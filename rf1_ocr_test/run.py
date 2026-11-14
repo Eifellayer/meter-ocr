@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
-from threading import Event
+from queue import Empty, Queue
 from tempfile import NamedTemporaryFile
 import time
 from urllib.request import Request, urlopen
@@ -119,7 +119,7 @@ def select_register(frame, overlay, manual_crop, manual_width):
     return register, manual_width, [], boxes, "manual"
 
 
-def read_digit(register, box, light_digits, trim_vertical=False):
+def read_digit(register, box, read, trim_vertical=False):
     left, top, right, bottom = box
     if trim_vertical:
         # Keep the center of the roll and omit the edges of adjacent digits.
@@ -127,17 +127,23 @@ def read_digit(register, box, light_digits, trim_vertical=False):
         top += margin
         bottom -= margin
     try:
-        return read_register(register.crop((left, top, right, bottom)), light_digits, digits=1) or "?"
+        return read(register.crop((left, top, right, bottom)), digits=1) or "?"
     except (OSError, subprocess.SubprocessError):
         return "?"
 
 
-def read_visible_digits(register, integer_width, whole_boxes, fraction_boxes, light_digits):
-    whole = read_register(register.crop((0, 0, integer_width, register.height)), light_digits)
+def read_visible_digits(register, integer_width, whole_boxes, fraction_boxes, light_digits, polarity="auto"):
+    if polarity != "auto":
+        light_digits = polarity == "light"
+
+    def read(picture, digits=5):
+        return read_register(picture, light_digits, digits, force_polarity=polarity != "auto")
+
+    whole = read(register.crop((0, 0, integer_width, register.height)))
     if whole is None:
-        whole = "".join(read_digit(register, box, light_digits, trim_vertical=True)
+        whole = "".join(read_digit(register, box, read, trim_vertical=True)
                         for box in whole_boxes).ljust(5, "?")
-    fraction = "".join(read_digit(register, box, light_digits) for box in fraction_boxes[:3])
+    fraction = "".join(read_digit(register, box, read) for box in fraction_boxes[:3])
     return f"{whole}.{fraction.ljust(3, '?')}"
 
 
@@ -244,8 +250,8 @@ def main():
     if reference and not re.fullmatch(r"sensor\.[a-z0-9_]+", reference):
         raise ValueError("referenz_entitaet muss ein Home-Assistant-Sensor sein")
     decimals = options["vergleich_nachkommastellen"]
-    requested = Event()
-    start_panel(HISTORY, DESTINATION, GOOD_IMAGE, requested)
+    requested = Queue(maxsize=1)
+    start_panel(HISTORY, DESTINATION, GOOD_IMAGE, requested, decimals)
     push_service = (options.get("push_dienst") or "").strip()
     reminder = None
     if push_service:
@@ -255,13 +261,17 @@ def main():
             print(f"RF1-Erinnerung deaktiviert: {error}")
     pending_image = None
     startup = True
+    manual_options = None
     print("RF1 Kontrollmessung gestartet")
     while True:
         now = datetime.now(zone)
         remaining = history.get("next_check_at", 0) - now.timestamp()
-        manual = requested.is_set()
-        if manual:
-            requested.clear()
+        if manual_options is None:
+            try:
+                manual_options = requested.get_nowait()
+            except Empty:
+                pass
+        manual = manual_options is not None
         if remaining > 0 and not startup and not manual:
             # Refresh status after a Home Assistant restart, even between checks.
             if "check_status" in history:
@@ -273,7 +283,10 @@ def main():
                 except OSError as error:
                     print(f"Prüfstatus konnte nicht übertragen werden: {error}")
                 check_reminder(reminder, history, now)
-            requested.wait(min(remaining, RETRY_INTERVAL))
+            try:
+                manual_options = requested.get(timeout=min(remaining, RETRY_INTERVAL))
+            except Empty:
+                pass
             continue
 
         keep_schedule = startup and remaining > 0
@@ -308,7 +321,8 @@ def main():
                             frame, overlay, crop, options["vorkomma_breite"]
                         )
                         ocr = read_visible_digits(
-                            register, integer_width, whole_boxes, fraction_boxes, options["helle_ziffern"]
+                            register, integer_width, whole_boxes, fraction_boxes,
+                            options["helle_ziffern"], manual_options["polarity"] if manual else "auto",
                         )
                     except (OSError, ValueError, subprocess.SubprocessError) as error:
                         print(f"Lokale OCR nicht verfügbar: {error}")
@@ -319,7 +333,7 @@ def main():
                     image_time = sample_timestamp(sample, zone)
                     already_checked = (image_time == history.get("last_epoch")
                                        or image_time in history.get("confirmations", ()))
-                    _, detail = compare_sample(sample, ocr, decimals)
+                    _, detail = compare_sample(sample, ocr, manual_options["decimals"])
                     manual_result = {
                         "ocr": ocr,
                         "reference": sample["actual_value"],
@@ -342,7 +356,8 @@ def main():
 
         now = datetime.now(zone)
         if manual:
-            manual_result["checked_at"] = now.timestamp()
+            manual_result.update(checked_at=now.timestamp(), settings=manual_options)
+            manual_options = None
             history["manual_result"] = manual_result
             atomic_write(HISTORY, json.dumps(history).encode("utf-8"), 0o600)
             continue

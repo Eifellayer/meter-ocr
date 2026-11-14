@@ -22,10 +22,11 @@ def crop_register(picture, crop):
     return picture.crop(crop)
 
 
-def read_register(picture, light_digits, digits=5):
+def read_register(picture, light_digits, digits=5, *, force_polarity=False):
     image = picture.convert("L")
+    polarities = (light_digits,) if force_polarity else (light_digits, not light_digits)
     reads = {
-        value for invert in (light_digits, not light_digits)
+        value for invert in polarities
         if (value := read_polarity(ImageOps.invert(image) if invert else image, digits)) is not None
     }
     return next(iter(reads)) if len(reads) == 1 else None

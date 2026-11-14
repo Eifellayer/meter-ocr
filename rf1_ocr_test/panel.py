@@ -3,6 +3,7 @@
 import html
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from queue import Full
 from secrets import compare_digest, token_urlsafe
 from threading import Thread
 from urllib.parse import parse_qs, urlsplit
@@ -15,13 +16,18 @@ PAGE = """<!doctype html>
 <style>
 :root{{color-scheme:light dark;font:16px system-ui}}
 body{{max-width:64rem;margin:2rem auto;padding:0 1rem}}
-button{{font:inherit;padding:.55rem 1rem}} dl{{display:grid;grid-template-columns:max-content 1fr;gap:.4rem 1rem}}
+form{{display:flex;flex-wrap:wrap;align-items:end;gap:.75rem}} label{{display:grid;gap:.3rem}}
+select,button{{font:inherit}} button{{padding:.55rem 1rem}} dl{{display:grid;grid-template-columns:max-content 1fr;gap:.4rem 1rem}}
 dd{{margin:0;overflow-wrap:anywhere}} section{{display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(min(100%,18rem),1fr))}}
 img{{width:100%;height:auto}} h2{{font-size:1rem}}
 </style>
 <h1>RF1 Kontrollmessung</h1>
 <form method="post" action="pruefen">
 <input type="hidden" name="csrf" value="{csrf}">
+<label>Ziffernfarbe
+<select name="polarity">{polarity_options}</select></label>
+<label>Vergleichsgenauigkeit
+<select name="decimals">{decimal_options}</select></label>
 <button>Jetzt prüfen</button>
 </form>
 <h2>Letzter manueller Test</h2>
@@ -51,11 +57,27 @@ for (const el of document.querySelectorAll('.stamp')) {{
   const epoch = Number(el.dataset.epoch);
   if (epoch) el.textContent = new Date(epoch * 1000).toLocaleString('de-DE');
 }}
-tick(); setInterval(tick, 1000); setTimeout(() => location.reload(), 15000);
+let edited = false;
+document.querySelector('form').addEventListener('change', () => {{ edited = true; }});
+tick(); setInterval(tick, 1000);
+setInterval(() => {{
+  if (!edited && !document.querySelector('form').contains(document.activeElement)) location.reload();
+}}, 15000);
 </script></html>"""
 
 
-def start_panel(history_path, current_image, good_image, requested):
+POLARITIES = {"auto": "Automatisch", "light": "Hell", "dark": "Dunkel"}
+DECIMALS = {"0": "Volle Kubikmeter", "1": "1 Nachkommastelle", "2": "2 Nachkommastellen", "3": "3 Nachkommastellen"}
+
+
+def select_options(choices, chosen):
+    return "".join(
+        f'<option value="{value}"{" selected" if value == chosen else ""}>{label}</option>'
+        for value, label in choices.items()
+    )
+
+
+def start_panel(history_path, current_image, good_image, requested, default_decimals):
     images = {"/aktuell.jpg": current_image, "/treffer.jpg": good_image}
     csrf_token = token_urlsafe(32)
 
@@ -103,7 +125,10 @@ def start_panel(history_path, current_image, good_image, requested):
                 manual_detail += " Dieses Bild wurde bereits ausgewertet."
             if manual.get("outside_window"):
                 manual_detail += " Die Bildzeit liegt außerhalb des Zeitfensters für automatische Prüfungen."
+            settings = manual.get("settings", {})
             self.reply(PAGE.format(**values,
+                polarity_options=select_options(POLARITIES, settings.get("polarity", "auto")),
+                decimal_options=select_options(DECIMALS, str(settings.get("decimals", default_decimals))),
                 manual_checked_at=manual.get("checked_at", 0),
                 manual_image_time=manual.get("image_time", 0),
                 manual_ocr=html.escape(str(manual.get("ocr") or "–")),
@@ -139,7 +164,16 @@ def start_panel(history_path, current_image, good_image, requested):
             if len(supplied) != 1 or not compare_digest(supplied[0].encode(), csrf_token.encode()):
                 self.send_error(403)
                 return
-            requested.set()
+            polarity = form.get("polarity", ["auto"])
+            decimals = form.get("decimals", [str(default_decimals)])
+            if len(polarity) != 1 or polarity[0] not in POLARITIES or len(decimals) != 1 or decimals[0] not in DECIMALS:
+                self.send_error(400)
+                return
+            try:
+                requested.put_nowait({"polarity": polarity[0], "decimals": int(decimals[0])})
+            except Full:
+                self.send_error(429, "Ein manueller Test wartet bereits.")
+                return
             self.send_response(303)
             self.send_header("Location", "./")
             self.send_header("Content-Length", "0")

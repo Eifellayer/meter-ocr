@@ -1,5 +1,9 @@
 # Änderungen
 
+## 0.6.8
+
+- Auf der RF1-Seite lassen sich Ziffernfarbe und Vergleichsgenauigkeit für „Jetzt prüfen“ einstellen. Die Ziffernfarbe kann automatisch erkannt oder manuell auf hell oder dunkel festgelegt werden.
+
 ## 0.6.7
 
 - „Jetzt prüfen“ zeigt ein eigenes OCR-Testergebnis, auch für ältere oder bereits ausgewertete Bilder. Wiederverwendete Bilder werden gekennzeichnet. Manuelle Tests zählen nicht als automatische Treffer.

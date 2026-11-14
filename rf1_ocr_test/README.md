@@ -1,7 +1,7 @@
 # RF1 Kontrollmessung
 
 > **Privates Hobbyprojekt · Verwendung auf eigene Gefahr**  
-> Der Quellcode ist öffentlich zugänglich. Die App wird ohne Zusage zu Support, Wartung oder künftigen Updates bereitgestellt.  
+> Der Quellcode ist öffentlich zugänglich. Für dieses Projekt wird kein Support angeboten. Wartung und weitere Updates sind freiwillig.  
 > Die OCR kann Ziffern falsch erkennen. Für Abrechnungen und Meldungen an den Versorger gilt der direkt am Zähler abgelesene Stand.
 
 Dieses Update ersetzt den lokalen **RF1 OCR Probelauf**. Der Ordnername

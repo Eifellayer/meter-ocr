@@ -1,0 +1,45 @@
+# RF1 Kontrollmessung
+
+Dieses Update ersetzt den lokalen **RF1 OCR Probelauf**. Der Ordnername
+`rf1_ocr_test` bleibt für das Update bestehen.
+
+1. Den Ordner `rf1_ocr_test` aus der ZIP in dieselbe Samba-Freigabe
+   `local_apps` kopieren und die vorhandenen Dateien überschreiben.
+2. In Home Assistant unter **Einstellungen → Apps → App installieren** im
+   Drei-Punkte-Menü **Nach Updates suchen** wählen.
+3. Die vorhandene App auf **0.6.0** aktualisieren und bei Bedarf starten.
+   Beim Update bleiben die App-Einstellungen und gespeicherten Treffer erhalten.
+
+## Prüfintervall und Sichtprüfung
+
+Nach einem Treffer prüft die App nach einer Stunde erneut. Bei einer Abweichung,
+einem unklaren Bild oder fehlenden aktuellen Daten prüft sie alle fünf Minuten.
+Vier Stunden ohne bestätigte Übereinstimmung setzen
+`sensor.rf1_pruefstatus` auf `review_due`. Eine Übereinstimmung beendet die
+engmaschige Prüfung sofort. Die App speichert den Beginn der Störung und
+den nächsten Prüfzeitpunkt über Neustarts hinweg.
+
+Die App holt das ausgerichtete JPEG und die Werte derselben SLFork-Messung.
+Tesseract liest die fünf Vorkommastellen.
+Mindestens zwei Bildaufbereitungen müssen denselben Wert ergeben. Eine
+abweichende vollständige Lesung gilt als mehrdeutig. Ein Treffer zählt,
+wenn der OCR-Wert mit den ganzen Kubikmetern aus **Raw Value** und
+**Actual Value** übereinstimmt. Ab Version 0.4.1 werden dabei auch SLFork-Werte
+mit vier oder mehr Nachkommastellen verarbeitet, indem nur der Vorkommateil
+für den Vergleich verwendet wird.
+Jeder Messzeitpunkt zählt einmal und bleibt 24 Stunden lang berücksichtigt,
+auch über Mitternacht und Neustarts hinweg.
+
+Das Original liegt unter **Medien → Lokale Medien → rf1 → kontrollbild.jpg**.
+In `sensor.rf1_kontrollbild` stehen der kompakte Ziffernausschnitt, sein
+Zeitstempel und `matches_last_24h`. Der Ausschnitt enthält die Nachkommastellen
+für eine mögliche Sichtprüfung. Das Protokoll meldet **Kontrollbild bereit**
+mit OCR-Wert und Prüfergebnis.
+
+Die App sucht die grünen Ziffernrahmen im SLFork-Bild mit Markierungen und
+liest die fünf Vorkommastellen aus dem ausgerichteten Bild ohne Markierungen.
+Die OCR prüft die normale und die invertierte Darstellung. Im Sensorattribut
+`crop_source` und im Protokoll zeigt `auto` den automatisch gewählten Ausschnitt.
+Bei fehlenden oder nicht erkennbaren Rahmen verwendet die App die Werte
+`ausschnitt` und `vorkomma_breite` aus ihrer Konfiguration und meldet `manual`.
+Die Ziffernrahmen in SLFork müssen auf den Rollen liegen.

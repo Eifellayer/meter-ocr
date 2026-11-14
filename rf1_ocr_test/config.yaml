@@ -1,0 +1,25 @@
+name: RF1 Kontrollmessung
+version: "0.6.0"
+slug: rf1_ocr_test
+description: Lokaler OCR-Abgleich und Kontrollbild für den Gaszähler
+arch:
+  - aarch64
+  - amd64
+startup: application
+boot: auto
+homeassistant_api: true
+map:
+  - type: media
+    read_only: false
+options:
+  esp_url: "http://esp-gaszaehler.local"
+  ausschnitt: "52,56,564,132"
+  vorkomma_breite: 305
+  helle_ziffern: false
+  zeitzone: Europe/Berlin
+schema:
+  esp_url: url
+  ausschnitt: str
+  vorkomma_breite: int(1,1920)
+  helle_ziffern: bool
+  zeitzone: str

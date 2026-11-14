@@ -102,7 +102,7 @@ def select_register(frame, overlay, manual_crop, manual_width):
                     layout = find_digit_row(annotated)
                     if layout is not None:
                         crop, width, boxes = layout
-                        return crop_register(frame, crop), width, boxes, "auto"
+                        return crop_register(frame, crop), width, boxes[:5], boxes[5:], "auto"
         except (OSError, ValueError, Image.DecompressionBombError):
             pass
     register = crop_register(frame, manual_crop)
@@ -113,18 +113,29 @@ def select_register(frame, overlay, manual_crop, manual_width):
     boundaries = [manual_width + right_width * i // 3 for i in range(4)]
     boxes = [(left, 0, right, register.height)
              for left, right in zip(boundaries, boundaries[1:]) if right - left >= 8]
-    return register, manual_width, boxes, "manual"
+    return register, manual_width, [], boxes, "manual"
 
 
-def read_visible_digits(register, integer_width, boxes, light_digits):
+def read_digit(register, box, light_digits, trim_vertical=False):
+    left, top, right, bottom = box
+    if trim_vertical:
+        # Keep the center of the roll and omit the edges of adjacent digits.
+        margin = (bottom - top) // 8
+        top += margin
+        bottom -= margin
+    try:
+        return read_register(register.crop((left, top, right, bottom)), light_digits, digits=1) or "?"
+    except (OSError, subprocess.SubprocessError):
+        return "?"
+
+
+def read_visible_digits(register, integer_width, whole_boxes, fraction_boxes, light_digits):
     whole = read_register(register.crop((0, 0, integer_width, register.height)), light_digits)
-    fraction = []
-    for box in boxes[:3]:
-        try:
-            fraction.append(read_register(register.crop(box), light_digits, digits=1) or "?")
-        except (OSError, subprocess.SubprocessError):
-            fraction.append("?")
-    return f"{whole or '?????'}.{''.join(fraction).ljust(3, '?')}"
+    if whole is None:
+        whole = "".join(read_digit(register, box, light_digits, trim_vertical=True)
+                        for box in whole_boxes).ljust(5, "?")
+    fraction = "".join(read_digit(register, box, light_digits) for box in fraction_boxes[:3])
+    return f"{whole}.{fraction.ljust(3, '?')}"
 
 
 def transfer_jpeg(picture):
@@ -289,10 +300,12 @@ def main():
                         raise ValueError("Der ESP hat kein JPEG geliefert")
                     frame.load()
                     try:
-                        register, integer_width, boxes, source = select_register(
+                        register, integer_width, whole_boxes, fraction_boxes, source = select_register(
                             frame, overlay, crop, options["vorkomma_breite"]
                         )
-                        ocr = read_visible_digits(register, integer_width, boxes, options["helle_ziffern"])
+                        ocr = read_visible_digits(
+                            register, integer_width, whole_boxes, fraction_boxes, options["helle_ziffern"]
+                        )
                     except (OSError, ValueError, subprocess.SubprocessError) as error:
                         print(f"Lokale OCR nicht verfügbar: {error}")
                         register, ocr, source = frame, None, "unavailable"

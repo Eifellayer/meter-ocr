@@ -1,5 +1,9 @@
 # Änderungen
 
+## 0.6.6
+
+- Wenn die fünf Vorkommastellen als Zeile unklar sind, prüft RF1 sie anhand der automatisch erkannten SLFork-Rahmen einzeln. Unklare Stellen erscheinen als Fragezeichen.
+
 ## 0.6.5
 
 - „Jetzt prüfen“ funktioniert hinter Home Assistant Ingress auch ohne den Browser-Header `Sec-Fetch-Site`. Ein Formular-Token schützt den Button vor fremden Anfragen.

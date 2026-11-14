@@ -22,16 +22,16 @@ def crop_register(picture, crop):
     return picture.crop(crop)
 
 
-def read_register(picture, light_digits):
+def read_register(picture, light_digits, digits=5):
     image = picture.convert("L")
     reads = {
         value for invert in (light_digits, not light_digits)
-        if (value := read_polarity(ImageOps.invert(image) if invert else image)) is not None
+        if (value := read_polarity(ImageOps.invert(image) if invert else image, digits)) is not None
     }
     return next(iter(reads)) if len(reads) == 1 else None
 
 
-def read_polarity(image):
+def read_polarity(image, digits):
     gray = ImageOps.autocontrast(image, cutoff=2)
     variants = (
         gray,
@@ -45,11 +45,11 @@ def read_polarity(image):
         with io.BytesIO() as png:
             prepared.save(png, "PNG")
             result = subprocess.run(
-                ["tesseract", "stdin", "stdout", "-l", "eng", "--psm", "7",
+                ["tesseract", "stdin", "stdout", "-l", "eng", "--psm", "10" if digits == 1 else "7",
                  "-c", "tessedit_char_whitelist=0123456789"],
                 input=png.getvalue(), capture_output=True, timeout=12, check=True,
             ).stdout.decode("ascii", errors="ignore").strip()
-        if re.fullmatch(r"[0-9]{5}", result):
+        if len(result) == digits and re.fullmatch(r"[0-9]+", result):
             votes[result] += 1
     if len(votes) == 1:
         value, count = votes.most_common(1)[0]
@@ -58,10 +58,31 @@ def read_polarity(image):
     return None
 
 
-def whole_m3(value):
-    # SLFork can send more than three decimal places. Only the whole part must be readable.
-    match = re.fullmatch(r"([0-9]{1,5})(?:\.[0-9Nn]+)?", str(value))
-    return int(match[1]) if match else None
+def meter_prefix(value, decimals):
+    match = re.fullmatch(r"([0-9]{1,5})(?:[.,]([0-9Nn?]+))?", str(value))
+    if not match:
+        return None
+    fractional = (match[2] or "")[:decimals]
+    if decimals and (len(fractional) != decimals or not fractional.isdigit()):
+        return None
+    return int(match[1] + fractional)
+
+
+def compare_sample(data, ocr, decimals):
+    value = meter_prefix(ocr, decimals)
+    if value is None:
+        return "ocr_unclear", "OCR konnte die eingestellten Stellen nicht eindeutig lesen."
+    if data.get("reference_required") is False:
+        return "ocr_only", "OCR ausgewertet. Es ist kein Referenzsensor eingestellt."
+    raw = meter_prefix(data["raw_value"], decimals)
+    actual = meter_prefix(data["actual_value"], decimals)
+    if raw is None or actual is None:
+        return "slfork_unclear", "Der Referenzwert fehlt, ist zu alt oder hat zu wenige lesbare Stellen."
+    if raw != actual:
+        return "slfork_unclear", "Rohwert und übernommener Referenzwert weichen voneinander ab."
+    if value != actual:
+        return "difference", "OCR und Referenzwert weichen bei der eingestellten Genauigkeit ab."
+    return "match", "OCR und Referenzwert stimmen überein."
 
 
 def rolling_summary(history, now):
@@ -76,6 +97,8 @@ def rolling_summary(history, now):
         "review_due": failure is not None and epoch - failure >= REVIEW_AFTER,
         "check_status": history.get("check_status"),
         "next_check_at_epoch": history.get("next_check_at"),
+        "last_match_at_epoch": history.get("last_match_at"),
+        "check_detail": history.get("check_detail"),
     }
 
 
@@ -88,7 +111,7 @@ def sample_epoch(data, zone, now):
     return captured if epoch - FRESH_SAMPLE_AGE < captured <= epoch + 60 else None
 
 
-def record_sample(history, data, ocr, zone, now):
+def record_sample(history, data, ocr, zone, now, decimals=0):
     """Count each in-window cycle at most once, even after a restart."""
     captured = sample_epoch(data, zone, now)
     if captured is None or captured <= history.get("last_epoch", 0):
@@ -98,25 +121,17 @@ def record_sample(history, data, ocr, zone, now):
     if "started_at" not in history:
         history.update(started_at=epoch, confirmations=[], status="no_current_sample")
     history["confirmations"] = [old for old in history["confirmations"] if old > epoch - WINDOW_SECONDS]
-    raw = whole_m3(data["raw_value"])
-    actual = whole_m3(data["actual_value"])
-    value = whole_m3(ocr)
-    if value is None:
-        status = "ocr_unclear"
-    elif raw is None or actual is None or raw != actual:
-        status = "slfork_unclear"
-    elif value == actual:
-        status = "match"
+    status, detail = compare_sample(data, ocr, decimals)
+    if status == "match":
         history["confirmations"].append(captured)
-    else:
-        status = "difference"
-    history.update(last_epoch=captured, status=status, ocr_value=ocr)
+        history["last_match_at"] = captured
+    history.update(last_epoch=captured, status=status, ocr_value=ocr, check_detail=detail)
     return True
 
 
 def schedule_next_check(history, outcome, checked_at):
     history["check_status"] = outcome
-    if outcome == "match":
+    if outcome in ("match", "ocr_only"):
         history.pop("failure_since", None)
         interval = NORMAL_INTERVAL
     else:

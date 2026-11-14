@@ -1,5 +1,11 @@
 # Änderungen
 
+## 0.6.4
+
+- App-Oberfläche mit Countdown, „Jetzt prüfen“, verständlichem Prüfergebnis und Bildvergleich mit dem letzten Treffer.
+- Erkannte Nachkommastellen werden separat ausgewiesen. Unsichere Stellen erscheinen als Fragezeichen. Die Vergleichsgenauigkeit ist auf null bis drei Stellen einstellbar.
+- Home-Assistant-Kameras wie ESPHome als optionale Bildquelle. Ein zeitnaher kumulierter m³-Sensor kann als Referenz dienen, auch bei Pulsmessung.
+
 ## 0.6.3
 
 - Beim Start wertet RF1 ein frisches, noch nicht geprüftes SLFork-Bild sofort aus.

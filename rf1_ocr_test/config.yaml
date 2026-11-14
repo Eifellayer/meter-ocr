@@ -1,5 +1,5 @@
 name: RF1 Kontrollmessung
-version: "0.6.3"
+version: "0.6.4"
 slug: rf1_ocr_test
 description: "Lokaler OCR-Abgleich für den Gaszähler. Privates Hobbyprojekt, Nutzung auf eigene Gefahr. Kein Support."
 arch:
@@ -8,6 +8,8 @@ arch:
 startup: application
 boot: auto
 homeassistant_api: true
+ingress: true
+ingress_port: 8099
 map:
   - type: media
     read_only: false
@@ -18,6 +20,9 @@ options:
   helle_ziffern: false
   zeitzone: Europe/Berlin
   push_dienst: ""
+  vergleich_nachkommastellen: 0
+  kamera_entitaet: ""
+  referenz_entitaet: ""
 schema:
   esp_url: url
   ausschnitt: str
@@ -26,3 +31,6 @@ schema:
   zeitzone: str
   push_dienst: str?
   intervall_sekunden: int?
+  vergleich_nachkommastellen: int(0,3)
+  kamera_entitaet: str?
+  referenz_entitaet: str?

@@ -4,7 +4,7 @@
 > Der Quellcode ist öffentlich zugänglich. Für dieses Projekt wird kein Support angeboten. Wartung und weitere Updates sind freiwillig.  
 > Die OCR kann Ziffern falsch erkennen. Für Abrechnungen und Meldungen an den Versorger gilt der direkt am Zähler abgelesene Stand.
 
-Home-Assistant-App zur unabhängigen Bildkontrolle eines Pipersberg G4 RF1 mit SLFork und lokaler OCR. Sie vergleicht die fünf Vorkommastellen mit dem SLFork-Wert.
+Home-Assistant-App zur unabhängigen Bildkontrolle eines Pipersberg G4 RF1 mit lokaler OCR. Sie liest die fünf Vorkommastellen und zeigt erkennbare Nachkommastellen an.
 
 [Änderungen je Version](rf1_ocr_test/CHANGELOG.md)
 
@@ -24,6 +24,16 @@ Home-Assistant-App zur unabhängigen Bildkontrolle eines Pipersberg G4 RF1 mit S
 Wenn du von der lokalen App wechselst, übernimm zuerst deine ESP-Adresse und sonstigen Einstellungen. Stoppe die lokale App vor dem Start der Repository-Version. Beide verwenden dieselben Sensoren. Die lokal gespeicherte Prüfhistorie gehört zur jeweiligen Installation.
 
 ## Prüfverhalten
+
+Unter **Weboberfläche öffnen** zeigt RF1 den Countdown bis zur nächsten Prüfung, das Ergebnis und das aktuelle Bild neben dem letzten bestätigten Bild. **Jetzt prüfen** liest die vorhandene Aufnahme ein. Bei SLFork wird ein bereits ausgewerteter Messzyklus kein zweites Mal gezählt.
+
+Mit `vergleich_nachkommastellen` stellst du ein, ob null bis drei Nachkommastellen zählen. Der Standard ist **0**. Die Anzeige enthält die gelesenen Nachkommastellen auch bei einem Vergleich der vollen Kubikmeter. Ein `?` steht für eine unklare oder fehlende Ziffer. Für den Vergleich werden Stellen abgeschnitten, ohne zu runden.
+
+### ESPHome und Pulssensor
+
+Für eine ESPHome-Kamera oder andere Home-Assistant-Kamera setze `kamera_entitaet` auf ihre `camera.*`-Entität. Richte dazu `ausschnitt` und `vorkomma_breite` manuell auf die Rollen ein. Mit leerem Kamerafeld läuft RF1 im SLFork-Modus.
+
+Im Kameramodus kannst du mit `referenz_entitaet` einen kumulierten `sensor.*` in m³ angeben. Ein Pulssensor eignet sich, wenn er den absoluten Stand als Startstand plus Impulse × m³ pro Impuls liefert. Der Faktor richtet sich nach dem Zählertyp. Der Sensor muss den Stand mindestens alle fünf Minuten melden, auch wenn er gleich bleibt. Home Assistant liefert beim Kameraabruf keinen garantierten Aufnahmezeitstempel. Verwende deshalb eine Kamera, die ein aktuelles Bild liefert. Ohne Referenzsensor zeigt RF1 nur die OCR-Lesung an.
 
 Beim Start prüft die App sofort, ob ein frisches, noch nicht ausgewertetes SLFork-Bild vorliegt.
 

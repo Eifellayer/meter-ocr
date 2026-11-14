@@ -80,4 +80,5 @@ def find_digit_row(overlay):
     top = max(0, min(box[1] for box in row) - 2)
     bottom = min(height, max(box[3] for box in row) + 3)
     boundary = (row[4][2] + row[5][0]) // 2
-    return (left, top, right, bottom), boundary - left
+    decimal_boxes = [(a - left, b - top, c - left, d - top) for a, b, c, d in row[5:]]
+    return (left, top, right, bottom), boundary - left, decimal_boxes

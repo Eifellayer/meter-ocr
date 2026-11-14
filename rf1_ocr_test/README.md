@@ -16,6 +16,14 @@ Dieses Update ersetzt den lokalen **RF1 OCR Probelauf**. Der Ordnername
 
 ## Prüfintervall und Sichtprüfung
 
+Unter **Weboberfläche öffnen** findest du den Countdown, **Jetzt prüfen**
+und den Vergleich mit dem letzten bestätigten Bild. Erkannte Nachkommastellen
+werden angezeigt. Unklare Stellen erscheinen als `?`. Die Einstellung
+`vergleich_nachkommastellen` bestimmt die Genauigkeit des Vergleichs (0–3).
+ESPHome- und andere Home-Assistant-Kameras lassen sich über `kamera_entitaet`
+einbinden. Im Kameramodus ist ein absoluter m³-Zählerstand aus einem Sensor
+als Referenz möglich, auch wenn dieser aus Impulsen berechnet wird.
+
 Nach einem Treffer prüft die App nach einer Stunde erneut. Bei einer Abweichung,
 einem unklaren Bild oder fehlenden aktuellen Daten prüft sie alle fünf Minuten.
 Vier Stunden ohne bestätigte Übereinstimmung setzen

@@ -9,6 +9,9 @@ DEFAULTS = {
     "helle_ziffern": False,
     "zeitzone": "Europe/Berlin",
     "push_dienst": "",
+    "vergleich_nachkommastellen": 0,
+    "kamera_entitaet": "",
+    "referenz_entitaet": "",
 }
 
 

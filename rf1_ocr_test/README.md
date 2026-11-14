@@ -11,7 +11,7 @@ Dieses Update ersetzt den lokalen **RF1 OCR Probelauf**. Der Ordnername
    `local_apps` kopieren und die vorhandenen Dateien überschreiben.
 2. In Home Assistant unter **Einstellungen → Apps → App installieren** im
    Drei-Punkte-Menü **Nach Updates suchen** wählen.
-3. Die vorhandene App auf **0.6.0** aktualisieren und bei Bedarf starten.
+3. Die vorhandene App auf die neueste Version aktualisieren und bei Bedarf starten.
    Beim Update bleiben die App-Einstellungen und gespeicherten Treffer erhalten.
 
 ## Prüfintervall und Sichtprüfung
@@ -47,3 +47,14 @@ Die OCR prüft die normale und die invertierte Darstellung. Im Sensorattribut
 Bei fehlenden oder nicht erkennbaren Rahmen verwendet die App die Werte
 `ausschnitt` und `vorkomma_breite` aus ihrer Konfiguration und meldet `manual`.
 Die Ziffernrahmen in SLFork müssen auf den Rollen liegen.
+
+## Optionale Push-Erinnerung
+
+Trage unter `push_dienst` den Benachrichtigungsdienst deiner Home Assistant
+Companion App ein, etwa `notify.mobile_app_mein_handy`. Lass das Feld leer,
+wenn die Erinnerung ausgeschaltet bleiben soll.
+
+Nach vier Stunden ohne bestätigten Stand erscheint ein Hinweis unter
+**Benachrichtigungen**. Bleibt er weitere 24 Stunden offen, folgt einmalig
+ein Push. Schließen des Hinweises oder **Überspringen** im Push quittiert
+diesen Fall. Bei einer neuen Störung beginnt die Frist erneut.

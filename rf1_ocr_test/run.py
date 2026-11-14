@@ -14,14 +14,19 @@ from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
 from PIL import Image
+from websocket import WebSocketException
 
 from checks import RETRY_INTERVAL, crop_register, read_register, record_sample, rolling_summary, schedule_next_check
 from layout import find_digit_row
+from reminder import Reminder
+from settings import SCHEMA_VERSION, load_options
 
 MAX_RESPONSE_BYTES = 3_000_000
 MAX_TRANSFER_BYTES = 11_000
 DESTINATION = Path("/media/rf1/kontrollbild.jpg")
 HISTORY = Path("/data/kontrollmessung.json")
+OPTIONS = Path("/data/options.json")
+EFFECTIVE_OPTIONS = Path("/data/rf1-settings.json")
 ENTITY = "sensor.rf1_kontrollbild"
 CORE_URL = f"http://supervisor/core/api/states/{ENTITY}"
 CHECK_ENTITY = "sensor.rf1_pruefstatus"
@@ -144,8 +149,28 @@ def publish_state(url, payload, token):
             raise OSError(f"Home Assistant meldet HTTP {response.status}")
 
 
+def check_reminder(reminder, history, now):
+    if reminder is None:
+        return
+    before = json.dumps(history)
+    try:
+        reminder.sync(history, rolling_summary(history, now), now.timestamp())
+    except (OSError, ValueError, WebSocketException) as error:
+        print(f"RF1-Erinnerung konnte nicht aktualisiert werden: {type(error).__name__}")
+    after = json.dumps(history)
+    if after != before:
+        atomic_write(HISTORY, after.encode("utf-8"), 0o600)
+
+
 def main():
-    options = json.loads(Path("/data/options.json").read_text(encoding="utf-8"))
+    raw_options = json.loads(OPTIONS.read_text(encoding="utf-8"))
+    # The Supervisor remains the source of truth for values edited in its UI.
+    # It regenerates options.json. Record a versioned, normalized copy separately.
+    snapshot = json.loads(EFFECTIVE_OPTIONS.read_text(encoding="utf-8")) if EFFECTIVE_OPTIONS.exists() else {}
+    options = load_options(raw_options, snapshot)
+    atomic_write(EFFECTIVE_OPTIONS, json.dumps({
+        "schema_version": SCHEMA_VERSION, "options": options,
+    }, indent=2).encode("utf-8"), 0o600)
     base = options["esp_url"].rstrip("/")
     zone = ZoneInfo(options["zeitzone"])
     crop = tuple(int(part.strip()) for part in options["ausschnitt"].split(","))
@@ -153,6 +178,13 @@ def main():
         raise ValueError("ausschnitt erwartet links, oben, rechts, unten")
     token = os.environ["SUPERVISOR_TOKEN"]
     history = json.loads(HISTORY.read_text(encoding="utf-8")) if HISTORY.exists() else {}
+    push_service = (options.get("push_dienst") or "").strip()
+    reminder = None
+    if push_service:
+        try:
+            reminder = Reminder(push_service, token)
+        except ValueError as error:
+            print(f"RF1-Erinnerung deaktiviert: {error}")
     pending_image = None
     print("RF1 Kontrollmessung gestartet")
     while True:
@@ -168,6 +200,7 @@ def main():
                         pending_image = None
                 except OSError as error:
                     print(f"Prüfstatus konnte nicht übertragen werden: {error}")
+                check_reminder(reminder, history, now)
             time.sleep(min(remaining, RETRY_INTERVAL))
             continue
 
@@ -221,6 +254,7 @@ def main():
                 pending_image = None
         except OSError as error:
             print(f"Home Assistant konnte nicht aktualisiert werden: {error}")
+        check_reminder(reminder, history, now)
 
 
 if __name__ == "__main__":

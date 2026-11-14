@@ -3,8 +3,9 @@
 import html
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from secrets import compare_digest, token_urlsafe
 from threading import Thread
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 SUPERVISOR_ADDRESS = "172.30.32.2"
 
@@ -19,7 +20,10 @@ dd{{margin:0;overflow-wrap:anywhere}} section{{display:grid;gap:1rem;grid-templa
 img{{width:100%;height:auto}} h2{{font-size:1rem}}
 </style>
 <h1>RF1 Kontrollmessung</h1>
-<form method="post" action="pruefen"><button>Jetzt prüfen</button></form>
+<form method="post" action="pruefen">
+<input type="hidden" name="csrf" value="{csrf}">
+<button>Jetzt prüfen</button>
+</form>
 <dl><dt>Nächste Prüfung</dt><dd id="countdown">–</dd>
 <dt>Erkannter Stand</dt><dd>{ocr}</dd>
 <dt>Referenz</dt><dd>{reference}</dd>
@@ -46,6 +50,7 @@ tick(); setInterval(tick, 1000); setTimeout(() => location.reload(), 15000);
 
 def start_panel(history_path, current_image, good_image, requested):
     images = {"/aktuell.jpg": current_image, "/treffer.jpg": good_image}
+    csrf_token = token_urlsafe(32)
 
     class Handler(BaseHTTPRequestHandler):
         def authorized(self):
@@ -86,6 +91,7 @@ def start_panel(history_path, current_image, good_image, requested):
                 ("ocr", "ocr_value"), ("reference", "last_reference"), ("detail", "check_detail"),
             )}
             self.reply(PAGE.format(**values,
+                csrf=csrf_token,
                 last_good=history.get("last_match_at") or 0,
                 image_time=history.get("last_epoch") or 0,
                 next_check=json.dumps(history.get("next_check_at")),
@@ -99,7 +105,20 @@ def start_panel(history_path, current_image, good_image, requested):
             if urlsplit(self.path).path != "/pruefen":
                 self.send_error(404)
                 return
-            if self.headers.get("Sec-Fetch-Site") not in ("same-origin", "none"):
+            # Ingress and companion webviews need not forward Fetch Metadata headers.
+            if self.headers.get_content_type() != "application/x-www-form-urlencoded":
+                self.send_error(403)
+                return
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if not 0 < length <= 256:
+                    raise ValueError("Invalid form length")
+                form = parse_qs(self.rfile.read(length).decode("ascii"), max_num_fields=4)
+            except ValueError:
+                self.send_error(400)
+                return
+            supplied = form.get("csrf", [])
+            if len(supplied) != 1 or not compare_digest(supplied[0].encode(), csrf_token.encode()):
                 self.send_error(403)
                 return
             requested.set()

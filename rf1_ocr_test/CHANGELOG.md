@@ -1,5 +1,9 @@
 # Änderungen
 
+## 0.6.5
+
+- „Jetzt prüfen“ funktioniert hinter Home Assistant Ingress auch ohne den Browser-Header `Sec-Fetch-Site`. Ein Formular-Token schützt den Button vor fremden Anfragen.
+
 ## 0.6.4
 
 - App-Oberfläche mit Countdown, „Jetzt prüfen“, verständlichem Prüfergebnis und Bildvergleich mit dem letzten Treffer.

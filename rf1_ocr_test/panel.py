@@ -24,6 +24,13 @@ img{{width:100%;height:auto}} h2{{font-size:1rem}}
 <input type="hidden" name="csrf" value="{csrf}">
 <button>Jetzt prüfen</button>
 </form>
+<h2>Letzter manueller Test</h2>
+<dl><dt>Getestet um</dt><dd class="stamp" data-epoch="{manual_checked_at}">–</dd>
+<dt>Bildzeit</dt><dd class="stamp" data-epoch="{manual_image_time}">–</dd>
+<dt>Erkannter Stand</dt><dd>{manual_ocr}</dd>
+<dt>Referenz</dt><dd>{manual_reference}</dd>
+<dt>Testergebnis</dt><dd>{manual_detail}</dd></dl>
+<h2>Automatische Kontrollmessung</h2>
 <dl><dt>Nächste Prüfung</dt><dd id="countdown">–</dd>
 <dt>Erkannter Stand</dt><dd>{ocr}</dd>
 <dt>Referenz</dt><dd>{reference}</dd>
@@ -90,7 +97,18 @@ def start_panel(history_path, current_image, good_image, requested):
             values = {name: html.escape(str(history.get(key) or "–")) for name, key in (
                 ("ocr", "ocr_value"), ("reference", "last_reference"), ("detail", "check_detail"),
             )}
+            manual = history.get("manual_result", {})
+            manual_detail = manual.get("detail", "Noch kein manueller Test.")
+            if manual.get("already_checked"):
+                manual_detail += " Dieses Bild wurde bereits ausgewertet."
+            if manual.get("outside_window"):
+                manual_detail += " Die Bildzeit liegt außerhalb des Zeitfensters für automatische Prüfungen."
             self.reply(PAGE.format(**values,
+                manual_checked_at=manual.get("checked_at", 0),
+                manual_image_time=manual.get("image_time", 0),
+                manual_ocr=html.escape(str(manual.get("ocr") or "–")),
+                manual_reference=html.escape(str(manual.get("reference") or "–")),
+                manual_detail=html.escape(manual_detail),
                 csrf=csrf_token,
                 last_good=history.get("last_match_at") or 0,
                 image_time=history.get("last_epoch") or 0,

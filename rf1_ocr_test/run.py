@@ -18,7 +18,10 @@ from zoneinfo import ZoneInfo
 from PIL import Image
 from websocket import WebSocketException
 
-from checks import RETRY_INTERVAL, crop_register, read_register, record_sample, rolling_summary, sample_epoch, schedule_next_check
+from checks import (
+    RETRY_INTERVAL, compare_sample, crop_register, read_register, record_sample,
+    rolling_summary, sample_epoch, sample_timestamp, schedule_next_check,
+)
 from layout import find_digit_row
 from reminder import Reminder
 from settings import SCHEMA_VERSION, load_options
@@ -273,13 +276,14 @@ def main():
             requested.wait(min(remaining, RETRY_INTERVAL))
             continue
 
-        keep_schedule = (startup or manual) and remaining > 0
-        startup = False
+        keep_schedule = startup and remaining > 0
+        startup = startup and manual
         data = None
         outcome = "capture_unavailable"
         updated = dict(history)
         updated["comparison_decimals"] = decimals
         updated["check_detail"] = "Das Kamerabild oder die Quelldaten konnten nicht geladen werden."
+        manual_result = {"detail": updated["check_detail"]}
         try:
             result = capture_camera(camera, reference, token, zone) if camera else capture(base)
             if result is None:
@@ -290,7 +294,7 @@ def main():
                 picture, overlay, sample = result
                 now = datetime.now(zone)
                 captured = sample_epoch(sample, zone, now)
-                if captured is None or captured <= history.get("last_epoch", 0):
+                if not manual and (captured is None or captured <= history.get("last_epoch", 0)):
                     outcome = "stale_sample"
                     updated["check_detail"] = "Das Bild ist zu alt oder wurde schon ausgewertet."
                     result = None
@@ -309,9 +313,22 @@ def main():
                     except (OSError, ValueError, subprocess.SubprocessError) as error:
                         print(f"Lokale OCR nicht verfügbar: {error}")
                         register, ocr, source = frame, None, "unavailable"
-                    jpeg, size = transfer_jpeg(register)
-                now = datetime.now(zone)
-                if record_sample(updated, sample, ocr, zone, now, decimals):
+                    if not manual:
+                        jpeg, size = transfer_jpeg(register)
+                if manual:
+                    image_time = sample_timestamp(sample, zone)
+                    already_checked = (image_time == history.get("last_epoch")
+                                       or image_time in history.get("confirmations", ()))
+                    _, detail = compare_sample(sample, ocr, decimals)
+                    manual_result = {
+                        "ocr": ocr,
+                        "reference": sample["actual_value"],
+                        "detail": detail,
+                        "image_time": image_time,
+                        "already_checked": already_checked,
+                        "outside_window": captured is None,
+                    }
+                elif record_sample(updated, sample, ocr, zone, datetime.now(zone), decimals):
                     atomic_write(DESTINATION, picture, 0o644)
                     outcome = updated["status"]
                     if outcome == "match":
@@ -324,10 +341,12 @@ def main():
             print(f"Bildabruf fehlgeschlagen: {error}")
 
         now = datetime.now(zone)
+        if manual:
+            manual_result["checked_at"] = now.timestamp()
+            history["manual_result"] = manual_result
+            atomic_write(HISTORY, json.dumps(history).encode("utf-8"), 0o600)
+            continue
         if keep_schedule and data is None and history.get("next_check_at", 0) > now.timestamp():
-            if manual:
-                history["check_detail"] = updated["check_detail"]
-                atomic_write(HISTORY, json.dumps(history).encode("utf-8"), 0o600)
             continue
         schedule_next_check(updated, outcome, now.timestamp())
         atomic_write(HISTORY, json.dumps(updated).encode("utf-8"), 0o600)

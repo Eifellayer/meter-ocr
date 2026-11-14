@@ -1,5 +1,9 @@
 # Änderungen
 
+## 0.6.7
+
+- „Jetzt prüfen“ zeigt ein eigenes OCR-Testergebnis, auch für ältere oder bereits ausgewertete Bilder. Wiederverwendete Bilder werden gekennzeichnet. Manuelle Tests zählen nicht als automatische Treffer.
+
 ## 0.6.6
 
 - Wenn die fünf Vorkommastellen als Zeile unklar sind, prüft RF1 sie anhand der automatisch erkannten SLFork-Rahmen einzeln. Unklare Stellen erscheinen als Fragezeichen.

@@ -102,11 +102,15 @@ def rolling_summary(history, now):
     }
 
 
-def sample_epoch(data, zone, now):
+def sample_timestamp(data, zone):
     stamp = datetime.fromisoformat(data["esp_timestamp"])
     if stamp.tzinfo is None:
         stamp = stamp.replace(tzinfo=zone)
-    captured = stamp.timestamp()
+    return stamp.timestamp()
+
+
+def sample_epoch(data, zone, now):
+    captured = sample_timestamp(data, zone)
     epoch = now.timestamp()
     return captured if epoch - FRESH_SAMPLE_AGE < captured <= epoch + 60 else None
 

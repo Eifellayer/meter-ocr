@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 from PIL import Image
 from websocket import WebSocketException
 
-from checks import RETRY_INTERVAL, crop_register, read_register, record_sample, rolling_summary, schedule_next_check
+from checks import RETRY_INTERVAL, crop_register, read_register, record_sample, rolling_summary, sample_epoch, schedule_next_check
 from layout import find_digit_row
 from reminder import Reminder
 from settings import SCHEMA_VERSION, load_options
@@ -186,11 +186,12 @@ def main():
         except ValueError as error:
             print(f"RF1-Erinnerung deaktiviert: {error}")
     pending_image = None
+    startup = True
     print("RF1 Kontrollmessung gestartet")
     while True:
         now = datetime.now(zone)
         remaining = history.get("next_check_at", 0) - now.timestamp()
-        if remaining > 0:
+        if remaining > 0 and not startup:
             # Refresh status after a Home Assistant restart, even between checks.
             if "check_status" in history:
                 try:
@@ -204,6 +205,8 @@ def main():
             time.sleep(min(remaining, RETRY_INTERVAL))
             continue
 
+        keep_schedule = startup and remaining > 0
+        startup = False
         data = None
         outcome = "capture_unavailable"
         updated = dict(history)
@@ -215,6 +218,12 @@ def main():
                 result = capture(base)
             if result is not None:
                 picture, overlay, sample = result
+                now = datetime.now(zone)
+                captured = sample_epoch(sample, zone, now)
+                if captured is None or captured <= history.get("last_epoch", 0):
+                    outcome = "stale_sample"
+                    result = None
+            if result is not None:
                 with Image.open(io.BytesIO(picture)) as frame:
                     if frame.format != "JPEG":
                         raise ValueError("Der ESP hat kein JPEG geliefert")
@@ -240,6 +249,8 @@ def main():
             print(f"Bildabruf fehlgeschlagen: {error}")
 
         now = datetime.now(zone)
+        if keep_schedule and data is None and history.get("next_check_at", 0) > now.timestamp():
+            continue
         schedule_next_check(updated, outcome, now.timestamp())
         atomic_write(HISTORY, json.dumps(updated).encode("utf-8"), 0o600)
         history = updated

@@ -25,6 +25,8 @@ Wenn du von der lokalen App wechselst, übernimm zuerst deine ESP-Adresse und so
 
 ## Prüfverhalten
 
+Beim Start prüft die App sofort, ob ein frisches, noch nicht ausgewertetes SLFork-Bild vorliegt.
+
 Nach einem Treffer prüft die App nach einer Stunde erneut. Bei Abweichungen, unklarer OCR oder fehlenden aktuellen Daten prüft sie alle fünf Minuten. Nach vier Stunden ohne bestätigte Übereinstimmung zeigt `sensor.rf1_pruefstatus` den Zustand `review_due` an. Diesen Status kannst du in eigenen Automationen verwenden.
 
 Die App liest sowohl normale als auch invertierte Bilder und übernimmt den Ausschnitt aus den SLFork-Ziffernrahmen. Falls die Rahmen fehlen, nutzt sie `ausschnitt` und `vorkomma_breite` aus der App-Konfiguration.

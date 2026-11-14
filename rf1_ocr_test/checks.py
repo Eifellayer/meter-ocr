@@ -79,20 +79,24 @@ def rolling_summary(history, now):
     }
 
 
-def record_sample(history, data, ocr, zone, now):
-    """Count each in-window cycle at most once, even after a restart."""
-    if "started_at" not in history:
-        history.update(started_at=now.timestamp(), confirmations=[], status="no_current_sample")
-    epoch = now.timestamp()
+def sample_epoch(data, zone, now):
     stamp = datetime.fromisoformat(data["esp_timestamp"])
     if stamp.tzinfo is None:
         stamp = stamp.replace(tzinfo=zone)
     captured = stamp.timestamp()
-    if not epoch - FRESH_SAMPLE_AGE < captured <= epoch + 60:
-        return False
-    if captured <= history.get("last_epoch", 0):
+    epoch = now.timestamp()
+    return captured if epoch - FRESH_SAMPLE_AGE < captured <= epoch + 60 else None
+
+
+def record_sample(history, data, ocr, zone, now):
+    """Count each in-window cycle at most once, even after a restart."""
+    captured = sample_epoch(data, zone, now)
+    if captured is None or captured <= history.get("last_epoch", 0):
         return False
 
+    epoch = now.timestamp()
+    if "started_at" not in history:
+        history.update(started_at=epoch, confirmations=[], status="no_current_sample")
     history["confirmations"] = [old for old in history["confirmations"] if old > epoch - WINDOW_SECONDS]
     raw = whole_m3(data["raw_value"])
     actual = whole_m3(data["actual_value"])
@@ -119,3 +123,4 @@ def schedule_next_check(history, outcome, checked_at):
         history.setdefault("failure_since", checked_at)
         interval = RETRY_INTERVAL
     history["next_check_at"] = checked_at + interval
+

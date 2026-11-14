@@ -1,5 +1,10 @@
 # Änderungen
 
+## 0.6.3
+
+- Beim Start wertet RF1 ein frisches, noch nicht geprüftes SLFork-Bild sofort aus.
+- Alte und bereits geprüfte Bilder zählen beim Neustart nicht erneut. Ohne neues Bild bleibt der geplante nächste Check bestehen.
+
 ## 0.6.2
 
 - Optionaler Hinweis in Home Assistant und einmalige Push-Erinnerung nach 24 Stunden. Offene Fälle lassen sich quittieren oder überspringen.

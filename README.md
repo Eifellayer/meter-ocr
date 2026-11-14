@@ -1,5 +1,9 @@
 # EifelLayer RF1
 
+> **Privates Hobbyprojekt · Verwendung auf eigene Gefahr**  
+> Der Quellcode ist öffentlich zugänglich. Die App wird ohne Zusage zu Support, Wartung oder künftigen Updates bereitgestellt.  
+> Die OCR kann Ziffern falsch erkennen. Für Abrechnungen und Meldungen an den Versorger gilt der direkt am Zähler abgelesene Stand.
+
 Home-Assistant-App zur unabhängigen Bildkontrolle eines Pipersberg G4 RF1 mit SLFork und lokaler OCR. Sie vergleicht die fünf Vorkommastellen mit dem SLFork-Wert.
 
 ## Voraussetzungen

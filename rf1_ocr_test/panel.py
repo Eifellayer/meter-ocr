@@ -3,9 +3,9 @@
 import html
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from queue import Full
+from queue import Empty, Full
 from secrets import compare_digest, token_urlsafe
-from threading import Thread
+from threading import Lock, Thread
 from urllib.parse import parse_qs, urlsplit
 
 SUPERVISOR_ADDRESS = "172.30.32.2"
@@ -30,6 +30,7 @@ img{{width:100%;height:auto}} h2{{font-size:1rem}}
 <select name="decimals">{decimal_options}</select></label>
 <button>Jetzt prüfen</button>
 </form>
+{request_status}
 <h2>Letzter manueller Test</h2>
 <dl><dt>Getestet um</dt><dd class="stamp" data-epoch="{manual_checked_at}">–</dd>
 <dt>Bildzeit</dt><dd class="stamp" data-epoch="{manual_image_time}">–</dd>
@@ -57,6 +58,7 @@ for (const el of document.querySelectorAll('.stamp')) {{
   const epoch = Number(el.dataset.epoch);
   if (epoch) el.textContent = new Date(epoch * 1000).toLocaleString('de-DE');
 }}
+if (location.search === '?test=queued') history.replaceState(null, '', location.pathname);
 let edited = false;
 document.querySelector('form').addEventListener('change', () => {{ edited = true; }});
 tick(); setInterval(tick, 1000);
@@ -80,6 +82,7 @@ def select_options(choices, chosen):
 def start_panel(history_path, current_image, good_image, requested, default_decimals):
     images = {"/aktuell.jpg": current_image, "/treffer.jpg": good_image}
     csrf_token = token_urlsafe(32)
+    request_lock = Lock()
 
     class Handler(BaseHTTPRequestHandler):
         def authorized(self):
@@ -100,7 +103,8 @@ def start_panel(history_path, current_image, good_image, requested, default_deci
         def do_GET(self):
             if not self.authorized():
                 return
-            path = urlsplit(self.path).path
+            url = urlsplit(self.path)
+            path = url.path
             if path in images:
                 try:
                     content = images[path].read_bytes()
@@ -126,7 +130,12 @@ def start_panel(history_path, current_image, good_image, requested, default_deci
             if manual.get("outside_window"):
                 manual_detail += " Die Bildzeit liegt außerhalb des Zeitfensters für automatische Prüfungen."
             settings = manual.get("settings", {})
+            request_status = (
+                '<p role="status">Test angefordert. Das Ergebnis erscheint unten.</p>'
+                if url.query == "test=queued" else ""
+            )
             self.reply(PAGE.format(**values,
+                request_status=request_status,
                 polarity_options=select_options(POLARITIES, settings.get("polarity", "auto")),
                 decimal_options=select_options(DECIMALS, str(settings.get("decimals", default_decimals))),
                 manual_checked_at=manual.get("checked_at", 0),
@@ -169,13 +178,19 @@ def start_panel(history_path, current_image, good_image, requested, default_deci
             if len(polarity) != 1 or polarity[0] not in POLARITIES or len(decimals) != 1 or decimals[0] not in DECIMALS:
                 self.send_error(400)
                 return
-            try:
-                requested.put_nowait({"polarity": polarity[0], "decimals": int(decimals[0])})
-            except Full:
-                self.send_error(429, "Ein manueller Test wartet bereits.")
-                return
+            settings = {"polarity": polarity[0], "decimals": int(decimals[0])}
+            with request_lock:
+                try:
+                    requested.put_nowait(settings)
+                except Full:
+                    # The worker may have taken the pending request in the meantime.
+                    try:
+                        requested.get_nowait()
+                    except Empty:
+                        pass
+                    requested.put_nowait(settings)
             self.send_response(303)
-            self.send_header("Location", "./")
+            self.send_header("Location", "./?test=queued")
             self.send_header("Content-Length", "0")
             self.end_headers()
 

@@ -1,5 +1,9 @@
 # Änderungen
 
+## 0.6.9
+
+- Mehrfaches Klicken auf „Jetzt prüfen“ zeigt eine Rückmeldung auf der RF1-Seite. Bei einem wartenden Test werden die neuesten Einstellungen verwendet.
+
 ## 0.6.8
 
 - Auf der RF1-Seite lassen sich Ziffernfarbe und Vergleichsgenauigkeit für „Jetzt prüfen“ einstellen. Die Ziffernfarbe kann automatisch erkannt oder manuell auf hell oder dunkel festgelegt werden.

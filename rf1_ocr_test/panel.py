@@ -87,7 +87,6 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <dt>Erkannter Stand</dt><dd>{ocr}</dd>
 <dt>Referenz</dt><dd>{reference}</dd>
 <dt>Prüfergebnis</dt><dd>{detail}</dd>
-{slfork}
 <dt>Bildzeit</dt><dd class="stamp" data-epoch="{image_time}">–</dd></dl></div>
 <section><div><h2>Aktuelles Bild</h2>{current}</div>
 <div><h2>Letzter Treffer</h2>{good}</div></section>
@@ -161,6 +160,11 @@ for (const el of document.querySelectorAll('.stamp')) {{
 if (location.search === '?test=queued') history.replaceState(null, '', location.pathname);
 let edited = false;
 document.querySelector('form').addEventListener('change', () => {{ edited = true; }});
+document.querySelector('form').addEventListener('submit', () => {{
+  const button = document.querySelector('#start-check');
+  button.disabled = true;
+  button.textContent = 'Prüfung läuft …';
+}});
 tick(); setInterval(tick, 1000);
 setInterval(() => {{
   if (!edited && !['queued','running','ocr'].includes(currentPhase) &&
@@ -178,18 +182,6 @@ def select_options(choices, chosen):
     return "".join(
         f'<option value="{value}"{" selected" if value == chosen else ""}>{label}</option>'
         for value, label in choices.items()
-    )
-
-
-def diagnostic_rows(data):
-    fields = (
-        ("slfork_value_status", "AI on the Edge · Wertstatus"),
-        ("slfork_last_processed_timestamp", "Letzte Messung am ESP"),
-        ("slfork_last_valid_timestamp", "Zeit des letzten gültigen Stands"),
-    )
-    return "".join(
-        f"<dt>{label}</dt><dd>{html.escape(str(data[key]))}</dd>"
-        for key, label in fields if data.get(key) not in (None, "")
     )
 
 
@@ -291,8 +283,6 @@ def start_panel(history_path, current_image, good_image, requested, default_deci
                 manual_ocr=html.escape(str(manual.get("ocr") or "–")),
                 manual_reference=html.escape(str(manual.get("reference") or "–")),
                 manual_detail=html.escape(manual_detail),
-                manual_slfork=diagnostic_rows(manual.get("slfork_diagnostics", {})),
-                slfork=diagnostic_rows(history.get("slfork_diagnostics", {})),
                 csrf=csrf_token,
                 last_good=history.get("last_match_at") or 0,
                 image_time=history.get("last_epoch") or 0,

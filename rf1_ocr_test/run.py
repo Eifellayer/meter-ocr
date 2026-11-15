@@ -16,7 +16,7 @@ import time
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
-from PIL import Image
+from PIL import Image, ImageDraw
 from websocket import WebSocketException
 
 from checks import (
@@ -32,6 +32,7 @@ MAX_RESPONSE_BYTES = 3_000_000
 MAX_TRANSFER_BYTES = 11_000
 DESTINATION = Path("/media/rf1/kontrollbild.jpg")
 GOOD_IMAGE = Path("/media/rf1/letzter_treffer.jpg")
+TEST_IMAGE = Path("/data/ocr-testvorschau.jpg")
 HISTORY = Path("/data/kontrollmessung.json")
 OPTIONS = Path("/data/options.json")
 EFFECTIVE_OPTIONS = Path("/data/rf1-settings.json")
@@ -163,6 +164,50 @@ def read_visible_digits(register, integer_width, whole_boxes, fraction_boxes, li
     return f"{whole}.{fraction.ljust(3, '?')}"
 
 
+def draw_test_preview(register, integer_width, whole_boxes, fraction_boxes, reading):
+    """Mark OCR digit regions and the actual read characters for manual diagnostics.
+
+    Green: OCR returned a digit at this position, red: it returned '?'.
+    The coordinates are approximate for manually configured crops without digit frames.
+    They do NOT assert a match against the reference value.
+    """
+    annotated = register.convert("RGB")
+    draw = ImageDraw.Draw(annotated)
+    h, w = annotated.height, annotated.width
+    if w <= 0 or h <= 0:
+        raise ValueError("Leerer OCR-Ausschnitt")
+    whole_width = max(1, min(integer_width, w))
+    boxes = list(whole_boxes[:5]) if len(whole_boxes) >= 5 else [
+        (whole_width * i // 5, 0, whole_width * (i + 1) // 5, h)
+        for i in range(5)
+    ]
+    fraction = list(fraction_boxes[:3])
+    if not fraction and whole_width < w:
+        fraction = [
+            (whole_width + (w - whole_width) * i // 3, 0,
+             whole_width + (w - whole_width) * (i + 1) // 3, h)
+            for i in range(3)
+        ]
+    chars = (str(reading or "").split(".", 1)[0].ljust(5, "?")[:5]
+             + str(reading or "").split(".", 1)[-1].ljust(3, "?")[:3]
+             if "." in str(reading or "") else str(reading or "").ljust(8, "?")[:8])
+    stroke = max(2, min(6, w // 240))
+    for idx, box in enumerate(boxes + fraction):
+        if idx >= 8:
+            break
+        l, t, r, b = [int(coord) for coord in box]
+        if not (0 <= l < r <= w and 0 <= t < b <= h):
+            continue
+        color = (36, 170, 92) if chars[idx].isdigit() else (203, 65, 77)
+        draw.rectangle((l, t, r - 1, b - 1), outline=color, width=stroke)
+        # The label is drawn on a filled patch for contrast against the counter.
+        label = chars[idx]
+        draw.rectangle((l, t, min(r, l + max(15, w // 45)), min(b, t + 16)),
+                       fill=color)
+        draw.text((l + 3, t + 2), label, fill=(255, 255, 255))
+    return annotated
+
+
 def transfer_jpeg(picture):
     rgb = picture.convert("RGB")
     for width in (640, 560, 480, 400, 320, 240, 160):
@@ -267,7 +312,9 @@ def main():
         raise ValueError("referenz_entitaet muss ein Home-Assistant-Sensor sein")
     default_decimals = options["vergleich_nachkommastellen"]
     default_attempts = options["ocr_versuche"]
-    auto_rules = {"decimals": default_decimals, "attempts": default_attempts, "polarity": "auto"}
+    auto_rules = {"decimals": default_decimals, "attempts": default_attempts, "polarity": "auto",
+                  "crop_mode": "auto", "crop": options["ausschnitt"],
+                  "width": options["vorkomma_breite"]}
     try:
         saved_rules = json.loads(AUTO_RULES.read_text(encoding="utf-8"))
         if (type(saved_rules.get("decimals")) is int and 0 <= saved_rules["decimals"] <= 3
@@ -275,8 +322,17 @@ def main():
             polarity = saved_rules.get("polarity", "auto")
             if polarity not in ("auto", "light", "dark"):
                 polarity = "auto"
+            crop_mode = saved_rules.get("crop_mode", "auto")
+            crop_text = saved_rules.get("crop", options["ausschnitt"])
+            width = saved_rules.get("width", options["vorkomma_breite"])
+            crop_valid = (isinstance(crop_text, str) and
+                          re.fullmatch(r"\\d{1,4}\\s*,\\s*\\d{1,4}\\s*,\\s*\\d{1,4}\\s*,\\s*\\d{1,4}", crop_text)
+                          and type(width) is int and 1 <= width <= 1920)
+            if crop_mode not in ("auto", "manual") or not crop_valid:
+                crop_mode, crop_text, width = "auto", options["ausschnitt"], options["vorkomma_breite"]
             auto_rules = {"decimals": saved_rules["decimals"],
-                          "attempts": saved_rules["attempts"], "polarity": polarity}
+                          "attempts": saved_rules["attempts"], "polarity": polarity,
+                          "crop_mode": crop_mode, "crop": crop_text, "width": width}
         else:
             print("Ungültige gespeicherte Automatikregeln; verwende die App-Konfiguration.")
     except FileNotFoundError:
@@ -291,16 +347,25 @@ def main():
         nonlocal auto_rules
         if (type(values.get("decimals")) is not int or not 0 <= values["decimals"] <= 3
                 or type(values.get("attempts")) is not int or not 1 <= values["attempts"] <= 10
-                or values.get("polarity") not in ("auto", "light", "dark")):
+                or values.get("polarity") not in ("auto", "light", "dark")
+                or values.get("crop_mode") not in ("auto", "manual")
+                or type(values.get("width")) is not int or not 1 <= values["width"] <= 1920
+                or not isinstance(values.get("crop"), str)
+                or not re.fullmatch(r"\\d{1,4}\\s*,\\s*\\d{1,4}\\s*,\\s*\\d{1,4}\\s*,\\s*\\d{1,4}", values["crop"])):
             raise ValueError("Ungültige Einstellungen für die automatische Kontrolle")
-        updated_rules = {"decimals": values["decimals"], "attempts": values["attempts"], "polarity": values["polarity"]}
+        coords = [int(part.strip()) for part in values["crop"].split(",")]
+        if not (0 <= coords[0] < coords[2] <= 1920 and 0 <= coords[1] < coords[3] <= 1920
+                and values["width"] <= coords[2] - coords[0]):
+            raise ValueError("Ungültiger Ausschnitt oder zu große Vorkommabreite")
+        updated_rules = dict(values)
+        updated_rules["crop"] = ",".join(str(part) for part in coords)
         atomic_write(AUTO_RULES, json.dumps(updated_rules, indent=2).encode("utf-8"), 0o600)
         auto_rules = updated_rules
 
     requested = Queue(maxsize=1)
     update_progress = start_panel(
         HISTORY, DESTINATION, GOOD_IMAGE, requested, default_decimals, default_attempts,
-        get_auto_rules, save_auto_rules, options["ausschnitt"], options["vorkomma_breite"],
+        get_auto_rules, save_auto_rules, options["ausschnitt"], options["vorkomma_breite"], TEST_IMAGE,
     )
     push_service = (options.get("push_dienst") or "").strip()
     reminder = None
@@ -389,6 +454,10 @@ def main():
                             manual_crop = tuple(int(part.strip()) for part in manual_options["crop"].split(","))
                             manual_width = manual_options["width"]
                             selected_overlay = None
+                        elif not manual and active_rules["crop_mode"] == "manual":
+                            manual_crop = tuple(int(part.strip()) for part in active_rules["crop"].split(","))
+                            manual_width = active_rules["width"]
+                            selected_overlay = None
                         register, integer_width, whole_boxes, fraction_boxes, source = select_register(
                             frame, selected_overlay, manual_crop, manual_width
                         )
@@ -420,7 +489,18 @@ def main():
                                        or image_time in history.get("confirmations", ()))
                     status, detail = compare_sample(sample, ocr, manual_options["decimals"],
                                                     ocr_confirmed=ocr_confirmed)
+                    try:
+                        preview = draw_test_preview(register, integer_width, whole_boxes,
+                                                    fraction_boxes, ocr)
+                        with io.BytesIO() as buffer:
+                            preview.save(buffer, "JPEG", quality=88, optimize=True)
+                            atomic_write(TEST_IMAGE, buffer.getvalue(), 0o600)
+                        preview_available = True
+                    except (OSError, ValueError) as error:
+                        print(f"OCR-Testvorschau konnte nicht erstellt werden: {error}")
+                        preview_available = False
                     manual_result = {
+                        "preview": preview_available,
                         "status": status,
                         "ocr_attempts": ocr_attempts,
                         "ocr": ocr,
@@ -454,7 +534,7 @@ def main():
             update_progress(request_id, "done", "Prüfung beendet.",
                             manual_result.get("ocr_attempts", 0), now.timestamp(),
                             outcome=manual_result.get("status", "capture_unavailable"),
-                            detail=manual_result["detail"])
+                            detail=manual_result["detail"], preview=manual_result.get("preview", False))
             continue
         if keep_schedule and data is None and history.get("next_check_at", 0) > now.timestamp():
             continue

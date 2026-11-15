@@ -108,6 +108,25 @@ class IngressFixture(TestCase):
 
 
 class IngressTests(IngressFixture):
+    def test_automatic_status_explains_three_retry_attempts_and_one_hour_wait(self):
+        self.history.write_text(json.dumps({
+            "check_status": "ocr_unclear", "failure_attempts": 2,
+            "next_check_at": time.time() + 300,
+        }))
+        status = json.loads(self.request("/automatic")[0])
+        self.assertEqual(2, status["failure_attempts"])
+        self.assertIn("2 von 3", status["recovery_notice"])
+        self.assertFalse(status["retry_suppressed"])
+
+        self.history.write_text(json.dumps({
+            "check_status": "ocr_unclear", "failure_attempts": 3,
+            "retry_suppressed": True, "next_check_at": time.time() + 3_600,
+        }))
+        status = json.loads(self.request("/automatic")[0])
+        self.assertIn("3 automatische Prüfungen fehlgeschlagen", status["recovery_notice"])
+        self.assertIn("höheren Zählerstand", status["recovery_notice"])
+        self.assertTrue(status["retry_suppressed"])
+
     def test_automatic_checks_can_be_paused_and_resumed_without_blocking_manual_tests(self):
         self.assertEqual((303, "./?paused=1"), self.submit("/automatik-pause", paused="1"))
         page, _ = self.request("/")
@@ -428,9 +447,10 @@ class BrowserTests(IngressFixture):
                     "callWS: request => { window.calls++;"
                     "if (request.type !== 'frontend/get_user_data' || request.key !== 'language')"
                     "throw new Error('Unexpected HA command');"
-                    f"return Promise.resolve({{value: {{language: '{profile}'}}}});"
+                    "return Promise.resolve({value: {language: window.haLanguage}});"
                     "}};"
                 )
+                script = f"window.haLanguage='{profile}';{script}"
                 if delay_ms:
                     script = f"setTimeout(() => {{{script}}}, {delay_ms});"
                 result = (f"<home-assistant></home-assistant><script>window.calls=0;{script}</script>"
@@ -465,12 +485,16 @@ class BrowserTests(IngressFixture):
 
             page.goto(parent + "/?de")
             expect_language("de")
-            self.assertEqual(1, page.evaluate("window.calls"))
+            self.assertEqual(2, page.evaluate("window.calls"))
             self.assertIn("Home Assistant: Deutsch", frame.locator("#language-select").inner_text())
             page.goto(parent + "/?late_de")
             expect_language("de")
-            self.assertEqual(1, page.evaluate("window.calls"))
+            self.assertEqual(2, page.evaluate("window.calls"))
             page.goto(parent + "/?en")
+            expect_language("en")
+            page.evaluate("window.haLanguage='de-AT'")
+            expect_language("de")
+            page.evaluate("window.haLanguage='en-US'")
             expect_language("en")
             if frame.locator("#setup-dialog").evaluate("dialog => dialog.open"):
                 frame.locator("#setup-skip").click()

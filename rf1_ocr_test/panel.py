@@ -75,7 +75,11 @@ header{{display:flex;align-items:baseline;justify-content:space-between;gap:.5re
 .automatic-banner button{{margin-left:auto;padding:.35rem .7rem;min-height:2.75rem}}
 .automatic-interval-hint{{display:flex;align-items:center;gap:.6rem;margin:.6rem 0 1rem;color:var(--muted)}}
 .automatic-interval-hint[hidden]{{display:none}}
+.failure-recovery{{margin:.5rem 0;padding:.65rem .75rem;border:1px solid #b58b38;border-radius:.65rem;background:light-dark(#fff8df,#3b311d);color:light-dark(#704c08,#ffdf8a);font-size:.9rem}}
+.failure-recovery[hidden]{{display:none}}
+.failure-recovery[data-state="waiting"]{{font-weight:650}}
 .activity-status{{margin:.15rem 0 0;color:var(--muted);font-size:.9rem;overflow-wrap:anywhere}}
+.activity-status[data-offline="pending"]{{color:light-dark(#704c08,#ffdf8a)}}
 .activity-status[data-offline="true"]{{color:light-dark(#8d282e,#ffc0c1);font-weight:650}}
 .connection-status{{margin:.35rem 0;color:var(--muted);font-size:.9rem}}
 .connection-status[data-state="connected"]{{color:light-dark(#155d39,#a2e5bc)}}
@@ -134,6 +138,7 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .preview img{{display:block;width:100%;max-width:740px;height:auto;border-radius:.5rem;border:1px solid var(--edge)}}
 .preview .legend{{margin:.45rem 0 0;font-size:.86rem;color:var(--muted)}}
 .green-key{{color:light-dark(#13824c,#7bcfa3);font-weight:700}}
+.yellow-key{{color:light-dark(#916509,#f1b836);font-weight:700}}
 .red-key{{color:light-dark(#b43c44,#eda2a8);font-weight:700}}
 .apply-crop{{margin-top:.8rem}}
 .ocr-details{{margin:.7rem 0;font-size:.9rem}}
@@ -222,6 +227,7 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <dt>Letzte Prüfung</dt><dd id="automatic-last-check" class="stamp" data-epoch="{last_check}">–</dd>
 <dt>Letzter bestätigter Abgleich</dt><dd id="automatic-last-match" class="stamp" data-epoch="{last_match}">–</dd>
 <dt>Nächste Prüfung</dt><dd id="countdown">–</dd></dl>
+<p class="failure-recovery" id="automatic-recovery" data-state="retrying" {recovery_hidden}>{recovery_notice}</p>
 <p class="activity-status"><strong>Automatik:</strong> <span id="automatic-activity">{automatic_activity}</span></p>
 <details class="ocr-details" id="automatic-ocr-details" hidden>
 <summary>Mehr Infos: Was wurde bei den OCR-Versuchen gelesen?</summary>
@@ -237,11 +243,11 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 entity: sensor.rf1_ocr_zaehlerstand
 name: Zählerstand (OCR)</code></pre>
 </details>
-<details class="automatic-images" id="automatic-images"><summary>Erkennungsbild</summary>
+<details class="automatic-images" id="automatic-images"><summary>Letztes Testbild</summary>
 <div class="preview" id="test-preview" data-auto-src="{automatic_preview_src}" data-auto-version="{automatic_preview_version}" data-auto-available="{automatic_preview_available}" {automatic_preview_hidden}>
-<h2 id="preview-heading">Letzte automatische Erkennung</h2>
-<img id="test-preview-image" src="{automatic_preview_src}" alt="Zählerbild mit grün markierten erkannten Ziffern und rot markierten unklaren Stellen">
-<p class="legend"><span class="green-key">Grün:</span> Ziffer wurde gelesen · <span class="red-key">Rot:</span> Ziffer unklar. Die Farbrahmen zeigen die OCR-Erkennung, nicht die Übereinstimmung mit dem Referenzstand. Ohne automatisch erkannte Ziffernrahmen sind die Bereiche nur näherungsweise aufgeteilt.</p>
+<h2 id="preview-heading">Letztes Testbild</h2>
+<img id="test-preview-image" src="{automatic_preview_src}" alt="Zählerbild mit farbig markierten erkannten und unsicheren Ziffern">
+<p class="legend"><span class="green-key">Grün:</span> Ziffer gelesen · <span class="yellow-key">Gelb:</span> Ziffer schwankte zwischen OCR-Versuchen oder wurde aus mehreren Versuchen zusammengesetzt · <span class="red-key">Rot:</span> Ziffer weiterhin unklar. Die Farben zeigen OCR-Sicherheit, nicht die Übereinstimmung mit dem Referenzstand. Ohne automatisch erkannte Ziffernrahmen sind die Bereiche nur näherungsweise aufgeteilt.</p>
 </div>
 </details>
 <div class="manual-test-area" id="manual-test-area" {manual_area_hidden}>
@@ -354,14 +360,14 @@ name: Zählerstand (OCR)</code></pre>
 <label>OCR-Versuche pro Bild<select name="attempts">{auto_attempt_options}</select></label>
 <label>Ziffernfarbe<select name="polarity">{auto_polarity_options}</select></label>
 <label>Prüfintervall (Minuten)<input type="number" name="interval_minutes" min="5" max="1440" value="{interval_minutes}" required></label>
-<details class="setup-help"><summary>ⓘ Warum das Prüfintervall ändern?</summary><p>Nach einer unklaren Ablesung prüft die App einmal nach fünf Minuten erneut. Schlägt auch diese Prüfung fehl, kehrt sie zum eingestellten Intervall zurück – standardmäßig eine Stunde. Ein kürzeres Intervall kann helfen, wenn sich der Zähler während der Drehung vorübergehend schlecht lesen lässt.</p></details>
+<details class="setup-help"><summary>ⓘ Warum das Prüfintervall ändern?</summary><p>Nach einem fehlgeschlagenen automatischen Test folgen bis zu zwei weitere Prüfungen im Abstand von fünf Minuten. Sind alle drei erfolglos, wartet die App eine Stunde und prüft dann erneut. Nach Erfolg gilt wieder dein eingestelltes Intervall. Ein kürzeres Intervall kann helfen, wenn sich der Zähler beim Weiterdrehen vorübergehend schlecht lesen lässt.</p></details>
 <label>Maximaler Durchfluss (m³/h)<input name="max_flow" type="text" inputmode="decimal" maxlength="10" value="{max_flow}" required></label>
 <div class="crop-fields setup-help" id="wizard-crop-fields">
 <label>Bildbereich (links, oben, rechts, unten)<input name="crop" value="{auto_crop_value}" maxlength="30" placeholder="52,56,564,132"></label>
 <label>Bilddrehung im Uhrzeigersinn<select name="rotation">{auto_rotation_options}</select></label>
 <label>Breite des Vorkomma-Bereichs in Pixeln<input name="width" type="number" min="1" max="9999" value="{auto_width_value}"></label>
 </div>
-<details class="setup-help"><summary>ⓘ Bild einrichten</summary><p>Die automatische Erkennung versucht, den Ziffernrahmen zu finden. Bei einer unsicheren Ablesung folgen bis zu zehn zusätzliche Bildauswertungen; die App setzt einzelne Ziffern nur zusammen, wenn sie in der Mehrheit der Versuche gleich erkannt wurden. Nach zwei erfolglosen Prüfungen mit kurzem Abstand wartet sie wieder das eingestellte Intervall ab. Beim Livebild kann AI Meter Reader bis zu 10 frische Standbilder innerhalb von höchstens 20 Sekunden prüfen.</p></details>
+<details class="setup-help"><summary>ⓘ Bild einrichten</summary><p>Die automatische Erkennung versucht, den Ziffernrahmen zu finden. Bei einer unsicheren Ablesung folgen bis zu zehn zusätzliche Bildauswertungen; die App setzt einzelne Ziffern nur bei einer strikten Mehrheit zusammen. Nach drei fehlgeschlagenen automatischen Prüfungen mit unterschiedlichen Bildabrufen wartet sie eine Stunde auf ein neues Bild oder einen höheren Zählerstand. Prüfe bei wiederholten Fehlern auch Beleuchtung, Abstand und Fokus. Beim Livebild kann AI Meter Reader bis zu 10 frische Standbilder innerhalb von höchstens 20 Sekunden prüfen.</p></details>
 <div class="setup-controls"><button type="button" class="setup-back">Zurück</button><span class="setup-count"></span><button type="button" class="setup-next">Weiter</button></div>
 </fieldset>
 <fieldset class="setup-step" data-step="3"><legend>4. Hinweise und speichern</legend>
@@ -501,6 +507,7 @@ Bei anhaltenden Problemen benachrichtigen
 <script>
 let next = {next_check};
 const lang = '{language}';
+let automaticStatusFailures = 0;
 const searchPrefs = new URLSearchParams(location.search);
 const tabs = [...document.querySelectorAll('[role="tab"]')];
 const views = [...document.querySelectorAll('.tab-content')];
@@ -743,7 +750,7 @@ async function refreshTestStatus() {{
     }}
     if (job.phase === 'done' && job.preview) {{
       preview.hidden = false;
-      previewHeading.textContent = 'Manueller Test';
+      previewHeading.textContent = 'Letztes Testbild';
       const url = 'testvorschau.jpg?v=' + encodeURIComponent(String(job.checked_at));
       if (previewImage.getAttribute('src') !== url) previewImage.setAttribute('src', url);
       automaticImages.open = true;
@@ -756,7 +763,7 @@ async function refreshTestStatus() {{
       }}
       const available = preview.dataset.autoAvailable === 'true';
       preview.hidden = !available;
-      previewHeading.textContent = 'Letzte automatische Erkennung';
+      previewHeading.textContent = 'Letztes Testbild';
       if (available && previewImage.getAttribute('src') !== preview.dataset.autoSrc) {{
         previewImage.setAttribute('src', preview.dataset.autoSrc);
       }}
@@ -862,6 +869,7 @@ async function refreshAutomatic() {{
     const response = await fetch('automatic?lang=' + lang, {{cache: 'no-store'}});
     if (!response.ok) throw new Error();
     const sample = await response.json();
+    automaticStatusFailures = 0;
     next = sample.next_check;
     document.querySelector('#paused-notice').hidden = !sample.paused;
     document.querySelector('#pause-auto-form').hidden = sample.paused;
@@ -879,6 +887,10 @@ async function refreshAutomatic() {{
     document.querySelector('#automatic-ocr').textContent = sample.ocr;
     document.querySelector('.activity-status').dataset.offline = 'false';
     document.querySelector('#automatic-activity').textContent = sample.activity;
+    const recovery = document.querySelector('#automatic-recovery');
+    recovery.hidden = !sample.failure_attempts;
+    recovery.dataset.state = sample.retry_suppressed ? 'waiting' : 'retrying';
+    recovery.textContent = sample.recovery_notice;
     document.querySelector('#source-connection').textContent = 'Quelle: ' + sample.source_connection;
     document.querySelector('#source-connection').dataset.state = sample.source_connection_state;
     document.querySelector('#automatic-reference').textContent = sample.reference;
@@ -900,8 +912,17 @@ async function refreshAutomatic() {{
       if (!image.parentNode) container.replaceChildren(image);
     }}
   }} catch (_) {{
-    document.querySelector('.activity-status').dataset.offline = 'true';
-    document.querySelector('#automatic-activity').textContent = 'Keine Verbindung zur App. Sie könnte gestoppt oder vorübergehend nicht erreichbar sein.';
+    automaticStatusFailures += 1;
+    const status = document.querySelector('.activity-status');
+    const unavailable = automaticStatusFailures >= 3;
+    status.dataset.offline = unavailable ? 'true' : 'pending';
+    document.querySelector('#automatic-activity').textContent = lang === 'en'
+      ? unavailable
+        ? 'App status has not responded for about 45 seconds. Retrying…'
+        : 'App status refresh failed temporarily. Retrying…'
+      : unavailable
+        ? 'Der App-Status antwortet seit etwa 45 Sekunden nicht. Neuer Versuch läuft …'
+        : 'Statusaktualisierung kurz fehlgeschlagen. Neuer Versuch läuft …';
   }}
   setTimeout(refreshAutomatic, 15000);
 }}
@@ -1074,6 +1095,27 @@ def start_panel(
                 detail = ""
         if language == "en":
             heading = EN_UI[heading]
+        try:
+            failure_attempts = max(0, int(history.get("failure_attempts", 0) or 0))
+        except (TypeError, ValueError):
+            failure_attempts = 0
+        retry_suppressed = bool(history.get("retry_suppressed"))
+        if failure_attempts and retry_suppressed:
+            recovery_notice = (
+                f"{failure_attempts} automatic checks failed. Waiting for a higher meter reading or a new image. "
+                "The next check is in about one hour."
+                if language == "en" else
+                f"{failure_attempts} automatische Prüfungen fehlgeschlagen. Es wird auf einen höheren Zählerstand "
+                "oder ein neues Bild gewartet. Die nächste Prüfung erfolgt in etwa einer Stunde."
+            )
+        elif failure_attempts:
+            recovery_notice = (
+                f"Failed checks: {failure_attempts} of 3. A new image will be checked in five minutes."
+                if language == "en" else
+                f"Fehlprüfungen: {failure_attempts} von 3. In fünf Minuten wird ein neues Bild geprüft."
+            )
+        else:
+            recovery_notice = ""
         activity = get_activity() if get_activity else {"detail": "Wartet auf die nächste automatische Prüfung."}
         if language == "en":
             from i18n import english_activity
@@ -1097,7 +1139,9 @@ def start_panel(
             "last_check": last_check_at(history),
             "last_match": history.get("last_match_at"),
             "readings": history.get("ocr_readings", []) if show_attempts else [],
-            "failure_attempts": history.get("failure_attempts", 0),
+            "failure_attempts": failure_attempts,
+            "retry_suppressed": retry_suppressed,
+            "recovery_notice": recovery_notice,
             "activity": activity.get("detail", "Wartet auf die nächste automatische Prüfung."),
             "paused": bool(get_auto_paused()) if get_auto_paused else False,
             "source_connection": source_connection,
@@ -1189,13 +1233,12 @@ def start_panel(
                 mode = "auto"
             if mode not in MODES:
                 mode = "auto"
-            profile = query.get("ui", [""])[0] if user and mode == "auto" else ""
+            profile = query.get("ha_language", query.get("ui", [""]))[0] if user and mode == "auto" else ""
             language = mode if mode in SUPPORTED else profile if profile in SUPPORTED else fallback
             source_name = {"de": "Deutsch", "en": "English"}.get(profile)
             automatic = "Automatic" if language == "en" else "Automatisch"
             automatic += f" (Home Assistant: {source_name})" if source_name else " (Home Assistant)"
-            scripts = (f"<script>{profile_script(user)}</script>"
-                       if user and mode == "auto" and not source_name else "")
+            scripts = f"<script>{profile_script(user)}</script>" if user and mode == "auto" else ""
             summary = automatic_summary(history, language, auto_rules)
             delivery = get_delivery()
             source, setup_pending = get_source()
@@ -1209,6 +1252,7 @@ def start_panel(
                      "Wähle eine Bildquelle, um die automatische Kontrolle zu starten.")
             values = {name: html.escape(summary[name]) for name in ("ocr", "reference", "detail")}
             values["automatic_activity"] = html.escape(summary["activity"])
+            values["recovery_notice"] = html.escape(summary["recovery_notice"])
             values["source_connection"] = html.escape(summary["source_connection"])
             values["source_connection_state"] = html.escape(summary["source_connection_state"])
             manual_saved = load_manual_settings()
@@ -1370,6 +1414,7 @@ def start_panel(
                 last_check=summary["last_check"] or 0,
                 last_match=summary["last_match"] or 0,
                 next_check=json.dumps(summary["next_check"]),
+                recovery_hidden="hidden" if not summary["failure_attempts"] else "",
                 current=(
                     '<img src="aktuell.jpg?v={}" alt="'.format(summary["current"]) +
                     ("Latest check image" if language == "en" else "Aktuelles Kontrollbild") + '">'

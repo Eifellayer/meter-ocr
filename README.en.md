@@ -6,11 +6,13 @@
 
 [Deutsch / German](README.md) · [English](README.en.md)
 
-**Current version: 0.3.1 Alpha.** Before version 0.5, testing uses the regular AI Meter Reader app. From 0.5 onward, Beta builds are reserved for larger changes that need dedicated testing.
+📘 [German illustrated user guide (PDF)](docs/Bedienungsanleitung-AI-Meter-Reader.pdf) · [App documentation](rf1_ocr_test/DOCS.md)
+
+**Current version: 0.4.0 Alpha.** This release remains on the regular test channel. After 0.4, a Hall / pulse sensor is planned as the first separate Beta feature because it needs a real hardware test.
 
 ## Beta testers wanted
 
-Do you use Home Assistant with a gas, water, or other meter? We are looking for testers with different cameras, crops, and lighting conditions. Until version 0.5, the regular app is the testing channel. I use AI on the Edge for real-world checks; other sources and meter types have so far been tested with simulations only. To help, report your app version, meter type, and image source through [GitHub Issues](https://github.com/Eifellayer/meter-ocr/issues). Please do not post credentials or unredacted photos containing personal information.
+Do you use Home Assistant with a gas, water, or other meter? We are looking for testers with different cameras, crops, and lighting conditions. Version 0.4.0 remains on the regular Alpha test channel. After 0.4, a Hall / pulse sensor is planned as the first separate Beta feature because it needs a real hardware test. I use AI on the Edge for real-world checks; other sources and meter types have so far been tested with simulations only. To help, report your app version, meter type, and image source through [GitHub Issues](https://github.com/Eifellayer/meter-ocr/issues). Please do not post credentials or unredacted photos containing personal information.
 
 AI Meter Reader reads camera images with **local Tesseract OCR**. It can provide its own reading from an ESPHome or Home Assistant camera, or double-check an existing reading from AI on the Edge / SLFork or a reference sensor.
 
@@ -24,16 +26,16 @@ By default, the app compares the **five digits for whole cubic meters (m³)**. U
 
 The app downloads the latest available meter image and reference reading from SLFork, or uses the configured Home Assistant camera and optionally a cumulative sensor in m³. It detects digit frames automatically when possible; otherwise you can specify a crop.
 
-For an uncertain automatic reading, the app can run up to ten additional image-processing profiles (15 attempts maximum) and combines digits only when a strict majority agrees. After the first failed check, it captures a fresh image after five minutes, including from a Home Assistant camera. If the second run also fails, it returns to the configured interval (one hour by default). On a valid reference reading, processing stops. A successful OCR read without a reference is shown as **unverified**, not as a confirmed match.
+For an uncertain automatic reading, the app can run up to ten additional image-processing profiles (15 attempts maximum) and combines digits only when a strict majority agrees. After a failed automatic check, it makes up to two more image checks at five-minute intervals. Each check requests the current image; its timestamp determines whether it is new. If all three checks fail, it waits one hour for a higher reading or a new image, then tries again. After a successful match, the selected check interval applies again. A successful OCR read without a reference is shown as **unverified**, not as a confirmed match.
 
 ## Install
 
-1. In Home Assistant, open **Settings → Apps → Install app → ⋮ → Repositories** and add **Add-ons by Eifellayer** using the [shared link](https://github.com/Eifellayer/meter-ocr).
+1. In Home Assistant, open **Settings → Apps → Install app → ⋮ → Repositories** and add **Add-ons by Eifellayer** using the [Stable link](https://github.com/Eifellayer/meter-ocr#stable). Version 0.4.0 is the Alpha test build; the planned Hall / pulse sensor feature will be prepared separately on the Beta channel.
 2. Install **AI Meter Reader (Alpha)**. Releases below 0.5 are Alpha and use the same regular app as their test channel.
 3. Configure `esp_url` for the SLFork ESP, for example `http://esp-gaszaehler.local`. Alternatively configure `kamera_entitaet` and optionally `referenz_entitaet`.
 4. Start the app and open its web interface.
 
-A Home Assistant installation with Supervisor is required on **AMD64 or ARM64**. There is no separate Beta app before version 0.5. From 0.5 onward, Beta builds are reserved for larger changes that need dedicated testing. Back up your Home Assistant configuration before updating.
+A Home Assistant installation with Supervisor is required on **AMD64 or ARM64**. The planned Hall / pulse sensor is not part of 0.4.0; it will be tested separately on the Beta channel. Back up your Home Assistant configuration before updating.
 
 ## First setup and image source
 
@@ -96,7 +98,7 @@ The main screen shows the last recognized value, reference value, verification r
 
 Saved automatic rules persist across app restarts. They take precedence over the corresponding Home Assistant configuration fields. When the comparison precision changes, the automatic confirmation count starts over so matches from the old precision are not treated as new evidence.
 
-A successful check is normally repeated after **one hour**. After the first failure, the app captures a fresh image after **five minutes**; if that run also fails, it returns to the selected interval. With the default settings, `sensor.rf1_pruefstatus` reports `review_due` after four hours of failed checks.
+A successful check is normally repeated after **one hour**. After a failure, up to two additional image checks follow at **five-minute intervals**. If all three checks fail, the app waits **one hour** for a higher reading or new image before trying again. The overview shows the number of failed checks and the wait reason. With the default settings, `sensor.rf1_pruefstatus` reports `review_due` after four hours of failed checks.
 
 Use **Pause automatic checks** to stop scheduled checks and **Resume automatic checks** to continue. A large yellow notice shows the paused state; manual tests remain available. The pause survives app restarts. The overview also tells you whether the app is waiting, capturing an image, or reading it, and whether the ESP/camera returned a fresh image. If the app is stopped or unavailable, an open page reports the lost connection.
 

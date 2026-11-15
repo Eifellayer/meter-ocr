@@ -32,15 +32,21 @@ EN_UI = {
     "Vorschlag bei wiederholt unlesbarer Ziffer ausblenden": "Hide the suggestion for a repeatedly unreadable digit",
     RAW_ROW_UNCLEAR: "Could not find a clear digit row. Set the crop in the manual test.",
     MANUAL_ROW_UNCLEAR: "The digits are hard to read. Check the image rotation, camera angle, focus and lighting.",
-    "Ausschnitt im Bild ziehen": "Draw a crop on the image",
     "Ausschnitt zurücksetzen": "Reset crop",
     "Ausschnitt zurückgesetzt. Die Automatik sucht die Ziffernreihe wieder selbst.":
         "Crop reset. Automatic checks will locate the digit row again.",
-    "Ziehe mit Maus oder Finger einen Rahmen um die gesamte Ziffernreihe. Prüfe danach den Ausschnitt mit „Jetzt prüfen“.":
-        "Draw a rectangle around the full digit row with a mouse or finger. Then select “Run check now” to test the crop.",
+    "Ziehe mit Maus oder Finger einen Rahmen um die gesamte Ziffernreihe.":
+        "Draw a frame around the full row of digits with a mouse or finger.",
     "Originalbild zum Einstellen des Ausschnitts": "Original image for setting the crop",
-    "Kein Bild vorhanden. Starte einen manuellen Test oder wähle ein eigenes Bild.":
-        "No image available. Run a manual test or choose your own image.",
+    "Kamerabild wird geladen …": "Loading camera image …",
+    "Kein Kamerabild verfügbar. Wähle ein eigenes Bild oder starte einen Test.":
+        "No camera image available. Choose your own image or run a test.",
+    "Kein Kamerabild verfügbar. Prüfe die Bildquelle oder warte auf die nächste automatische Prüfung.":
+        "No camera image available. Check the image source or wait for the next automatic check.",
+    "Ausschnitt, Drehung und Einstellungen speichern": "Save crop, rotation and settings",
+    "Ausschnitt und Drehung speichern": "Save crop and rotation",
+    "Ausschnitt und Drehung für manuelle Tests gespeichert.": "Crop and rotation saved for manual tests.",
+    "Einstellungen speichern": "Save settings",
     "Stand aus AI on the Edge oder aus dem gewählten Home-Assistant-Sensor": "Reading from AI on the Edge or the selected Home Assistant sensor",
     "Stand aus der ersten Aufnahme oder aus einer externen Quelle": "Reading from the first image or an external source",
     "Zweite Aufnahme steht aus": "Waiting for the second image",

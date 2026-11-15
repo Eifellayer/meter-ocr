@@ -345,6 +345,11 @@ def main():
         data = None
         outcome = "capture_unavailable"
         updated = dict(history)
+        # Confirmations obtained with another precision are not valid evidence
+        # for the newly chosen automatic comparison rules.
+        if history.get("comparison_decimals", decimals) != decimals:
+            updated["confirmations"] = []
+            updated.pop("last_match_at", None)
         updated["comparison_decimals"] = decimals
         updated["check_detail"] = "Das Zählerbild oder die Messwerte sind nicht verfügbar. Bitte die ESP- bzw. Kameraverbindung prüfen."
         manual_result = {"detail": updated["check_detail"]}

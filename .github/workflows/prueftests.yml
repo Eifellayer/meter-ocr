@@ -92,5 +92,6 @@ jobs:
           assert run.CHECK_ENTITY == "sensor.meter_ocr_beta_pruefstatus"
           assert str(run.DESTINATION.parent) == "/media/meter_ocr_beta"
           assert reminder.NOTICE_PREFIX == "meter_ocr_beta_review_"
+          assert reminder.SKIP_PREFIX == "METER_OCR_BETA_SKIP_"
           '
           docker run --rm --entrypoint tesseract meter-ocr-beta-test --list-langs | grep -x eng

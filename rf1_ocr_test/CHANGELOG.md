@@ -1,5 +1,9 @@
 # Changelog
 
+## In Vorbereitung
+
+- Beim ersten Einrichten wählst du die Bildquelle selbst. Der Assistent erklärt die drei Modi direkt neben der Auswahl und empfiehlt ESPHome für den Einstieg mit einer Kamera.
+
 ## 0.4.3 Alpha
 
 - Bei drei Nachkommastellen erklärt die Einrichtung, warum die letzte Stelle Fehlmeldungen verursachen kann.

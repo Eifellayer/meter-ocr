@@ -45,6 +45,8 @@ A Home Assistant installation with Supervisor is required on **AMD64 or ARM64**.
 
 On first open, a compact setup wizard guides you through the image source, meter type, digit format, crop, schedule and notifications. You can reopen it later; saved values are prefilled for quick edits. Explanations expand on demand. Automatic checks remain separate from manual diagnostics.
 
+Choose an image source first. If you are starting with a camera, **ESPHome / camera** is the recommended choice. The guide next to the selector explains when to use the other modes. If you skip setup, automatic checks wait until you save an image source.
+
 | Mode | What it uses |
 | --- | --- |
 | **SLFork / AI on the Edge** | The ESP supplies the image and reference reading. Enter its address. |

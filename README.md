@@ -48,6 +48,8 @@ Technisch werden die Web-Einstellungen separat im App-Datenverzeichnis (`/data/a
 
 Beim ersten Öffnen führt ein kompakter Einrichtungsassistent durch Bildquelle, Zählertyp, Stellenformat, Bildbereich, Prüfplan und Benachrichtigungen. Die Einrichtung kann jederzeit erneut geöffnet werden; aktuelle Werte sind vorausgefüllt, sodass sich einzelne Einstellungen schnell ändern lassen. Hilfetexte sind bei Bedarf aufklappbar. Die automatische Prüfung bleibt klar vom manuellen Diagnosebereich getrennt.
 
+Wähle zuerst deine Bildquelle. Wer neu mit einer Kamera startet, wählt am einfachsten **ESPHome / Kamera**. Neben der Auswahl steht, wann die anderen Modi passen. Überspringst du die Einrichtung, wartet die Automatik, bis du eine Bildquelle speicherst.
+
 | Modus | Wann passt er? |
 | --- | --- |
 | **SLFork / AI on the Edge** | Dein vorhandener ESP liefert das Foto und den Vergleichswert. Gib seine Adresse ein. |

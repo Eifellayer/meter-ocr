@@ -457,6 +457,7 @@ def main():
         raise ValueError("ausschnitt erwartet links, oben, rechts, unten")
     token = os.environ["SUPERVISOR_TOKEN"]
     history = json.loads(HISTORY.read_text(encoding="utf-8")) if HISTORY.exists() else {}
+    source_selected = configured or bool(history.get("last_epoch"))
     camera = (options.get("kamera_entitaet") or "").strip()
     reference = (options.get("referenz_entitaet") or "").strip()
     if camera and not CAMERA.fullmatch(camera):
@@ -470,6 +471,7 @@ def main():
     initial_source_key = [configured_source["mode"], camera or configured_source["url"].rstrip("/"), reference if camera else ""]
     try:
         configured_source = source_rules(json.loads(SOURCE_SETTINGS.read_text(encoding="utf-8")))
+        source_selected = True
         setup_pending = False
     except FileNotFoundError:
         pass
@@ -477,13 +479,14 @@ def main():
         print(f"Bildquelle konnte nicht geladen werden: {type(error).__name__}")
 
     def get_source():
-        return dict(configured_source), setup_pending
+        return {**configured_source, "selected": source_selected}, setup_pending
 
     def save_source(values):
-        nonlocal configured_source, setup_pending
+        nonlocal configured_source, setup_pending, source_selected
         validated = source_rules(values)
         atomic_write(SOURCE_SETTINGS, json.dumps(validated).encode("utf-8"), 0o600)
         configured_source, setup_pending = validated, False
+        source_selected = True
 
     default_decimals = options["vergleich_nachkommastellen"]
     default_attempts = options["ocr_versuche"]
@@ -710,7 +713,7 @@ def main():
     print(f"{APP_NAME} gestartet")
 
     def perform_factory_reset():
-        nonlocal history, configured_source, setup_pending, auto_rules, delivery
+        nonlocal history, configured_source, setup_pending, auto_rules, delivery, source_selected
         nonlocal pending_image, startup, published_standalone, snapshot
         nonlocal handled_automatic_request
         try:
@@ -726,6 +729,7 @@ def main():
             auto_paused["value"] = False
             configured_source = dict(default_source)
             setup_pending = True
+            source_selected = configured
             auto_rules = dict(default_auto_rules)
             delivery = dict(default_delivery)
             pending_image = None
@@ -788,7 +792,7 @@ def main():
             set_activity("paused", "Automatik pausiert. Manuelle Tests bleiben verfügbar.")
             wake_worker.wait(timeout=15)
             continue
-        if waiting_for_setup and not manual:
+        if (waiting_for_setup or not active_source["selected"]) and not manual:
             set_activity("waiting", "Einrichtung erforderlich. Bitte Bildquelle festlegen.")
             wake_worker.wait(timeout=2)
             continue

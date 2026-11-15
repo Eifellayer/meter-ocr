@@ -183,6 +183,33 @@ class OCRTests(TestCase):
 
 
 class StateTests(TestCase):
+    def test_skipping_setup_does_not_fetch_the_placeholder_slfork_url(self):
+        class WaitingForSource(Exception):
+            pass
+
+        class StopOnWait(run.Event):
+            def wait(self, timeout=None):
+                raise WaitingForSource
+
+        folder = Path(self.enterContext(TemporaryDirectory()))
+        files = {key: folder / key for key in (
+            "OPTIONS", "HISTORY", "EFFECTIVE_OPTIONS", "AUTO_RULES", "AUTO_PAUSED",
+            "LANGUAGE_MODES", "SOURCE_SETTINGS", "NOTIFICATIONS",
+        )}
+        files["OPTIONS"].write_text("{}")
+        self.enterContext(patch.multiple(run, **files, Event=StopOnWait))
+        self.enterContext(patch.dict(os.environ, {"SUPERVISOR_TOKEN": "stub"}))
+
+        def skip_in_panel(*_, **kwargs):
+            kwargs["skip_setup"]()
+            return None, None, None
+
+        self.enterContext(patch.object(run, "start_panel", skip_in_panel))
+        capture = self.enterContext(patch.object(run, "capture"))
+        with self.assertRaises(WaitingForSource):
+            run.main()
+        capture.assert_not_called()
+
     def test_last_digit_can_pass_with_warning_after_three_distinct_samples(self):
         now = datetime.now(timezone.utc)
         for strict in (False, True):

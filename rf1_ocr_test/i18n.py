@@ -299,6 +299,15 @@ EN_UI = {
     "3. Bildausschnitt und Prüfplan": "3. Image area and schedule",
     "4. Hinweise und speichern": "4. Alerts and save",
     "Woher kommt das Zählerbild?": "Where does the meter image come from?",
+    "Erklärung der Bildquellen": "Image source guide",
+    "ESPHome / Kamera:": "ESPHome / camera:",
+    "Empfohlen für den Einstieg mit einer Kamera. Die App liest den Stand selbst.":
+        "Recommended when starting with a camera. The app reads the meter itself.",
+    "Home-Assistant-Kamera mit Vergleichswert:": "Home Assistant camera with reference reading:",
+    "Die App holt pro Prüfung ein Standbild und kann den Wert mit einem vorhandenen Sensor abgleichen.":
+        "The app takes a snapshot for each check and can compare the reading with an existing sensor.",
+    "Der ESP liefert das Bild und seinen Messwert. Die App liest das Bild zur Kontrolle selbst.":
+        "The ESP provides the image and its reading. The app reads the image independently for comparison.",
     "Home-Assistant-Kamera (Livebild, Standbild je Prüfung)": "Home Assistant camera (live image, one snapshot per check)",
     "Home Assistant camera (snapshot per check)": "Home Assistant camera (live image, one snapshot per check)",
     "ⓘ Welcher Weg passt?": "ⓘ Which source should I choose?",

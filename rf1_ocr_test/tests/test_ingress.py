@@ -61,6 +61,7 @@ class IngressFixture(TestCase):
         self.profiles = {}
         self.source = dict(mode="slfork", url="http://meter", camera="", reference="")
         self.setup_pending = True
+        self.source_selected = False
         self.reset_state = "idle"
         self.activity = {"state": "waiting", "detail": "Wartet auf die nächste automatische Prüfung."}
         self.paused = False
@@ -71,6 +72,7 @@ class IngressFixture(TestCase):
     def save_source(self, values):
         self.source = values
         self.setup_pending = False
+        self.source_selected = True
 
     def skip_setup(self):
         self.setup_pending = False
@@ -86,7 +88,7 @@ class IngressFixture(TestCase):
             "0,0,400,90", 250, self.preview, lambda: load_preferences(self.preferences),
             lambda modes: atomic_write(self.preferences, json.dumps(modes).encode(), 0o600),
             lambda: dict(self.delivery), self.delivery.update,
-            lambda: (dict(self.source), self.setup_pending), self.save_source,
+            lambda: ({**self.source, "selected": self.source_selected}, self.setup_pending), self.save_source,
             address=("127.0.0.1", 0), skip_setup=self.skip_setup,
             request_factory_reset=request_reset, get_reset_status=lambda: self.reset_state,
             automatic_preview=self.automatic_preview, get_activity=lambda: dict(self.activity),
@@ -324,12 +326,20 @@ class IngressTests(IngressFixture):
         self.assertIn('<option value="1" selected>1 Nachkommastelle</option>', page)
 
     def test_initial_source_selection_and_later_changes(self):
-        self.assertIn('id="source-settings" open', self.request("/")[0])
+        page = self.request("/")[0]
+        self.assertIn('id="source-settings" open', page)
+        self.assertIn('id="wizard-source-mode" required><option value="" selected>', page)
+        self.assertIn('class="source-mode-guide"', page)
+        self.assertEqual(400, self.submit("/einrichtung", camera="camera.esp")[0])
+        self.assertEqual(400, self.submit("/bildquelle", source_mode="", camera="camera.esp")[0])
+        self.skip_setup()
+        self.assertIn('id="wizard-source-mode" required><option value="" selected>', self.request("/")[0])
         self.assertEqual(400, self.submit("/bildquelle", source_mode="esphome", camera="sensor.invalid")[0])
         self.assertEqual((303, "./?saved=source"),
                          self.submit("/bildquelle", source_mode="esphome", camera="camera.esp"))
         self.assertFalse(self.setup_pending)
         self.assertEqual("esphome", self.source["mode"])
+        self.assertIn('<option value="esphome" selected>ESPHome / Kamera</option>', self.request("/")[0])
         self.assertNotIn('id="source-settings" open', self.request("/")[0])
         self.assertEqual((303, "./?saved=source"),
                          self.submit("/bildquelle", source_mode="camera",

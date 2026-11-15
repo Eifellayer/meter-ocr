@@ -1,5 +1,13 @@
 # Änderungen
 
+## 0.7.1
+
+- Die maximale Zahl der OCR-Versuche ist in der App und für den manuellen Test von 1 bis 10 wählbar (Standard 5). Beim ersten bestätigten Treffer endet die Auswertung sofort.
+- Nach dem manuellen Test erscheint das Ergebnis direkt im Statusbereich. Unklare, abweichende oder fehlende Messwerte erhalten verständliche Hinweise statt technischer Mehrheits-/Versuchsmeldungen.
+- Dezente grüne Markierung nur bei bestätigter Übereinstimmung, dezente rote Markierung bei Problemen; ansonsten neutral.
+- „Jetzt prüfen“ ist zurückhaltend eingefärbt und wird während der laufenden Prüfung zu „Prüfung läuft …“ (nicht erneut anklickbar).
+- Längere Erklärung hinter einem aufklappbaren Infosymbol, keine unzuverlässigen Restzeitangaben und keine separate doppelte manuelle Ergebniskarte.
+
 ## 0.7.0
 
 - Verständlicher App-Name „Gaszähler OCR-Kontrolle“, technische IDs bleiben erhalten.

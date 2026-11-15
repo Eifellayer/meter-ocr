@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.8 Alpha
+
+- „Rahmen ziehen“ zeigt das Kamerabild direkt in den Test- und Automatik-Einstellungen.
+- Ausschnitt und Bilddrehung lassen sich zusammen speichern. Der manuelle Test kann seine Einstellungen auch ohne Testlauf speichern.
+- Speichern und Ausschnitt-Reset stehen im selben Bereich und sind optisch getrennt.
+
 ## 0.4.7 Alpha
 
 - Die bebilderte Bedienungsanleitung ist direkt über den Menüpunkt „Anleitung“ erreichbar.

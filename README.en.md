@@ -26,6 +26,8 @@ By default, the app compares the **five digits for whole cubic meters (m³)**. U
 
 The app downloads the latest available meter image and reference reading from SLFork, or uses the configured Home Assistant camera and optionally a cumulative sensor in m³. It detects digit frames automatically when possible; otherwise you can specify a crop.
 
+If a SLFork measurement cycle aborts or its processed image is too old, the app requests a fresh raw image directly from the ESP camera. It uses the configured crop and rotation. If it can read the raw image, the app shows the reading without an ESP reference and flags image alignment and reference markers as possible causes. This reading does not count toward confirmed checks or consumption.
+
 For an uncertain automatic reading, the app can run up to ten additional image-processing profiles (15 attempts maximum) and combines digits only when a strict majority agrees. After a failed automatic check, it makes up to two more image checks at five-minute intervals. Each check requests the current image; its timestamp determines whether it is new. If all three checks fail, it waits one hour for a higher reading or a new image, then tries again. After a successful match, the selected check interval applies again. A successful OCR read without a reference is shown as **unverified**, not as a confirmed match.
 
 ## Install

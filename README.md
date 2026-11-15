@@ -28,6 +28,8 @@ Die App holt das letzte vorhandene Foto sowie die zugehörigen Werte aus SLFork.
 
 Im SLFork-Modus gleicht die App den OCR-Wert mit **Raw Value** und **Actual Value** ab. Im Kameramodus kann ein aktueller kumulierter m³-Sensor als Referenz dienen. Ohne Referenzsensor wird nur das OCR-Ergebnis ausgegeben.
 
+Wenn ein SLFork-Messzyklus abbricht oder sein aufbereitetes Bild zu alt ist, fordert die App ein frisches Rohbild direkt von der ESP-Kamera an. Dafür verwendet sie den eingestellten Bildausschnitt und die gewählte Drehung. Gelingt die Ablesung, zeigt die App den Stand ohne ESP-Abgleich und weist auf die Bildausrichtung und Referenzmarken als mögliche Ursache hin. Das Ergebnis zählt weder als bestätigter Abgleich noch für den Verbrauch.
+
 ## Dauerhafte Einstellungen für die automatische Kontrolle
 
 In der Weboberfläche stehen unter **„Automatische Prüfung – Einstellungen“** vier dauerhaft gespeicherte Prüfregeln:

@@ -1,5 +1,9 @@
 # Changelog
 
+## In Vorbereitung
+
+- Die bebilderte Bedienungsanleitung ist direkt über den Menüpunkt „Anleitung“ erreichbar.
+
 ## 0.4.6 Alpha
 
 - Die Bilddrehung ist im manuellen Test gradweise einstellbar und kann mit dem Ausschnitt für die Automatik übernommen werden. Bei schwer lesbaren Ziffern weist die App auf diese Einstellung hin.

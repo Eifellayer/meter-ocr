@@ -91,6 +91,9 @@ EN_UI = {
     "Die Einrichtung konnte nicht übersprungen werden.": "Setup could not be skipped.",
     "Übersicht": "Overview",
     "Hauptmenü": "Main menu",
+    "Ansichten": "Views",
+    "Bebilderte Bedienungsanleitung (PDF)": "Illustrated user guide (PDF)",
+    ">Anleitung</a>": ">Guide</a>",
     "Fallback-Wert für diesen Test (optional)": "Fallback reading for this test (optional)",
     "Am markierten Bild ablesen und hier eintragen. Der Wert wird nur mit dem manuellen Test verglichen und nicht als automatische Referenz gespeichert.":
         "Read the marked image and enter the value here. It is compared only with the manual test and is not saved as the automatic reference.",

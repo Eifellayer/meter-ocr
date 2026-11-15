@@ -53,9 +53,12 @@ form label,form select,form input{{min-width:0}}
 header{{display:flex;align-items:baseline;justify-content:space-between;gap:.5rem 1rem;flex-wrap:wrap;margin-bottom:1rem}}
 .language-bar{{display:flex;flex-wrap:wrap}}
 .language-bar select,.language-bar button{{min-height:2.75rem}}
-.main-tabs{{display:flex;gap:.45rem;padding:.35rem;margin:0 0 1rem;border:1px solid var(--edge);border-radius:.85rem;background:var(--surface)}}
+.main-menu{{display:flex;align-items:center;gap:.45rem;padding:.35rem;margin:0 0 1rem;border:1px solid var(--edge);border-radius:.85rem;background:var(--surface)}}
+.main-tabs{{display:flex;flex:1;min-width:0;gap:.45rem}}
 .main-tabs button{{flex:1;min-height:2.8rem;background:transparent;border-color:transparent;color:var(--muted)}}
 .main-tabs button[aria-selected="true"]{{background:light-dark(#e7f0f5,#293b48);border-color:var(--edge);color:inherit}}
+.main-guide{{display:flex;align-items:center;justify-content:center;align-self:stretch;padding:.45rem .65rem;border-radius:.55rem;color:inherit;font-size:.9rem}}
+@media(max-width:400px){{.main-menu,.main-tabs{{gap:.2rem}}.main-tabs button,.main-guide{{padding-inline:.3rem}}}}
 .setup-dialog{{width:min(46rem,calc(100vw - 1.2rem));max-height:min(90dvh,52rem);overflow:auto;padding:1rem 1.2rem;border:1px solid var(--edge);border-radius:1rem;background:var(--surface);color:inherit;box-shadow:0 1rem 3rem #0004}}
 .setup-dialog::backdrop{{background:#07121dcc;backdrop-filter:blur(2px)}}
 .setup-dialog .manual-content{{margin-top:.5rem}}
@@ -214,9 +217,12 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <noscript><button type="submit">Speichern</button></noscript>
 </form>
 </header>
-<nav class="main-tabs" role="tablist" aria-label="Hauptmenü">
+<nav class="main-menu" aria-label="Hauptmenü">
+<div class="main-tabs" role="tablist" aria-label="Ansichten">
 <button type="button" role="tab" id="tab-overview" aria-controls="view-overview" aria-selected="true">Übersicht</button>
 <button type="button" role="tab" id="tab-settings" aria-controls="view-settings" aria-selected="false" tabindex="-1">Einstellungen</button>
+</div>
+<a id="open-user-guide" class="main-guide" href="https://github.com/Eifellayer/meter-ocr/blob/main/docs/Bedienungsanleitung-AI-Meter-Reader.pdf" target="_blank" rel="noopener noreferrer" title="Bebilderte Bedienungsanleitung (PDF)">Anleitung</a>
 </nav>
 <main>
 <div class="tab-content" id="view-overview" role="tabpanel" aria-labelledby="tab-overview" {overview_hidden}>

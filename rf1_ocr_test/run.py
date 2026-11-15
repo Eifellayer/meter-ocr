@@ -267,12 +267,16 @@ def main():
         raise ValueError("referenz_entitaet muss ein Home-Assistant-Sensor sein")
     default_decimals = options["vergleich_nachkommastellen"]
     default_attempts = options["ocr_versuche"]
-    auto_rules = {"decimals": default_decimals, "attempts": default_attempts}
+    auto_rules = {"decimals": default_decimals, "attempts": default_attempts, "polarity": "auto"}
     try:
         saved_rules = json.loads(AUTO_RULES.read_text(encoding="utf-8"))
         if (type(saved_rules.get("decimals")) is int and 0 <= saved_rules["decimals"] <= 3
                 and type(saved_rules.get("attempts")) is int and 1 <= saved_rules["attempts"] <= 10):
-            auto_rules = {"decimals": saved_rules["decimals"], "attempts": saved_rules["attempts"]}
+            polarity = saved_rules.get("polarity", "auto")
+            if polarity not in ("auto", "light", "dark"):
+                polarity = "auto"
+            auto_rules = {"decimals": saved_rules["decimals"],
+                          "attempts": saved_rules["attempts"], "polarity": polarity}
         else:
             print("Ungültige gespeicherte Automatikregeln; verwende die App-Konfiguration.")
     except FileNotFoundError:
@@ -286,9 +290,10 @@ def main():
     def save_auto_rules(values):
         nonlocal auto_rules
         if (type(values.get("decimals")) is not int or not 0 <= values["decimals"] <= 3
-                or type(values.get("attempts")) is not int or not 1 <= values["attempts"] <= 10):
+                or type(values.get("attempts")) is not int or not 1 <= values["attempts"] <= 10
+                or values.get("polarity") not in ("auto", "light", "dark")):
             raise ValueError("Ungültige Einstellungen für die automatische Kontrolle")
-        updated_rules = {"decimals": values["decimals"], "attempts": values["attempts"]}
+        updated_rules = {"decimals": values["decimals"], "attempts": values["attempts"], "polarity": values["polarity"]}
         atomic_write(AUTO_RULES, json.dumps(updated_rules, indent=2).encode("utf-8"), 0o600)
         auto_rules = updated_rules
 
@@ -390,7 +395,7 @@ def main():
                         read = partial(
                             read_visible_digits,
                             register, integer_width, whole_boxes, fraction_boxes,
-                            options["helle_ziffern"], manual_options["polarity"] if manual else "auto",
+                            options["helle_ziffern"], manual_options["polarity"] if manual else active_rules["polarity"],
                         )
                         if manual:
                             update_progress(request_id, "ocr", f"OCR-Prüfung gestartet (max. {manual_options['attempts']} Versuche).", 0)

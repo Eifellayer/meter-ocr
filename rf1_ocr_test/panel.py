@@ -49,6 +49,15 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .green-key{{color:light-dark(#13824c,#7bcfa3);font-weight:700}}
 .red-key{{color:light-dark(#b43c44,#eda2a8);font-weight:700}}
 .apply-crop{{margin-top:.8rem}}
+.ocr-details{{margin:.7rem 0;font-size:.9rem}}
+.ocr-details summary{{cursor:pointer;color:var(--muted);font-weight:600;padding:.35rem 0}}
+.ocr-details table{{border-collapse:collapse;width:100%;margin-top:.5rem;max-width:30rem}}
+.ocr-details th,.ocr-details td{{padding:.35rem .5rem;border-bottom:1px solid var(--edge);text-align:left}}
+.ocr-details th{{color:var(--muted);font-weight:600}}
+.ocr-details td:last-child{{font-family:ui-monospace,SFMono-Regular,monospace;font-variant-numeric:tabular-nums}}
+.page-footer{{margin:1.6rem 0 .3rem;text-align:center;font-size:.8rem;color:var(--muted)}}
+.page-footer a{{color:inherit;text-underline-offset:3px}}
+.page-footer a:hover{{color:light-dark(#1c5d77,#9bcbe8)}}
 [hidden]{{display:none!important}}
 .hint{{font-size:.85rem;color:var(--muted);margin:1rem 0 0;line-height:1.55}}
 .test-box{{border:1px solid var(--edge);background:light-dark(#f6faf9,#192e2c);border-radius:.8rem;padding:.95rem 1rem;margin:1rem 0 0;display:grid;gap:.35rem}}
@@ -141,6 +150,12 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <div class="test-result" id="test-result" hidden>
 <p id="test-result-detail"></p>
 <small id="test-result-stamp"></small>
+<details class="ocr-details" id="ocr-details" hidden>
+<summary>Mehr Infos: Was wurde bei den OCR-Versuchen gelesen?</summary>
+<p id="ocr-scope"></p>
+<table><thead><tr><th>Versuch</th><th>Erkannter Stand</th></tr></thead>
+<tbody id="ocr-attempt-table"></tbody></table>
+</details>
 </div>
 <div class="preview" id="test-preview" hidden>
 <h2>OCR-Testbild mit erkannten Stellen</h2>
@@ -155,6 +170,7 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 
 <section><div><h2>Aktuelles Bild</h2>{current}</div>
 <div><h2>Letzter Treffer</h2>{good}</div></section>
+<footer class="page-footer">Kostenloses Hobbyprojekt · <a href="https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8" target="_blank" rel="noopener noreferrer">Freiwillig unterstützen (PayPal)</a></footer>
 <script>
 const next = {next_check};
 
@@ -187,6 +203,7 @@ async function refreshTestStatus() {{
     const detail = document.querySelector('#test-result');
     const preview = document.querySelector('#test-preview');
     const apply = document.querySelector('#apply-crop-form');
+    const extra = document.querySelector('#ocr-details');
     const active = ['queued', 'running', 'ocr'].includes(job.phase);
     const outcome = job.phase === 'done' ? job.outcome : null;
     box.dataset.phase = job.phase;
@@ -221,8 +238,31 @@ async function refreshTestStatus() {{
       document.querySelector('#test-result-detail').textContent = job.detail || job.message || 'Kein Ergebnis.';
       document.querySelector('#test-result-stamp').textContent = job.checked_at ?
         new Intl.DateTimeFormat('de-DE', {{day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'}}).format(new Date(job.checked_at*1000)) : '';
+      extra.hidden = !Array.isArray(job.readings) || !job.readings.length;
+      if (!extra.hidden) {{
+        const scope = Number(job.comparison_decimals) || 0;
+        document.querySelector('#ocr-scope').textContent = scope === 0 ?
+          'Verglichen wurden nur die vollen Kubikmeter (ohne Nachkommastellen).' :
+          'Verglichen wurden die vollen Kubikmeter und ' + scope + ' Nachkommastelle(n).';
+        const body = document.querySelector('#ocr-attempt-table');
+        const key = JSON.stringify(job.readings);
+        if (body.dataset.values !== key) {{
+          body.replaceChildren();
+          job.readings.slice(0, 10).forEach((value, index) => {{
+            const row = document.createElement('tr');
+            const attempt = document.createElement('td');
+            const reading = document.createElement('td');
+            attempt.textContent = String(index + 1);
+            reading.textContent = String(value ?? '?');
+            row.append(attempt, reading);
+            body.appendChild(row);
+          }});
+          body.dataset.values = key;
+        }}
+      }}
     }} else {{
       detail.hidden = true;
+      extra.hidden = true;
     }}
     preview.hidden = !(job.phase === 'done' && job.preview);
     if (!preview.hidden) {{
@@ -262,6 +302,7 @@ manualForm.addEventListener('submit', () => {{
   document.querySelector('#test-head').textContent = 'Anfrage wird gesendet';
   document.querySelector('#test-status').textContent = 'Prüfung läuft …';
   document.querySelector('#test-result').hidden = true;
+  document.querySelector('#ocr-details').hidden = true;
   document.querySelector('#test-preview').hidden = true;
   document.querySelector('#apply-crop-form').hidden = true;
   const button = document.querySelector('#start-check');
@@ -301,7 +342,8 @@ def start_panel(
         "request_id": 0, "phase": "idle", "message": "Noch kein manueller Test gestartet.",
         "attempts": 0, "max_attempts": default_attempts,
         "started_at": 0, "checked_at": 0, "outcome": None, "detail": "",
-        "preview": False, "can_apply_crop": False,
+        "preview": False, "can_apply_crop": False, "readings": [],
+        "comparison_decimals": default_decimals,
     }
     try:
         saved_history = json.loads(history_path.read_text(encoding="utf-8"))
@@ -315,21 +357,23 @@ def start_panel(
                 outcome=previous.get("status") or "ocr_unclear",
                 detail=previous.get("detail", "Kein Prüfergebnis gespeichert."),
                 preview=bool(previous.get("preview") and test_image.exists()),
-                can_apply_crop=(previous.get("settings", {}).get("crop_mode") == "manual"
-                                and previous.get("ocr_attempts", 0) > 0),
+                can_apply_crop=bool(previous.get("can_apply_crop")),
+                readings=previous.get("readings", []),
+                comparison_decimals=previous.get("settings", {}).get("decimals", default_decimals),
             )
     except (OSError, ValueError, AttributeError, TypeError):
         pass
 
     def update_progress(request_id, phase, message, attempts=0, checked_at=0, outcome=None,
-                        detail="", preview=False, can_apply_crop=False):
+                        detail="", preview=False, can_apply_crop=False, readings=None):
         """Only the newest request may update the visible status."""
         with request_lock:
             if progress["request_id"] != request_id:
                 return
             progress.update(phase=phase, message=message, attempts=attempts,
                             checked_at=checked_at, outcome=outcome, detail=detail,
-                            preview=preview, can_apply_crop=can_apply_crop)
+                            preview=preview, can_apply_crop=can_apply_crop,
+                            readings=readings if readings is not None else progress["readings"])
 
     class Handler(BaseHTTPRequestHandler):
         def authorized(self):
@@ -547,7 +591,8 @@ def start_panel(
                 request_id = progress["request_id"] + 1
                 settings["request_id"] = request_id
                 progress.update(request_id=request_id, max_attempts=settings["attempts"], outcome=None,
-                                detail="", preview=False, can_apply_crop=False, phase="queued",
+                                detail="", preview=False, can_apply_crop=False, readings=[],
+                                comparison_decimals=settings["decimals"], phase="queued",
                                 message="Anfrage angenommen – warte auf die Bildprüfung.",
                                 attempts=0, started_at=time.time(), checked_at=0)
                 try:

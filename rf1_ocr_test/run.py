@@ -489,16 +489,17 @@ def main():
                                        or image_time in history.get("confirmations", ()))
                     status, detail = compare_sample(sample, ocr, manual_options["decimals"],
                                                     ocr_confirmed=ocr_confirmed)
-                    try:
-                        preview = draw_test_preview(register, integer_width, whole_boxes,
-                                                    fraction_boxes, ocr)
-                        with io.BytesIO() as buffer:
-                            preview.save(buffer, "JPEG", quality=88, optimize=True)
-                            atomic_write(TEST_IMAGE, buffer.getvalue(), 0o600)
-                        preview_available = True
-                    except (OSError, ValueError) as error:
-                        print(f"OCR-Testvorschau konnte nicht erstellt werden: {error}")
-                        preview_available = False
+                    preview_available = False
+                    if ocr_attempts and source != "unavailable":
+                        try:
+                            preview = draw_test_preview(register, integer_width, whole_boxes,
+                                                        fraction_boxes, ocr)
+                            with io.BytesIO() as buffer:
+                                preview.save(buffer, "JPEG", quality=88, optimize=True)
+                                atomic_write(TEST_IMAGE, buffer.getvalue(), 0o600)
+                            preview_available = True
+                        except (OSError, ValueError) as error:
+                            print(f"OCR-Testvorschau konnte nicht erstellt werden: {error}")
                     manual_result = {
                         "preview": preview_available,
                         "status": status,
@@ -509,6 +510,8 @@ def main():
                         "image_time": image_time,
                         "already_checked": already_checked,
                         "outside_window": captured is None,
+                        "can_apply_crop": (manual_options["crop_mode"] == "manual"
+                                           and ocr_attempts > 0 and preview_available),
                     }
                 elif record_sample(updated, sample, ocr, zone, datetime.now(zone), decimals,
                                    ocr_confirmed=ocr_confirmed):
@@ -534,7 +537,8 @@ def main():
             update_progress(request_id, "done", "Prüfung beendet.",
                             manual_result.get("ocr_attempts", 0), now.timestamp(),
                             outcome=manual_result.get("status", "capture_unavailable"),
-                            detail=manual_result["detail"], preview=manual_result.get("preview", False))
+                            detail=manual_result["detail"], preview=manual_result.get("preview", False),
+                            can_apply_crop=manual_result.get("can_apply_crop", False))
             continue
         if keep_schedule and data is None and history.get("next_check_at", 0) > now.timestamp():
             continue

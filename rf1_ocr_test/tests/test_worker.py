@@ -292,6 +292,7 @@ class StateTests(TestCase):
         files = {name: folder / name for name in (
             "OPTIONS", "HISTORY", "EFFECTIVE_OPTIONS", "AUTO_RULES", "LANGUAGE_MODES",
             "SOURCE_SETTINGS", "NOTIFICATIONS", "DESTINATION", "GOOD_IMAGE", "TEST_IMAGE",
+            "AUTOMATIC_PREVIEW",
         )}
         files["OPTIONS"].write_text(json.dumps({"ausschnitt": "0,0,500,100", "vorkomma_breite": 350,
                                                 "ocr_versuche": 1}))

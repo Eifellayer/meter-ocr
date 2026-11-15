@@ -16,12 +16,12 @@ PAGE = """<!doctype html>
 <title>Gaszähler OCR-Kontrolle</title>
 <style>
 :root{{color-scheme:light dark;font:16px system-ui}}
-body{{max-width:64rem;margin:2rem auto;padding:0 1rem}}
+body{{max-width:64rem;margin:1.2rem auto;padding:0 1rem}}
 form{{display:flex;flex-wrap:wrap;align-items:end;gap:.75rem}} label{{display:grid;gap:.3rem}}
-select,button{{font:inherit}} button{{padding:.55rem 1rem}} dl{{display:grid;grid-template-columns:max-content 1fr;gap:.4rem 1rem}}
+select,button{{font:inherit}} button{{padding:.55rem 1rem}} dl{{display:grid;grid-template-columns:minmax(8.5rem,12rem) minmax(0,1fr);gap:.35rem .85rem;margin:.5rem 0}}
 dd{{margin:0;overflow-wrap:anywhere}} section{{display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(min(100%,18rem),1fr))}}
-img{{width:100%;height:auto}} h2{{font-size:1rem}}
-.intro,.hint{{line-height:1.5;max-width:56rem}} .hint{{font-size:.92rem;opacity:.85}}
+img{{width:100%;height:auto}} h2{{font-size:1.08rem;margin:.25rem 0 .75rem}} h1{{font-size:1.55rem;margin-bottom:.4rem}} dt{{opacity:.72}} .panel{{border:1px solid #8c959e65;border-radius:.75rem;padding:1rem;margin:1rem 0}} @media(max-width:470px){{dl{{grid-template-columns:1fr}} dd{{margin:0 0 .4rem}}}}
+.intro,.hint{{line-height:1.45;max-width:56rem}} .intro{{font-size:.95rem}} .hint{{font-size:.9rem;opacity:.85}}
 .test-box{{border:1px solid #7a8b9a;border-radius:.7rem;padding:1rem;margin:1rem 0 1.5rem;display:grid;gap:.5rem}}
 .test-box p{{margin:.15rem 0}} .test-box progress{{width:100%;height:1.2rem;accent-color:#168664}}
 .test-box small{{opacity:.8}} .test-box[data-phase="done"]{{border-color:#168664}}
@@ -29,7 +29,7 @@ img{{width:100%;height:auto}} h2{{font-size:1rem}}
 </style>
 <h1>Gaszähler OCR-Kontrolle</h1>
 <p class="intro">Unabhängiger Bildabgleich deines Gaszählerstands mit der vorhandenen Messung. Die OCR liest die Ziffern erneut direkt aus dem Kamerabild – ohne den vom ESP erkannten Wert einfach zu übernehmen.</p>
-<form method="post" action="pruefen">
+<div class="panel"><h2>Manueller Bildtest</h2><form method="post" action="pruefen">
 <input type="hidden" name="csrf" value="{csrf}">
 <label>Ziffernfarbe
 <select name="polarity">{polarity_options}</select></label>
@@ -39,25 +39,25 @@ img{{width:100%;height:auto}} h2{{font-size:1rem}}
 </form>
 <p class="hint"><strong>Was passiert bei „Jetzt prüfen“?</strong> Die App lädt das letzte verfügbare Zählerbild (sie löst am ESP keine neue Aufnahme aus), liest die Ziffern lokal mit Tesseract und vergleicht sie mit dem Referenzstand. Falls die erste Lesung unklar ist oder abweicht, folgen bis zu vier weitere OCR-Aufbereitungen desselben Bilds. Das kann einen Moment dauern. Der manuelle Test verändert weder den automatischen Prüfplan noch den Zählerstand oder die 24-Stunden-Trefferzahl.</p>
 <div class="test-box" id="test-box" data-phase="idle" role="status" aria-live="polite">
-<strong id="test-head">Manueller OCR-Test</strong>
+<strong id="test-head">Aktueller Schritt: Bereit</strong>
 <p id="test-status">{request_status}</p>
 <progress id="test-progress" max="5" value="0" aria-label="OCR-Durchläufe" hidden></progress>
 <small id="test-meta">Der aktuelle Bearbeitungsstand wird automatisch aktualisiert.</small>
-</div>
-<h2>Letzter abgeschlossener manueller Test</h2>
+</div></div>
+<div class="panel"><h2>Letzter manueller Test</h2>
 <dl><dt>Getestet um</dt><dd class="stamp" data-epoch="{manual_checked_at}">–</dd>
 <dt>Bildzeit</dt><dd class="stamp" data-epoch="{manual_image_time}">–</dd>
 <dt>Erkannter Stand</dt><dd>{manual_ocr}</dd>
 <dt>Referenz</dt><dd>{manual_reference}</dd>
-<dt>Testergebnis</dt><dd>{manual_detail}</dd>{manual_slfork}</dl>
-<h2>Automatische Kontrollmessung</h2>
+<dt>Ergebnis</dt><dd>{manual_detail}</dd>{manual_slfork}</dl></div>
+<div class="panel"><h2>Automatische Kontrolle</h2>
 <dl><dt>Nächste Prüfung</dt><dd id="countdown">–</dd>
 <dt>Erkannter Stand</dt><dd>{ocr}</dd>
 <dt>Referenz</dt><dd>{reference}</dd>
 <dt>Prüfergebnis</dt><dd>{detail}</dd>
 {slfork}
 <dt>Bildzeit</dt><dd class="stamp" data-epoch="{image_time}">–</dd>
-<dt>Letzter Treffer</dt><dd class="stamp" data-epoch="{last_good}">–</dd></dl>
+<dt>Letzter Treffer</dt><dd class="stamp" data-epoch="{last_good}">–</dd></dl></div>
 <section><div><h2>Aktuelles Bild</h2>{current}</div>
 <div><h2>Letzter Treffer</h2>{good}</div></section>
 <script>
@@ -75,6 +75,8 @@ async function refreshTestStatus() {{
     const active = ['queued', 'running', 'ocr'].includes(job.phase);
     box.dataset.phase = job.phase;
     document.querySelector('#test-status').textContent = job.message || 'Noch kein manueller Test gestartet.';
+    const step = job.phase === 'queued' ? 'Anfrage angenommen' : job.phase === 'running' ? 'Bild und Messwerte' : job.phase === 'ocr' ? 'OCR-Auswertung' : job.phase === 'done' ? 'Abgeschlossen' : 'Bereit';
+    document.querySelector('#test-head').textContent = 'Aktueller Schritt: ' + step;
     document.querySelector('form button').disabled = active;
     bar.hidden = job.phase === 'idle';
     const done = Math.min(Number(job.attempts) || 0, 5);
@@ -83,8 +85,8 @@ async function refreshTestStatus() {{
     else bar.value = job.phase === 'done' ? 5 : done;
     const seconds = job.started_at ? Math.floor(Math.max(0, Date.now()/1000 - job.started_at)) : 0;
     let meta = active ? 'Verstrichen: ' + seconds + ' s · keine verlässliche Restzeit möglich' : '';
-    if (job.phase === 'ocr') meta = 'OCR-Aufbereitungen: ' + done + '/5 · ' + meta;
-    if (job.phase === 'done') meta = 'Test beendet; OCR-Durchläufe: ' + done + '/5. Ergebnis unten.';
+    if (job.phase === 'ocr') meta = 'Fortschritt: ' + done + '/5 OCR-Durchläufen · ' + meta;
+    if (job.phase === 'done') meta = 'Fertig · ' + done + ' OCR-Durchläufe · Ergebnis unten';
     if (job.phase === 'idle') meta = 'Bereit für einen manuellen Test.';
     document.querySelector('#test-meta').textContent = meta;
     if (job.phase === 'done' && Number(job.checked_at) > lastRenderedManual + .001) {{
@@ -100,11 +102,11 @@ function tick() {{
   const out = document.querySelector('#countdown');
   if (!next) return;
   const seconds = Math.max(0, Math.ceil(next - Date.now() / 1000));
-  out.textContent = seconds ? Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2,'0') + ' min' : 'Prüfung fällig';
+  out.textContent = seconds ? Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2,'0') + ' min' : 'Jetzt fällig';
 }}
 for (const el of document.querySelectorAll('.stamp')) {{
   const epoch = Number(el.dataset.epoch);
-  if (epoch) el.textContent = new Date(epoch * 1000).toLocaleString('de-DE');
+  if (epoch) el.textContent = new Intl.DateTimeFormat('de-DE', {day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'}).format(new Date(epoch * 1000));
 }}
 if (location.search === '?test=queued') history.replaceState(null, '', location.pathname);
 let edited = false;

@@ -160,7 +160,7 @@ class IngressTests(IngressFixture):
         status = json.loads(self.request("/status?lang=en")[0])
         self.assertEqual("12345.120", status["ocr"])
         self.assertEqual(409, self.submit("/ausschnitt-uebernehmen", checked_at="90.0")[0])
-        self.assertEqual((303, "./?saved=crop"), self.submit(
+        self.assertEqual((303, "./?saved=crop&ui=settings"), self.submit(
             "/ausschnitt-uebernehmen", checked_at=status["crop_id"]))
         self.assertEqual(("manual", "1925,5,2005,390", 220, 90, 0),
                          (self.rules["crop_mode"], self.rules["crop"], self.rules["width"],
@@ -447,7 +447,7 @@ class BrowserTests(IngressFixture):
             print("DEBUG_SETTINGS_VIEW", frame.locator("#tab-settings").get_attribute("aria-selected"),
                   frame.locator("#view-settings").get_attribute("hidden"),
                   frame.locator("html").get_attribute("lang"),
-                  frame.evaluate("() => location.href"))
+                  page.frames[-1].evaluate("() => location.href"))
             automatic_settings = frame.locator("#automatic-settings")
             if not automatic_settings.evaluate("section => section.open"):
                 automatic_settings.locator("summary").click()

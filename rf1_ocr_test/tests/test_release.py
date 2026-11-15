@@ -89,7 +89,7 @@ class PanelTests(unittest.TestCase):
         self.assertIn("Use tested crop for automatic checks", page)
         self.assertIn("More details", page)
         self.assertIn("Check in progress", page)
-        self.assertIn("lang=0", page)
+        self.assertIn('name="lang" value="0"', page)
         self.assertNotIn("Manuellen Test öffnen", page)
 
     def test_english_status_and_specific_digit_diagnostics(self):

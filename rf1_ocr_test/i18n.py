@@ -10,6 +10,11 @@ from checks import FALLBACK_NOTICE, uncertain_positions
 
 
 EN_UI = {
+    "Übersicht": "Overview",
+    "Hauptmenü": "Main menu",
+    "Fallback-Wert für diesen Test (optional)": "Fallback reading for this test (optional)",
+    "Am markierten Bild ablesen und hier eintragen. Der Wert wird nur mit dem manuellen Test verglichen und nicht als automatische Referenz gespeichert.":
+        "Read the marked image and enter the value here. It is compared only with the manual test and is not saved as the automatic reference.",
     "Über Meter OCR": "About Meter OCR",
     "EifelLayer-Projektlogo": "EifelLayer project logo",
     "Ein privates Hobbyprojekt von EifelLayer. KI-unterstützt entwickelt. Keine geeichte Messung oder Gewähr für OCR-Ergebnisse. Bitte Zählerstände bei Bedarf direkt am Gerät prüfen.": "A private hobby project by EifelLayer, developed with AI assistance. Not a certified measurement and no guarantee of OCR results. Check readings on the physical meter when needed.",

@@ -8,7 +8,7 @@ English: [Full documentation](../README.en.md) · [English – App](README.en.md
 
 Diese App überprüft den automatisch ausgelesenen mechanischen Gaszähler mit **lokaler OCR** und kann den gelesenen Stand mit einem Referenzwert abgleichen. Sie ist keine geeichte Messung.
 
-Mit KI-Unterstützung entwickelt. Für Abrechnungen und Meldungen gilt der direkt am Zähler geprüfte Stand. [Hinweise zur Nutzung und Haftung](https://github.com/Eifellayer/rf1-kontrollmessung#hinweise-zur-nutzung)
+Mit KI-Unterstützung entwickelt. Für Abrechnungen und Meldungen gilt der direkt am Zähler geprüfte Stand. [Hinweise zur Nutzung und Haftung](https://github.com/Eifellayer/meter-ocr#hinweise-zur-nutzung)
 
 1. Richte die `esp_url` für den SLFork-ESP ein oder wähle eine Home-Assistant-Kamera (`kamera_entitaet`) und optional einen Referenzsensor (`referenz_entitaet`).
 2. Starte die App, öffne ihre Weboberfläche und wähle unter **Bildquelle** den Betriebsmodus. ESPHome-Kameras können Bilder für die lokale OCR ohne SLFork liefern.
@@ -18,13 +18,13 @@ Mit KI-Unterstützung entwickelt. Für Abrechnungen und Meldungen gilt der direk
 
 Unter **Benachrichtigungen** lassen sich Hinweis, Companion-Push und E-Mail konfigurieren. Für das Energie-Dashboard stellst du den maximalen Durchfluss nach Qmax ein und wählst `sensor.rf1_verbrauch_gesamt` als Gasverbrauch. [Plausibilitätsprüfung und Energie-Dashboard](../README.md#plausibilitätsprüfung-und-energie-dashboard)
 
-Die bestehenden Entitäten `sensor.rf1_kontrollbild` und `sensor.rf1_pruefstatus` bleiben unverändert. Support: [GitHub Issues](https://github.com/Eifellayer/rf1-kontrollmessung/issues).
+Die bestehenden Entitäten `sensor.rf1_kontrollbild` und `sensor.rf1_pruefstatus` bleiben unverändert. Support: [GitHub Issues](https://github.com/Eifellayer/meter-ocr/issues).
 
 ## English
 
 The app performs an **independent local OCR reading of your most recent gas meter image** and can check it against a reference reading from SLFork or a Home Assistant sensor. It is not a certified meter.
 
-Developed with AI assistance. Check the physical meter for billing and official readings. [Usage and liability notes](https://github.com/Eifellayer/rf1-kontrollmessung/blob/main/README.en.md#usage-notes)
+Developed with AI assistance. Check the physical meter for billing and official readings. [Usage and liability notes](https://github.com/Eifellayer/meter-ocr/blob/main/README.en.md#usage-notes)
 
 1. Enter the SLFork ESP URL in `esp_url`, or configure a Home Assistant camera (`kamera_entitaet`) and optional reference sensor (`referenz_entitaet`).
 2. Start the app and choose a mode under **Image source**. An ESPHome camera can provide images for local OCR without SLFork.
@@ -36,7 +36,7 @@ Under **Notifications**, configure Home Assistant notices, Companion push or ema
 
 The entity IDs `sensor.rf1_kontrollbild` and `sensor.rf1_pruefstatus` do not change when switching language.
 
-For full setup, explanation of comparison rules, schedules and troubleshooting, consult the [English guide](../README.en.md). For help or bug reports, open a [GitHub issue](https://github.com/Eifellayer/rf1-kontrollmessung/issues).
+For full setup, explanation of comparison rules, schedules and troubleshooting, consult the [English guide](../README.en.md). For help or bug reports, open a [GitHub issue](https://github.com/Eifellayer/meter-ocr/issues).
 
 ---
 

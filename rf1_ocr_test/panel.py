@@ -10,10 +10,12 @@ from secrets import compare_digest, token_urlsafe
 from threading import Lock, Thread
 from urllib.parse import parse_qs, urlsplit
 
+from i18n import EN_UI, english_progress, english_result, translate_page
+
 SUPERVISOR_ADDRESS = "172.30.32.2"
 
 PAGE = """<!doctype html>
-<html lang="de"><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<html lang="{language}"><meta charset="utf-8"><meta name="viewport" content="width=device-width">
 <title>Gaszähler OCR-Kontrolle</title>
 <style>
 :root{{color-scheme:light dark;font:15px system-ui,-apple-system,sans-serif;--edge:light-dark(#dfe6ec,#34424d);--surface:light-dark(#fff,#1b252e);--muted:light-dark(#536475,#aebcc8);--accent:#158765;--page:light-dark(#f4f7f9,#111a22)}}
@@ -22,6 +24,9 @@ body{{max-width:62rem;margin:0 auto;padding:1.5rem 1rem 3rem;background:var(--pa
 h1{{font-size:clamp(1.5rem,4vw,2rem);letter-spacing:-.03em;margin:.2rem 0 .25rem}}
 h2{{font-size:1rem;margin:0 0 .85rem;letter-spacing:-.01em}}
 .intro{{max-width:48rem;color:var(--muted);margin:.25rem 0 1.4rem}}
+.language-bar{{display:flex;align-items:center;justify-content:flex-end;gap:.45rem;margin:0 0 .5rem}}
+.language-bar label{{display:block;font-size:.8rem;font-weight:500}}
+.language-bar select{{min-height:2rem;padding:.25rem .5rem;font-size:.85rem}}
 .panel{{background:var(--surface);border:1px solid var(--edge);border-radius:1rem;padding:1.15rem 1.25rem;margin:0 0 1rem;box-shadow:0 3px 14px light-dark(#162b3b09,#0002)}}
 form{{display:flex;flex-wrap:wrap;align-items:end;gap:.8rem}}
 label{{display:grid;gap:.3rem;font-weight:600;font-size:.85rem;color:var(--muted)}}
@@ -87,6 +92,12 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 .stamp,#countdown{{font-variant-numeric:tabular-nums}}
 @media(max-width:500px){{body{{padding:.8rem .7rem 2rem}}.panel{{padding:.9rem}}dl{{grid-template-columns:7.4rem minmax(0,1fr)}}form label{{flex:1 1 9rem}}button{{width:100%}}}}
 </style>
+<form method="get" action="" class="language-bar" id="language-form">
+<label for="language-select">Sprache / Language</label>
+<select id="language-select" name="lang" aria-label="Sprache / Language">
+<option value="de"{de_selected}>Deutsch</option><option value="en"{en_selected}>English</option>
+</select>
+</form>
 <h1>Gaszähler OCR-Kontrolle</h1>
 <p class="intro">Unabhängiger Bildabgleich deines Gaszählerstands mit der vorhandenen Messung. Die OCR liest die Ziffern erneut direkt aus dem Kamerabild – ohne den vom ESP erkannten Wert einfach zu übernehmen.</p>
 <div class="panel"><h2>Automatische Kontrolle</h2>
@@ -98,6 +109,7 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <dt>Bildzeit</dt><dd class="stamp" data-epoch="{image_time}">–</dd></dl></div>
 <div class="panel"><h2>Automatische Prüfung – Einstellungen</h2>
 <form method="post" action="automatik" id="auto-form">
+<input type="hidden" name="lang" value="{language}">
 <input type="hidden" name="csrf" value="{csrf}">
 <label>Vergleich
 <select name="decimals">{auto_decimal_options}</select></label>
@@ -123,6 +135,7 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <div class="manual-content">
 <h2>Manueller Bildtest</h2>
 <form method="post" action="pruefen" id="manual-form">
+<input type="hidden" name="lang" value="{language}">
 <input type="hidden" name="csrf" value="{csrf}">
 <label>Ziffernfarbe
 <select name="polarity">{polarity_options}</select></label>
@@ -163,6 +176,7 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <p class="legend"><span class="green-key">Grün:</span> Ziffer wurde gelesen · <span class="red-key">Rot:</span> Ziffer unklar. Die Farbrahmen zeigen die OCR-Erkennung, nicht die Übereinstimmung mit dem Referenzstand. Ohne automatisch erkannte Ziffernrahmen sind die Bereiche nur näherungsweise aufgeteilt.</p>
 </div>
 <form method="post" action="ausschnitt-uebernehmen" id="apply-crop-form" class="apply-crop" hidden>
+<input type="hidden" name="lang" value="{language}">
 <input type="hidden" name="csrf" value="{csrf}">
 <button type="submit">Getesteten Ausschnitt für die Automatik übernehmen</button>
 </form>
@@ -173,6 +187,20 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <footer class="page-footer">Kostenloses Hobbyprojekt · <a href="https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8" target="_blank" rel="noopener noreferrer">Freiwillig unterstützen (PayPal)</a></footer>
 <script>
 const next = {next_check};
+const lang = '{language}';
+const searchPrefs = new URLSearchParams(location.search);
+try {{
+  const savedLanguage = localStorage.getItem('rf1-language');
+  if (!searchPrefs.has('lang') && (savedLanguage === 'en' || savedLanguage === 'de') && savedLanguage !== lang) {{
+    searchPrefs.set('lang', savedLanguage);
+    location.replace(location.pathname + '?' + searchPrefs.toString());
+  }} else if (searchPrefs.has('lang')) {{
+    localStorage.setItem('rf1-language', lang);
+  }}
+}} catch (_) {{ /* Browser storage is optional. */ }}
+document.querySelector('#language-select').addEventListener('change', () => {{
+  document.querySelector('#language-form').submit();
+}});
 
 let currentPhase = 'idle';
 const manualPanel = document.querySelector('#manual-panel');
@@ -193,7 +221,7 @@ cropMode.addEventListener('change', showCropFields);
 showCropFields();
 async function refreshTestStatus() {{
   try {{
-    const response = await fetch('status', {{cache: 'no-store'}});
+    const response = await fetch('status?lang=' + lang, {{cache: 'no-store'}});
     if (!response.ok) throw new Error('Status nicht abrufbar');
     const job = await response.json();
     currentPhase = job.phase;
@@ -237,7 +265,7 @@ async function refreshTestStatus() {{
       detail.hidden = false;
       document.querySelector('#test-result-detail').textContent = job.detail || job.message || 'Kein Ergebnis.';
       document.querySelector('#test-result-stamp').textContent = job.checked_at ?
-        new Intl.DateTimeFormat('de-DE', {{day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'}}).format(new Date(job.checked_at*1000)) : '';
+        new Intl.DateTimeFormat(lang === 'en' ? 'en-GB' : 'de-DE', {{day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'}}).format(new Date(job.checked_at*1000)) : '';
       extra.hidden = !Array.isArray(job.readings) || !job.readings.length;
       if (!extra.hidden) {{
         const scope = Number(job.comparison_decimals) || 0;
@@ -285,11 +313,12 @@ function tick() {{
 }}
 for (const el of document.querySelectorAll('.stamp')) {{
   const epoch = Number(el.dataset.epoch);
-  if (epoch) el.textContent = new Intl.DateTimeFormat('de-DE', {{day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'}}).format(new Date(epoch * 1000));
+  if (epoch) el.textContent = new Intl.DateTimeFormat(lang === 'en' ? 'en-GB' : 'de-DE', {{day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'}}).format(new Date(epoch * 1000));
 }}
-if (location.search === '?test=queued') {{
+if (searchPrefs.get('test') === 'queued') {{
   manualPanel.open = true;
-  history.replaceState(null, '', location.pathname);
+  searchPrefs.delete('test');
+  history.replaceState(null, '', location.pathname + '?' + searchPrefs.toString());
 }}
 let edited = false;
 manualForm.addEventListener('change', () => {{ edited = true; }});
@@ -321,6 +350,10 @@ POLARITIES = {"auto": "Automatisch", "light": "Hell", "dark": "Dunkel"}
 DECIMALS = {"0": "Volle Kubikmeter", "1": "1 Nachkommastelle", "2": "2 Nachkommastellen", "3": "3 Nachkommastellen"}
 ATTEMPTS = {str(value): str(value) for value in range(1, 11)}
 CROP_MODES = {"auto": "Automatisch erkennen", "manual": "Ausschnitt selbst festlegen"}
+POLARITIES_EN = {"auto": "Automatic", "light": "Light digits", "dark": "Dark digits"}
+DECIMALS_EN = {"0": "Whole cubic meters", "1": "1 decimal place",
+               "2": "2 decimal places", "3": "3 decimal places"}
+CROP_MODES_EN = {"auto": "Detect automatically", "manual": "Specify crop"}
 
 
 def select_options(choices, chosen):
@@ -396,6 +429,11 @@ def start_panel(
                 return
             url = urlsplit(self.path)
             path = url.path
+            query = parse_qs(url.query)
+            requested_lang = query.get("lang", [""])[0]
+            language = (requested_lang if requested_lang in ("de", "en") else
+                        "en" if self.headers.get("Accept-Language", "").lower().startswith("en")
+                        else "de")
             if path in images:
                 try:
                     content = images[path].read_bytes()
@@ -407,6 +445,14 @@ def start_panel(
             if path == "/status":
                 with request_lock:
                     snapshot = dict(progress)
+                if language == "en":
+                    snapshot["message"] = english_progress(snapshot.get("message"))
+                    if snapshot.get("detail"):
+                        snapshot["detail"] = english_result(
+                            snapshot["detail"], snapshot.get("outcome"),
+                            snapshot.get("comparison_decimals", default_decimals),
+                            snapshot.get("readings"), manual=True,
+                        )
                 self.reply(json.dumps(snapshot).encode("utf-8"), "application/json; charset=utf-8")
                 return
             if path != "/":
@@ -419,6 +465,13 @@ def start_panel(
             values = {name: html.escape(str(history.get(key) or "–")) for name, key in (
                 ("ocr", "ocr_value"), ("reference", "last_reference"), ("detail", "check_detail"),
             )}
+            if language == "en" and history.get("check_detail"):
+                values["detail"] = html.escape(english_result(
+                    history["check_detail"],
+                    history.get("status") or history.get("check_status"),
+                    history.get("comparison_decimals", default_decimals),
+                    history.get("ocr_readings", []),
+                ))
             manual = history.get("manual_result", {})
             manual_detail = manual.get("detail", "Noch kein manueller Test.")
             if manual.get("already_checked"):
@@ -427,38 +480,84 @@ def start_panel(
                 manual_detail += " Das Bild ist für eine neue automatische Bestätigung zu alt."
             settings = manual.get("settings", {})
             auto_rules = get_auto_rules()
-            auto_saved_notice = ('<p class="save-notice" role="status">Automatische Prüfregeln gespeichert.</p>'
-                                 if url.query == "saved=1" else
-                                 '<p class="save-notice" role="status">Getesteten Bildausschnitt für die Automatik übernommen.</p>'
-                                 if url.query == "saved=crop" else "")
-            rule_label = ("Volle m³" if auto_rules["decimals"] == 0
-                          else f'{auto_rules["decimals"]} Nachkommastelle(n)')
-            polarity_label = {"auto": "Farbe automatisch", "light": "helle Ziffern",
-                              "dark": "dunkle Ziffern"}[auto_rules["polarity"]]
-            crop_label = "fester Bildausschnitt" if auto_rules["crop_mode"] == "manual" else "Bildausschnitt automatisch"
-            auto_rule_description = (f'{rule_label} · max. {auto_rules["attempts"]} OCR-Versuche '
-                                     f'· {polarity_label} · {crop_label}')
+            saved = query.get("saved", [""])[0]
+            saved_message = (
+                "Automatische Prüfregeln gespeichert." if saved == "1" else
+                "Getesteten Bildausschnitt für die Automatik übernommen." if saved == "crop" else ""
+            )
+            if language == "en" and saved_message:
+                saved_message = EN_UI[saved_message]
+            auto_saved_notice = (
+                '<p class="save-notice" role="status">' + html.escape(saved_message) + '</p>'
+                if saved_message else ""
+            )
+            if language == "en":
+                rule_label = ("Whole m³" if auto_rules["decimals"] == 0
+                              else f'{auto_rules["decimals"]} decimal place(s)')
+                polarity_label = {"auto": "automatic digit color", "light": "light digits",
+                                  "dark": "dark digits"}[auto_rules["polarity"]]
+                crop_label = ("fixed image crop" if auto_rules["crop_mode"] == "manual"
+                              else "automatic image crop")
+                auto_rule_description = (
+                    f'{rule_label} · max. {auto_rules["attempts"]} OCR attempts '
+                    f'· {polarity_label} · {crop_label}'
+                )
+            else:
+                rule_label = ("Volle m³" if auto_rules["decimals"] == 0
+                              else f'{auto_rules["decimals"]} Nachkommastelle(n)')
+                polarity_label = {"auto": "Farbe automatisch", "light": "helle Ziffern",
+                                  "dark": "dunkle Ziffern"}[auto_rules["polarity"]]
+                crop_label = ("fester Bildausschnitt" if auto_rules["crop_mode"] == "manual"
+                              else "Bildausschnitt automatisch")
+                auto_rule_description = (
+                    f'{rule_label} · max. {auto_rules["attempts"]} OCR-Versuche '
+                    f'· {polarity_label} · {crop_label}'
+                )
             if (history.get("comparison_decimals") is not None
                     and history["comparison_decimals"] != auto_rules["decimals"]):
-                values["detail"] = ("Neue Vergleichsgenauigkeit gespeichert. Die nächste automatische "
-                                    "Prüfung zeigt das erste Ergebnis mit dieser Einstellung.")
+                pending_message = ("Neue Vergleichsgenauigkeit gespeichert. Die nächste automatische "
+                                   "Prüfung zeigt das erste Ergebnis mit dieser Einstellung.")
+                values["detail"] = html.escape(
+                    EN_UI[pending_message] if language == "en" else pending_message
+                )
             request_status = (
                 "Test angenommen. Die Bearbeitung wird hier live angezeigt."
                 if url.query == "test=queued" else "Status wird geladen …"
             )
-            self.reply(PAGE.format(**values,
+            if language == "en":
+                request_status = EN_UI.get(request_status, request_status)
+            page = translate_page(PAGE) if language == "en" else PAGE
+            self.reply(page.format(**values,
+                language=language,
+                de_selected=" selected" if language == "de" else "",
+                en_selected=" selected" if language == "en" else "",
                 request_status=request_status,
-                polarity_options=select_options(POLARITIES, settings.get("polarity", "auto")),
-                decimal_options=select_options(DECIMALS, str(settings.get("decimals", auto_rules["decimals"]))),
-                auto_decimal_options=select_options(DECIMALS, str(auto_rules["decimals"])),
+                polarity_options=select_options(
+                    POLARITIES_EN if language == "en" else POLARITIES,
+                    settings.get("polarity", "auto"),
+                ),
+                decimal_options=select_options(
+                    DECIMALS_EN if language == "en" else DECIMALS,
+                    str(settings.get("decimals", auto_rules["decimals"])),
+                ),
+                auto_decimal_options=select_options(
+                    DECIMALS_EN if language == "en" else DECIMALS, str(auto_rules["decimals"]),
+                ),
                 auto_attempt_options=select_options(ATTEMPTS, str(auto_rules["attempts"])),
-                auto_polarity_options=select_options(POLARITIES, auto_rules["polarity"]),
-                auto_crop_mode_options=select_options(CROP_MODES, auto_rules["crop_mode"]),
+                auto_polarity_options=select_options(
+                    POLARITIES_EN if language == "en" else POLARITIES, auto_rules["polarity"],
+                ),
+                auto_crop_mode_options=select_options(
+                    CROP_MODES_EN if language == "en" else CROP_MODES, auto_rules["crop_mode"],
+                ),
                 auto_crop_value=html.escape(auto_rules["crop"], quote=True),
                 auto_width_value=auto_rules["width"],
                 auto_saved_notice=auto_saved_notice,
                 auto_rule_description=html.escape(auto_rule_description),
-                crop_mode_options=select_options(CROP_MODES, settings.get("crop_mode", "auto")),
+                crop_mode_options=select_options(
+                    CROP_MODES_EN if language == "en" else CROP_MODES,
+                    settings.get("crop_mode", "auto"),
+                ),
                 crop_value=html.escape(str(settings.get("crop", default_crop)), quote=True),
                 width_value=int(settings.get("width", default_width)),
 
@@ -473,8 +572,18 @@ def start_panel(
                 last_good=history.get("last_match_at") or 0,
                 image_time=history.get("last_epoch") or 0,
                 next_check=json.dumps(history.get("next_check_at")),
-                current='<img src="aktuell.jpg" alt="Aktuelles Kontrollbild">' if current_image.exists() else 'Noch kein Kontrollbild.',
-                good='<img src="treffer.jpg" alt="Kontrollbild des letzten Treffers">' if good_image.exists() else 'Noch kein bestätigtes Bild.',
+                current=(
+                    '<img src="aktuell.jpg" alt="' +
+                    ("Latest check image" if language == "en" else "Aktuelles Kontrollbild") + '">'
+                    if current_image.exists() else
+                    ("No check image available yet." if language == "en" else "Noch kein Kontrollbild.")
+                ),
+                good=(
+                    '<img src="treffer.jpg" alt="' +
+                    ("Image from last match" if language == "en" else "Kontrollbild des letzten Treffers") + '">'
+                    if good_image.exists() else
+                    ("No confirmed image available yet." if language == "en" else "Noch kein bestätigtes Bild.")
+                ),
             ).encode("utf-8"), "text/html; charset=utf-8")
 
         def do_POST(self):
@@ -492,11 +601,16 @@ def start_panel(
                 length = int(self.headers.get("Content-Length", "0"))
                 if not 0 < length <= 512:
                     raise ValueError("Invalid form length")
-                form = parse_qs(self.rfile.read(length).decode("ascii"), max_num_fields=8)
+                form = parse_qs(self.rfile.read(length).decode("ascii"), max_num_fields=9)
             except ValueError:
                 self.send_error(400)
                 return
             supplied = form.get("csrf", [])
+            form_language = form.get("lang", ["de"])
+            if len(form_language) != 1 or form_language[0] not in ("de", "en"):
+                self.send_error(400)
+                return
+            language = form_language[0]
             if len(supplied) != 1 or not compare_digest(supplied[0].encode(), csrf_token.encode()):
                 self.send_error(403)
                 return
@@ -515,7 +629,7 @@ def start_panel(
                     self.send_error(503, "Ausschnitt konnte nicht gespeichert werden")
                     return
                 self.send_response(303)
-                self.send_header("Location", "./?saved=crop")
+                self.send_header("Location", "./?saved=crop&lang=" + language)
                 self.send_header("Content-Length", "0")
                 self.end_headers()
                 return
@@ -549,7 +663,7 @@ def start_panel(
                     self.send_error(503)
                     return
                 self.send_response(303)
-                self.send_header("Location", "./?saved=1")
+                self.send_header("Location", "./?saved=1&lang=" + language)
                 self.send_header("Content-Length", "0")
                 self.end_headers()
                 return
@@ -606,7 +720,7 @@ def start_panel(
                         pass
                     requested.put_nowait(settings)
             self.send_response(303)
-            self.send_header("Location", "./?test=queued")
+            self.send_header("Location", "./?test=queued&lang=" + language)
             self.send_header("Content-Length", "0")
             self.end_headers()
 

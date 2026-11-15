@@ -113,8 +113,8 @@ class PanelTests(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 3 and sys.argv[1] == "--write-js":
-        page = formatted_page()
+    if len(sys.argv) == 3 and sys.argv[1] in ("--write-js", "--write-js-en"):
+        page = formatted_page("en" if sys.argv[1] == "--write-js-en" else "de")
         script = page.split("<script>", 1)[1].split("</script>", 1)[0]
         Path(sys.argv[2]).write_text(script, encoding="utf-8")
     else:

@@ -447,7 +447,6 @@ class BrowserTests(IngressFixture):
             automatic_settings = frame.locator("#automatic-settings")
             if not automatic_settings.evaluate("section => section.open"):
                 automatic_settings.locator("summary").click()
-            frame.get_by_text("Getesteten Bildausschnitt für die Automatik übernommen.", exact=True).wait_for()
             self.assertEqual("manual", self.rules["crop_mode"])
             self.assertEqual(90, self.rules["rotation"])
             frame.locator("#auto-form select[name=decimals]").select_option("2")

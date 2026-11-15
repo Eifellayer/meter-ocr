@@ -1,7 +1,8 @@
-"""Home Assistant ingress panel for RF1 diagnostics."""
+"""Home Assistant ingress panel for optical gas meter checks."""
 
 import html
 import json
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from queue import Empty, Full
 from secrets import compare_digest, token_urlsafe
@@ -12,7 +13,7 @@ SUPERVISOR_ADDRESS = "172.30.32.2"
 
 PAGE = """<!doctype html>
 <html lang="de"><meta charset="utf-8"><meta name="viewport" content="width=device-width">
-<title>RF1 Kontrollmessung</title>
+<title>Gaszähler OCR-Kontrolle</title>
 <style>
 :root{{color-scheme:light dark;font:16px system-ui}}
 body{{max-width:64rem;margin:2rem auto;padding:0 1rem}}
@@ -20,8 +21,14 @@ form{{display:flex;flex-wrap:wrap;align-items:end;gap:.75rem}} label{{display:gr
 select,button{{font:inherit}} button{{padding:.55rem 1rem}} dl{{display:grid;grid-template-columns:max-content 1fr;gap:.4rem 1rem}}
 dd{{margin:0;overflow-wrap:anywhere}} section{{display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(min(100%,18rem),1fr))}}
 img{{width:100%;height:auto}} h2{{font-size:1rem}}
+.intro,.hint{{line-height:1.5;max-width:56rem}} .hint{{font-size:.92rem;opacity:.85}}
+.test-box{{border:1px solid #7a8b9a;border-radius:.7rem;padding:1rem;margin:1rem 0 1.5rem;display:grid;gap:.5rem}}
+.test-box p{{margin:.15rem 0}} .test-box progress{{width:100%;height:1.2rem;accent-color:#168664}}
+.test-box small{{opacity:.8}} .test-box[data-phase="done"]{{border-color:#168664}}
+.test-box[data-phase="queued"],.test-box[data-phase="running"],.test-box[data-phase="ocr"]{{border-style:dashed}}
 </style>
-<h1>RF1 Kontrollmessung</h1>
+<h1>Gaszähler OCR-Kontrolle</h1>
+<p class="intro">Unabhängiger Bildabgleich deines Gaszählerstands mit der vorhandenen Messung. Die OCR liest die Ziffern erneut direkt aus dem Kamerabild – ohne den vom ESP erkannten Wert einfach zu übernehmen.</p>
 <form method="post" action="pruefen">
 <input type="hidden" name="csrf" value="{csrf}">
 <label>Ziffernfarbe
@@ -30,8 +37,14 @@ img{{width:100%;height:auto}} h2{{font-size:1rem}}
 <select name="decimals">{decimal_options}</select></label>
 <button>Jetzt prüfen</button>
 </form>
-{request_status}
-<h2>Letzter manueller Test</h2>
+<p class="hint"><strong>Was passiert bei „Jetzt prüfen“?</strong> Die App lädt das letzte verfügbare Zählerbild (sie löst am ESP keine neue Aufnahme aus), liest die Ziffern lokal mit Tesseract und vergleicht sie mit dem Referenzstand. Falls die erste Lesung unklar ist oder abweicht, folgen bis zu vier weitere OCR-Aufbereitungen desselben Bilds. Das kann einen Moment dauern. Der manuelle Test verändert weder den automatischen Prüfplan noch den Zählerstand oder die 24-Stunden-Trefferzahl.</p>
+<div class="test-box" id="test-box" data-phase="idle" role="status" aria-live="polite">
+<strong id="test-head">Manueller OCR-Test</strong>
+<p id="test-status">{request_status}</p>
+<progress id="test-progress" max="5" value="0" aria-label="OCR-Durchläufe" hidden></progress>
+<small id="test-meta">Der aktuelle Bearbeitungsstand wird automatisch aktualisiert.</small>
+</div>
+<h2>Letzter abgeschlossener manueller Test</h2>
 <dl><dt>Getestet um</dt><dd class="stamp" data-epoch="{manual_checked_at}">–</dd>
 <dt>Bildzeit</dt><dd class="stamp" data-epoch="{manual_image_time}">–</dd>
 <dt>Erkannter Stand</dt><dd>{manual_ocr}</dd>
@@ -49,6 +62,40 @@ img{{width:100%;height:auto}} h2{{font-size:1rem}}
 <div><h2>Letzter Treffer</h2>{good}</div></section>
 <script>
 const next = {next_check};
+const lastRenderedManual = Number({manual_checked_at});
+let currentPhase = 'idle';
+async function refreshTestStatus() {{
+  try {{
+    const response = await fetch('status', {{cache: 'no-store'}});
+    if (!response.ok) throw new Error('Status nicht abrufbar');
+    const job = await response.json();
+    currentPhase = job.phase;
+    const box = document.querySelector('#test-box');
+    const bar = document.querySelector('#test-progress');
+    const active = ['queued', 'running', 'ocr'].includes(job.phase);
+    box.dataset.phase = job.phase;
+    document.querySelector('#test-status').textContent = job.message || 'Noch kein manueller Test gestartet.';
+    document.querySelector('form button').disabled = active;
+    bar.hidden = job.phase === 'idle';
+    const done = Math.min(Number(job.attempts) || 0, 5);
+    bar.max = 5;
+    if (job.phase === 'queued' || job.phase === 'running') bar.removeAttribute('value');
+    else bar.value = job.phase === 'done' ? 5 : done;
+    const seconds = job.started_at ? Math.floor(Math.max(0, Date.now()/1000 - job.started_at)) : 0;
+    let meta = active ? 'Verstrichen: ' + seconds + ' s · keine verlässliche Restzeit möglich' : '';
+    if (job.phase === 'ocr') meta = 'OCR-Aufbereitungen: ' + done + '/5 · ' + meta;
+    if (job.phase === 'done') meta = 'Test beendet; OCR-Durchläufe: ' + done + '/5. Ergebnis unten.';
+    if (job.phase === 'idle') meta = 'Bereit für einen manuellen Test.';
+    document.querySelector('#test-meta').textContent = meta;
+    if (job.phase === 'done' && Number(job.checked_at) > lastRenderedManual + .001) {{
+      location.reload();
+    }}
+  }} catch (_) {{
+    document.querySelector('#test-meta').textContent = 'Live-Status nicht erreichbar. Verbindung zur App prüfen.';
+  }}
+}}
+refreshTestStatus();
+setInterval(refreshTestStatus, 1000);
 function tick() {{
   const out = document.querySelector('#countdown');
   if (!next) return;
@@ -64,7 +111,8 @@ let edited = false;
 document.querySelector('form').addEventListener('change', () => {{ edited = true; }});
 tick(); setInterval(tick, 1000);
 setInterval(() => {{
-  if (!edited && !document.querySelector('form').contains(document.activeElement)) location.reload();
+  if (!edited && !['queued','running','ocr'].includes(currentPhase) &&
+      !document.querySelector('form').contains(document.activeElement)) location.reload();
 }}, 15000);
 </script></html>"""
 
@@ -99,6 +147,18 @@ def start_panel(history_path, current_image, good_image, requested, default_deci
     images = {"/aktuell.jpg": current_image, "/treffer.jpg": good_image}
     csrf_token = token_urlsafe(32)
     request_lock = Lock()
+    progress = {
+        "request_id": 0, "phase": "idle", "message": "Noch kein manueller Test gestartet.",
+        "attempts": 0, "started_at": 0, "checked_at": 0,
+    }
+
+    def update_progress(request_id, phase, message, attempts=0, checked_at=0):
+        """Only the newest request may update the visible status."""
+        with request_lock:
+            if progress["request_id"] != request_id:
+                return
+            progress.update(phase=phase, message=message, attempts=attempts,
+                            checked_at=checked_at)
 
     class Handler(BaseHTTPRequestHandler):
         def authorized(self):
@@ -129,6 +189,11 @@ def start_panel(history_path, current_image, good_image, requested, default_deci
                 else:
                     self.reply(content, "image/jpeg")
                 return
+            if path == "/status":
+                with request_lock:
+                    snapshot = dict(progress)
+                self.reply(json.dumps(snapshot).encode("utf-8"), "application/json; charset=utf-8")
+                return
             if path != "/":
                 self.send_error(404)
                 return
@@ -147,8 +212,8 @@ def start_panel(history_path, current_image, good_image, requested, default_deci
                 manual_detail += " Die Bildzeit liegt außerhalb des Zeitfensters für automatische Prüfungen."
             settings = manual.get("settings", {})
             request_status = (
-                '<p role="status">Test angefordert. Das Ergebnis erscheint unten.</p>'
-                if url.query == "test=queued" else ""
+                "Test angenommen. Die Bearbeitung wird hier live angezeigt."
+                if url.query == "test=queued" else "Status wird geladen …"
             )
             self.reply(PAGE.format(**values,
                 request_status=request_status,
@@ -198,6 +263,11 @@ def start_panel(history_path, current_image, good_image, requested, default_deci
                 return
             settings = {"polarity": polarity[0], "decimals": int(decimals[0])}
             with request_lock:
+                request_id = progress["request_id"] + 1
+                settings["request_id"] = request_id
+                progress.update(request_id=request_id, phase="queued",
+                                message="Anfrage angenommen – warte auf die Bildprüfung.",
+                                attempts=0, started_at=time.time(), checked_at=0)
                 try:
                     requested.put_nowait(settings)
                 except Full:
@@ -217,3 +287,4 @@ def start_panel(history_path, current_image, good_image, requested, default_deci
 
     server = ThreadingHTTPServer(("0.0.0.0", 8099), Handler)
     Thread(target=server.serve_forever, daemon=True).start()
+    return update_progress

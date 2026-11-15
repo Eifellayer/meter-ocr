@@ -266,7 +266,7 @@ def main():
         raise ValueError("referenz_entitaet muss ein Home-Assistant-Sensor sein")
     decimals = options["vergleich_nachkommastellen"]
     requested = Queue(maxsize=1)
-    start_panel(HISTORY, DESTINATION, GOOD_IMAGE, requested, decimals)
+    update_progress = start_panel(HISTORY, DESTINATION, GOOD_IMAGE, requested, decimals)
     push_service = (options.get("push_dienst") or "").strip()
     reminder = None
     if push_service:
@@ -287,6 +287,9 @@ def main():
             except Empty:
                 pass
         manual = manual_options is not None
+        request_id = manual_options["request_id"] if manual else None
+        if manual:
+            update_progress(request_id, "running", "Lade Zählerbild und Referenzdaten …")
         if remaining > 0 and not startup and not manual:
             # Refresh status after a Home Assistant restart, even between checks.
             if "check_status" in history:
@@ -320,6 +323,8 @@ def main():
                 time.sleep(10)
                 result = capture(base, diagnostics)
             if result is not None:
+                if manual:
+                    update_progress(request_id, "running", "Bild geladen – überprüfe Zeitstempel und Ziffernbereich …")
                 picture, overlay, sample = result
                 now = datetime.now(zone)
                 captured = sample_epoch(sample, zone, now)
@@ -341,9 +346,15 @@ def main():
                             register, integer_width, whole_boxes, fraction_boxes,
                             options["helle_ziffern"], manual_options["polarity"] if manual else "auto",
                         )
+                        if manual:
+                            update_progress(request_id, "ocr", "OCR beginnt – bis zu fünf Aufbereitungen desselben Bilds.", 0)
+                        def report_ocr(attempts, message):
+                            if manual:
+                                update_progress(request_id, "ocr", message, attempts)
                         ocr, ocr_confirmed, ocr_attempts = read_with_retries(
                             lambda profile: read(profile=profile), sample,
                             manual_options["decimals"] if manual else decimals,
+                            progress=report_ocr if manual else None,
                         )
                     except (OSError, ValueError, subprocess.SubprocessError) as error:
                         print(f"Lokale OCR nicht verfügbar: {error}")
@@ -359,6 +370,7 @@ def main():
                     if ocr_attempts:
                         detail += f" OCR-Durchläufe für dieses Bild: {ocr_attempts}."
                     manual_result = {
+                        "ocr_attempts": ocr_attempts,
                         "ocr": ocr,
                         "reference": sample["actual_value"],
                         "detail": detail,
@@ -381,10 +393,14 @@ def main():
 
         now = datetime.now(zone)
         if manual:
+            update_progress(request_id, "running", "Ergebnis wird gespeichert …",
+                            manual_result.get("ocr_attempts", 0))
             manual_result.update(checked_at=now.timestamp(), settings=manual_options, slfork_diagnostics=diagnostics)
             manual_options = None
             history["manual_result"] = manual_result
             atomic_write(HISTORY, json.dumps(history).encode("utf-8"), 0o600)
+            update_progress(request_id, "done", "Manueller OCR-Test abgeschlossen. Das Ergebnis steht unten.",
+                            manual_result.get("ocr_attempts", 0), now.timestamp())
             continue
         if keep_schedule and data is None and history.get("next_check_at", 0) > now.timestamp():
             continue

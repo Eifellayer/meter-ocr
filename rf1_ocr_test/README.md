@@ -1,5 +1,7 @@
 # Gaszähler OCR-Kontrolle – Home-Assistant-App
 
+**Sprache / Language:** [Deutsch](README.md) · [English](README.en.md)
+
 **Kontrolliert einen automatisch erkannten Gaszählerstand mit einer zweiten, lokalen OCR-Lesung aus dem Zählerfoto.** Entwickelt für Pipersberg G4 RF1 und AI on the Edge / SLFork; auch eine passende Home-Assistant-Kamera ist möglich.
 
 Das ist eine **zusätzliche Plausibilitätskontrolle**, kein amtliches Messgerät. OCR-Fehler sind möglich; für eine Abrechnung zählt die direkt am Zähler überprüfte Ablesung. Privates Hobbyprojekt ohne garantierten Support.

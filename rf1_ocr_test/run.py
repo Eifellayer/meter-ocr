@@ -33,7 +33,7 @@ from checks import (
 )
 from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, MAX_FLOW_LPH, ImplausibleReading,
                          accumulate_consumption, fallback_detail, format_cubic_metres)
-from layout import crop_coordinates, find_digit_row, turn_crop
+from layout import MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, find_digit_row, find_raw_digit_row, turn_crop
 from reminder import Reminder
 from notification_settings import (DEFAULT_DELIVERY_HOURS, DEFAULT_REVIEW_MINUTES, PUSH_SERVICE,
                                    notification_rules)
@@ -243,7 +243,8 @@ def apply_manual_reference(sample, reference, decimals, integer_digits):
     sample.pop("slfork_process_error", None)
 
 
-def select_register(frame, overlay, manual_crop, manual_width, rotation=0, whole_digits=5, fraction_digits=3):
+def select_register(frame, overlay, manual_crop, manual_width, rotation=0, whole_digits=5, fraction_digits=3,
+                    *, detect_raw=False):
     if overlay is not None:
         try:
             with Image.open(io.BytesIO(overlay)) as annotated:
@@ -254,6 +255,11 @@ def select_register(frame, overlay, manual_crop, manual_width, rotation=0, whole
                         return crop_register(frame, crop), width, boxes[:whole_digits], boxes[whole_digits:], "auto"
         except (OSError, ValueError, Image.DecompressionBombError):
             pass
+    if detect_raw:
+        layout = find_raw_digit_row(frame, whole_digits, fraction_digits)
+        if layout:
+            crop, width, boxes = layout
+            return crop_register(frame, crop), width, boxes[:whole_digits], boxes[whole_digits:], "raw_auto"
     register = turn_crop(crop_register(frame, manual_crop), rotation)
     if not 0 < manual_width <= register.width:
         raise ValueError("vorkomma_breite liegt außerhalb des Ausschnitts")
@@ -1007,12 +1013,14 @@ def main():
                         atomic_write(TEST_SOURCE_IMAGE, picture, 0o600)
                     ocr_readings = []
                     ocr_error = None
+                    detect_raw = False
                     try:
                         crop_rules = manual_options if manual else active_rules
                         manual_crop = crop
                         manual_width = options["vorkomma_breite"]
                         selected_overlay = overlay
                         rotation = 0
+                        detect_raw = crop_rules["crop_mode"] == "auto"
                         if crop_rules["crop_mode"] == "manual":
                             rotation = crop_rules.get("rotation", 0)
                             manual_width = crop_rules["width"]
@@ -1020,7 +1028,7 @@ def main():
                             selected_overlay = None
                         register, integer_width, whole_boxes, fraction_boxes, source = select_register(
                             frame, selected_overlay, manual_crop, manual_width, rotation,
-                            integer_digits, fraction_digits,
+                            integer_digits, fraction_digits, detect_raw=detect_raw,
                         )
                         read_state = {"register": register, "integer_width": integer_width,
                                       "whole_boxes": whole_boxes, "fraction_boxes": fraction_boxes,
@@ -1058,7 +1066,7 @@ def main():
                                         atomic_write(TEST_SOURCE_IMAGE, latest_picture, 0o600)
                                     latest_register, latest_integer_width, latest_whole, latest_fraction, latest_source = select_register(
                                         latest_frame, latest_overlay, manual_crop, manual_width, rotation,
-                                        integer_digits, fraction_digits,
+                                        integer_digits, fraction_digits, detect_raw=detect_raw,
                                     )
                                 sample.clear()
                                 sample.update(latest_sample)
@@ -1185,6 +1193,10 @@ def main():
                             automatic_preview_ready = True
                     except (OSError, ValueError) as error:
                         print(f"Automatische OCR-Vorschau konnte nicht erstellt werden: {error}")
+                if source == "manual":
+                    unclear_detail = RAW_ROW_UNCLEAR if detect_raw else MANUAL_ROW_UNCLEAR
+                else:
+                    unclear_detail = None
                 if manual:
                     already_checked = (image_time == history.get("last_epoch")
                                        or image_time in history.get("confirmations", ()))
@@ -1210,8 +1222,8 @@ def main():
                             detail = (f"Bestätigt: Zählerstand und Referenzwert stimmen bis einschließlich "
                                       f"der {precise}. Nachkommastelle überein.")
                     elif status == "ocr_unclear":
-                        detail = explain_uncertain_positions(ocr_readings, manual_options["decimals"],
-                                                             integer_digits)
+                        detail = unclear_detail or explain_uncertain_positions(
+                            ocr_readings, manual_options["decimals"], integer_digits)
                     if (ocr_attempts == len(ocr_readings) and ocr not in ocr_readings
                             and status in ("match", "ocr_only")):
                         detail = "Ziffern aus mehreren OCR-Versuchen zusammengesetzt. " + detail
@@ -1282,7 +1294,8 @@ def main():
                         updated["standalone_reading"] = new_standalone
                     updated["ocr_readings"] = ocr_readings if outcome == "ocr_unclear" else []
                     if outcome == "ocr_unclear" and updated["check_detail"] != LAST_DIGIT_NOTICE:
-                        updated["check_detail"] = validation_detail or ocr_error or explain_uncertain_positions(ocr_readings, decimals)
+                        updated["check_detail"] = (validation_detail or ocr_error or unclear_detail
+                                                   or explain_uncertain_positions(ocr_readings, decimals, integer_digits))
                     elif validation_detail:
                         updated["check_detail"] = validation_detail
                     if outcome == "match":

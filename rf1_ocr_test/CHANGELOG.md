@@ -1,5 +1,14 @@
 # Änderungen
 
+## 0.7.0
+
+- Verständlicher App-Name „Gaszähler OCR-Kontrolle“, technische IDs bleiben erhalten.
+- Live-Fortschritt beim manuellen Test: Anfrage, Bildabruf, aktueller OCR-Schritt, tatsächlich abgeschlossene Durchläufe (max. 5) und verstrichene Zeit.
+- Kompakte und mobilfreundliche Weboberfläche mit Karten, übersichtlichen Kontrollbildern und Datum im Kurzformat.
+- Doppelte Zählerangaben aus der manuellen Testzusammenfassung entfernt. Technische Meldungen wie Messbetrieb und Prozessfehlercode bleiben für die Diagnose verfügbar, werden aber nicht mehr standardmäßig angezeigt.
+- Ausführliche GitHub- und App-Dokumentation: Zweck, Voraussetzungen, Installation, Bilder, Vergleichslogik und Unterschied zwischen fünf OCR-Aufbereitungen und fünf bestätigten automatischen Treffern.
+
+
 ## 0.6.10
 
 - Bei einer abweichenden oder unklaren OCR liest die App dasselbe Bild insgesamt fünfmal mit unterschiedlicher Aufbereitung. Eine Lesung muss bei der eingestellten Genauigkeit zur gültigen Referenz passen. Pro Messbild zählt höchstens ein Treffer.

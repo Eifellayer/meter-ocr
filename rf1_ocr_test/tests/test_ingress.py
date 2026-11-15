@@ -2,6 +2,7 @@
 
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from io import BytesIO
 import json
 import os
 from pathlib import Path
@@ -165,6 +166,31 @@ class IngressTests(IngressFixture):
         self.assertEqual(("manual", "1925,5,2005,390", 220, 90, 0),
                          (self.rules["crop_mode"], self.rules["crop"], self.rules["width"],
                           self.rules["rotation"], self.rules["decimals"]))
+
+    def test_manual_test_accepts_only_a_small_jpeg_or_png_upload(self):
+        image = Image.new("RGB", (32, 24), "white")
+        encoded = BytesIO()
+        image.save(encoded, format="JPEG")
+        picture = encoded.getvalue()
+        boundary = "meter-ocr-test-boundary"
+        body = (
+            f"--{boundary}\r\nContent-Disposition: form-data; name=\"csrf\"\r\n\r\n{self.csrf}\r\n"
+            f"--{boundary}\r\nContent-Disposition: form-data; name=\"image\"; filename=\"meter.jpg\"\r\n"
+            "Content-Type: image/jpeg\r\n\r\n"
+        ).encode() + picture + f"\r\n--{boundary}--\r\n".encode()
+        headers = {"Content-Type": f"multipart/form-data; boundary={boundary}",
+                   "X-Remote-User-Id": USER_DE}
+        with self.assertRaises(HTTPError) as caught:
+            open_core(Request(self.base + "/pruefen", data=body, headers=headers))
+        self.assertEqual(303, caught.exception.code)
+        self.assertEqual(picture, self.requested.get_nowait()["image"])
+
+        unsupported = body.replace(b"image/jpeg", b"image/gif")
+        headers["Content-Type"] = f"multipart/form-data; boundary={boundary}"
+        with self.assertRaises(HTTPError) as caught:
+            open_core(Request(self.base + "/pruefen", data=unsupported, headers=headers))
+        self.assertEqual(400, caught.exception.code)
+        self.assertTrue(self.requested.empty())
 
     def test_invalid_manual_crop_returns_localized_form_error(self):
         for language, message in (("en", "Check the form values"), ("de", "Bitte die Formulareingaben prüfen")):

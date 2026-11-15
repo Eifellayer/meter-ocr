@@ -112,20 +112,30 @@ class SourceTests(TestCase):
             run.select_register(frame, None, (0, 0, 400, 100), 80)
 
 
-    def test_rotated_high_resolution_camera_crop_is_readable(self):
-        frame = Image.new("RGB", (2560, 1440), "gray")
+    def test_camera_crop_is_readable_at_all_four_rotations(self):
         upright = synthetic_meter()
-        sideways = upright.transpose(Image.Transpose.ROTATE_90)
-        frame.paste(sideways, (2190, 310))
+        rotations = {
+            0: None,
+            90: Image.Transpose.ROTATE_270,
+            180: Image.Transpose.ROTATE_180,
+            270: Image.Transpose.ROTATE_90,
+        }
+        for rotation, transform in rotations.items():
+            with self.subTest(rotation=rotation):
+                raw = upright if transform is None else upright.transpose(transform)
+                frame = Image.new("RGB", (3000, 1200), "gray")
+                left, top = 2190, 310
+                frame.paste(raw, (left, top))
+                crop_text = f"{left},{top},{left + raw.width},{top + raw.height}"
+                crop = crop_coordinates(crop_text, upright.width, rotation=rotation)
+                register, width, _, _, mode = run.select_register(
+                    frame, None, crop, upright.width, rotation=rotation)
 
-        crop = crop_coordinates("2190,310,2290,810", upright.width, rotation=90)
-        register, width, _, _, mode = run.select_register(frame, None, crop, upright.width, rotation=90)
-
-        self.assertEqual("manual", mode)
-        self.assertEqual(upright.size, register.size)
-        self.assertEqual(upright.width, width)
-        self.assertEqual(upright.tobytes(), register.tobytes())
-        self.assertEqual("12345", read_register(register, False))
+                self.assertEqual("manual", mode)
+                self.assertEqual(upright.size, register.size)
+                self.assertEqual(upright.width, width)
+                self.assertEqual(upright.tobytes(), register.tobytes())
+                self.assertEqual("12345", read_register(register, False))
         with self.assertRaises(ValueError):
             crop_coordinates("2190,310,2290,810", upright.width)
 

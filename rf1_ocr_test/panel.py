@@ -1,6 +1,8 @@
 """Home Assistant ingress panel for optical gas meter checks."""
 
 import html
+from email.parser import BytesParser
+from email.policy import default as email_policy
 import json
 import os
 import re
@@ -24,6 +26,8 @@ from notification_settings import notification_rules
 from source_settings import SOURCE_MODES, source_rules
 
 SUPERVISOR_ADDRESS = "172.30.32.2"
+MAX_MANUAL_IMAGE_BYTES = 3_000_000
+MAX_MULTIPART_OVERHEAD = 16_384
 
 PAGE = """<!doctype html>
 <html lang="{language}"><meta charset="utf-8"><meta name="viewport" content="width=device-width">
@@ -263,7 +267,7 @@ name: Zählerstand (OCR)</code></pre>
 <details class="manual-panel settings-item" id="manual-panel" {manual_open}>
 <summary><strong>Testeinstellungen</strong></summary>
 <div class="manual-content">
-<form method="post" action="pruefen" id="manual-form">
+<form method="post" action="pruefen" id="manual-form" enctype="multipart/form-data">
 <input type="hidden" name="lang" value="{language}">
 <input type="hidden" name="mode" value="{language_mode}">
 <input type="hidden" name="csrf" value="{csrf}">
@@ -284,10 +288,13 @@ name: Zählerstand (OCR)</code></pre>
 <input name="width" type="number" min="1" max="9999" value="{width_value}"></label>
 <p class="settings-note">Wähle den Ausschnitt im Originalbild. Die Vorkommabreite gilt nach der Drehung.</p>
 </div>
+<label>Eigenes Testbild (optional, JPG oder PNG)
+<input type="file" name="image" accept="image/jpeg,image/png"></label>
+<p class="settings-note">Ein ausgewähltes Bild wird nur für diesen manuellen Test verwendet (max. 3 MB).</p>
 <button id="start-check-with-options" type="submit">Jetzt prüfen</button>
 </form>
 <details class="help"><summary title="Informationen zum manuellen Bildtest">ⓘ Was passiert bei „Jetzt prüfen“?</summary>
-<p>Die App verwendet das letzte vorhandene Zählerbild, ohne eine neue Aufnahme zu starten. Sie liest die Zahlen aus dem Bild und vergleicht sie mit dem Referenzwert. Sobald die Werte übereinstimmen, stoppt die Prüfung. Andernfalls werden höchstens so viele OCR-Versuche durchgeführt wie eingestellt (1–10). Der Test verändert die automatische Trefferzahl nicht.</p></details>
+<p>Die App verwendet das letzte vorhandene Zählerbild oder ein ausgewähltes eigenes JPG-/PNG-Testbild (bis 3 MB). Sie liest die Zahlen aus dem Bild und vergleicht sie mit dem Referenzwert. Sobald die Werte übereinstimmen, stoppt die Prüfung. Andernfalls werden höchstens so viele OCR-Versuche durchgeführt wie eingestellt (1–10). Der Test verändert die automatische Trefferzahl nicht.</p></details>
 </div></details>
 </div>
 </div>
@@ -355,11 +362,11 @@ name: Zählerstand (OCR)</code></pre>
 entity: sensor.rf1_ocr_zaehlerstand
 name: Zählerstand (OCR)</code></pre>
 </details>
-<div class="setup-controls"><button type="button" class="setup-back">Zurück</button><span class="setup-count"></span><button type="submit">Einrichtung speichern</button></div>
+<div class="setup-controls"><button type="button" class="setup-back">Zurück</button><span class="setup-count"></span><button type="submit">Speichern und Test öffnen</button></div>
 </fieldset>
 <div id="setup-error" class="setup-warning" hidden></div>
 </form>
-<button type="button" id="setup-open-manual">Manuellen Bildtest mit Testbild öffnen</button>
+
 </div>
 </dialog>
 {wizard_saved_notice}
@@ -576,11 +583,6 @@ setupForm.querySelector('[name="fraction_digits"]').addEventListener('change', e
   [...precision.options].forEach(option => option.disabled = Number(option.value) > maximum);
   if (Number(precision.value) > maximum) precision.value = String(maximum);
 }});
-document.querySelector('#setup-open-manual').addEventListener('click', () => {{
-  activateTab('overview');
-  manualTestArea.hidden = false;
-  const manual = document.querySelector('#manual-panel'); manual.open = true;
-}});
 document.querySelector('#close-manual-test').addEventListener('click', () => {{
   manualTestArea.hidden = true;
 }});
@@ -779,10 +781,14 @@ document.querySelector('#open-manual-settings').addEventListener('click', () => 
 }});
 manualTestArea.hidden = testBox.hidden;
 const testRequest = searchPrefs.get('test');
-if (['queued', 'open', 'busy'].includes(testRequest)) {{
+if (['queued', 'open', 'busy', 'ready'].includes(testRequest)) {{
   manualTestArea.hidden = false;
-  if (testRequest === 'open') manualPanel.open = true;
+  if (testRequest === 'open' || testRequest === 'ready') manualPanel.open = true;
   else if (!testBox.hidden) testBox.focus();
+  if (testRequest === 'ready') {{
+    document.querySelector('#manual-test').scrollIntoView({{block: 'start'}});
+    manualForm.querySelector('[name="image"]').focus({{preventScroll: true}});
+  }}
   searchPrefs.delete('test');
   history.replaceState(null, '', location.pathname + (searchPrefs.size ? '?' + searchPrefs : ''));
 }}
@@ -1361,15 +1367,47 @@ def start_panel(
                 self.reply(content.encode("utf-8"), "text/html; charset=utf-8", code)
 
             # Ingress and companion webviews need not forward Fetch Metadata headers.
-            if self.headers.get_content_type() != "application/x-www-form-urlencoded":
-                problem(403)
-                return
+            image_upload = None
+            content_type = self.headers.get_content_type()
             try:
                 length = int(self.headers.get("Content-Length", "0"))
-                if not 0 < length <= 4096:
-                    raise ValueError("Invalid form length")
-                form = parse_qs(self.rfile.read(length).decode("ascii"), keep_blank_values=True, max_num_fields=40)
-            except ValueError:
+                if content_type == "application/x-www-form-urlencoded":
+                    if not 0 < length <= 4096:
+                        raise ValueError("Invalid form length")
+                    form = parse_qs(self.rfile.read(length).decode("ascii"), keep_blank_values=True,
+                                    max_num_fields=40)
+                elif content_type == "multipart/form-data" and path == "/pruefen":
+                    if not 0 < length <= MAX_MANUAL_IMAGE_BYTES + MAX_MULTIPART_OVERHEAD:
+                        raise ValueError("Invalid upload length")
+                    body = self.rfile.read(length)
+                    envelope = (b"Content-Type: " + self.headers.get("Content-Type", "").encode("ascii")
+                                + b"\r\nMIME-Version: 1.0\r\n\r\n" + body)
+                    message = BytesParser(policy=email_policy).parsebytes(envelope)
+                    if not message.is_multipart():
+                        raise ValueError("Invalid multipart form")
+                    form = {}
+                    found_image = False
+                    for part in message.iter_parts():
+                        name = part.get_param("name", header="content-disposition")
+                        filename = part.get_filename()
+                        payload = part.get_payload(decode=True) or b""
+                        if filename is not None:
+                            if not filename and not payload:
+                                continue
+                            if (name != "image" or found_image
+                                    or part.get_content_type() not in ("image/jpeg", "image/png")
+                                    or len(payload) > MAX_MANUAL_IMAGE_BYTES):
+                                raise ValueError("Unsupported test image")
+                            found_image = True
+                            image_upload = payload
+                        elif name:
+                            form.setdefault(name, []).append(payload.decode("utf-8"))
+                    if not form:
+                        raise ValueError("Empty multipart form")
+                else:
+                    problem(403)
+                    return
+            except (ValueError, UnicodeDecodeError, LookupError):
                 problem(400)
                 return
             user = self.user_id()
@@ -1492,7 +1530,7 @@ def start_panel(
                 except OSError:
                     problem(503)
                     return
-                self.redirect("?saved=setup" + keep_mode)
+                self.redirect("?saved=setup&test=ready&ui=overview" + keep_mode)
                 return
 
             if path == "/bildquelle":
@@ -1504,6 +1542,8 @@ def start_panel(
                             **{key: field(key, current[key]) for key in ("url", "camera", "reference")},
                         })
                         save_source(values)
+                    if wake_worker is not None:
+                        wake_worker()
                 except ValueError:
                     problem(400, "Bitte prüfe die Adresse oder die Entitäts-ID der Bildquelle.",
                             "Check the address or entity ID of the image source.")
@@ -1641,7 +1681,7 @@ def start_panel(
                     return
             settings["manual_reference"] = manual_reference
             try:
-                save_manual_settings({key: value for key, value in settings.items() if key != "request_id"})
+                save_manual_settings({key: value for key, value in settings.items() if key not in ("request_id", "image")})
                 if test_source_image is not None:
                     test_source_image.unlink(missing_ok=True)
                 test_image.unlink(missing_ok=True)
@@ -1655,6 +1695,8 @@ def start_panel(
                     return
                 request_id = progress["request_id"] + 1
                 settings["request_id"] = request_id
+                if image_upload is not None:
+                    settings["image"] = image_upload
                 try:
                     requested.put_nowait(settings)
                 except Full:

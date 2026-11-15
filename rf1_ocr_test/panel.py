@@ -115,9 +115,12 @@ async function refreshTestStatus() {{
     const title = job.phase === 'queued' ? 'Anfrage angenommen' :
       job.phase === 'running' ? 'Bild und Messwerte' :
       job.phase === 'ocr' ? 'OCR-Auswertung' :
-      job.phase === 'done' && outcome === 'match' ? 'Test erfolgreich – Werte stimmen überein' :
-      job.phase === 'done' && outcome === 'ocr_only' ? 'Test abgeschlossen – kein Vergleichswert' :
-      job.phase === 'done' ? 'Test abgeschlossen – keine Übereinstimmung' : 'Bereit';
+      job.phase === 'done' && outcome === 'match' ? 'Test erfolgreich' :
+      job.phase === 'done' && outcome === 'ocr_only' ? 'Bild gelesen – ohne Vergleich' :
+      job.phase === 'done' && outcome === 'difference' ? 'Test beendet – Abweichung erkannt' :
+      job.phase === 'done' && outcome === 'ocr_unclear' ? 'Test beendet – Ziffern nicht sicher erkannt' :
+      job.phase === 'done' && outcome === 'slfork_unclear' ? 'Test beendet – Referenzwert unklar' :
+      job.phase === 'done' ? 'Test nicht erfolgreich' : 'Bereit';
     document.querySelector('#test-head').textContent = title;
     document.querySelector('#test-status').textContent = active ? (job.message || 'Prüfung läuft …') : '';
     const max = Math.min(10, Math.max(1, Number(job.max_attempts) || Number({default_attempts})));
@@ -129,7 +132,7 @@ async function refreshTestStatus() {{
     document.querySelector('#test-meta').textContent = active && job.phase === 'ocr' ?
       'Versuche abgeschlossen: ' + done + ' / ' + max :
       active ? 'Prüfung läuft …' :
-      job.phase === 'done' ? done + ' OCR-Versuche durchgeführt (max. ' + max + ')' : 'Bereit für den manuellen Test.';
+      job.phase === 'done' ? (done === 1 ? '1 OCR-Versuch' : done + ' OCR-Versuche') : 'Bereit für den manuellen Test.';
 
     if (job.phase === 'done') {{
       detail.hidden = false;
@@ -199,6 +202,20 @@ def start_panel(history_path, current_image, good_image, requested, default_deci
         "attempts": 0, "max_attempts": default_attempts,
         "started_at": 0, "checked_at": 0, "outcome": None, "detail": "",
     }
+    try:
+        saved_history = json.loads(history_path.read_text(encoding="utf-8"))
+        previous = saved_history.get("manual_result", {})
+        if previous.get("checked_at"):
+            progress.update(
+                phase="done", message="Letzter manueller Test",
+                attempts=previous.get("ocr_attempts", 0),
+                max_attempts=previous.get("settings", {}).get("attempts", default_attempts),
+                checked_at=previous["checked_at"],
+                outcome=previous.get("status") or "ocr_unclear",
+                detail=previous.get("detail", "Kein Prüfergebnis gespeichert."),
+            )
+    except (OSError, ValueError, AttributeError, TypeError):
+        pass
 
     def update_progress(request_id, phase, message, attempts=0, checked_at=0, outcome=None, detail=""):
         """Only the newest request may update the visible status."""

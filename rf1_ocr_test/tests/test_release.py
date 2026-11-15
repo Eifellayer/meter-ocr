@@ -10,13 +10,15 @@ sys.path.insert(0, str(APP))
 
 from PIL import Image  # noqa: E402
 from checks import compare_sample, explain_uncertain_positions, read_with_retries  # noqa: E402
+from i18n import english_progress, english_result, english_uncertain_positions, translate_page  # noqa: E402
 from panel import PAGE  # noqa: E402
 from run import draw_test_preview  # noqa: E402
 
 
-def formatted_page():
-    fields = {name for _, name, _, _ in Formatter().parse(PAGE) if name is not None}
-    return PAGE.format(**{field: "0" for field in fields})
+def formatted_page(language="de"):
+    template = translate_page(PAGE) if language == "en" else PAGE
+    fields = {name for _, name, _, _ in Formatter().parse(template) if name is not None}
+    return template.format(**{field: "0" for field in fields})
 
 
 class ComparisonTests(unittest.TestCase):
@@ -78,6 +80,30 @@ class PanelTests(unittest.TestCase):
         self.assertIn("Getesteten Ausschnitt für die Automatik übernehmen", page)
         self.assertIn('id="test-preview"', page)
         self.assertIn('id="ocr-details"', page)
+
+    def test_english_page_translates_controls_and_remains_format_safe(self):
+        page = formatted_page("en")
+        self.assertIn("Gas Meter OCR Verification", page)
+        self.assertIn("Automatic verification", page)
+        self.assertIn("Open manual test", page)
+        self.assertIn("Use tested crop for automatic checks", page)
+        self.assertIn("More details", page)
+        self.assertIn("Check in progress", page)
+        self.assertIn("lang=0", page)
+        self.assertNotIn("Manuellen Test öffnen", page)
+
+    def test_english_status_and_specific_digit_diagnostics(self):
+        self.assertIn("attempt 2 of 5", english_progress("OCR-Versuch 2 von 5 läuft …"))
+        self.assertIn("decimal place 2", english_result(
+            "Bestätigt: Zählerstand und Referenzwert stimmen überein.",
+            "match", 2))
+        self.assertIn("whole-number digit 3", english_uncertain_positions(
+            ["12345.???", "12945.???"], 0, manual=True))
+        self.assertNotIn("decimal digit", english_uncertain_positions(
+            ["12345.???", "12945.???"], 0))
+        self.assertIn("ESP", english_result(
+            "Der ESP meldet ein Problem mit der Zählerablesung. Bitte den Wert direkt am ESP prüfen.",
+            "slfork_unclear", 0))
 
     def test_overlay_green_for_read_digit_red_for_unknown(self):
         source = Image.new("RGB", (500, 100), "white")

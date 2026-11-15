@@ -1,6 +1,6 @@
 # Changelog
 
-## In Vorbereitung
+## 0.4.5 Alpha
 
 - Das letzte Testbild ist beim Öffnen der Übersicht bereits ausgeklappt.
 - Der Kameramodus sucht die Ziffernreihe auch ohne vorhandene SLFork-Markierungen.

@@ -30,7 +30,7 @@ class AppIdentityTests(unittest.TestCase):
     def test_release_metadata_is_alpha_040_with_preserved_identity(self):
         config = yaml.safe_load((APP / "config.yaml").read_text(encoding="utf-8"))
         repository = yaml.safe_load((APP.parent / "repository.yaml").read_text(encoding="utf-8"))
-        self.assertEqual("0.4.4", config["version"])
+        self.assertEqual("0.4.5", config["version"])
         self.assertEqual("rf1_ocr_test", config["slug"])
         self.assertEqual("AI Meter Reader (Alpha)", config["name"])
         self.assertNotIn("stage", config)

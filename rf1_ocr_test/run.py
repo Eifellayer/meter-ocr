@@ -261,7 +261,7 @@ def publish(data, jpeg, size, history, now, token, review_after=REVIEW_AFTER):
     payload = {
         "state": data["esp_timestamp"],
         "attributes": {
-            "friendly_name": "RF1 Kontrollbild",
+            "friendly_name": "Meter OCR Kontrollbild",
             **data,
             **rolling_summary(history, now, review_after),
             "decimal_places": history.get("comparison_decimals", 0),
@@ -281,7 +281,7 @@ def publish_check(history, now, token, review_after=REVIEW_AFTER):
     summary = rolling_summary(history, now, review_after)
     payload = {
         "state": "review_due" if summary["review_due"] else history["check_status"],
-        "attributes": {"friendly_name": "RF1 Prüfstatus", **summary, **history.get("slfork_diagnostics", {})},
+        "attributes": {"friendly_name": "Meter OCR Prüfstatus", **summary, **history.get("slfork_diagnostics", {})},
     }
     publish_state(f"http://supervisor/core/api/states/{CHECK_ENTITY}", payload, token)
 
@@ -306,7 +306,7 @@ def publish_standalone(history, camera, token):
         captured = last["image_time"]
     payload = {
         "state": value,
-        "attributes": {"friendly_name": "RF1 OCR-Zählerstand", "unit_of_measurement": "m³",
+        "attributes": {"friendly_name": "Meter OCR Zählerstand", "unit_of_measurement": "m³",
                        "device_class": "gas", "source_camera": camera, "last_successful_image": captured},
     }
     publish_state(f"http://supervisor/core/api/states/{OCR_ENTITY}", payload, token)
@@ -342,13 +342,13 @@ def check_reminder(reminder, history, now, review_after=REVIEW_AFTER):
     try:
         reminder.sync(history, rolling_summary(history, now, review_after), now.timestamp())
     except (OSError, ValueError, WebSocketException) as error:
-        print(f"RF1-Erinnerung konnte nicht aktualisiert werden: {type(error).__name__}")
+        print(f"Meter-OCR-Erinnerung konnte nicht aktualisiert werden: {type(error).__name__}")
     after = json.dumps(history)
     if after != before:
         try:
             atomic_write(HISTORY, after.encode("utf-8"), 0o600)
         except OSError as error:
-            print(f"RF1-Erinnerung konnte nicht gespeichert werden: {type(error).__name__}")
+            print(f"Meter-OCR-Erinnerung konnte nicht gespeichert werden: {type(error).__name__}")
 
 
 def main():
@@ -490,7 +490,7 @@ def main():
     startup = True
     manual_options = None
     published_standalone = bool(history.get("standalone_reading"))
-    print("RF1 Kontrollmessung gestartet")
+    print("Meter OCR gestartet")
     while True:
         active_rules = get_auto_rules()
         active_source, waiting_for_setup = get_source()

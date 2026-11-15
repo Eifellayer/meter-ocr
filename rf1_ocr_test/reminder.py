@@ -95,7 +95,7 @@ class Reminder:
             if notification_id not in notices:
                 self.call_service("persistent_notification.create", {
                     "notification_id": notification_id,
-                    "title": "Gaszähler bitte prüfen",
+                    "title": "Zählerstand bitte prüfen",
                     "message": "Die automatische Kontrolle konnte den Zählerstand wiederholt nicht bestätigen. "
                                "Das Kontrollbild findest du unter Medien → Lokale Medien → rf1. "
                                "Wenn du den Stand geprüft hast, kannst du diesen Hinweis schließen.",
@@ -114,7 +114,7 @@ class Reminder:
             return
 
         payload = {
-            "title": "Gaszähler bitte prüfen",
+            "title": "Zählerstand bitte prüfen",
             "message": "Die automatische Kontrolle konnte den Zählerstand wiederholt nicht bestätigen. "
                        "Bitte prüfe den Stand am Zähler oder öffne das Kontrollbild in Home Assistant.",
         }
@@ -125,14 +125,14 @@ class Reminder:
                     {"action": f"RF1_SKIP_{reminder['id']}", "title": "Überspringen"},
                 ]}})
             except OSError as error:
-                print(f"RF1-Handy-Push konnte nicht gesendet werden: {type(error).__name__}")
+                print(f"Meter-OCR-Handy-Push konnte nicht gesendet werden: {type(error).__name__}")
             else:
                 reminder.update(pushed=True, push_service=self.push)
         if self.target and not reminder.get("target_sent"):
             try:
                 self.call_service("notify.send_message", {**payload, "entity_id": self.target})
             except OSError as error:
-                print(f"RF1-Benachrichtigung konnte nicht gesendet werden: {type(error).__name__}")
+                print(f"Meter-OCR-Benachrichtigung konnte nicht gesendet werden: {type(error).__name__}")
             else:
                 reminder["target_sent"] = True
 

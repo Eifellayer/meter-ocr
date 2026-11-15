@@ -2,7 +2,7 @@
 
 **Sprache / Language:** [Deutsch](README.md) · [English](README.en.md)
 
-**Versionsstatus: Beta.** Unter 0.5.0 gilt Alpha, ab 0.5.0 bis vor 1.0.0 Beta und ab 1.0.0 stabil.
+**Aktueller Stand: 0.1.0.** Eine reguläre App und eine separate Testausgabe für Home Assistant.
 
 **Zählerstände lokal aus Kamerabildern lesen und mit Home Assistant abgleichen.**
 
@@ -10,7 +10,7 @@ Meter OCR liest das Zählerfoto mit **Tesseract OCR**. Mit ESPHome oder einer an
 
 Entwickelt für mechanische Gaszähler wie den **Pipersberg G4 RF1**. Das Ziffernfenster hat fünf Vorkommastellen und bei Bedarf bis zu drei Nachkommastellen. Die Messwertausgabe in Home Assistant ist auf Kubikmeter ausgelegt.
 
-> **Privates Hobbyprojekt, keine geeichte Zweitmessung.** OCR kann Ziffern falsch lesen. Für Abrechnungen und Meldungen an den Versorger gilt der direkt am Zähler kontrollierte Stand. Nutzung auf eigene Gefahr; kein garantierter Support.
+Meter OCR ist ein privates Hobbyprojekt für die Plausibilitätskontrolle. [Hinweise zur Nutzung](#hinweise-zur-nutzung)
 
 ## Was wird kontrolliert?
 
@@ -45,7 +45,7 @@ Beim ersten Öffnen einer frischen Installation wählst du unter **Bildquelle** 
 
 Für ESPHome richte eine [ESP32-Kamera](https://esphome.io/components/esp32_camera/) mit [nativer API](https://esphome.io/components/api/) ein und füge das Gerät in Home Assistant hinzu. Prüfe das Kamerabild dort und trage anschließend die `camera.*`-Entität in RF1 ein. Öffne **Manuellen Test**, passe den Bildausschnitt an und übernimm die Vorschau in die Automatik. Die App benötigt für diese Betriebsart weder SLFork noch einen Referenzsensor.
 
-Der OCR-Sensor benötigt eine Mehrheit von mindestens zwei OCR-Profilen desselben Bildes. Bei einer unsicheren Lesung oder einem Rückgang gegenüber dem letzten gültigen Stand derselben Kamera wird er als **nicht verfügbar** gemeldet. Ein OCR-Stand ohne Referenz ist eine eigenständige Ablesung. Für das Energie-Dashboard gibt es einen kumulativen Verbrauchssensor. Bestehende Installationen übernehmen zuerst ihre bisherige Bildquelle. Ein späterer Wechsel startet die automatische Bestätigungszählung für die neue Quelle neu.
+Der OCR-Sensor benötigt eine Mehrheit von mindestens zwei OCR-Profilen desselben Bildes. Bei einer unsicheren Lesung oder einem Rückgang gegenüber dem letzten gültigen Stand derselben Kamera wird er als **nicht verfügbar** gemeldet. Ein OCR-Stand ohne Referenz ist eine eigenständige Ablesung. Für das Energie-Dashboard gibt es einen kumulativen Verbrauchssensor. Ein späterer Wechsel startet die automatische Bestätigungszählung für die neue Quelle neu.
 
 ## Kamerabild und Ausschnitt einrichten
 
@@ -78,8 +78,6 @@ Je Ziel wird pro Vorfall höchstens eine erfolgreiche Nachricht erfasst. Wenn du
 ## Sprache der Weboberfläche
 
 **Automatisch (Home Assistant)** verwendet die im angemeldeten Home-Assistant-Profil gewählte Sprache, wenn die App über Ingress darauf zugreifen kann. Unterstützt werden Deutsch und Englisch einschließlich Varianten wie `de-AT` und `en-US`. Fehlt eine unterstützte Profilsprache, gilt die erste passende Browsersprache, sonst Deutsch. Eine ausdrückliche Auswahl von **Deutsch** oder **English** wird pro angemeldetem Ingress-Nutzer gespeichert. Die Auswahl **Automatisch** übernimmt beim nächsten Öffnen oder Neuladen wieder das Profil. Ohne eindeutige Ingress-Identität gilt die manuelle Wahl innerhalb der aktuellen Navigation.
-
-Die frühere Sprachauswahl von 0.8.1 war browserweit. Wähle eine gewünschte dauerhafte Sprache nach dem Update einmal im jeweiligen Konto. Die App übernimmt die Sprache aus der bereits angemeldeten Frontend-Verbindung. In den App-Einstellungen wird nur die manuelle Auswahl je Nutzer gespeichert.
 
 ## „Jetzt prüfen“ – erweiterter manueller Test
 
@@ -114,12 +112,12 @@ Ein SLFork-Messzeitpunkt wird automatisch nur einmal gezählt. Alte Bilder lasse
 
 ## Installation
 
-1. In Home Assistant unter **Einstellungen → Apps → App installieren → ⋮ → Repositories** die Adresse `https://github.com/Thunder86/rf1-kontrollmessung` hinzufügen.
-2. **Meter OCR** installieren.
+1. In Home Assistant unter **Einstellungen → Apps → App installieren → ⋮ → Repositories** das [gemeinsame Repository](https://github.com/Eifellayer/rf1-kontrollmessung) hinzufügen.
+2. **Meter OCR** für den regulären Betrieb oder **Meter OCR Beta** zum Testen installieren.
 3. Für SLFork `esp_url` auf die Adresse des ESP setzen (z. B. `http://esp-gaszaehler.local`). Alternativ `kamera_entitaet`, `ausschnitt` und optional `referenz_entitaet` konfigurieren.
 4. App starten, **Weboberfläche öffnen** und mit **Jetzt prüfen** eine Testlesung durchführen.
 
-Wer von einer alten lokalen RF1-App auf die Repository-Version wechselt, sollte die Einstellungen zuerst übernehmen und **nur eine Variante gleichzeitig betreiben**. Beide verwenden dieselben Entitäts-IDs; ihre lokal gespeicherten Historien sind voneinander getrennt.
+**Meter OCR Beta** ist als experimentell markiert und startet manuell. Sie hat eigene Einstellungen, Bilder und Sensoren mit dem Präfix `sensor.meter_ocr_beta_`. Die reguläre App nutzt weiterhin ihre bisherigen Sensor-IDs.
 
 ## Wichtige Einstellungen
 
@@ -144,8 +142,16 @@ Wer von einer alten lokalen RF1-App auf die Repository-Version wechselt, sollte 
 
 Eine Meldung `match` bedeutet Übereinstimmung **bei der eingestellten Genauigkeit** – nicht notwendigerweise, dass jede sichtbare Nachkommastelle erkannt wurde.
 
+## Hinweise zur Nutzung
+
+Mit KI-Unterstützung entwickelt. Die OCR kann Ziffern falsch erkennen. Für Abrechnungen und Meldungen gilt der direkt am Zähler geprüfte Stand.
+
+Soweit gesetzlich zulässig, wird die Software ohne Gewähr für Richtigkeit, Verfügbarkeit oder Eignung bereitgestellt und die Haftung für Schäden aus ihrer Nutzung ausgeschlossen. Es gelten die zwingenden gesetzlichen Haftungsvorschriften, insbesondere bei Vorsatz, grober Fahrlässigkeit, Verletzungen von Leben, Körper oder Gesundheit und nach dem Produkthaftungsrecht.
+
 ## Projekt unterstützen
 
 Meter OCR ist ein kostenloses Hobbyprojekt. Wenn sie dir hilft, freue ich mich über eine [freiwillige PayPal-Spende](https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8).
 
-[Änderungsprotokoll](rf1_ocr_test/CHANGELOG.md) · [Installationshinweise für lokale Altversionen](rf1_ocr_test/README.md) · [English documentation](README.en.md)
+[Änderungsprotokoll](rf1_ocr_test/CHANGELOG.md) · [Quellen](SOURCES.md) · [Home-Assistant-App](rf1_ocr_test/README.md) · [English documentation](README.en.md)
+
+<img src="assets/project-logo.png" alt="Projektlogo" width="120">

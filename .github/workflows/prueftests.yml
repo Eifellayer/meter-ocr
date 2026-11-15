@@ -4,10 +4,16 @@ on:
   push:
     paths:
       - "rf1_ocr_test/**"
+      - "meter_ocr_beta/**"
+      - "repository.yaml"
+      - "scripts/package-beta.sh"
       - ".github/workflows/prueftests.yml"
   pull_request:
     paths:
       - "rf1_ocr_test/**"
+      - "meter_ocr_beta/**"
+      - "repository.yaml"
+      - "scripts/package-beta.sh"
       - ".github/workflows/prueftests.yml"
 
 permissions:
@@ -18,6 +24,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -25,7 +33,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y tesseract-ocr-eng tesseract-ocr fonts-dejavu-core
-          python -m pip install pillow websocket-client playwright
+          python -m pip install pillow websocket-client playwright pyyaml
           python -m playwright install --with-deps --only-shell chromium
       - name: Prüfe Python-Syntax
         run: python -m compileall -q rf1_ocr_test
@@ -37,6 +45,30 @@ jobs:
           node --check /tmp/rf1-panel.js
           python rf1_ocr_test/tests/test_release.py --write-js-en /tmp/rf1-panel-en.js
           node --check /tmp/rf1-panel-en.js
+      - name: Prüfe beide Einträge und den Beta-Quellstand
+        if: ${{ hashFiles('meter_ocr_beta/SOURCE') != '' }}
+        run: |
+          beta_revision=$(cat meter_ocr_beta/SOURCE)
+          bash scripts/package-beta.sh "$beta_revision" --check
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          stable = yaml.safe_load(Path("rf1_ocr_test/config.yaml").read_text())
+          beta = yaml.safe_load(Path("meter_ocr_beta/config.yaml").read_text())
+          assert stable["name"] == "Meter OCR" and beta["name"] == "Meter OCR Beta"
+          assert stable["slug"] == "rf1_ocr_test" and beta["slug"] == "meter_ocr_beta"
+          assert stable.get("stage", "stable") == "stable" and beta["stage"] == "experimental"
+          assert stable["arch"] == beta["arch"]
+          assert beta["boot"] == "manual"
+          PY
+          beta_source=$(mktemp -d)
+          git archive "$beta_revision" -- rf1_ocr_test | tar -x -C "$beta_source"
+          python -m unittest discover -s "$beta_source/rf1_ocr_test/tests" -v
+          python "$beta_source/rf1_ocr_test/tests/test_release.py" --write-js /tmp/beta-panel.js
+          node --check /tmp/beta-panel.js
+          python "$beta_source/rf1_ocr_test/tests/test_release.py" --write-js-en /tmp/beta-panel-en.js
+          node --check /tmp/beta-panel-en.js
 
   container:
     strategy:
@@ -50,3 +82,16 @@ jobs:
           docker build --tag rf1-test rf1_ocr_test
           docker run --rm --entrypoint /usr/bin/python3 rf1-test -c 'import run, checks, language, panel, reminder'
           docker run --rm --entrypoint tesseract rf1-test --list-langs | grep -x eng
+      - name: Beta-Image bauen und getrennte Kennungen prüfen
+        if: ${{ hashFiles('meter_ocr_beta/SOURCE') != '' }}
+        run: |
+          docker build --tag meter-ocr-beta-test meter_ocr_beta
+          docker run --rm --entrypoint /usr/bin/python3 meter-ocr-beta-test -c '
+          import run
+          import reminder
+          assert run.CHECK_ENTITY == "sensor.meter_ocr_beta_pruefstatus"
+          assert str(run.DESTINATION.parent) == "/media/meter_ocr_beta"
+          assert reminder.NOTICE_PREFIX == "meter_ocr_beta_review_"
+          assert reminder.SKIP_PREFIX == "METER_OCR_BETA_SKIP_"
+          '
+          docker run --rm --entrypoint tesseract meter-ocr-beta-test --list-langs | grep -x eng

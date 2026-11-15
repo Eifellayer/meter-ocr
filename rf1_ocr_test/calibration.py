@@ -96,6 +96,9 @@ class Calibration:
     limit: int
     started: float
     state: str = "waiting"
+    stage: str = "queued"
+    rotation: int | None = None
+    variant: int | None = None
     seen: set = field(default_factory=set)
     last_stamp: float = 0
     candidate: Layout | None = None
@@ -108,11 +111,12 @@ class Calibration:
         return now - self.started >= TIME_LIMIT
 
     def status(self, now):
-        return {"state": self.state, "tested": len(self.seen), "limit": self.limit,
+        return {"state": self.state, "stage": self.stage, "rotation": self.rotation, "variant": self.variant,
+                "tested": len(self.seen), "limit": self.limit, "duration": TIME_LIMIT,
                 "confirmations": self.confirmations, "required": MIN_IMAGES,
                 "seconds": max(0, ceil(TIME_LIMIT - (now - self.started)))}
 
-    def examine(self, frame, overlay, sample, stamp, rules, read, stop, baseline=None):
+    def examine(self, frame, overlay, sample, stamp, rules, read, stop, baseline=None, on_attempt=None):
         """Return a verified layout, checking two OCR profiles per distinct image."""
         digest = sha256(frame.convert("RGB").tobytes()).digest()
         if stamp <= self.last_stamp or digest in self.seen:
@@ -124,9 +128,12 @@ class Calibration:
         precision = rules["decimals"] if has_reference else rules["fraction_digits"]
         digits = rules["integer_digits"]
         flow = rules["max_flow_lph"]
-        for layout in layouts(frame, overlay, rules, len(self.seen) - 1, self.candidate):
+        candidates = layouts(frame, overlay, rules, len(self.seen) - 1, self.candidate)
+        for index, layout in enumerate(candidates, start=1):
             if stop():
                 return None
+            if on_attempt is not None:
+                on_attempt(index, layout.rotation)
             try:
                 readings = [read(layout, OCR_PROFILES[0])]
                 if stop():

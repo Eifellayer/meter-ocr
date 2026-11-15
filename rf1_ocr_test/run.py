@@ -815,10 +815,13 @@ def main():
                 if not MIN_IMAGES <= limit <= MAX_IMAGES:
                     raise ValueError("Invalid calibration image limit")
                 now = time.monotonic()
-                if calibration is not None and calibration.state in ("waiting", "testing") and not calibration.expired(now):
+                configuration = calibration_configuration_now()
+                if (calibration is not None and calibration.state in ("waiting", "testing")
+                        and not calibration.expired(now) and calibration.limit == limit
+                        and configuration == calibration_configuration):
                     return
                 calibration = Calibration(limit=limit, started=now)
-                calibration_configuration = calibration_configuration_now()
+                calibration_configuration = configuration
                 calibration_next = now
             wake_worker.set()
 
@@ -850,6 +853,7 @@ def main():
             if now < calibration_next or (active_rules, active_source) != (configured_rules, configured_camera):
                 return True
             job.state = "testing"
+            job.stage = "capture"
             attempt = deepcopy(job)
         deadline = job.started + TIME_LIMIT
 
@@ -860,6 +864,11 @@ def main():
             if stopped():
                 raise TimeoutError("Calibration stopped")
             return get_bytes(url, token, timeout=min(timeout, max(0.01, deadline - time.monotonic())))
+
+        def report_calibration(stage, variant=None, rotation=None):
+            with settings_lock:
+                if calibration is job and job.state == "testing":
+                    job.stage, job.variant, job.rotation = stage, variant, rotation
 
         set_activity("working", "Selbsteinrichtung prüft Bildausschnitt und Drehung.")
         result = None
@@ -913,7 +922,11 @@ def main():
                                 fraction_digits=active_rules["fraction_digits"], deadline=deadline,
                             )
 
-                        selected = attempt.examine(frame, overlay, sample, captured, active_rules, read, stopped, baseline)
+                        report_calibration("search")
+                        selected = attempt.examine(
+                            frame, overlay, sample, captured, active_rules, read, stopped, baseline,
+                            on_attempt=lambda variant, rotation: report_calibration("ocr", variant, rotation),
+                        )
         except (OSError, ValueError, TypeError, Image.DecompressionBombError) as error:
             print(f"Selbsteinrichtung konnte die Aufnahme nicht prüfen: {type(error).__name__}")
         with settings_lock:
@@ -934,6 +947,7 @@ def main():
                 attempt.state = "failed"
             else:
                 attempt.state = "waiting"
+                attempt.stage = "waiting"
             calibration = attempt
             calibration_next = now + CAPTURE_INTERVAL
         return True

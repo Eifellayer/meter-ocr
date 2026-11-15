@@ -32,12 +32,22 @@ EN_UI = {
     "Vorschlag bei wiederholt unlesbarer Ziffer ausblenden": "Hide the suggestion for a repeatedly unreadable digit",
     RAW_ROW_UNCLEAR: "Could not find a clear digit row. Set the crop in the manual test.",
     MANUAL_ROW_UNCLEAR: "The digits are hard to read. Check the image rotation, camera angle, focus and lighting.",
+    "Selbsteinrichtung": "Automatic setup",
+    "Verstrichene Zeit der Selbsteinrichtung": "Elapsed automatic setup time",
+    "Selbsteinrichtung startet, sobald die laufende Prüfung beendet ist …":
+        "Automatic setup will start once the current check finishes …",
+    "Kamerabild wird abgerufen …": "Fetching a camera image …",
+    "Suche nach der Ziffernreihe …": "Looking for the digit row …",
+    "Prüfe Rahmen ": "Checking frame ",
+    " mit Drehung ": " at a rotation of ",
     "Selbsteinrichtung für Ausschnitt und Drehung": "Automatic setup for crop and rotation",
     "Die App tastet sich mit unterschiedlichen Bildern an einen passenden Rahmen und Winkel heran. Nach drei bestätigten Ablesungen übernimmt sie den Rahmen und die Drehung. Nach fünf Minuten endet der Versuch automatisch.":
         "The app searches for a suitable crop and rotation using different images. It saves them after three confirmed readings. The search automatically ends after five minutes.",
     "Ohne externen Vergleichswert hilft ein von Hand abgelesener Startwert. Ohne Startwert wartet die App zusätzlich auf einen plausiblen Zähleranstieg.":
         "A manually entered starting reading helps if there is no external reference. Without either, the app also waits for a plausible increase.",
     "Geprüfte Bilder der Selbsteinrichtung": "Images checked during automatic setup",
+    "Startet nach dem Speichern und endet spätestens nach fünf Minuten. Erst nach drei bestätigten Aufnahmen übernimmt die App den Rahmen und die Drehung.":
+        "Starts after saving and ends within five minutes. The app uses the crop and rotation once three captures confirm it.",
     "Höchstens so viele unterschiedliche Bilder": "Maximum number of distinct images",
     "Selbsteinrichtung starten": "Start automatic setup",
     "Selbsteinrichtung stoppen": "Stop automatic setup",

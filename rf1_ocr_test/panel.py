@@ -130,6 +130,19 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .setup-step legend{{font-weight:700;padding:0 .4rem 0 0;color:inherit}}
 .setup-controls{{display:flex;align-items:center;justify-content:space-between;gap:.6rem;grid-column:1/-1}}
 .setup-help{{grid-column:1/-1}}
+.wizard-crop-options{{margin:0;padding:0;border:0;min-width:0}}
+.wizard-crop-options legend{{margin:0 0 .45rem;padding:0;font-size:.9rem}}
+.wizard-crop-choices{{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,10rem),1fr));gap:.5rem}}
+.wizard-crop-choices label{{display:flex;align-items:center;gap:.5rem;padding:.65rem;border:1px solid var(--edge);border-radius:.55rem;cursor:pointer}}
+.wizard-crop-choices label:has(:checked){{border-color:#65bcaf;color:inherit}}
+.wizard-crop-choices input{{margin:0;min-height:auto;flex-shrink:0}}
+.calibration-card{{border-color:light-dark(#83aaa2,#4b786e)}}
+.calibration-card h2{{font-size:1.15rem}}
+.calibration-card p{{margin:.55rem 0}}
+.calibration-live{{padding:.75rem .9rem;margin:0 0 .8rem;border:1px solid var(--edge);border-radius:.7rem}}
+.calibration-live p{{margin:0}}
+.calibration-live progress,.calibration-card progress{{display:block;width:100%;margin:.55rem 0;accent-color:#bb861b}}
+.calibration-card form{{margin-top:.75rem}}
 .source-mode-guide{{grid-column:1/-1;display:grid;gap:.75rem;grid-template-columns:repeat(auto-fit,minmax(min(100%,14rem),1fr))}}
 .source-mode-guide ul{{padding-inline-start:1.25rem;margin:0}}
 .source-mode-guide li + li{{margin-top:.35rem}}
@@ -232,12 +245,17 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <div class="panel" id="check-overview">
 <div class="check-card-heading"><h2>Automatische Kontrolle</h2>
 <div class="check-actions">
+<button type="button" id="open-calibration" {calibration_hidden}>Selbsteinrichtung</button>
 <button type="button" id="open-manual-settings">Test einstellen</button>
 <button id="start-check" type="submit" form="manual-form">Test starten</button>
 </div></div>
 <div class="activity-status" data-state="{automatic_activity_state}">
 <p role="status" aria-live="polite"><strong>Automatik:</strong> <span id="automatic-activity">{automatic_activity}</span></p>
 <progress id="automatic-progress" class="setup-progress" aria-label="Fortschritt der automatischen Prüfung" {automatic_progress_hidden}></progress>
+</div>
+<div id="calibration-overview" class="calibration-live" hidden>
+<p id="calibration-overview-state" role="status"></p>
+<progress id="calibration-overview-progress" aria-label="Verstrichene Zeit der Selbsteinrichtung"></progress>
 </div>
 {wizard_saved_notice}
 <div class="paused-notice" id="paused-notice" {paused_notice_hidden} role="status" aria-live="polite"><strong>Automatik pausiert</strong><p>Es starten keine neuen automatischen Prüfungen. Ein bereits laufender Durchlauf darf noch enden. Manuelle Tests bleiben verfügbar.</p><form method="post" action="automatik-pause" id="resume-auto-form"><input type="hidden" name="lang" value="{language}"><input type="hidden" name="mode" value="{language_mode}"><input type="hidden" name="csrf" value="{csrf}"><input type="hidden" name="paused" value="0"><button type="submit">Automatik fortsetzen</button></form></div>
@@ -396,6 +414,25 @@ name: Zählerstand (OCR)</code></pre>
 </div>
 <div class="tab-content" id="view-settings" role="tabpanel" aria-labelledby="tab-settings" {settings_hidden}>
 {reset_notice}
+<section class="panel calibration-card" id="calibration-settings" aria-labelledby="calibration-title" {calibration_hidden}>
+<h2 id="calibration-title" tabindex="-1">Selbsteinrichtung für Ausschnitt und Drehung</h2>
+<p>Die App tastet sich mit unterschiedlichen Bildern an einen passenden Rahmen und Winkel heran. Nach drei bestätigten Ablesungen übernimmt sie den Rahmen und die Drehung. Nach fünf Minuten endet der Versuch automatisch.</p>
+<p>Ohne externen Vergleichswert hilft ein von Hand abgelesener Startwert. Ohne Startwert wartet die App zusätzlich auf einen plausiblen Zähleranstieg.</p>
+{calibration_saved_notice}
+<p id="calibration-state" role="status" hidden></p>
+<progress id="calibration-progress" aria-label="Verstrichene Zeit der Selbsteinrichtung" hidden></progress>
+<form method="post" action="selbsteinrichtung">
+<input type="hidden" name="lang" value="{language}">
+<input type="hidden" name="mode" value="{language_mode}">
+<input type="hidden" name="csrf" value="{csrf}">
+<label id="calibration-limit-label">Höchstens so viele unterschiedliche Bilder
+<input id="calibration-limit" name="image_limit" type="number" min="{calibration_min}" max="{calibration_max}" value="{calibration_limit}" required></label>
+<div class="crop-actions">
+<button id="calibration-start" type="submit" name="action" value="start">Selbsteinrichtung starten</button>
+<button id="calibration-cancel" type="submit" name="action" value="cancel" formnovalidate hidden>Selbsteinrichtung stoppen</button>
+</div>
+</form>
+</section>
 <div class="panel" id="settings"><h2>Einstellungen</h2>
 <dialog class="setup-dialog" id="setup-dialog" aria-labelledby="setup-title" data-first-run="{setup_first_run}">
 <div class="dialog-heading"><h2 id="setup-title">Einrichtungsassistent</h2>
@@ -446,7 +483,15 @@ name: Zählerstand (OCR)</code></pre>
 <div class="setup-controls"><button type="button" class="setup-back">Zurück</button><span class="setup-count"></span><button type="button" class="setup-next">Weiter</button></div>
 </fieldset>
 <fieldset class="setup-step" data-step="2"><legend>3. Bildausschnitt und Prüfplan</legend>
-<label>Bildbereich<select name="crop_mode">{wizard_crop_options}</select></label>
+<fieldset class="wizard-crop-options setup-help" id="wizard-crop-options">
+<legend>Bildbereich</legend>
+<div class="wizard-crop-choices">{wizard_crop_options}</div>
+</fieldset>
+<div id="wizard-calibration-options" class="setup-help" hidden>
+<label>Höchstens so viele unterschiedliche Bilder
+<input name="image_limit" type="number" min="{calibration_min}" max="{calibration_max}" value="{calibration_limit}" required disabled></label>
+<p class="settings-note">Startet nach dem Speichern und endet spätestens nach fünf Minuten. Erst nach drei bestätigten Aufnahmen übernimmt die App den Rahmen und die Drehung.</p>
+</div>
 <label>OCR-Versuche pro Bild<select name="attempts">{auto_attempt_options}</select></label>
 <label>Ziffernfarbe<select name="polarity">{auto_polarity_options}</select></label>
 <label>Prüfintervall (Minuten)<input type="number" name="interval_minutes" min="5" max="1440" value="{interval_minutes}" required></label>
@@ -570,24 +615,6 @@ name: Zählerstand (OCR)</code></pre>
 <input type="hidden" name="mode" value="{language_mode}">
 <input type="hidden" name="csrf" value="{csrf}">
 </form>
-<details class="help setup-help" id="calibration-settings" {calibration_open} {calibration_hidden}>
-<summary>Selbsteinrichtung für Ausschnitt und Drehung</summary>
-<p>Die App tastet sich mit unterschiedlichen Bildern an einen passenden Rahmen und Winkel heran. Nach drei bestätigten Ablesungen übernimmt sie den Rahmen und die Drehung. Nach fünf Minuten endet der Versuch automatisch.</p>
-<p>Ohne externen Vergleichswert hilft ein von Hand abgelesener Startwert. Ohne Startwert wartet die App zusätzlich auf einen plausiblen Zähleranstieg.</p>
-<p id="calibration-state" role="status" hidden></p>
-<progress id="calibration-progress" max="50" value="0" aria-label="Geprüfte Bilder der Selbsteinrichtung" hidden></progress>
-<form method="post" action="selbsteinrichtung">
-<input type="hidden" name="lang" value="{language}">
-<input type="hidden" name="mode" value="{language_mode}">
-<input type="hidden" name="csrf" value="{csrf}">
-<label id="calibration-limit-label">Höchstens so viele unterschiedliche Bilder
-<input id="calibration-limit" name="image_limit" type="number" min="{calibration_min}" max="{calibration_max}" value="{calibration_limit}" required></label>
-<div class="crop-actions">
-<button id="calibration-start" type="submit" name="action" value="start">Selbsteinrichtung starten</button>
-<button id="calibration-cancel" type="submit" name="action" value="cancel" formnovalidate hidden>Selbsteinrichtung stoppen</button>
-</div>
-</form>
-</details>
 <p class="settings-note">Nach zwei Fehlprüfungen mit kurzem Abstand gilt wieder dein eingestelltes Prüfintervall. Bei geänderter Vergleichsgenauigkeit beginnt die Trefferzählung neu.</p>
 </div></details>
 {auto_saved_notice}
@@ -695,6 +722,11 @@ document.querySelector('#open-setup').addEventListener('click', () => {{
   showSetupStep(0);
   if (!setupDialog.open) setupDialog.showModal();
   loadSourceSuggestions();
+}});
+document.querySelector('#open-calibration').addEventListener('click', () => {{
+  activateTab('settings');
+  document.querySelector('#calibration-title').focus({{preventScroll: true}});
+  document.querySelector('#calibration-settings').scrollIntoView({{block: 'start'}});
 }});
 document.querySelector('#open-interval-settings').addEventListener('click', () => {{
   activateTab('settings');
@@ -815,9 +847,18 @@ discoveredSource.addEventListener('change', () => {{
   showWizardSource();
 }});
 if (setupDialog.open) loadSourceSuggestions();
-const wizardCropMode = setupForm.querySelector('[name="crop_mode"]');
-function showWizardCrop() {{ document.querySelector('#wizard-crop-fields').hidden = wizardCropMode.value !== 'manual'; }}
-wizardCropMode.addEventListener('change', showWizardCrop); showWizardCrop();
+const wizardCropMode = setupForm.elements.crop_mode;
+function showWizardCrop() {{
+  const manual = wizardCropMode.value === 'manual';
+  const learn = wizardCropMode.value === 'learn';
+  const fields = document.querySelector('#wizard-crop-fields');
+  fields.hidden = !manual;
+  fields.querySelectorAll('input').forEach(input => input.disabled = !manual);
+  document.querySelector('#wizard-calibration-options').hidden = !learn;
+  setupForm.elements.image_limit.disabled = !learn;
+}}
+document.querySelector('#wizard-crop-options').addEventListener('change', showWizardCrop);
+showWizardCrop();
 setupForm.querySelector('[name="fraction_digits"]').addEventListener('change', event => {{
   const maximum = Number(event.target.value);
   const precision = setupForm.querySelector('[name="decimals"]');
@@ -1035,11 +1076,27 @@ function refreshCalibration(status) {{
     save_failed: 'Ausschnitt und Drehung konnten nicht gespeichert werden.',
   }};
   const clock = Math.floor(status.seconds / 60) + ':' + String(status.seconds % 60).padStart(2, '0');
-  const message = messages[status.state] || '';
+  const stages = {{
+    queued: 'Selbsteinrichtung startet, sobald die laufende Prüfung beendet ist …',
+    capture: 'Kamerabild wird abgerufen …',
+    search: 'Suche nach der Ziffernreihe …',
+    ocr: 'Prüfe Rahmen ' + status.variant + ' mit Drehung ' + status.rotation + '° …',
+  }};
+  const message = active && stages[status.stage] ? stages[status.stage] : messages[status.state] || '';
   const detail = 'Bilder: ' + status.tested + '/' + status.limit +
     ' · Bestätigungen: ' + status.confirmations + '/' + status.required +
     (active ? ' · Noch ' + clock + ' min' : '');
   label.textContent = message + ' ' + detail;
+  document.querySelector('#calibration-overview').hidden = false;
+  document.querySelector('#calibration-overview-state').textContent = label.textContent;
+  document.querySelector('.activity-status').hidden = active;
+  for (const bar of [progress, document.querySelector('#calibration-overview-progress')]) {{
+    bar.hidden = !active;
+    bar.max = status.duration;
+    const elapsed = status.duration - status.seconds;
+    if (elapsed > 0) bar.value = elapsed;
+    else bar.removeAttribute('value');
+  }}
   if (status.state === 'saved' && lastCalibrationState && lastCalibrationState !== 'saved' && status.settings) {{
     const form = document.querySelector('#auto-form');
     for (const [name, value] of Object.entries(status.settings)) form.elements[name].value = value;
@@ -1047,9 +1104,6 @@ function refreshCalibration(status) {{
     form.elements.crop_mode.dispatchEvent(new Event('change'));
   }}
   lastCalibrationState = status.state;
-  progress.hidden = !active;
-  progress.max = status.limit;
-  progress.value = status.tested;
   document.querySelector('#calibration-limit-label').hidden = active;
   document.querySelector('#calibration-start').hidden = active;
   document.querySelector('#calibration-cancel').hidden = !active;
@@ -1357,6 +1411,14 @@ CROP_MODES_EN = {"auto": "Detect automatically", "manual": "Draw a frame"}
 def select_options(choices, chosen):
     return "".join(
         f'<option value="{value}"{" selected" if value == chosen else ""}>{label}</option>'
+        for value, label in choices.items()
+    )
+
+
+def radio_options(name, choices, chosen):
+    return "".join(
+        f'<label><input type="radio" name="{name}" value="{value}"'
+        f'{" checked" if value == chosen else ""}>{label}</label>'
         for value, label in choices.items()
     )
 
@@ -1775,10 +1837,10 @@ def start_panel(
                 reset_message = EN_UI[reset_message]
             selected_tab = query.get("ui", [""])[0]
             settings_tab_active = (selected_tab == "settings" if selected_tab in ("settings", "overview") else
-                                   saved in ("1", "crop", "notifications", "source") or setup_pending)
+                                   saved in ("1", "crop", "notifications", "source", "setup-calibration") or setup_pending)
             saved_message = (
                 "Ausschnitt und Drehung für manuelle Tests gespeichert." if saved == "manual-crop" else
-                "Einrichtung gespeichert." if saved == "setup" else
+                "Einrichtung gespeichert." if saved in ("setup", "setup-calibration") else
                 "Automatische Prüfregeln gespeichert." if saved == "1" else
                 "Getesteten Bildausschnitt für die Automatik übernommen." if saved == "crop" else
                 "Ausschnitt zurückgesetzt. Die Automatik sucht die Ziffernreihe wieder selbst." if saved == "crop-reset" else
@@ -1828,8 +1890,8 @@ def start_panel(
                 overview_hidden="hidden" if settings_tab_active else "",
                 settings_hidden="" if settings_tab_active else "hidden",
                 language_options=select_options({"auto": automatic, "de": "Deutsch", "en": "English"}, mode),
-                settings_open="open" if saved in ("1", "crop", "crop-reset", "calibration") else "",
-                calibration_open="open" if saved == "calibration" else "",
+                settings_open="open" if saved in ("1", "crop", "crop-reset") else "",
+                calibration_saved_notice=auto_saved_notice if saved == "setup-calibration" else "",
                 calibration_hidden="" if control_calibration else "hidden",
                 calibration_min=MIN_IMAGES, calibration_max=MAX_IMAGES,
                 calibration_limit=calibration["limit"] if calibration else DEFAULT_LIMIT,
@@ -1864,9 +1926,12 @@ def start_panel(
                 wizard_decimal_options=select_options(
                     {key: label for key, label in (DECIMALS_EN if language == "en" else DECIMALS).items()
                      if int(key) <= auto_rules["fraction_digits"]}, str(auto_rules["decimals"])),
-                wizard_crop_options=select_options(
-                    {**CROP_MODES_EN, "manual": "Enter crop coordinates"} if language == "en"
-                    else {**CROP_MODES, "manual": "Bildkoordinaten eingeben"}, auto_rules["crop_mode"]),
+                wizard_crop_options=radio_options("crop_mode", {
+                    "auto": CROP_MODES_EN["auto"] if language == "en" else CROP_MODES["auto"],
+                    **({"learn": "Learn crop and rotation" if language == "en"
+                        else "Ausschnitt und Drehung lernen"} if control_calibration else {}),
+                    "manual": "Enter crop coordinates" if language == "en" else "Bildkoordinaten eingeben",
+                }, auto_rules["crop_mode"]),
                 fallback_value=html.escape(auto_rules["fallback_value"], quote=True),
                 fallback_time=html.escape(auto_rules["fallback_time"], quote=True),
                 wizard_saved_notice=(
@@ -2066,7 +2131,8 @@ def start_panel(
                     problem(400)
                     return
                 try:
-                    save_auto_paused(target[0] == "1")
+                    with rules_lock:
+                        save_auto_paused(target[0] == "1")
                 except (OSError, ValueError):
                     problem(503, "Der Pausenzustand konnte nicht gespeichert werden.",
                             "Could not save the pause state.")
@@ -2149,6 +2215,12 @@ def start_panel(
                     interval_minutes = int(field("interval_minutes"))
                     polarity = field("polarity")
                     crop_mode = field("crop_mode")
+                    learn_crop = crop_mode == "learn" and control_calibration is not None
+                    if learn_crop:
+                        image_limit = int(field("image_limit", str(DEFAULT_LIMIT)))
+                        if not MIN_IMAGES <= image_limit <= MAX_IMAGES:
+                            raise ValueError("Invalid calibration image limit")
+                        crop_mode = old_rules["crop_mode"]
                     meter_display = field("meter_display")
                     if (not 1 <= integer_digits <= 9 or not 0 <= fraction_digits <= 3
                             or not 0 <= decimals <= fraction_digits or not 1 <= attempts <= 10
@@ -2156,10 +2228,12 @@ def start_panel(
                             or polarity not in POLARITIES or crop_mode not in CROP_MODES
                             or meter_display not in ("rollers", "digital", "mixed")):
                         raise ValueError("Prüfe Ziffernzahl, Vergleichsgenauigkeit und Prüfintervall.")
-                    crop = field("crop", old_rules["crop"])
-                    width = int(field("width", str(old_rules["width"])))
-                    rotation = int(field("rotation", str(old_rules.get("rotation", 0))))
-                    crop_coordinates(crop, width, rotation)
+                    crop, width, rotation = old_rules["crop"], old_rules["width"], old_rules.get("rotation", 0)
+                    if not learn_crop:
+                        crop = field("crop", crop)
+                        width = int(field("width", str(width)))
+                        rotation = int(field("rotation", str(rotation)))
+                        crop_coordinates(crop, width, rotation)
                     max_flow = parse_flow_limit(field("max_flow"))
                     fallback_value = field("fallback_value").strip()
                     fallback_time = field("fallback_time").strip()
@@ -2187,12 +2261,17 @@ def start_panel(
                         "fraction_digits": fraction_digits, "meter_display": meter_display,
                         "fallback_value": fallback_value, "fallback_time": fallback_time,
                     }
-                    with source_lock:
+                    with source_lock, rules_lock:
+                        if learn_crop and get_auto_paused and get_auto_paused():
+                            problem(409, "Setze die Automatik fort und starte dann die Selbsteinrichtung.",
+                                    "Resume automatic checks before starting automatic setup.")
+                            return
                         save_source(source_values)
-                    with delivery_lock:
-                        save_delivery(delivery_values)
-                    with rules_lock:
+                        with delivery_lock:
+                            save_delivery(delivery_values)
                         save_auto_rules(rules_values)
+                        if learn_crop:
+                            control_calibration("start", image_limit)
                 except (ValueError, TypeError):
                     problem(400, "Bitte prüfe Bildquelle, Ziffernaufteilung und Fallback-Wert.",
                             "Check the image source, digit layout and fallback reading.")
@@ -2200,7 +2279,10 @@ def start_panel(
                 except OSError:
                     problem(503)
                     return
-                self.redirect("?saved=setup&ui=overview" + keep_mode)
+                if learn_crop:
+                    self.redirect("?saved=setup-calibration&ui=settings" + keep_mode + "#calibration-settings")
+                else:
+                    self.redirect("?saved=setup&ui=overview" + keep_mode)
                 return
 
             if path == "/bildquelle":

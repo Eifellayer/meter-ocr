@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.10 Alpha
+
+- „Ausschnitt und Drehung lernen“ ist im Einrichtungsassistenten auswählbar und startet nach dem Speichern.
+- Die Selbsteinrichtung hat einen direkten Einstieg in der Übersicht und eine eigene Karte in den Einstellungen.
+- Der Zeitbalken läuft auch während des Bildabrufs. Status, Prüfzahl, Bestätigungen und getesteter Drehwinkel sind live sichtbar.
+
 ## 0.4.9 Alpha
 
 - Optionale Selbsteinrichtung für Ausschnitt und Drehung. Einstellbares Limit von 3 bis 50 unterschiedlichen Bildern, höchstens fünf Minuten und Übernahme nach mindestens drei bestätigten Aufnahmen.

@@ -154,6 +154,24 @@ class IngressTests(IngressFixture):
         status_en = json.loads(self.request("/automatic?lang=en")[0])
         self.assertIn("value on the meter itself", status_en["detail"])
 
+    def test_last_digit_warning_and_optional_precision_mode(self):
+        self.rules.update(decimals=3)
+        page = self.request("/")[0]
+        self.assertIn('data-precision-options >', page)
+        self.assertNotIn('name="precision_mode" value="1" checked', page)
+        form = dict(decimals=3, attempts=3, crop_mode="auto", polarity="auto", precision_mode=1)
+        self.assertEqual((303, "./?saved=1"), self.submit("/automatik", **form))
+        self.assertTrue(self.rules["precision_mode"])
+        self.assertIn('name="precision_mode" value="1" checked', self.request("/")[0])
+        self.rules["precision_mode"] = False
+        self.history.write_text(json.dumps({
+            "check_status": "match_with_warning", "comparison_decimals": 3,
+            "check_detail": "Die ersten zwei Nachkommastellen stimmen überein. Die dritte Stelle bleibt unbestätigt.",
+        }))
+        status = json.loads(self.request("/automatic")[0])
+        self.assertEqual(("warning", "Prüfung bestanden mit Hinweis"), (status["tone"], status["heading"]))
+
+
     def test_automatic_status_explains_three_retry_attempts_and_one_hour_wait(self):
         self.history.write_text(json.dumps({
             "check_status": "ocr_unclear", "failure_attempts": 2,

@@ -15,7 +15,8 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from checks import (FRESH_SAMPLE_AGE, NORMAL_INTERVAL, OCR_PROFILES, RETRY_INTERVAL, WINDOW_SECONDS,
-                    compare_sample, explain_uncertain_positions, last_check_at, read_register, record_sample,
+                    LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, compare_sample, explain_uncertain_positions,
+                    last_check_at, read_register, record_sample,
                     reschedule_next_check, rolling_summary, schedule_next_check, slfork_reference)
 from consumption import EXCESSIVE_INCREASE, FALLBACK_PLAUSIBLE, FALLBACK_UNKNOWN_TIME, LOWER_READING, fallback_detail
 from layout import crop_coordinates, find_digit_row
@@ -182,6 +183,47 @@ class OCRTests(TestCase):
 
 
 class StateTests(TestCase):
+    def test_last_digit_can_pass_with_warning_after_three_distinct_samples(self):
+        now = datetime.now(timezone.utc)
+        for strict in (False, True):
+            with self.subTest(strict=strict):
+                history = {}
+                for index in range(3):
+                    data = sample(now - timedelta(seconds=3 - index))
+                    data.update(raw_value="12345.2276", actual_value="12345.2276")
+                    readings = ("12345.222", "12345.22?", "12345.222")
+                    self.assertTrue(record_sample(history, data, "12345.222", timezone.utc, now, 3,
+                                                  readings=readings, precision_mode=strict))
+                    self.assertFalse(record_sample(history, data, "12345.222", timezone.utc, now, 3,
+                                                   readings=readings, precision_mode=strict))
+                    if index < 2 or strict:
+                        self.assertEqual(("difference", LAST_DIGIT_NOTICE),
+                                         (history["status"], history["check_detail"]))
+                    else:
+                        self.assertEqual(("match_with_warning", LAST_DIGIT_PASS),
+                                         (history["status"], history["check_detail"]))
+                    schedule_next_check(history, history["status"], now.timestamp())
+                self.assertEqual([], history["confirmations"])
+                self.assertNotIn("last_match_at", history)
+                if not strict:
+                    self.assertNotIn("failure_since", history)
+                    self.assertEqual(now.timestamp() + NORMAL_INTERVAL, history["next_check_at"])
+
+    def test_last_digit_warning_requires_agreeing_prefixes_and_valid_reference(self):
+        now = datetime.now(timezone.utc)
+        expected = {**sample(now), "raw_value": "12345.2276", "actual_value": "12345.2276"}
+        for data, reading, readings in (
+            (expected, "12345.212", ("12345.212",) * 3),
+            (expected, "12345.222", ("12345.212", "12345.222", "12345.21?")),
+            ({**expected, "reference_is_fallback": True}, "12345.222", ("12345.222",) * 3),
+            ({**expected, "raw_value": "12345.2376"}, "12345.222", ("12345.222",) * 3),
+        ):
+            with self.subTest(data=data, reading=reading):
+                history = {"last_digit_failures": 2}
+                self.assertTrue(record_sample(history, data, reading, timezone.utc, now, 3, readings=readings))
+                self.assertNotEqual("match_with_warning", history["status"])
+                self.assertNotIn("last_digit_failures", history)
+
     def test_saving_settings_bypasses_the_previous_interval(self):
         class StopLoop(Exception):
             pass
@@ -362,6 +404,16 @@ class StateTests(TestCase):
             uncertain = check(old_sample, "?????.???")
         self.assertEqual("ocr_unclear", uncertain["check_status"])
         self.assertNotEqual(run.SLFORK_RAW_SUCCESS, uncertain["source_connection_detail"])
+
+        for index in range(3):
+            timestamp = datetime.now(timezone.utc) + timedelta(seconds=index + 1)
+            marginal = check({
+                **sample(timestamp), "raw_value": "12346.3530", "actual_value": "12346.3530",
+            }, "12346.354")
+        self.assertEqual("match_with_warning", marginal["check_status"])
+        self.assertEqual(12346353, marginal["consumption"]["reading_litres"])
+        self.assertEqual(recovered["consumption"]["total_litres"] + 2, marginal["consumption"]["total_litres"])
+        self.assertEqual(recovered["confirmations"], marginal["confirmations"])
     def test_standalone_sensor_retains_exact_precision_and_rejects_lower_readings(self):
         data = sample(datetime.now(timezone.utc))
         latest = run.standalone_reading("camera.meter", data, "12345.170", 2, None)

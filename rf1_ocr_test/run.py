@@ -25,7 +25,9 @@ from app_channel import APP_NAME, CHECK_ENTITY, LABEL_SUFFIX, NAMESPACE
 
 from checks import (
     DEFAULT_INTERVAL_MINUTES, RETRY_INTERVAL, REVIEW_AFTER, compare_sample, crop_register, read_register, read_with_retries, record_sample,
-    explain_uncertain_positions, meter_prefix, common_exact_precision, manual_confirms_failed_auto,
+    LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, LAST_DIGIT_RETRIES, SUCCESSFUL_CHECKS,
+    differs_only_at_last_digit, last_digit_can_pass, explain_uncertain_positions,
+    meter_prefix, common_exact_precision, manual_confirms_failed_auto,
     reschedule_next_check, rolling_summary, sample_epoch, sample_timestamp, schedule_next_check, slfork_reference,
     valid_interval_minutes,
 )
@@ -494,6 +496,7 @@ def main():
         wake_worker.set()
 
     auto_rules = {"decimals": default_decimals, "attempts": default_attempts, "polarity": "auto",
+                  "precision_mode": False,
                   "crop_mode": "auto", "crop": options["ausschnitt"],
                   "width": options["vorkomma_breite"], "rotation": 0,
                   "max_flow_lph": DEFAULT_FLOW_LPH, "interval_minutes": DEFAULT_INTERVAL_MINUTES,
@@ -555,6 +558,7 @@ def main():
                           "max_flow_lph": max_flow, "interval_minutes": interval_minutes,
                           "integer_digits": integer_digits, "fraction_digits": fraction_digits,
                           "meter_display": meter_display, "fallback_value": fallback_value,
+                          "precision_mode": saved_rules.get("precision_mode") is True,
                           "fallback_time": fallback_time, "decimals": decimals}
         else:
             print("Ungültige gespeicherte Automatikregeln; verwende die App-Konfiguration.")
@@ -573,6 +577,7 @@ def main():
         meter_display = values.get("meter_display", auto_rules["meter_display"])
         fallback_value = values.get("fallback_value", auto_rules["fallback_value"])
         fallback_time = values.get("fallback_time", auto_rules["fallback_time"])
+        precision_mode = values.get("precision_mode", auto_rules["precision_mode"])
         if (type(values.get("decimals")) is not int or not 0 <= values["decimals"] <= fraction_digits
                 or type(values.get("attempts")) is not int or not 1 <= values["attempts"] <= 10
                 or values.get("polarity") not in ("auto", "light", "dark")
@@ -580,6 +585,7 @@ def main():
                 or type(integer_digits) is not int or not 1 <= integer_digits <= 9
                 or type(fraction_digits) is not int or not 0 <= fraction_digits <= 3
                 or meter_display not in ("rollers", "digital", "mixed")
+                or type(precision_mode) is not bool
                 or not isinstance(fallback_value, str) or not isinstance(fallback_time, str)):
             raise ValueError("Ungültige Einstellungen für die automatische Kontrolle")
         if fallback_value:
@@ -603,6 +609,7 @@ def main():
         updated_rules = {**auto_rules, **values, "rotation": rotation, "max_flow_lph": max_flow,
                          "interval_minutes": interval_minutes, "integer_digits": integer_digits,
                          "fraction_digits": fraction_digits, "meter_display": meter_display,
+                         "precision_mode": precision_mode,
                          "fallback_value": fallback_value, "fallback_time": fallback_time}
         updated_rules["crop"] = ",".join(str(part) for part in coords)
         atomic_write(AUTO_RULES, json.dumps(updated_rules, indent=2).encode("utf-8"), 0o600)
@@ -763,6 +770,7 @@ def main():
         reminder.configure(enabled=active_delivery["enabled"], push=active_delivery["push"], target=active_delivery["target"],
                            delay=active_delivery["delivery_hours"] * 60 * 60)
         decimals = active_rules["decimals"]
+        precision_mode = active_rules["precision_mode"]
         integer_digits = active_rules["integer_digits"]
         fraction_digits = active_rules["fraction_digits"]
         max_attempts = active_rules["attempts"]
@@ -815,6 +823,7 @@ def main():
             source_history["confirmations"] = []
             for field in ("last_epoch", "last_match_at", "failure_since", "failure_attempts", "retry_suppressed", "capture_failure_since",
                           "source_connection_status", "source_connection_detail",
+                          "last_digit_failures",
                           "last_slfork_match", "last_reference", "last_reference_time",
                           "last_reference_is_fallback", "ocr_value", "ocr_readings"):
                 source_history.pop(field, None)
@@ -829,15 +838,18 @@ def main():
             ("comparison_decimals", decimals, decimals),
             ("comparison_integer_digits", integer_digits, integer_digits),
             ("comparison_fraction_digits", fraction_digits, fraction_digits),
+            ("precision_mode", False, precision_mode),
         ))
         if format_changed:
             updated["confirmations"] = []
             updated.pop("last_match_at", None)
+            updated.pop("last_digit_failures", None)
             if history.get("comparison_integer_digits", integer_digits) != integer_digits:
                 updated.pop("standalone_reading", None)
         updated["comparison_decimals"] = decimals
         updated["comparison_integer_digits"] = integer_digits
         updated["comparison_fraction_digits"] = fraction_digits
+        updated["precision_mode"] = precision_mode
         updated["check_detail"] = "Bild oder Messwert fehlt. Verbindung prüfen."
         manual_result = {"status": "capture_unavailable", "detail": updated["check_detail"]}
         diagnostics = {}
@@ -1057,7 +1069,13 @@ def main():
                     if not manual:
                         reading_status, _ = compare_sample(sample, ocr, decimals, ocr_confirmed=ocr_confirmed,
                                                            integer_digits=integer_digits)
-                        if reading_status == "match" or ((standalone or raw_fallback) and reading_status == "ocr_only"):
+                        accept_reference = (
+                            decimals == 3 and reading_status in ("difference", "ocr_unclear")
+                            and last_digit_can_pass(updated, precision_mode)
+                            and differs_only_at_last_digit(sample, ocr, ocr_readings, integer_digits)
+                        )
+                        if (reading_status == "match" or accept_reference
+                                or ((standalone or raw_fallback) and reading_status == "ocr_only")):
                             try:
                                 if standalone:
                                     new_standalone = standalone_reading(
@@ -1082,7 +1100,8 @@ def main():
                                         "step_litres": fallback_step, "total_litres": 0,
                                     }
                                 new_consumption = accumulate_consumption(
-                                    previous_consumption, source_key, captured, ocr, decimals,
+                                    previous_consumption, source_key, captured,
+                                    sample["actual_value"] if accept_reference else ocr, decimals,
                                     active_rules["max_flow_lph"], integer_digits,
                                 )
                             except ImplausibleReading as error:
@@ -1118,6 +1137,12 @@ def main():
                         detail = ocr_error
                     elif validation_detail:
                         detail = validation_detail
+                    elif (manual_options["decimals"] == 3 and captured is not None
+                          and status in ("difference", "ocr_unclear")
+                          and differs_only_at_last_digit(sample, ocr, ocr_readings, integer_digits)):
+                        detail = LAST_DIGIT_NOTICE
+                        if ocr_attempts >= LAST_DIGIT_RETRIES and not precision_mode:
+                            status, detail = "match_with_warning", LAST_DIGIT_PASS
                     elif status == "match" and not manual_reference:
                         precise = common_exact_precision(
                             ocr, sample.get("reference", sample.get("actual_value")),
@@ -1134,7 +1159,7 @@ def main():
                         detail = "Ziffern aus mehreren OCR-Versuchen zusammengesetzt. " + detail
                     if raw_fallback and status in ("match", "ocr_only"):
                         detail = SLFORK_RAW_SUCCESS + " " + detail
-                    if status in ("match", "ocr_only") and not ocr_error and not validation_detail:
+                    if status in SUCCESSFUL_CHECKS and not ocr_error and not validation_detail:
                         updated["next_check_at"] = datetime.now(zone).timestamp() + (
                             active_rules["interval_minutes"] * 60
                         )
@@ -1184,7 +1209,9 @@ def main():
                                            and ocr_attempts > 0 and preview_available),
                     }
                 elif record_sample(updated, sample, ocr, zone, datetime.now(zone), decimals,
-                                   ocr_confirmed=ocr_confirmed, integer_digits=integer_digits):
+                                   ocr_confirmed=ocr_confirmed, integer_digits=integer_digits,
+                                   readings=ocr_readings if not validation_detail else (),
+                                   precision_mode=precision_mode):
                     atomic_write(DESTINATION, picture, 0o644)
                     if not automatic_preview_ready:
                         AUTOMATIC_PREVIEW.unlink(missing_ok=True)
@@ -1196,7 +1223,7 @@ def main():
                     if new_standalone is not None:
                         updated["standalone_reading"] = new_standalone
                     updated["ocr_readings"] = ocr_readings if outcome == "ocr_unclear" else []
-                    if outcome == "ocr_unclear":
+                    if outcome == "ocr_unclear" and updated["check_detail"] != LAST_DIGIT_NOTICE:
                         updated["check_detail"] = validation_detail or ocr_error or explain_uncertain_positions(ocr_readings, decimals)
                     elif validation_detail:
                         updated["check_detail"] = validation_detail
@@ -1239,7 +1266,7 @@ def main():
                                  slfork_diagnostics=diagnostics)
             try:
                 next_history = {**history, "manual_result": manual_result}
-                if manual_result.get("status") in ("match", "ocr_only"):
+                if manual_result.get("status") in SUCCESSFUL_CHECKS:
                     next_history["next_check_at"] = updated.get("next_check_at", history.get("next_check_at"))
                 if (sample is not None and updated.get("check_status") == "match"
                         and history.get("check_status") != "match"):
@@ -1277,7 +1304,7 @@ def main():
             continue
         history = updated
         set_activity("waiting", "Letzte Prüfung beendet. Nächster Versuch nach kurzer Wartezeit."
-                     if not updated.get("retry_suppressed") and outcome not in ("match", "ocr_only") else
+                     if not updated.get("retry_suppressed") and outcome not in SUCCESSFUL_CHECKS else
                      "Letzte Prüfung beendet. Wartet auf das eingestellte Prüfintervall.")
         if data is not None:
             pending_image = (data, jpeg, size)

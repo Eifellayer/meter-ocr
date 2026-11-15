@@ -313,6 +313,30 @@ def compare_sample(data, ocr, decimals, *, ocr_confirmed=True, integer_digits=5)
             "stimmen Zählerstand und Referenzwert überein.")
 
 
+LAST_DIGIT_NOTICE = "Nur die dritte Nachkommastelle ist unklar oder weicht ab."
+LAST_DIGIT_PASS = "Die ersten zwei Nachkommastellen stimmen überein. Die dritte Stelle bleibt unbestätigt."
+LAST_DIGIT_RETRIES = 3
+SUCCESSFUL_CHECKS = ("match", "match_with_warning", "ocr_only")
+
+
+def last_digit_can_pass(history, precision_mode):
+    return not precision_mode and history.get("last_digit_failures", 0) >= LAST_DIGIT_RETRIES - 1
+
+
+def differs_only_at_last_digit(data, ocr, readings, integer_digits=5):
+    reference = data.get("actual_value")
+    # A reduced comparison still needs trustworthy and consistent source values.
+    if compare_sample(data, reference, 3, integer_digits=integer_digits)[0] != "match":
+        return False
+    if compare_sample(data, ocr, 3, integer_digits=integer_digits)[0] == "match":
+        return False
+    prefix = meter_prefix(reference, 2, integer_digits)
+    if prefix != meter_prefix(data["raw_value"], 2, integer_digits) or prefix != meter_prefix(ocr, 2, integer_digits):
+        return False
+    agreeing = sum(meter_prefix(reading, 2, integer_digits) == prefix for reading in readings)
+    return agreeing >= 2 and agreeing > len(readings) // 2
+
+
 def rolling_summary(history, now, review_after=REVIEW_AFTER):
     epoch = now.timestamp()
     count = sum(epoch - WINDOW_SECONDS < stamp <= epoch for stamp in history.get("confirmations", ()))
@@ -383,7 +407,8 @@ def sample_epoch(data, zone, now):
     return captured if epoch - FRESH_SAMPLE_AGE < captured <= epoch + 60 else None
 
 
-def record_sample(history, data, ocr, zone, now, decimals=0, *, ocr_confirmed=True, integer_digits=5):
+def record_sample(history, data, ocr, zone, now, decimals=0, *, ocr_confirmed=True, integer_digits=5,
+                  readings=(), precision_mode=False):
     """Count each in-window cycle at most once, even after a restart."""
     captured = sample_epoch(data, zone, now)
     if captured is None or captured <= history.get("last_epoch", 0):
@@ -395,6 +420,16 @@ def record_sample(history, data, ocr, zone, now, decimals=0, *, ocr_confirmed=Tr
     history["confirmations"] = [old for old in history["confirmations"] if old > epoch - WINDOW_SECONDS]
     status, detail = compare_sample(data, ocr, decimals, ocr_confirmed=ocr_confirmed,
                                     integer_digits=integer_digits)
+    if (decimals == 3 and status in ("difference", "ocr_unclear")
+            and differs_only_at_last_digit(data, ocr, readings, integer_digits)):
+        can_pass = last_digit_can_pass(history, precision_mode)
+        retries = min(history.get("last_digit_failures", 0) + 1, LAST_DIGIT_RETRIES)
+        history["last_digit_failures"] = retries
+        detail = LAST_DIGIT_NOTICE
+        if can_pass:
+            status, detail = "match_with_warning", LAST_DIGIT_PASS
+    else:
+        history.pop("last_digit_failures", None)
     if status == "match":
         history["confirmations"].append(captured)
         history["last_match_at"] = captured
@@ -408,14 +443,14 @@ def valid_interval_minutes(value):
 
 def _check_delay(outcome, interval_minutes, retry_suppressed=False):
     interval = interval_minutes * 60
-    if outcome in ("match", "ocr_only"):
+    if outcome in SUCCESSFUL_CHECKS:
         return interval
     return FAILURE_COOLDOWN_INTERVAL if retry_suppressed else min(interval, RETRY_INTERVAL)
 
 
 def schedule_next_check(history, outcome, checked_at, interval_minutes=DEFAULT_INTERVAL_MINUTES):
     history["check_status"] = outcome
-    if outcome in ("match", "ocr_only"):
+    if outcome in SUCCESSFUL_CHECKS:
         history.pop("failure_since", None)
         history.pop("failure_attempts", None)
         history.pop("retry_suppressed", None)

@@ -17,7 +17,8 @@ from urllib.parse import parse_qs, urlsplit
 
 from app_channel import APP_NAME, NAMESPACE
 from checks import (DEFAULT_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, WARNING_DETAIL_AFTER, meter_prefix,
-                    last_check_at, reschedule_next_check, valid_interval_minutes)
+                    LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, last_check_at, reschedule_next_check,
+                    valid_interval_minutes)
 from consumption import DEFAULT_FLOW_LPH, format_cubic_metres, parse_flow_limit
 from i18n import EN_UI, english_progress, english_result, translate_page
 from language import MODES, SUPPORTED, USER_ID, browser_locale, profile_script
@@ -362,6 +363,10 @@ name: Zählerstand (OCR)</code></pre>
 <label>Ziffern vor dem Komma<select name="integer_digits">{integer_digit_options}</select></label>
 <label>Nachkommastellen auf dem Zähler<select name="fraction_digits">{fraction_digit_options}</select></label>
 <label>Verglichen wird bis<select name="decimals">{wizard_decimal_options}</select></label>
+<div class="settings-note setup-help" data-precision-options {precision_hidden}>
+<p>Die letzte Stelle kann beim Weiterdrehen schwer lesbar sein. Das kann zu Fehlmeldungen führen.</p>
+<label class="check-option"><input type="checkbox" name="precision_mode" value="1" {precision_checked}> Präzisionsmodus: Alle drei Nachkommastellen müssen stimmen</label>
+</div>
 <p class="settings-note setup-help">Die Vergleichsgenauigkeit darf kleiner sein als die angezeigte Stellenzahl. Kleine Zeiger werden nicht automatisch gelesen; bei Rollen und Zeigern bitte nur die Ziffernrollen einstellen.</p>
 <label>Fallback-Zählerstand (optional)<input name="fallback_value" value="{fallback_value}" inputmode="decimal" maxlength="16" placeholder="z. B. 10446,337"></label>
 <label>Stand abgelesen am<input name="fallback_time" type="datetime-local" value="{fallback_time}"></label>
@@ -441,6 +446,10 @@ name: Zählerstand (OCR)</code></pre>
 <input type="hidden" name="csrf" value="{csrf}">
 <label>Vergleich
 <select name="decimals">{auto_decimal_options}</select></label>
+<div class="settings-note" data-precision-options {precision_hidden}>
+<p>Die letzte Stelle kann beim Weiterdrehen schwer lesbar sein. Das kann zu Fehlmeldungen führen.</p>
+<label class="check-option"><input type="checkbox" name="precision_mode" value="1" {precision_checked}> Präzisionsmodus: Alle drei Nachkommastellen müssen stimmen</label>
+</div>
 <label title="Nach einer unklaren Ablesung folgt ein zusätzlicher Versuch nach fünf Minuten. Schlägt auch der fehl, gilt wieder dieses Intervall.">Prüfintervall (Minuten)
 <input name="interval_minutes" type="number" min="1" max="{max_interval_minutes}" value="{interval_minutes}" required></label>
 <label>Max. OCR-Versuche
@@ -650,6 +659,13 @@ setupForm.querySelector('[name="fraction_digits"]').addEventListener('change', e
   const precision = setupForm.querySelector('[name="decimals"]');
   [...precision.options].forEach(option => option.disabled = Number(option.value) > maximum);
   if (Number(precision.value) > maximum) precision.value = String(maximum);
+  precision.dispatchEvent(new Event('change'));
+}});
+document.querySelectorAll('[data-precision-options]').forEach(options => {{
+  const select = options.closest('form').querySelector('[name="decimals"]');
+  const showPrecisionOptions = () => {{ options.hidden = select.value !== '3'; }};
+  select.addEventListener('change', showPrecisionOptions);
+  showPrecisionOptions();
 }});
 document.querySelector('#close-manual-test').addEventListener('click', () => {{
   manualTestArea.hidden = true;
@@ -749,6 +765,7 @@ async function refreshTestStatus() {{
       job.phase === 'running' ? 'Bild und Messwerte' :
       job.phase === 'ocr' ? 'OCR-Auswertung' :
       job.phase === 'done' && outcome === 'match' ? 'Test erfolgreich' :
+      job.phase === 'done' && outcome === 'match_with_warning' ? 'Test bestanden mit Hinweis' :
       job.phase === 'done' && outcome === 'ocr_only' ? 'Bild gelesen – ohne Vergleich' :
       job.phase === 'done' && outcome === 'difference' ? 'Test beendet – Abweichung erkannt' :
       job.phase === 'done' && outcome === 'ocr_unclear' ? 'Test beendet – Ziffern nicht sicher erkannt' :
@@ -1121,6 +1138,7 @@ def start_panel(
             ("comparison_decimals", auto_rules["decimals"]),
             ("comparison_integer_digits", auto_rules["integer_digits"]),
             ("comparison_fraction_digits", auto_rules["fraction_digits"]),
+            ("precision_mode", auto_rules.get("precision_mode", False)),
         ))
         if precision_pending:
             detail = ("Neue Zählereinstellungen gespeichert. Die nächste automatische "
@@ -1138,6 +1156,11 @@ def start_panel(
         show_attempts = False
         if not precision_pending and status == "match":
             tone, heading, icon = "ok", "Zählerstand bestätigt", "✓"
+        elif not precision_pending and status == "match_with_warning":
+            tone, heading, icon = "warning", "Prüfung bestanden mit Hinweis", "!"
+            if history.get("check_detail") == LAST_DIGIT_PASS:
+                explanation = "Für den Verbrauch verwendet die App den plausiblen Vergleichswert."
+                detail = f"{detail} {EN_UI[explanation] if language == 'en' else explanation}"
         elif not precision_pending and status in (
             "difference", "ocr_unclear", "slfork_unclear", "stale_sample", "capture_unavailable",
         ):
@@ -1160,7 +1183,10 @@ def start_panel(
                           "Warte auf ein aktuelles Zählerbild. Die App versucht es automatisch erneut.")
             else:
                 detail = ""
-            if status == "difference":
+            if history.get("check_detail") == LAST_DIGIT_NOTICE:
+                heading = "Letzte Nachkommastelle unsicher"
+                detail = LAST_DIGIT_NOTICE if language == "de" else EN_UI[LAST_DIGIT_NOTICE]
+            elif status == "difference":
                 heading = "Ablesung und Vergleichswert weichen ab" if not prolonged else heading
                 instructions = ("Vergleiche beide Werte mit dem Stand direkt am Zähler."
                                 if prolonged or paused else
@@ -1406,6 +1432,8 @@ def start_panel(
                 language_options=select_options({"auto": automatic, "de": "Deutsch", "en": "English"}, mode),
                 settings_open="open" if saved in ("1", "crop") else "",
                 setup_first_run=str(bool(setup_pending or reset_state == "done")).lower(),
+                precision_hidden="" if auto_rules["decimals"] == 3 else "hidden",
+                precision_checked="checked" if auto_rules.get("precision_mode") else "",
                 wizard_source_options=select_options(source_choices, source["mode"]),
                 meter_display_options=select_options({
                     "rollers": "Number rollers" if language == "en" else "Ziffernrollen",
@@ -1697,6 +1725,7 @@ def start_panel(
                         **old_rules, "decimals": decimals, "attempts": attempts,
                         "polarity": polarity, "crop_mode": crop_mode, "crop": crop,
                         "width": width, "rotation": rotation, "max_flow_lph": max_flow,
+                        "precision_mode": field("precision_mode") == "1",
                         "interval_minutes": interval_minutes, "integer_digits": integer_digits,
                         "fraction_digits": fraction_digits, "meter_display": meter_display,
                         "fallback_value": fallback_value, "fallback_time": fallback_time,
@@ -1811,6 +1840,7 @@ def start_panel(
                         if not valid_interval_minutes(interval_minutes):
                             raise ValueError("Ungültiges Prüfintervall")
                         save_auto_rules({"decimals": int(decimals[0]), "attempts": int(attempts[0]),
+                                         "precision_mode": field("precision_mode") == "1",
                                          "polarity": polarity[0], "crop_mode": crop_mode[0],
                                          "crop": crop, "width": width, "rotation": rotation,
                                          "max_flow_lph": max_flow, "interval_minutes": interval_minutes})

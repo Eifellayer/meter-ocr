@@ -15,17 +15,36 @@ PAGE = """<!doctype html>
 <html lang="de"><meta charset="utf-8"><meta name="viewport" content="width=device-width">
 <title>Gaszähler OCR-Kontrolle</title>
 <style>
-:root{{color-scheme:light dark;font:16px system-ui}}
-body{{max-width:64rem;margin:1.2rem auto;padding:0 1rem}}
-form{{display:flex;flex-wrap:wrap;align-items:end;gap:.75rem}} label{{display:grid;gap:.3rem}}
-select,button{{font:inherit}} button{{padding:.55rem 1rem}} dl{{display:grid;grid-template-columns:minmax(8.5rem,12rem) minmax(0,1fr);gap:.35rem .85rem;margin:.5rem 0}}
-dd{{margin:0;overflow-wrap:anywhere}} section{{display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(min(100%,18rem),1fr))}}
-img{{width:100%;height:auto}} h2{{font-size:1.08rem;margin:.25rem 0 .75rem}} h1{{font-size:1.55rem;margin-bottom:.4rem}} dt{{opacity:.72}} .panel{{border:1px solid #8c959e65;border-radius:.75rem;padding:1rem;margin:1rem 0}} @media(max-width:470px){{dl{{grid-template-columns:1fr}} dd{{margin:0 0 .4rem}}}}
-.intro,.hint{{line-height:1.45;max-width:56rem}} .intro{{font-size:.95rem}} .hint{{font-size:.9rem;opacity:.85}}
-.test-box{{border:1px solid #7a8b9a;border-radius:.7rem;padding:1rem;margin:1rem 0 1.5rem;display:grid;gap:.5rem}}
-.test-box p{{margin:.15rem 0}} .test-box progress{{width:100%;height:1.2rem;accent-color:#168664}}
-.test-box small{{opacity:.8}} .test-box[data-phase="done"]{{border-color:#168664}}
-.test-box[data-phase="queued"],.test-box[data-phase="running"],.test-box[data-phase="ocr"]{{border-style:dashed}}
+:root{{color-scheme:light dark;font:15px system-ui,-apple-system,sans-serif;--edge:light-dark(#dfe6ec,#34424d);--surface:light-dark(#fff,#1b252e);--muted:light-dark(#536475,#aebcc8);--accent:#158765;--page:light-dark(#f4f7f9,#111a22)}}
+*{{box-sizing:border-box}}
+body{{max-width:62rem;margin:0 auto;padding:1.5rem 1rem 3rem;background:var(--page);color:light-dark(#162b3b,#e8f0f5);line-height:1.45}}
+h1{{font-size:clamp(1.5rem,4vw,2rem);letter-spacing:-.03em;margin:.2rem 0 .25rem}}
+h2{{font-size:1rem;margin:0 0 .85rem;letter-spacing:-.01em}}
+.intro{{max-width:48rem;color:var(--muted);margin:.25rem 0 1.4rem}}
+.panel{{background:var(--surface);border:1px solid var(--edge);border-radius:1rem;padding:1.15rem 1.25rem;margin:0 0 1rem;box-shadow:0 3px 14px light-dark(#162b3b09,#0002)}}
+form{{display:flex;flex-wrap:wrap;align-items:end;gap:.8rem}}
+label{{display:grid;gap:.3rem;font-weight:600;font-size:.85rem;color:var(--muted)}}
+select,button{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem}}
+select{{background:var(--surface);border:1px solid var(--edge);color:inherit}}
+button{{border:0;background:var(--accent);color:white;font-weight:700;padding:.62rem 1.1rem;cursor:pointer}}
+button:disabled{{opacity:.6;cursor:progress}}
+button:focus-visible,select:focus-visible{{outline:3px solid #65bcaf;outline-offset:2px}}
+.hint{{font-size:.85rem;color:var(--muted);margin:1rem 0 0;line-height:1.55}}
+.test-box{{border:1px solid var(--edge);background:light-dark(#f6faf9,#192e2c);border-radius:.8rem;padding:.95rem 1rem;margin:1rem 0 0;display:grid;gap:.35rem}}
+.test-box strong{{font-size:.94rem;color:light-dark(#17684f,#80d3b4)}}
+.test-box p{{margin:0}} .test-box small{{color:var(--muted);font-variant-numeric:tabular-nums}}
+.test-box progress{{width:100%;height:.7rem;margin:.45rem 0;border:0;border-radius:99px;overflow:hidden;accent-color:var(--accent)}}
+.test-box progress::-webkit-progress-bar{{background:light-dark(#e1e9e7,#354842);border-radius:99px}}
+.test-box progress::-webkit-progress-value{{background:var(--accent);border-radius:99px}}
+.test-box[data-phase="done"]{{border-color:var(--accent)}}
+dl{{display:grid;grid-template-columns:minmax(8rem,11rem) minmax(0,1fr);gap:.5rem 1rem;margin:0}}
+dt{{color:var(--muted);font-size:.9rem}}
+dd{{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums;font-weight:550}}
+section{{display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(min(100%,18rem),1fr));margin-top:1rem}}
+section>div{{background:var(--surface);border:1px solid var(--edge);border-radius:1rem;padding:1rem;overflow:hidden}}
+section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
+.stamp,#countdown{{font-variant-numeric:tabular-nums}}
+@media(max-width:500px){{body{{padding:.8rem .7rem 2rem}}.panel{{padding:.9rem}}dl{{grid-template-columns:7.4rem minmax(0,1fr)}}form label{{flex:1 1 9rem}}button{{width:100%}}}}
 </style>
 <h1>Gaszähler OCR-Kontrolle</h1>
 <p class="intro">Unabhängiger Bildabgleich deines Gaszählerstands mit der vorhandenen Messung. Die OCR liest die Ziffern erneut direkt aus dem Kamerabild – ohne den vom ESP erkannten Wert einfach zu übernehmen.</p>

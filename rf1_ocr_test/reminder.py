@@ -138,6 +138,21 @@ class Reminder:
                 reminder["target_sent"] = True
 
 
+    def clear_for_reset(self, history):
+        """Dismiss this app's pending notice and its push before local history is cleared."""
+        pending = history.get("reminder")
+        if not isinstance(pending, dict) or not isinstance(pending.get("id"), str):
+            return
+        try:
+            notice_ids = {notice["notification_id"] for notice in self.notifications()}
+            if pending["id"] in notice_ids:
+                self.call_service("persistent_notification.dismiss",
+                                  {"notification_id": pending["id"]})
+            self.clear_push(pending)
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            print(f"Meter-OCR-Hinweis konnte beim Werkreset nicht entfernt werden: {type(error).__name__}")
+        self.skipped_id = None
+
     @staticmethod
     def message(history, ending):
         prefix = "Die automatische Kontrolle konnte den Zählerstand wiederholt nicht bestätigen."

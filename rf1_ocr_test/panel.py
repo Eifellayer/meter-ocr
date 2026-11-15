@@ -1377,7 +1377,7 @@ def start_panel(
                     problem(503, "Die Einrichtung konnte nicht übersprungen werden.",
                             "Setup could not be skipped.")
                     return
-                self.redirect("?saved=skip&ui=settings" + keep_mode)
+                self.redirect("?saved=skip" + keep_mode)
                 return
             if path == "/werkreset":
                 result = request_factory_reset() if request_factory_reset is not None else "failed"

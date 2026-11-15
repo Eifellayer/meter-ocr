@@ -12,6 +12,13 @@ from checks import FALLBACK_NOTICE, uncertain_positions
 EN_UI = {
     "Erkennungsbild": "Recognition image",
     "Letztes Testbild": "Latest test image",
+    "Noch kein Testbild verfügbar.": "No test image available yet.",
+    "Stand aus AI on the Edge oder aus dem gewählten Home-Assistant-Sensor": "Reading from AI on the Edge or the selected Home Assistant sensor",
+    "Vergleichswert": "Reference reading",
+    "Ablesung und Vergleichswert weichen ab": "Image reading and reference differ",
+    "Vergleiche beide Werte mit dem Stand direkt am Zähler.": "Compare both readings with the value on the meter itself.",
+    "Die App prüft automatisch erneut. Bleibt der Unterschied, vergleiche beide Werte mit dem Stand direkt am Zähler.":
+        "The app will check again automatically. If the readings still differ, compare both with the value on the meter itself.",
     "Letzte automatische Erkennung": "Latest automatic reading",
     "Schließen": "Close",
     "Originalbild zum Ablesen": "Original image for reading",
@@ -32,10 +39,12 @@ EN_UI = {
         "Saved image source, OCR and notification settings, check history, and test images will be reset. Home Assistant app configuration and entity IDs will be kept.",
     "Abbrechen": "Cancel",
     "Jetzt zurücksetzen": "Reset now",
+    "Werkreset angefordert. Eine laufende Prüfung kann den Reset verzögern. Bitte warte, bis sich die Einrichtung öffnet.":
+        "Factory reset requested. A check in progress may delay the reset. Please wait for setup to open.",
     "Werkseinstellungen wiederhergestellt. Die Einrichtung öffnet sich erneut.":
         "Factory settings restored. Setup will open again.",
-    "Werkreset läuft noch. Bitte die Seite in Kürze neu laden.":
-        "The reset is still running. Reload the page shortly.",
+    "Werkreset läuft noch. Die Einrichtung öffnet sich, sobald er fertig ist.":
+        "The reset is still running. Setup will open when it finishes.",
     "Werkreset konnte nicht vollständig ausgeführt werden.":
         "The reset could not be completed.",
     "Die Einrichtung konnte nicht übersprungen werden.": "Setup could not be skipped.",
@@ -99,6 +108,14 @@ EN_UI = {
     "Home-Assistant-Kamera nicht erreichbar oder Bild unlesbar. Kamera und Zugriff prüfen.": "Home Assistant camera unavailable or image unreadable. Check the camera and access.",
     "ESP nicht erreichbar oder Antwort unvollständig. Adresse und Verbindung prüfen.": "ESP unavailable or response incomplete. Check its address and connection.",
     "Kamerabild wird aufgenommen.": "Capturing a fresh camera image.",
+    "Einstellungen gespeichert. Prüfung startet gleich.": "Settings saved. The check is about to start.",
+    "Automatische Prüfung startet …": "Starting the automatic check …",
+    "Warte auf ein Kamerabild …": "Waiting for a camera image …",
+    "Warte auf Bild und Messwerte vom ESP …": "Waiting for the image and reading from the ESP …",
+    "Warte auf ein aktuelles Bild vom ESP …": "Waiting for a new image from the ESP …",
+    "Noch kein aktuelles Zählerbild": "No current meter image yet",
+    "Fortschritt der automatischen Prüfung": "Automatic check progress",
+    "Einstellungen werden gespeichert …": "Saving settings …",
     "Bild und Messwerte werden vom ESP abgerufen.": "Fetching the image and reading from the ESP.",
     "Bild wird vorbereitet.": "Preparing the image.",
     "Automatische Prüfung wird abgeschlossen.": "Finishing the automatic check.",
@@ -139,7 +156,7 @@ EN_UI = {
     "Jetzt prüfen": "Run check now",
     "Eigenes Testbild (optional, JPG oder PNG)": "Choose a test image (optional, JPG or PNG)",
     "Ein ausgewähltes Bild wird nur für diesen manuellen Test verwendet (max. 3 MB).": "The selected image is used only for this manual test (max. 3 MB).",
-    "Speichern und Test öffnen": "Save and open test",
+    "Speichern und prüfen": "Save and check",
     "ⓘ Was passiert bei „Jetzt prüfen“?": "ⓘ What happens when I run a check?",
     "Die App verwendet das letzte vorhandene Zählerbild oder ein ausgewähltes eigenes JPG-/PNG-Testbild (bis 3 MB). Sie liest die Zahlen aus dem Bild und vergleicht sie mit dem Referenzwert. Sobald die Werte übereinstimmen, stoppt die Prüfung. Andernfalls werden höchstens so viele OCR-Versuche durchgeführt wie eingestellt (1–10). Der Test verändert die automatische Trefferzahl nicht.": "The app uses the latest available meter image or a selected JPG/PNG test image (up to 3 MB). It reads the digits and compares them with the reference. The check stops as soon as they match. Otherwise it runs up to the configured number of OCR attempts (1–10). A manual test does not change the automatic confirmation count.",
     "Ziffern aus mehreren OCR-Versuchen zusammengesetzt.": "Digits combined from multiple OCR attempts.",

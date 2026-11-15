@@ -53,6 +53,7 @@ class IngressFixture(TestCase):
         self.root = Path(folder.name)
         self.history = self.root / "history.json"
         self.preview = self.root / "preview.jpg"
+        self.automatic_preview = self.root / "automatic-preview.jpg"
         self.preferences = self.root / "language.json"
         self.requested = Queue(maxsize=1)
         self.rules = dict(decimals=0, attempts=3, crop_mode="auto", polarity="auto",
@@ -60,6 +61,8 @@ class IngressFixture(TestCase):
         self.profiles = {}
         self.source = dict(mode="slfork", url="http://meter", camera="", reference="")
         self.setup_pending = True
+        self.reset_state = "idle"
+        self.activity = {"state": "waiting", "detail": "Wartet auf die nächste automatische Prüfung."}
         self.paused = False
         self.delivery = dict(enabled=False, review_minutes=240, delivery_hours=24, push="", target="")
         self.enterContext(patch.object(panel, "SUPERVISOR_ADDRESS", "127.0.0.1"))
@@ -73,7 +76,11 @@ class IngressFixture(TestCase):
         self.setup_pending = False
 
     def start_panel(self):
-        server, self.update = panel.start_panel(
+        def request_reset():
+            self.reset_state = "pending"
+            return self.reset_state
+
+        server, self.update, self.reset_manual_progress = panel.start_panel(
             self.history, self.root / "current.jpg", self.root / "good.jpg",
             self.requested, 0, 3, lambda: dict(self.rules), self.rules.update,
             "0,0,400,90", 250, self.preview, lambda: load_preferences(self.preferences),
@@ -81,6 +88,8 @@ class IngressFixture(TestCase):
             lambda: dict(self.delivery), self.delivery.update,
             lambda: (dict(self.source), self.setup_pending), self.save_source,
             address=("127.0.0.1", 0), skip_setup=self.skip_setup,
+            request_factory_reset=request_reset, get_reset_status=lambda: self.reset_state,
+            automatic_preview=self.automatic_preview, get_activity=lambda: dict(self.activity),
             get_auto_paused=lambda: self.paused,
             save_auto_paused=lambda value: setattr(self, "paused", value),
         )
@@ -108,6 +117,43 @@ class IngressFixture(TestCase):
 
 
 class IngressTests(IngressFixture):
+    def test_factory_reset_clears_manual_result_after_pending_response(self):
+        self.setup_pending = False
+        form = dict(decimals=0, attempts=3, crop_mode="auto", polarity="auto")
+        self.assertEqual((303, "./?test=queued"), self.submit("/pruefen", **form))
+        job = self.requested.get_nowait()
+        self.preview.write_bytes(b"preview")
+        self.update(job["request_id"], "done", "Prüfung beendet.", 3, 100,
+                    outcome="match", preview=True, ocr="12345")
+        self.assertTrue(json.loads(self.request("/status")[0])["preview"])
+
+        self.assertEqual((303, "./?reset=pending&ui=settings"), self.submit("/werkreset"))
+        self.assertIn("Werkreset läuft noch.", self.request("/?reset=pending&ui=settings")[0])
+        self.reset_manual_progress()
+        self.reset_state = "done"
+        self.update(job["request_id"], "done", "Veraltetes Ergebnis", preview=True)
+        status = json.loads(self.request("/status")[0])
+        self.assertEqual(("idle", None, False), (status["phase"], status["ocr"], status["preview"]))
+        page = self.request("/?reset=pending&ui=settings")[0]
+        self.assertIn("Werkseinstellungen wiederhergestellt.", page)
+        self.assertIn('data-first-run="true"', page)
+
+    def test_first_missing_image_has_an_immediate_yellow_status(self):
+        self.history.write_text(json.dumps({"check_status": "capture_unavailable", "failure_since": time.time()}))
+        status = json.loads(self.request("/automatic")[0])
+        self.assertEqual(("warning", "Noch kein aktuelles Zählerbild"), (status["tone"], status["heading"]))
+        self.assertIn("versucht es automatisch erneut", status["detail"])
+
+    def test_mismatch_immediately_explains_what_to_do(self):
+        self.history.write_text(json.dumps({"check_status": "difference", "failure_since": time.time()}))
+        status = json.loads(self.request("/automatic")[0])
+        self.assertEqual(("warning", "Ablesung und Vergleichswert weichen ab"),
+                         (status["tone"], status["heading"]))
+        self.assertIn("prüft automatisch erneut", status["detail"])
+        self.assertIn("direkt am Zähler", status["detail"])
+        status_en = json.loads(self.request("/automatic?lang=en")[0])
+        self.assertIn("value on the meter itself", status_en["detail"])
+
     def test_automatic_status_explains_three_retry_attempts_and_one_hour_wait(self):
         self.history.write_text(json.dumps({
             "check_status": "ocr_unclear", "failure_attempts": 2,
@@ -290,7 +336,11 @@ class IngressTests(IngressFixture):
             "notifications_enabled": 1, "review_minutes": 60, "delivery_hours": 0,
             "push": "notify.mobile_app_phone", "target": "notify.email",
         }
-        self.assertEqual((303, "./?saved=setup&test=ready&ui=overview"), self.submit("/einrichtung", **values))
+        self.assertEqual((303, "./?saved=setup&ui=overview"), self.submit("/einrichtung", **values))
+        page = self.request("/?saved=setup&ui=overview")[0]
+        self.assertNotIn('aria-labelledby="tab-overview" hidden', page)
+        self.assertIn('id="automatic-progress"', page)
+        self.assertIn('id="setup-image-test"', page)
         self.assertEqual("camera", self.source["mode"])
         self.assertEqual("sensor.meter", self.source["reference"])
         self.assertEqual((6, 2, "mixed", 1), (self.rules["integer_digits"], self.rules["fraction_digits"],
@@ -402,6 +452,34 @@ class RedirectTests(TestCase):
 
 
 class BrowserTests(IngressFixture):
+    def test_automatic_status_and_image_update_when_a_check_runs(self):
+        from playwright.sync_api import sync_playwright
+
+        self.setup_pending = False
+        self.activity = {"state": "working", "detail": "Warte auf Bild und Messwerte vom ESP …"}
+        current = self.root / "current.jpg"
+        Image.new("RGB", (240, 60), "white").save(current, "JPEG")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(executable_path=os.getenv("RF1_CHROMIUM"))
+            page = browser.new_page(locale="de-DE")
+            page.set_default_timeout(7000)
+            page.goto(self.base)
+            page.locator("#automatic-progress").wait_for(state="visible")
+            page.locator("#automatic-images summary").click()
+            preview = page.locator("#test-preview-image")
+            self.assertEqual(240, preview.evaluate("async image => { await image.decode(); return image.naturalWidth; }"))
+            self.assertFalse(page.locator("#preview-legend").is_visible())
+            page.wait_for_function("document.querySelector('.activity-status').dataset.offline === 'false'")
+            Image.new("RGB", (200, 45), "white").save(self.automatic_preview, "JPEG")
+            self.activity = {"state": "working", "detail": "Bild wird vorbereitet.", "completed": 2, "total": 5}
+            page.wait_for_function("document.querySelector('#automatic-progress').value === 2")
+            page.wait_for_function("document.querySelector('#test-preview-image').naturalWidth === 200")
+            self.assertTrue(page.locator("#preview-legend").is_visible())
+            self.activity = {"state": "waiting", "detail": "Wartet auf die nächste automatische Prüfung."}
+            page.locator("#automatic-progress").wait_for(state="hidden")
+            self.assertEqual("false", page.locator(".activity-status").get_attribute("data-offline"))
+            browser.close()
+
     def test_profile_and_manual_override_on_a_narrow_screen(self):
         from playwright.sync_api import sync_playwright
 

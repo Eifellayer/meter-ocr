@@ -181,12 +181,13 @@ def compare_sample(data, ocr, decimals, *, ocr_confirmed=True):
         if decimals == 0:
             return "difference", "Abweichung: Die vollen Kubikmeter stimmen nicht überein. Bitte das Zählerbild prüfen."
         return ("difference",
-                f"Abweichung: Die Werte stimmen bei {decimals} Nachkommastelle" +
-                ("n" if decimals > 1 else "") + " nicht überein. Bitte das Zählerbild prüfen.")
+                f"Abweichung: Die Werte stimmen beim Vergleich bis zur {decimals}. Nachkommastelle "
+                "nicht überein. Bitte das Zählerbild prüfen.")
     if decimals == 0:
         return "match", "Bestätigt: Die vollen Kubikmeter stimmen überein. Nachkommastellen wurden nicht berücksichtigt."
-    return ("match", f"Bestätigt: Zählerstand und Referenzwert stimmen bis auf {decimals} Nachkommastelle" +
-            ("n" if decimals > 1 else "") + " überein.")
+    if decimals == 1:
+        return "match", "Bestätigt: Zählerstand und Referenzwert stimmen bis einschließlich der 1. Nachkommastelle überein."
+    return "match", f"Bestätigt: Zählerstand und Referenzwert stimmen bis einschließlich der {decimals}. Nachkommastelle überein."
 
 
 def rolling_summary(history, now):

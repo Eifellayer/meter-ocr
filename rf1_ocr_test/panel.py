@@ -258,7 +258,7 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 entity: sensor.rf1_ocr_zaehlerstand
 name: Zählerstand (OCR)</code></pre>
 </details>
-<details class="automatic-images" id="automatic-images"><summary>Letztes Testbild</summary>
+<details class="automatic-images" id="automatic-images" open><summary>Letztes Testbild</summary>
 <p id="preview-empty" class="legend" {preview_empty_hidden}>Noch kein Testbild verfügbar.</p>
 <div class="preview" id="test-preview" {automatic_preview_hidden}>
 <h2 id="preview-heading">Letztes Testbild</h2>

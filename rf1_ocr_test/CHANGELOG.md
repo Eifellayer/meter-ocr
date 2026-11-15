@@ -1,5 +1,9 @@
 # Changelog
 
+## In Vorbereitung
+
+- Das letzte Testbild ist beim Öffnen der Übersicht bereits ausgeklappt.
+
 ## 0.4.4 Alpha
 
 - Beim ersten Einrichten wählst du die Bildquelle selbst. Der Assistent erklärt die drei Modi direkt neben der Auswahl und empfiehlt ESPHome für den Einstieg mit einer Kamera.

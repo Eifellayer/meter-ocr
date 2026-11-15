@@ -534,7 +534,7 @@ class BrowserTests(IngressFixture):
             page.set_default_timeout(7000)
             page.goto(self.base)
             page.locator("#automatic-progress").wait_for(state="visible")
-            page.locator("#automatic-images summary").click()
+            self.assertTrue(page.locator("#automatic-images").evaluate("section => section.open"))
             preview = page.locator("#test-preview-image")
             self.assertEqual(240, preview.evaluate("async image => { await image.decode(); return image.naturalWidth; }"))
             self.assertFalse(page.locator("#preview-legend").is_visible())

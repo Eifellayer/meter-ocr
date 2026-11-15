@@ -6,7 +6,8 @@ The language only affects text shown in the ingress interface.
 
 import re
 
-from checks import FALLBACK_NOTICE, LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, uncertain_positions
+from checks import (FALLBACK_NOTICE, LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, STANDALONE_PENDING_NOTICE,
+                    STANDALONE_REJECTED_NOTICE, STANDALONE_VERIFIED_NOTICE, uncertain_positions)
 from layout import MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR
 
 
@@ -14,8 +15,23 @@ EN_UI = {
     "Erkennungsbild": "Recognition image",
     "Letztes Testbild": "Latest test image",
     "Noch kein Testbild verfügbar.": "No test image available yet.",
+    "Eindeutig ergänzter Zwischenstand": "Reconstructed intermediate reading",
+    "Berechnete Ziffer": "Calculated digit",
+    "Für eine unlesbare Ziffer gibt es einen eindeutigen Vorschlag. Wähle die Ziffer aus, um den Zwischenstand zu übernehmen.":
+        "There is one plausible value for an unreadable digit. Select it to accept the intermediate reading.",
+    "Ziffer auswählen …": "Choose a digit …",
+    "Zwischenstand übernehmen": "Accept the intermediate reading",
+    "Dieselbe Ziffer ist wiederholt unlesbar. Bei Spiegelungen kannst du sie aus der vorherigen und der nächsten sicheren Ablesung ergänzen lassen.":
+        "The same digit has been unreadable repeatedly. For reflections, the previous and next confirmed readings can help reconstruct it.",
+    "Zur Einstellung": "Open settings",
+    "Vorschlag dauerhaft ausblenden": "Hide this suggestion permanently",
+    "ⓘ Spiegelungen und verdeckte Ziffern": "ⓘ Reflections and obscured digits",
+    "Einzelne verdeckte Ziffer ergänzen": "Reconstruct one obscured digit",
+    "Die App ergänzt eine Ziffer nur, wenn zwischen zwei sicheren Ständen genau ein Wert plausibel ist. Die berechnete Ziffer bleibt gelb. Ein manuell eingetragener Startwert mit Ablesezeit kann als erster Vergleichswert dienen.":
+        "The app fills in a digit only when exactly one value is plausible between two confirmed readings. The calculated digit is highlighted in yellow. A manually entered starting value with its reading time can serve as the first reference.",
+    "Vorschlag bei wiederholt unlesbarer Ziffer ausblenden": "Hide the suggestion for a repeatedly unreadable digit",
     RAW_ROW_UNCLEAR: "Could not find a clear digit row. Set the crop in the manual test.",
-    MANUAL_ROW_UNCLEAR: "The digits in the crop are hard to read. Check the camera angle, focus and lighting.",
+    MANUAL_ROW_UNCLEAR: "The digits are hard to read. Check the image rotation, camera angle, focus and lighting.",
     "Ausschnitt im Bild ziehen": "Draw a crop on the image",
     "Ziehe mit Maus oder Finger einen Rahmen um die gesamte Ziffernreihe. Prüfe danach den Ausschnitt mit „Jetzt prüfen“.":
         "Draw a rectangle around the full digit row with a mouse or finger. Then select “Run check now” to test the crop.",
@@ -23,6 +39,13 @@ EN_UI = {
     "Kein Bild vorhanden. Starte einen manuellen Test oder wähle ein eigenes Bild.":
         "No image available. Run a manual test or choose your own image.",
     "Stand aus AI on the Edge oder aus dem gewählten Home-Assistant-Sensor": "Reading from AI on the Edge or the selected Home Assistant sensor",
+    "Stand aus der ersten Aufnahme oder aus einer externen Quelle": "Reading from the first image or an external source",
+    "Zweite Aufnahme steht aus": "Waiting for the second image",
+    "Zählerstand gegengeprüft": "Meter reading cross-checked",
+    "Aufnahmen stimmen nicht plausibel überein": "The two images suggest an implausible change",
+    STANDALONE_PENDING_NOTICE: "First image read. Waiting for a second snapshot to cross-check the reading.",
+    STANDALONE_VERIFIED_NOTICE: "Meter reading cross-checked against a second snapshot.",
+    STANDALONE_REJECTED_NOTICE: "The second image does not confirm the first meter reading.",
     "Vergleichswert": "Reference reading",
     "Die letzte Stelle kann beim Weiterdrehen schwer lesbar sein. Das kann zu Fehlmeldungen führen.":
         "The last digit can be hard to read as it turns, which can cause false alerts.",
@@ -131,6 +154,7 @@ EN_UI = {
     "Warte auf ein Kamerabild …": "Waiting for a camera image …",
     "Warte auf Bild und Messwerte vom ESP …": "Waiting for the image and reading from the ESP …",
     "Warte auf ein aktuelles Bild vom ESP …": "Waiting for a new image from the ESP …",
+    "Intensivtest: Prüfe eine leicht gedrehte Aufnahme.": "Recovery check: testing a slightly rotated image.",
     "Noch kein aktuelles Zählerbild": "No current meter image yet",
     "Fortschritt der automatischen Prüfung": "Automatic check progress",
     "Einstellungen werden gespeichert …": "Saving settings …",
@@ -155,6 +179,9 @@ EN_UI = {
     "Bildbereich (links, oben, rechts, unten)": "Image region (left, top, right, bottom)",
     "Manueller Ausschnitt (links, oben, rechts, unten)": "Custom crop (left, top, right, bottom)",
     "Bilddrehung im Uhrzeigersinn": "Clockwise rotation",
+    "Bilddrehung (°)": "Image rotation (°)",
+    "Wähle den Ausschnitt im Originalbild. Positive Winkel drehen nach rechts, negative nach links. Die Vorkommabreite gilt nach der Drehung.":
+        "Select the crop in the original image. Positive angles turn right; negative angles turn left. The whole-number width applies after rotation.",
     "Wähle den Ausschnitt im Originalbild. Die Vorkommabreite gilt nach der Drehung.":
         "Use coordinates from the original image. The whole-digit width applies after rotation.",
     "Maximaler Durchfluss (m³/h)": "Maximum flow (m³/h)",
@@ -452,8 +479,12 @@ def english_result(detail, status=None, decimals=0, readings=None):
     """Translate a saved result without changing the Home Assistant sensor state."""
     if not isinstance(detail, str):
         return "No result available."
-    if detail in (LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, RAW_ROW_UNCLEAR, MANUAL_ROW_UNCLEAR):
+    if detail in (LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, RAW_ROW_UNCLEAR, MANUAL_ROW_UNCLEAR,
+                  STANDALONE_PENDING_NOTICE, STANDALONE_VERIFIED_NOTICE):
         return EN_UI[detail]
+    if detail.startswith(STANDALONE_REJECTED_NOTICE):
+        reason = detail.removeprefix(STANDALONE_REJECTED_NOTICE).strip()
+        return " ".join(filter(None, (EN_UI[STANDALONE_REJECTED_NOTICE], EN_DETAILS.get(reason))))
     if detail in EN_DETAILS:
         return EN_DETAILS[detail]
     for prefix in (

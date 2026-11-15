@@ -10,6 +10,48 @@ from checks import FALLBACK_NOTICE, uncertain_positions
 
 
 EN_UI = {
+    "Erkennungsbild": "Recognition image",
+    "Letzte automatische Erkennung": "Latest automatic reading",
+    "Schließen": "Close",
+    "Originalbild zum Ablesen": "Original image for reading",
+    "Später einrichten": "Set up later",
+    "Du kannst die Einrichtung jederzeit über „Einrichtung öffnen“ erneut starten.":
+        "You can restart setup at any time using “Open setup wizard”.",
+    "Stand im Home-Assistant-Dashboard anzeigen": "Show the reading on a Home Assistant dashboard",
+    "Wenn Meter OCR selbst aus einer ESPHome- oder Home-Assistant-Kamera liest, kannst du den Sensor „OCR-Zählerstand“ zum Dashboard hinzufügen. Seine Entitäts-ID lautet ":
+        "When Meter OCR reads directly from an ESPHome or Home Assistant camera, you can add its OCR meter reading sensor to your dashboard. Its entity ID is ",
+    "Oder füge diese kurze YAML-Konfiguration in eine manuelle Karte ein:":
+        "Or paste this short YAML configuration into a manual card:",
+    "App-Daten zurücksetzen": "Reset app data",
+    "Setzt die Meter-OCR-Einstellungen und Prüfhistorie auf Standardwerte zurück und entfernt gespeicherte Testbilder. Die Home-Assistant-App-Konfiguration und vorhandenen Entitäten bleiben erhalten.":
+        "Resets Meter OCR settings and check history to defaults and removes saved test images. Home Assistant app configuration and existing entities are kept.",
+    "Auf Werkseinstellungen zurücksetzen": "Restore factory settings",
+    "Werkseinstellungen wiederherstellen?": "Restore factory settings?",
+    "Gespeicherte Bildquelle, OCR- und Benachrichtigungseinstellungen, Prüfhistorie und Testbilder werden zurückgesetzt. Home-Assistant-App-Konfiguration und Entitätsnamen bleiben erhalten.":
+        "Saved image source, OCR and notification settings, check history, and test images will be reset. Home Assistant app configuration and entity IDs will be kept.",
+    "Abbrechen": "Cancel",
+    "Jetzt zurücksetzen": "Reset now",
+    "Werkseinstellungen wiederhergestellt. Die Einrichtung öffnet sich erneut.":
+        "Factory settings restored. Setup will open again.",
+    "Werkreset läuft noch. Bitte die Seite in Kürze neu laden.":
+        "The reset is still running. Reload the page shortly.",
+    "Werkreset konnte nicht vollständig ausgeführt werden.":
+        "The reset could not be completed.",
+    "Die Einrichtung konnte nicht übersprungen werden.": "Setup could not be skipped.",
+    "Übersicht": "Overview",
+    "Hauptmenü": "Main menu",
+    "Fallback-Wert für diesen Test (optional)": "Fallback reading for this test (optional)",
+    "Am markierten Bild ablesen und hier eintragen. Der Wert wird nur mit dem manuellen Test verglichen und nicht als automatische Referenz gespeichert.":
+        "Read the marked image and enter the value here. It is compared only with the manual test and is not saved as the automatic reference.",
+    "Über Meter OCR": "About Meter OCR",
+    "Stand und Verbrauch im Dashboard anzeigen": "Show the reading and usage on a dashboard",
+    "Für den erkannten Zählerstand im ESPHome- oder Kameramodus: ": "For the recognized meter reading in ESPHome or camera mode: ",
+    "Für den Home-Assistant-Energieverbrauch: ": "For Home Assistant energy usage: ",
+    "Diese Entität erscheint nach dem ersten gültigen Messwert und kann im Energie-Dashboard als Gasverbrauch ausgewählt werden.": "This entity appears after the first valid reading and can be selected as gas consumption in the Energy dashboard.",
+    "So fügst du den Zählerstand einer einfachen Dashboard-Karte hinzu:": "To add the meter reading to a simple dashboard card:",
+    "Freiwillig mit PayPal unterstützen": "Support the project voluntarily with PayPal",
+    "EifelLayer-Projektlogo": "EifelLayer project logo",
+    "Ein privates Hobbyprojekt von EifelLayer. KI-unterstützt entwickelt. Keine geeichte Messung oder Gewähr für OCR-Ergebnisse. Bitte Zählerstände bei Bedarf direkt am Gerät prüfen.": "A private hobby project by EifelLayer, developed with AI assistance. Not a certified measurement and no guarantee of OCR results. Check readings on the physical meter when needed.",
     "Unabhängiger Bildabgleich deines Gaszählerstands mit der vorhandenen Messung. Die OCR liest die Ziffern erneut direkt aus dem Kamerabild – ohne den vom ESP erkannten Wert einfach zu übernehmen.":
         "Independent visual cross-check of your gas meter reading. Local OCR reads the digits again from the camera image instead of simply reusing the ESP's reading.",
     "Automatische Kontrolle": "Automatic verification",
@@ -45,6 +87,7 @@ EN_UI = {
     "Das Prüfintervall gilt auch für die bereits geplante nächste Prüfung. Bei geänderter Vergleichsgenauigkeit beginnt die Trefferzählung neu.":
         "The interval also applies to the next scheduled check. Changing comparison precision resets the match count.",
     "Manueller Test": "Manual test",
+    "Test einstellen": "Test settings",
     "Test starten": "Start test",
     "Testeinstellungen": "Test settings",
     "Zusätzliche Bild- und OCR-Einstellungen": "Advanced image and OCR settings",
@@ -165,6 +208,59 @@ EN_UI = {
     "Test angenommen. Die Bearbeitung wird hier live angezeigt.":
         "Request accepted. Progress will appear here live.",
     "Jetzt fällig": "Due now",
+    "Einrichtung öffnen": "Open setup wizard",
+    "Einrichtungsassistent": "Setup wizard",
+    "Einmal Schritt für Schritt einrichten oder später einzelne Angaben ändern. Deine aktuellen Einstellungen sind vorausgefüllt.":
+        "Set things up step by step, or return later to change individual settings. Your current values are prefilled.",
+    "1. Bildquelle": "1. Image source",
+    "2. Zähleranzeige": "2. Meter display",
+    "3. Bildausschnitt und Prüfplan": "3. Image area and schedule",
+    "4. Hinweise und speichern": "4. Alerts and save",
+    "Woher kommt das Zählerbild?": "Where does the meter image come from?",
+    "Home-Assistant-Kamera (Livebild, Standbild je Prüfung)": "Home Assistant camera (live image, one snapshot per check)",
+    "Home Assistant camera (snapshot per check)": "Home Assistant camera (live image, one snapshot per check)",
+    "ⓘ Welcher Weg passt?": "ⓘ Which source should I choose?",
+    "SLFork liefert Bild und Messwert. Bei einer Home-Assistant-Kamera kannst du einen Zählerstandssensor – etwa von AI on the Edge – als Vergleich eintragen. Ohne Referenzsensor liest Meter OCR selbst und prüft die Werte auf Plausibilität.":
+        "SLFork supplies the image and reading. With a Home Assistant camera, you can add a meter reading sensor, such as AI on the Edge, for comparison. Without one, Meter OCR reads the image itself and checks readings for plausibility.",
+    "Anzeigeart": "Display type",
+    "Ziffern vor dem Komma": "Digits before the decimal point",
+    "Nachkommastellen auf dem Zähler": "Decimal places shown on the meter",
+    "Verglichen wird bis": "Compare through",
+    "Die Vergleichsgenauigkeit darf kleiner sein als die angezeigte Stellenzahl. Kleine Zeiger werden nicht automatisch gelesen; bei Rollen und Zeigern bitte nur die Ziffernrollen einstellen.":
+        "You can compare fewer places than the meter shows. Small pointer dials are not read automatically; for a meter with rollers and dials, configure only the roller digits.",
+    "Fallback-Zählerstand (optional)": "Fallback meter reading (optional)",
+    "Stand abgelesen am": "Reading recorded at",
+    "ⓘ Wie wird der Fallback verwendet?": "ⓘ How is the fallback used?",
+    "Er ist ein Startwert, solange noch keine sichere automatische Ablesung gespeichert ist. Meter OCR prüft die erste Ablesung gegen den Zeitabstand und den maximalen Durchfluss. Danach wird der letzte bestätigte Stand als Referenz genutzt. Ohne Fallback beginnt die Plausibilitätsprüfung mit der ersten sicheren Ablesung.":
+        "This is a starting value until a reliable automatic reading has been saved. Meter OCR checks the first reading against the elapsed time and maximum flow. After that, it uses the latest confirmed reading as its reference. Without a fallback, plausibility checks begin with the first reliable reading.",
+    "OCR-Versuche pro Bild": "OCR attempts per image",
+    "Prüfintervall (Minuten)": "Check interval (minutes)",
+    "Breite des Vorkomma-Bereichs in Pixeln": "Width of whole-digit area in pixels",
+    "ⓘ Bild einrichten": "ⓘ Set up the image",
+    "Die automatische Erkennung versucht, den Ziffernrahmen zu finden. Wenn sie das nicht schafft, öffne den manuellen Test: Dort wird das aktuelle Bild mit den erkannten Ziffern angezeigt. Einen getesteten Ausschnitt kannst du danach ausdrücklich für die Automatik übernehmen. Beim Livebild kann Meter OCR bis zu 10 frische Standbilder innerhalb von höchstens 20 Sekunden prüfen.":
+        "Automatic detection tries to find the digit area. If it cannot, open the manual test to see the current image and recognized digits. You can explicitly apply a tested crop to automatic checks. For live images, Meter OCR can try up to 10 fresh snapshots within 20 seconds.",
+    "SLFork liefert Bild und Messwert. Die Livebild-Quelle ruft bei jeder Prüfung ein aktuelles Standbild deiner Home-Assistant-Kamera ab; ein Video wird nicht dauerhaft ausgewertet. Du kannst dazu einen Zählerstandssensor – etwa von AI on the Edge – als Vergleich eintragen. Ohne Referenzsensor liest Meter OCR selbst und prüft die Werte auf Plausibilität.":
+        "SLFork supplies the image and reading. The live image source takes a fresh snapshot from your Home Assistant camera for each check; it does not continuously process video. You can add a meter reading sensor, such as AI on the Edge, for comparison. Without one, Meter OCR reads the image itself and checks readings for plausibility.",
+    "Hinweis zum Teststand": "Testing note",
+    "Für reale Tests nutze ich ausschließlich AI on the Edge. Die übrigen Kamera- und Zählermodi sind bisher nur mit simulierten Bildern und automatisierten Tests geprüft.":
+        "For real-world tests, I use AI on the Edge only. The other camera and meter modes have so far been checked only with simulated images and automated tests.",
+    "Bei anhaltenden Problemen benachrichtigen": "Notify me if problems continue",
+    "Push oder E-Mail nach weiteren Stunden": "Send push or email after (additional hours)",
+    "ⓘ Keine Benachrichtigung nötig?": "ⓘ Prefer no notifications?",
+    "Entferne das Häkchen. Das Statusfeld in der Übersicht bleibt sichtbar; ein manueller Test löst keinen Push oder keine E-Mail aus.":
+        "Clear the checkbox. The status remains visible on the overview; manual tests never send push or email notifications.",
+    "Einrichtung speichern": "Save setup",
+    "Manuellen Bildtest mit Testbild öffnen": "Open manual image test",
+    "Einrichtung gespeichert.": "Setup saved.",
+    "Fallback-Wert für diesen Test (optional)": "Fallback reading for this test (optional)",
+    "Lass den Test zuerst das aktuelle Kamerabild laden. Lies den Stand am Bild ab und trage ihn hier ein, wenn du diesen einzelnen OCR-Test damit vergleichen möchtest. Der Wert wird nicht dauerhaft als automatische Referenz gespeichert.":
+        "First let the test load the current camera image. Read the meter value from the image and enter it here to compare this one OCR test. The value is not saved as a permanent automatic reference.",
+    "Aktuelles Bild zum Ablesen": "Current image to read",
+    "Kein Bild vorhanden. Bitte Bildquelle und Verbindung prüfen und den manuellen Test erneut starten.":
+        "No image available. Check the image source and connection, then run the manual test again.",
+    "Ziffernrollen": "Number rollers",
+    "Digitales Zifferndisplay": "Digital numeric display",
+    "Ziffernrollen plus Zeiger": "Number rollers plus pointers",
 }
 
 EN_DETAILS = {

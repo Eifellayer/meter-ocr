@@ -8,11 +8,13 @@ This Home Assistant app takes the latest available gas meter image from **AI on 
 
 This is an additional plausibility check, **not a certified measurement device**. OCR may be wrong. Read the physical meter for billing and legally relevant measurements. Private hobby project, no warranty or guaranteed support.
 
+**Setup wizard:** The wizard guides you through the image source, meter format, crop, check interval and notifications. You can reopen it with saved values at any time. The maintainer has tested real meters only with AI on the Edge / SLFork; other modes have simulated tests only.
+
 ## Installation
 
-This app is in beta.
+**Meter OCR (Alpha)** is the regular app and the test channel until version 0.5. From 0.5 onward, Beta builds are reserved for larger changes that need dedicated testing.
 
-Add `https://github.com/Eifellayer/meter-ocr` under **Settings → Apps → Install app → ⋮ → Repositories**, then install **Meter OCR**. Set `esp_url` for SLFork, or configure `kamera_entitaet` and an optional `referenz_entitaet` sensor.
+Add **Add-ons by Eifellayer** under **Settings → Apps → Install app → ⋮ → Repositories** using the [shared link](https://github.com/Eifellayer/meter-ocr), then install **Meter OCR (Alpha)**. Releases below 0.5 use the regular app as their test channel. From 0.5 onward, Beta builds are reserved for larger changes that need dedicated testing. Set `esp_url` for SLFork, or configure `kamera_entitaet` and an optional `referenz_entitaet` sensor.
 
 ## Choose a language
 
@@ -20,9 +22,8 @@ Use **Sprache / Language** to follow your Home Assistant profile or select **Deu
 
 ## Automatic checks
 
-The overview shows the latest OCR result, reference, image time, last automatic check and last confirmed match. Save the following options under **Settings → Automatic checks**.
+The always-visible overview contains the most recent OCR result, reference, status, image time and next check. Automatic settings are persistent and can be changed in the web interface:
 
-- **Check interval:** 1–1,440 minutes after success, default 60.
 - **Comparison:** whole cubic meters or up to three decimal places. Decimals outside the configured precision are ignored, not rounded.
 - **Maximum OCR attempts:** 1–10 (default 5); stop on the first verified match.
 - **Digit color:** auto-detect, light or dark.
@@ -30,20 +31,20 @@ The overview shows the latest OCR result, reference, image time, last automatic 
 
 Changing the precision resets the automatic confirmation counter from the next check. Five automatic confirmations in 24 hours are a separate target from the number of OCR attempts for a single image.
 
-## Manual test
+## Advanced manual test
 
-Select **Start test** to read the latest available image. Open **Test settings** to adjust the crop, comparison precision, digit color or attempts for this test.
+Open **Open manual test** only when you need it. It lets you temporarily override all of the above settings and try a custom crop. **Run check now** reads the most recent image; it does not request a new capture.
 
-The result appears below the progress indicator. Green marks a confirmed match and yellow marks a mismatch or uncertainty. The preview uses green outlines for recognized digits and red for unclear digits. The positions are approximate when the image has no detectable frames.
+The result appears below the progress indicator, using muted green only for a confirmed match, red for failures, and neutral styling while running or without a reference. It explains whether whole cubic meters or decimal places matched. The annotated image outlines digits the OCR recognized in green and unclear ones in red; red or green here does not establish agreement with the reference. The positions may be approximate without detected frames.
 
 Expand **More details** to see the individual attempt readings. When a custom crop produces a preview, you can **Use tested crop for automatic checks** to permanently apply the crop settings you have tried.
 
 ## Schedules and files
 
-Successful checks repeat after 60 minutes by default. Failed checks retry within five minutes. Yellow notices show details after an hour of failed checks, including the known time of an ESP fallback reading. The default delay for `review_due` is four hours. **Notifications** controls Home Assistant notices, mobile push and email. [Project guide](../README.en.md#notifications-and-automatic-status)
+Successful automatic checks normally run hourly; errors and uncertain readings cause five-minute retries. The default delay for `review_due` is four hours. The **Notifications** panel controls Home Assistant notices, mobile push and email. See the [project guide](../README.en.md#notifications-and-automatic-status).
 
 The app publishes `sensor.rf1_kontrollbild` and `sensor.rf1_pruefstatus`, and stores the latest/last-confirmed images in **Media → Local Media → rf1**. Neither entity name is translated because dashboards and automations depend on it.
 
 Full options and troubleshooting: [Project documentation](../README.en.md).
 
-Support: [GitHub Issues](https://github.com/Eifellayer/meter-ocr/issues). Optional voluntary donation: [PayPal](https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8).
+Support: [GitHub Issues](https://github.com/Eifellayer/meter-ocr/issues). Optional donations are linked in the app under **About Meter OCR**.

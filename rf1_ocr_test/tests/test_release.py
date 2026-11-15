@@ -1,12 +1,10 @@
 """Smoke and regression checks for OCR result logic and ingress page."""
 
-import json
-import os
-import subprocess
 import sys
 import unittest
 from pathlib import Path
 from string import Formatter
+import yaml
 
 APP = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(APP))
@@ -26,40 +24,24 @@ def formatted_page(language="de"):
     return template.format(**values)
 
 
-class AppChannelTests(unittest.TestCase):
-    def test_catalog_versions_use_separate_entities_media_and_notices(self):
-        script = """
-import json
-from app_channel import APP_NAME
-import reminder
-import run
-print(json.dumps({
-    "name": APP_NAME,
-    "entities": [run.ENTITY, run.CHECK_ENTITY, run.OCR_ENTITY, run.CONSUMPTION_ENTITY],
-    "media": [str(run.DESTINATION.parent), str(run.GOOD_IMAGE.parent)],
-    "notice": reminder.NOTICE_PREFIX,
-    "skip_action": reminder.SKIP_PREFIX,
-    "notification_target": reminder.CHECK_ENTITY,
-}))
-"""
-        for channel, name, namespace in (
-            ("stable", "Meter OCR", "rf1"), ("beta", "Meter OCR Beta", "meter_ocr_beta"),
-        ):
-            with self.subTest(channel=channel):
-                result = json.loads(subprocess.check_output(
-                    [sys.executable, "-c", script], cwd=APP,
-                    env={**os.environ, "METER_OCR_CHANNEL": channel},
-                ))
-                entities = [f"sensor.{namespace}_{suffix}" for suffix in (
-                    "kontrollbild", "pruefstatus", "ocr_zaehlerstand", "verbrauch_gesamt",
-                )]
-                self.assertEqual(name, result["name"])
-                self.assertEqual(entities, result["entities"])
-                self.assertEqual([f"/media/{namespace}"] * 2, result["media"])
-                self.assertEqual(f"{namespace}_review_", result["notice"])
-                prefix = "METER_OCR_BETA_SKIP_" if channel == "beta" else "RF1_SKIP_"
-                self.assertEqual(prefix, result["skip_action"])
-                self.assertEqual(entities[1], result["notification_target"])
+class AppIdentityTests(unittest.TestCase):
+    def test_release_metadata_is_alpha_without_a_separate_beta_stage(self):
+        config = yaml.safe_load((APP / "config.yaml").read_text(encoding="utf-8"))
+        repository = yaml.safe_load((APP.parent / "repository.yaml").read_text(encoding="utf-8"))
+        self.assertEqual("0.2.0", config["version"])
+        self.assertEqual("rf1_ocr_test", config["slug"])
+        self.assertEqual("Meter OCR (Alpha)", config["name"])
+        self.assertNotIn("stage", config)
+        self.assertIn("esp_url", config["options"])
+        self.assertEqual("https://github.com/Eifellayer/meter-ocr", repository["url"])
+
+    def test_app_keeps_existing_home_assistant_entities_and_media_path(self):
+        import run
+        self.assertEqual("sensor.rf1_kontrollbild", run.ENTITY)
+        self.assertEqual("sensor.rf1_pruefstatus", run.CHECK_ENTITY)
+        self.assertEqual("sensor.rf1_ocr_zaehlerstand", run.OCR_ENTITY)
+        self.assertEqual("sensor.rf1_verbrauch_gesamt", run.CONSUMPTION_ENTITY)
+        self.assertEqual("/media/rf1", str(run.DESTINATION.parent))
 
 
 class ComparisonTests(unittest.TestCase):
@@ -133,18 +115,37 @@ class PanelTests(unittest.TestCase):
         page = formatted_page()
         self.assertIn("Meter OCR", page)
         self.assertIn("FG4Q7VKQJ9BW8", page)
+        self.assertIn("Über Meter OCR", page)
+        self.assertIn("Projekt von EifelLayer auf GitHub", page)
         self.assertIn("Test starten", page)
+        self.assertIn("Test einstellen", page)
         self.assertIn("Testeinstellungen", page)
         self.assertIn('id="settings"', page)
         self.assertIn("Getesteten Ausschnitt für die Automatik übernehmen", page)
         self.assertIn('id="test-preview"', page)
+        self.assertIn('id="manual-test-area"', page)
+        self.assertIn('id="start-check"', page)
+        self.assertIn('id="open-manual-settings"', page)
+        self.assertEqual(1, page.count('id="test-preview-image"'))
+        self.assertIn("automatikvorschau.jpg", page)
+        self.assertIn('id="setup-dialog"', page)
+        self.assertIn('id="setup-skip-form"', page)
+        self.assertIn("document.body.appendChild(setupDialog)", page)
+        self.assertIn('id="reset-dialog"', page)
+        self.assertIn("App-Daten zurücksetzen", page)
+        self.assertIn("sensor.rf1_ocr_zaehlerstand", page)
         self.assertIn('id="ocr-details"', page)
 
     def test_english_page_translates_controls_and_remains_format_safe(self):
         page = formatted_page("en")
         self.assertIn("Meter OCR", page)
         self.assertIn("Automatic verification", page)
+        self.assertIn("Overview", page)
+        self.assertIn("Show the reading on a Home Assistant dashboard", page)
+        self.assertIn("Reset app data", page)
+        self.assertIn("Set up later", page)
         self.assertIn("Start test", page)
+        self.assertIn("Test settings", page)
         self.assertIn("Test settings", page)
         self.assertIn("Use tested crop for automatic checks", page)
         self.assertIn("More details", page)

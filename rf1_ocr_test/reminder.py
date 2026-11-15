@@ -1,4 +1,4 @@
-"""Track a Home Assistant notice and send at most one reminder per incident."""
+"""Track a Home Assistant notice and send at most one reminder per RF1 incident."""
 
 import json
 from threading import Thread
@@ -7,13 +7,12 @@ from urllib.request import Request
 
 from websocket import create_connection
 
-from app_channel import CHECK_ENTITY, IS_BETA, LABEL_SUFFIX, NAMESPACE
 from transport import open_core
 from notification_settings import PUSH_SERVICE
+from app_channel import APP_NAME, CHECK_ENTITY, LABEL_SUFFIX, NAMESPACE
 
 NOTICE_PREFIX = f"{NAMESPACE}_review_"
-SKIP_PREFIX = "METER_OCR_BETA_SKIP_" if IS_BETA else "RF1_SKIP_"
-
+SKIP_PREFIX = f"{NAMESPACE.upper()}_SKIP_"
 
 class Reminder:
     def __init__(self, token):
@@ -43,7 +42,7 @@ class Reminder:
                         if not line.startswith(b"data:"):
                             continue
                         action = json.loads(line[5:]).get("data", {}).get("action")
-                        if isinstance(action, str) and action.startswith(SKIP_PREFIX + NOTICE_PREFIX):
+                        if isinstance(action, str) and action.startswith(SKIP_PREFIX):
                             self.skipped_id = action.removeprefix(SKIP_PREFIX)
             except (OSError, ValueError):
                 sleep(10)
@@ -95,20 +94,13 @@ class Reminder:
 
         if incident is None or not self.enabled:
             return
-        uses_fallback = summary["check_status"] == "slfork_unclear" and history.get("last_reference_is_fallback")
-        message = (
-            "Der ESP verwendet weiterhin einen Ersatzwert. Bitte den aktuellen Stand am Zähler prüfen."
-            if uses_fallback else
-            "Die automatische Kontrolle konnte den Zählerstand wiederholt nicht bestätigen."
-        )
         if reminder is None:
             notification_id = f"{NOTICE_PREFIX}{round(incident * 1_000_000)}"
             if notification_id not in notices:
                 self.call_service("persistent_notification.create", {
                     "notification_id": notification_id,
-                    "title": "Zählerstand bitte prüfen" + LABEL_SUFFIX,
-                    "message": (f"{message} Das Kontrollbild findest du unter Medien → Lokale Medien → {NAMESPACE}. "
-                                "Wenn du den Stand geprüft hast, kannst du diesen Hinweis schließen."),
+                    "title": f"{APP_NAME}: Zähler bitte prüfen",
+                    "message": self.message(history, "Das Kontrollbild findest du in Home Assistant unter Medien → Lokale Medien.") ,
                 })
                 notices.add(notification_id)
             reminder = {"id": notification_id, "incident": incident, "shown_at": now}
@@ -124,10 +116,8 @@ class Reminder:
             return
 
         payload = {
-            "title": "Zählerstand bitte prüfen" + LABEL_SUFFIX,
-            "message": message + (
-                "" if uses_fallback else " Bitte prüfe den Stand am Zähler oder öffne das Kontrollbild in Home Assistant."
-            ),
+            "title": f"{APP_NAME}: Zähler bitte prüfen",
+            "message": self.message(history, "Bitte prüfe den Stand am Zähler oder öffne das Kontrollbild in Home Assistant."),
         }
         if self.push and not reminder.get("pushed"):
             try:
@@ -136,16 +126,39 @@ class Reminder:
                     {"action": f"{SKIP_PREFIX}{reminder['id']}", "title": "Überspringen"},
                 ]}})
             except OSError as error:
-                print(f"Meter-OCR-Handy-Push konnte nicht gesendet werden: {type(error).__name__}")
+                print(f"RF1-Handy-Push konnte nicht gesendet werden: {type(error).__name__}")
             else:
                 reminder.update(pushed=True, push_service=self.push)
         if self.target and not reminder.get("target_sent"):
             try:
                 self.call_service("notify.send_message", {**payload, "entity_id": self.target})
             except OSError as error:
-                print(f"Meter-OCR-Benachrichtigung konnte nicht gesendet werden: {type(error).__name__}")
+                print(f"RF1-Benachrichtigung konnte nicht gesendet werden: {type(error).__name__}")
             else:
                 reminder["target_sent"] = True
+
+
+    def clear_for_reset(self, history):
+        """Dismiss this app's pending notice and its push before local history is cleared."""
+        pending = history.get("reminder")
+        if not isinstance(pending, dict) or not isinstance(pending.get("id"), str):
+            return
+        try:
+            notice_ids = {notice["notification_id"] for notice in self.notifications()}
+            if pending["id"] in notice_ids:
+                self.call_service("persistent_notification.dismiss",
+                                  {"notification_id": pending["id"]})
+            self.clear_push(pending)
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            print(f"Meter-OCR-Hinweis konnte beim Werkreset nicht entfernt werden: {type(error).__name__}")
+        self.skipped_id = None
+
+    @staticmethod
+    def message(history, ending):
+        prefix = "Die automatische Kontrolle konnte den Zählerstand wiederholt nicht bestätigen."
+        if history.get("last_reference_is_fallback"):
+            prefix += " Der ESP verwendet weiterhin einen Ersatzwert."
+        return f"{prefix} {ending}"
 
     def clear_push(self, reminder):
         push = reminder.get("push_service") or self.push

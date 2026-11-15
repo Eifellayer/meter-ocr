@@ -221,7 +221,7 @@ class StateTests(TestCase):
         folder = Path(self.enterContext(TemporaryDirectory()))
         files = {name: folder / name for name in (
             "OPTIONS", "HISTORY", "EFFECTIVE_OPTIONS", "AUTO_RULES", "LANGUAGE_MODES",
-            "SOURCE_SETTINGS", "NOTIFICATIONS", "DESTINATION", "GOOD_IMAGE", "TEST_IMAGE",
+            "SOURCE_SETTINGS", "NOTIFICATIONS", "DESTINATION", "GOOD_IMAGE", "TEST_IMAGE", "AUTOMATIC_PREVIEW",
         )}
         files["OPTIONS"].write_text(json.dumps({"esp_url": "http://meter", "ausschnitt": "0,0,500,100",
                                                 "vorkomma_breite": 350, "vergleich_nachkommastellen": 3}))
@@ -292,6 +292,7 @@ class StateTests(TestCase):
         files = {name: folder / name for name in (
             "OPTIONS", "HISTORY", "EFFECTIVE_OPTIONS", "AUTO_RULES", "LANGUAGE_MODES",
             "SOURCE_SETTINGS", "NOTIFICATIONS", "DESTINATION", "GOOD_IMAGE", "TEST_IMAGE",
+            "AUTOMATIC_PREVIEW",
         )}
         files["OPTIONS"].write_text(json.dumps({"ausschnitt": "0,0,500,100", "vorkomma_breite": 350,
                                                 "ocr_versuche": 1}))
@@ -316,7 +317,7 @@ class StateTests(TestCase):
         self.enterContext(patch.object(run, "publish_state", collect))
         with self.assertRaises(StopLoop):
             run.main()
-        fetch.assert_called_once_with("http://supervisor/core/api/camera_proxy/camera.esp", "stub")
+        fetch.assert_called_once_with("http://supervisor/core/api/camera_proxy/camera.esp", "stub", timeout=8)
         self.assertEqual(2, recognize.call_count)
         self.assertEqual("12345", published[run.OCR_ENTITY]["state"])
         self.assertEqual("ocr_only", published[run.CHECK_ENTITY]["state"])
@@ -328,6 +329,9 @@ class StateTests(TestCase):
                          (attributes["device_class"], attributes["state_class"], attributes["unit_of_measurement"]))
         with Image.open(files["DESTINATION"]) as current:
             self.assertEqual("JPEG", current.format)
+        with Image.open(files["AUTOMATIC_PREVIEW"]) as overlay:
+            self.assertEqual("JPEG", overlay.format)
+            self.assertGreater(overlay.width, 0)
 
         initial["next_check_at"] = 0
         initial["consumption"]["timestamp"] -= 3600
@@ -358,7 +362,7 @@ class StateTests(TestCase):
         paths = {name: folder / f"{name.lower()}.json" for name in (
             "OPTIONS", "HISTORY", "EFFECTIVE_OPTIONS", "AUTO_RULES", "LANGUAGE_MODES",
             "SOURCE_SETTINGS", "NOTIFICATIONS",
-            "DESTINATION", "GOOD_IMAGE", "TEST_IMAGE",
+            "DESTINATION", "GOOD_IMAGE", "TEST_IMAGE", "TEST_SOURCE_IMAGE",
         )}
         paths["OPTIONS"].write_text(json.dumps({"esp_url": "http://meter", "ausschnitt": "0,0,500,100", "vorkomma_breite": 350}))
         self.enterContext(patch.multiple(run, **paths))
@@ -370,7 +374,7 @@ class StateTests(TestCase):
         published = []
         progress_updates = []
 
-        def fake_panel(history_path, current, good, requested, *_):
+        def fake_panel(history_path, current, good, requested, *_, **__):
             requested.put_nowait({
                 "request_id": 1, "decimals": 2, "attempts": 1, "polarity": "dark",
                 "crop_mode": "manual", "crop": "0,0,480,100", "width": 350,

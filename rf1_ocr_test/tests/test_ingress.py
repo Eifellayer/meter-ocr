@@ -67,6 +67,9 @@ class IngressFixture(TestCase):
         self.source = values
         self.setup_pending = False
 
+    def skip_setup(self):
+        self.setup_pending = False
+
     def start_panel(self):
         server, self.update = panel.start_panel(
             self.history, self.root / "current.jpg", self.root / "good.jpg",
@@ -75,7 +78,7 @@ class IngressFixture(TestCase):
             lambda modes: atomic_write(self.preferences, json.dumps(modes).encode(), 0o600),
             lambda: dict(self.delivery), self.delivery.update,
             lambda: (dict(self.source), self.setup_pending), self.save_source,
-            address=("127.0.0.1", 0),
+            address=("127.0.0.1", 0), skip_setup=self.skip_setup,
         )
         self.server = server
         self.addCleanup(server.server_close)
@@ -157,7 +160,7 @@ class IngressTests(IngressFixture):
         status = json.loads(self.request("/status?lang=en")[0])
         self.assertEqual("12345.120", status["ocr"])
         self.assertEqual(409, self.submit("/ausschnitt-uebernehmen", checked_at="90.0")[0])
-        self.assertEqual((303, "./?saved=crop"), self.submit(
+        self.assertEqual((303, "./?saved=crop&ui=settings"), self.submit(
             "/ausschnitt-uebernehmen", checked_at=status["crop_id"]))
         self.assertEqual(("manual", "1925,5,2005,390", 220, 90, 0),
                          (self.rules["crop_mode"], self.rules["crop"], self.rules["width"],
@@ -172,6 +175,17 @@ class IngressTests(IngressFixture):
                 self.assertEqual(400, response.code)
                 self.assertIn(message, response.read().decode())
         self.assertTrue(self.requested.empty())
+
+    def test_manual_options_and_fallback_value_persist_for_the_next_click(self):
+        values = {"polarity": "dark", "decimals": 1, "attempts": 4, "crop_mode": "manual",
+                  "crop": "10,10,410,110", "width": 300, "manual_reference": "12345.6"}
+        self.assertEqual((303, "./?test=queued"), self.submit("/pruefen", **values))
+        self.assertTrue((self.root / "manual-test-settings.json").exists())
+        self.assertEqual("12345.6", self.requested.get_nowait()["manual_reference"])
+        page = self.request("/")[0]
+        self.assertIn('name="manual_reference" form="manual-form" value="12345.6"', page)
+        self.assertIn('<option value="dark" selected>', page)
+        self.assertIn('<option value="1" selected>1 Nachkommastelle</option>', page)
 
     def test_initial_source_selection_and_later_changes(self):
         self.assertIn('id="source-settings" open', self.request("/")[0])
@@ -190,6 +204,46 @@ class IngressTests(IngressFixture):
         self.assertEqual((303, "./?saved=source"),
                          self.submit("/bildquelle", source_mode="slfork", url="http://new-meter"))
         self.assertEqual("http://new-meter", self.source["url"])
+
+    def test_setup_wizard_saves_source_meter_format_crop_schedule_and_notifications(self):
+        page = self.request("/")[0]
+        self.assertIn('id="setup-dialog"', page)
+        self.assertIn('data-first-run="true"', page)
+        self.assertIn('setupDialog.showModal()', page)
+        self.assertIn('name="integer_digits"', page)
+        values = {
+            "source_mode": "camera", "camera": "camera.meter", "reference": "sensor.meter",
+            "url": "http://meter", "meter_display": "mixed", "integer_digits": 6,
+            "fraction_digits": 2, "decimals": 1, "attempts": 4, "polarity": "dark",
+            "crop_mode": "manual", "crop": "10,10,410,110", "width": 300, "rotation": 0,
+            "interval_minutes": 30, "max_flow": "6.5", "fallback_value": "123456.7",
+            "fallback_time": time.strftime("%Y-%m-%dT%H:%M", time.localtime()),
+            "notifications_enabled": 1, "review_minutes": 60, "delivery_hours": 0,
+            "push": "notify.mobile_app_phone", "target": "notify.email",
+        }
+        self.assertEqual((303, "./?saved=setup"), self.submit("/einrichtung", **values))
+        self.assertEqual("camera", self.source["mode"])
+        self.assertEqual("sensor.meter", self.source["reference"])
+        self.assertEqual((6, 2, "mixed", 1), (self.rules["integer_digits"], self.rules["fraction_digits"],
+                                               self.rules["meter_display"], self.rules["decimals"]))
+        self.assertEqual((30, 6500, "123456.7"), (self.rules["interval_minutes"],
+                                                   self.rules["max_flow_lph"],
+                                                   self.rules["fallback_value"]))
+        self.assertTrue(self.delivery["enabled"])
+
+    def test_setup_wizard_rejects_fallback_without_timestamp_and_keeps_old_settings(self):
+        before = dict(self.source)
+        values = {
+            "source_mode": "camera", "camera": "camera.meter", "reference": "",
+            "meter_display": "rollers", "integer_digits": 5, "fraction_digits": 3,
+            "decimals": 0, "attempts": 3, "polarity": "auto", "crop_mode": "auto",
+            "crop": "0,0,400,90", "width": 250, "rotation": 0,
+            "interval_minutes": 60, "max_flow": "6", "fallback_value": "12345.6",
+            "fallback_time": "", "review_minutes": 240, "delivery_hours": 24,
+            "push": "", "target": "",
+        }
+        self.assertEqual(400, self.submit("/einrichtung", **values)[0])
+        self.assertEqual(before, self.source)
 
     def test_notification_form_saves_and_can_disable_channels(self):
         settings = dict(review_minutes=15, delivery_hours=0, push="notify.mobile_app_phone",
@@ -360,13 +414,15 @@ class BrowserTests(IngressFixture):
             self.assertIn("Home Assistant: Deutsch", frame.locator("#language-select").inner_text())
             page.goto(parent + "/?en")
             expect_language("en")
-            frame.locator("#manual-panel summary").first.click()
+            if frame.locator("#setup-dialog").evaluate("dialog => dialog.open"):
+                frame.locator("#setup-skip").click()
+            frame.locator("#open-manual-settings").click()
             frame.locator("#manual-form select[name=crop_mode]").select_option("manual")
             frame.locator("#manual-form input[name=crop]").fill("0,0,90,400")
             frame.locator("#manual-form select[name=rotation]").select_option("90")
             frame.locator("#start-check").click()
             frame.get_by_text("Request accepted", exact=True).wait_for()
-            frame.locator("#manual-test #test-progress").wait_for(state="visible")
+            frame.locator("#test-progress").wait_for(state="visible")
             self.assertEqual("neutral", frame.locator("#test-box").get_attribute("data-result"))
             frame.locator("#language-select").select_option("de")
             expect_language("de")
@@ -387,7 +443,11 @@ class BrowserTests(IngressFixture):
             self.assertEqual(400, frame.locator("#test-preview-image").evaluate(
                 "async image => { await image.decode(); return image.naturalWidth; }"))
             frame.locator("#apply-crop-form button").click()
-            frame.get_by_text("Getesteten Bildausschnitt für die Automatik übernommen.", exact=True).wait_for()
+            frame.locator("#tab-settings").click()
+            automatic_settings = frame.locator("#automatic-settings")
+            if not automatic_settings.evaluate("section => section.open"):
+                automatic_settings.locator("summary").click()
+            frame.locator("#view-settings").wait_for(state="visible")
             self.assertEqual("manual", self.rules["crop_mode"])
             self.assertEqual(90, self.rules["rotation"])
             frame.locator("#auto-form select[name=decimals]").select_option("2")
@@ -436,6 +496,7 @@ class BrowserTests(IngressFixture):
             self.history.write_text(json.dumps({**failed, "failure_since": 200}))
             page.reload()
             frame.get_by_text("Check the meter reading", exact=True).wait_for()
+            frame.locator("#tab-settings").click()
             frame.locator("#notification-settings summary").first.click()
             frame.get_by_text("How are notifications sent?", exact=False).click()
             frame.get_by_text("Leave both optional fields blank", exact=False).wait_for()

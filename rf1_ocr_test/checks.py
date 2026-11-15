@@ -100,8 +100,10 @@ def read_polarity(image, digits, profile):
     return None
 
 
-def meter_prefix(value, decimals):
-    match = re.fullmatch(r"([0-9]{1,5})(?:[.,]([0-9Nn?]+))?", str(value))
+def meter_prefix(value, decimals, integer_digits=5):
+    if type(integer_digits) is not int or not 1 <= integer_digits <= 9:
+        return None
+    match = re.fullmatch(rf"([0-9]{{1,{integer_digits}}})(?:[.,]([0-9Nn?]+))?", str(value))
     if not match:
         return None
     fractional = (match[2] or "")[:decimals]
@@ -117,9 +119,9 @@ def comparison_scope(decimals):
     return f"volle Kubikmeter und {decimals} Nachkommastelle" + ("n" if decimals > 1 else "")
 
 
-def uncertain_positions(readings, decimals):
+def uncertain_positions(readings, decimals, integer_digits=5):
     """Return 1-based digit positions, or None when all were unreadable."""
-    positions = list(range(5)) + list(range(6, 6 + decimals))
+    positions = list(range(integer_digits)) + list(range(integer_digits + 1, integer_digits + 1 + decimals))
     evidence = [
         {value[position] if len(value) > position else "?" for value in readings}
         for position in positions
@@ -127,15 +129,15 @@ def uncertain_positions(readings, decimals):
     if not any(any(char in "0123456789" for char in chars) for chars in evidence):
         return None
     return [
-        (position >= 6, position - 5 if position >= 6 else position + 1)
+        (position > integer_digits, position - integer_digits if position > integer_digits else position + 1)
         for position, chars in zip(positions, evidence)
         if len(chars) != 1 or not all(char in "0123456789" for char in chars)
     ]
 
 
-def explain_uncertain_positions(readings, decimals):
+def explain_uncertain_positions(readings, decimals, integer_digits=5):
     """Explain differences at digit positions relevant to this comparison."""
-    positions = uncertain_positions(readings, decimals)
+    positions = uncertain_positions(readings, decimals, integer_digits)
     if positions is None:
         return "Keine Ziffern lesbar. Ausschnitt und Licht prüfen."
     if not positions:
@@ -148,20 +150,23 @@ def explain_uncertain_positions(readings, decimals):
     return "OCR unsicher. " + " ".join(groups)
 
 
-def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace=None, *, standalone=False):
+def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace=None, *, standalone=False,
+                      integer_digits=5, stop_before_attempt=None):
     """Read one image up to max_attempts times; stop on the first valid agreement."""
     if type(max_attempts) is not int or not 1 <= max_attempts <= MAX_OCR_ATTEMPTS:
         raise ValueError("OCR-Versuche müssen zwischen 1 und 10 liegen")
     readings = []
     for index, profile in enumerate(OCR_PROFILES[:max_attempts], start=1):
+        if index > 1 and stop_before_attempt and stop_before_attempt():
+            break
         if progress:
             progress(index - 1, f"OCR-Versuch {index} von {max_attempts} läuft …")
         try:
             value = read(profile)
         except subprocess.TimeoutExpired as error:
             print(f"OCR-Variante hat das Zeitlimit überschritten: {error}")
-            value = "?????.???"
-        status, _ = compare_sample(data, value, decimals)
+            value = "?" * integer_digits + ("." + "?" * decimals if decimals else "")
+        status, _ = compare_sample(data, value, decimals, integer_digits=integer_digits)
         readings.append(value)
         if trace is not None:
             trace.append(str(value))
@@ -175,9 +180,9 @@ def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace
     # No match: show a majority reading for diagnostics if possible.
     majority = len(readings) // 2 + 1
     minimum_votes = max(2, majority) if standalone else majority
-    prefix_length = 5 + (decimals + 1 if decimals else 0)
+    prefix_length = integer_digits + (decimals + 1 if decimals else 0)
     prefixes = Counter(value[:prefix_length] for value in readings
-                       if meter_prefix(value, decimals) is not None)
+                       if meter_prefix(value, decimals, integer_digits) is not None)
     prefix = next((value for value, count in prefixes.items() if count >= minimum_votes), None)
     display = []
     for column in zip(*readings):
@@ -189,12 +194,12 @@ def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace
     return display, prefix is not None, len(readings)
 
 
-def compare_sample(data, ocr, decimals, *, ocr_confirmed=True):
+def compare_sample(data, ocr, decimals, *, ocr_confirmed=True, integer_digits=5):
     if data.get("reference_is_fallback"):
         return "slfork_unclear", FALLBACK_NOTICE
     if not ocr_confirmed:
         return "ocr_unclear", "Zählerstand nicht sicher erkannt. Bitte die unklaren Stellen im Kamerabild prüfen."
-    value = meter_prefix(ocr, decimals)
+    value = meter_prefix(ocr, decimals, integer_digits)
     if value is None:
         return "ocr_unclear", "Zählerstand nicht lesbar. Mindestens eine benötigte Ziffer konnte nicht erkannt werden. Bitte das Kamerabild prüfen."
     if data.get("reference_required") is False:
@@ -204,8 +209,8 @@ def compare_sample(data, ocr, decimals, *, ocr_confirmed=True):
         return "slfork_unclear", "Der ESP meldet ein Problem mit der Zählerablesung. Bitte den Wert direkt am ESP prüfen."
     if data.get("slfork_process_error") in (-1, -2, "-1", "-2"):
         return "slfork_unclear", "Die Messung am ESP wurde abgebrochen. Bitte den ESP prüfen und die nächste Aufnahme abwarten."
-    raw = meter_prefix(data["raw_value"], decimals)
-    actual = meter_prefix(data["actual_value"], decimals)
+    raw = meter_prefix(data["raw_value"], decimals, integer_digits)
+    actual = meter_prefix(data["actual_value"], decimals, integer_digits)
     if raw is None or actual is None:
         return "slfork_unclear", "Referenzwert fehlt oder ist ungültig."
     if raw != actual:
@@ -293,7 +298,7 @@ def sample_epoch(data, zone, now):
     return captured if epoch - FRESH_SAMPLE_AGE < captured <= epoch + 60 else None
 
 
-def record_sample(history, data, ocr, zone, now, decimals=0, *, ocr_confirmed=True):
+def record_sample(history, data, ocr, zone, now, decimals=0, *, ocr_confirmed=True, integer_digits=5):
     """Count each in-window cycle at most once, even after a restart."""
     captured = sample_epoch(data, zone, now)
     if captured is None or captured <= history.get("last_epoch", 0):
@@ -303,7 +308,8 @@ def record_sample(history, data, ocr, zone, now, decimals=0, *, ocr_confirmed=Tr
     if "started_at" not in history:
         history.update(started_at=epoch, confirmations=[], status="no_current_sample")
     history["confirmations"] = [old for old in history["confirmations"] if old > epoch - WINDOW_SECONDS]
-    status, detail = compare_sample(data, ocr, decimals, ocr_confirmed=ocr_confirmed)
+    status, detail = compare_sample(data, ocr, decimals, ocr_confirmed=ocr_confirmed,
+                                    integer_digits=integer_digits)
     if status == "match":
         history["confirmations"].append(captured)
         history["last_match_at"] = captured

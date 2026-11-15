@@ -34,9 +34,9 @@ def parse_flow_limit(text):
     return litres
 
 
-def accumulate_consumption(previous, source, stamp, reading, decimals, max_flow_lph):
+def accumulate_consumption(previous, source, stamp, reading, decimals, max_flow_lph, integer_digits=5):
     """Return a proposed new counter state. Rejected and repeated readings add nothing."""
-    prefix = meter_prefix(reading, decimals)
+    prefix = meter_prefix(reading, decimals, integer_digits)
     if prefix is None:
         raise ValueError("Ungültiger Zählerstand")
     step = 10 ** (3 - decimals)
@@ -68,11 +68,11 @@ def accumulate_consumption(previous, source, stamp, reading, decimals, max_flow_
     }
 
 
-def fallback_detail(sample, image_time, ocr, readings, previous, source, max_flow_lph):
+def fallback_detail(sample, image_time, ocr, readings, previous, source, max_flow_lph, integer_digits=5):
     """Assess repeatable OCR against dated readings, without accepting consumption."""
     for decimals in (3, 2, 1, 0):
-        prefix = meter_prefix(ocr, decimals)
-        if prefix is not None and sum(meter_prefix(value, decimals) == prefix
+        prefix = meter_prefix(ocr, decimals, integer_digits)
+        if prefix is not None and sum(meter_prefix(value, decimals, integer_digits) == prefix
                                       for value in readings) * 2 > len(readings):
             break
     else:
@@ -87,6 +87,7 @@ def fallback_detail(sample, image_time, ocr, readings, previous, source, max_flo
             if meter_prefix(reference, reference_decimals) is not None:
                 baselines.append(accumulate_consumption(
                     {}, source, reference_time, reference, reference_decimals, max_flow_lph,
+                    integer_digits,
                 ))
                 break
     if not baselines:
@@ -94,7 +95,8 @@ def fallback_detail(sample, image_time, ocr, readings, previous, source, max_flo
 
     try:
         for baseline in baselines:
-            accumulate_consumption(baseline, source, image_time, ocr, decimals, max_flow_lph)
+            accumulate_consumption(baseline, source, image_time, ocr, decimals, max_flow_lph,
+                                   integer_digits)
     except ImplausibleReading as error:
         return f"{FALLBACK_NOTICE} OCR: {error}"
     return f"{FALLBACK_NOTICE} {FALLBACK_PLAUSIBLE}"

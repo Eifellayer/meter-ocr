@@ -1,5 +1,17 @@
 # Änderungen
 
+## 0.8.0
+
+- **Automatik und Test getrennt:** Die automatische Kontrolle steht im Vordergrund, der erweiterte manuelle Test bleibt eingeklappt.
+- Vergleichsgenauigkeit, maximale OCR-Versuche, Ziffernfarbe und Bildausschnitt lassen sich dauerhaft direkt in der Weboberfläche speichern.
+- **Bildausschnitt übernehmen:** Nach einem Test mit manuell definiertem Ausschnitt können seine Koordinaten und die Vorkommabreite direkt für die automatische Kontrolle übernommen werden.
+- **Visuelle OCR-Diagnose:** Das letzte manuelle Testbild zeigt grüne Rahmen für gelesene Ziffern und rote Rahmen für unklare Stellen. Ohne automatisch erkannte Ziffernrahmen werden die Bereiche näherungsweise aufgeteilt. Die Rahmen zeigen Lesbarkeit, keine Referenzübereinstimmung.
+- **Mehr Infos:** Einzelne OCR-Versuche sind aufklappbar, und bei unsicheren Ergebnissen werden die relevanten Ziffernpositionen beschrieben. Bestätigungen und Abweichungen nennen die eingestellte Vergleichsgenauigkeit.
+- Während einer laufenden Prüfung bleibt das Statusfeld neutral; erst das endgültige Ergebnis wird dezent grün beziehungsweise rot markiert.
+- **Freiwillige Unterstützung:** Kleiner PayPal-Link ganz unten in der Weboberfläche sowie GitHub-Sponsor-Link, ohne Pflicht oder Einfluss auf die Funktionen.
+- Regressionstests für Vergleichslogik, Frühausstieg der OCR, unsichere Stellen, HTML-Vorlage und farbige OCR-Rahmen ergänzt. Änderungen der gespeicherten Automatikregeln überstehen Neustarts.
+- Bestehender technischer App-Slug und Home-Assistant-Entitätsnamen bleiben unverändert.
+
 ## 0.7.2
 
 - Die Hauptansicht zeigt zuerst den Zustand der automatischen Kontrolle. Ihre Vergleichsgenauigkeit (volle m³ oder 1–3 Nachkommastellen), Ziffernfarbe (automatisch/hell/dunkel) und maximale Anzahl der OCR-Versuche (1–10) lassen sich dort dauerhaft speichern.

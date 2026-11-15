@@ -4,13 +4,13 @@
 
 [Deutsch / German](README.md) · [English](README.en.md)
 
-**Release status: Beta.** Versions below 0.5.0 are alpha. The beta phase starts at 0.5.0, and the first stable version is 1.0.0.
+**Current version: 0.1.0.** A regular app and a separate test build for Home Assistant.
 
 Meter OCR reads camera images with **local Tesseract OCR**. It can provide its own reading from an ESPHome or Home Assistant camera, or double-check an existing reading from AI on the Edge / SLFork or a reference sensor.
 
 Designed for mechanical gas meters such as the **Pipersberg G4 RF1**. The register format is five whole digits, with up to three decimal digits. The current Home Assistant sensor output uses cubic meters.
 
-> **Private hobby project, not a certified instrument.** OCR can misread digits. Check the physical meter directly for billing or official readings. Provided without warranty or guaranteed support.
+Meter OCR is a private hobby project for checking meter readings. [Usage notes](#usage-notes)
 
 ## What does it check?
 
@@ -22,13 +22,12 @@ For each image, OCR can attempt between **1 and 10 different processing profiles
 
 ## Install
 
-1. In Home Assistant, open **Settings → Apps → Install app → ⋮ → Repositories** and add:
-   `https://github.com/Thunder86/rf1-kontrollmessung`
-2. Install **Meter OCR**.
+1. In Home Assistant, open **Settings → Apps → Install app → ⋮ → Repositories** and add the [shared repository](https://github.com/Eifellayer/rf1-kontrollmessung).
+2. Install **Meter OCR** for regular use or **Meter OCR Beta** to test new builds.
 3. Configure `esp_url` for the SLFork ESP, for example `http://esp-gaszaehler.local`. Alternatively configure `kamera_entitaet` and optionally `referenz_entitaet`.
 4. Start the app and open its web interface.
 
-A Home Assistant installation with Supervisor is required; supported platforms are **AMD64 and ARM64**. Only one installed variant should publish the same sensor IDs at a time.
+A Home Assistant installation with Supervisor is required on **AMD64 or ARM64**. **Meter OCR Beta** is marked experimental and starts manually. It uses separate settings, images and sensors with the prefix `sensor.meter_ocr_beta_`.
 
 ## First setup and image source
 
@@ -76,8 +75,6 @@ Each destination records at most one successful send per incident. Dismissing th
 
 **Automatic (Home Assistant)** uses the signed-in Home Assistant user's profile language when available through Ingress. German and English include regional variants such as `de-AT` and `en-US`. If the profile language is unavailable or unsupported, the app uses the first supported browser language, then German. Explicit **Deutsch** and **English** choices persist per identified Ingress user. Selecting **Automatic** uses the current profile again on the next open or reload. Without an Ingress user identity, a manual choice lasts for the current navigation.
 
-Version 0.8.1 used a browser-wide preference. To keep an explicit language, select it once in each account after upgrading. The app uses the authenticated frontend connection to read the profile and stores the manual choice per user.
-
 ## Automatic verification
 
 The main screen shows the last recognized value, reference value, verification result, image timestamp, and next scheduled check. Expand **Automatic checks – settings** to change the persistent rules, or **Check images** to see the latest and last-confirmed photos.
@@ -124,9 +121,17 @@ When a custom crop produces a preview, use **Use tested crop for automatic check
 
 Existing entity IDs remain **`sensor.rf1_kontrollbild`** and **`sensor.rf1_pruefstatus`**. Check images are stored in **Media → Local Media → rf1**.
 
+## Usage notes
+
+Developed with AI assistance. OCR can misread digits. Check the physical meter for billing and official readings.
+
+To the extent permitted by law, the software is provided without warranties of accuracy, availability or fitness for a particular purpose. Liability for damages arising from its use is excluded to the extent permitted by law. Mandatory liability rules apply, including for intent, gross negligence, injury to life, body or health, and product liability.
+
+[Sources and credits](SOURCES.md)
+
 ## Support and optional donations
 
-For questions and bug reports, use the [GitHub issues](https://github.com/Thunder86/rf1-kontrollmessung/issues) page. Please include your app version, relevant log lines without secrets, and the result status.
+For questions and bug reports, use the [GitHub issues](https://github.com/Eifellayer/rf1-kontrollmessung/issues) page. Please include your app version, relevant log lines without secrets, and the result status.
 
 The project is free. If it helped you, you can [make a voluntary PayPal donation](https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8). Donations are never required for use or support.
 

@@ -1,6 +1,8 @@
-# Vergleichstest mit zehn Zählerfotos
+# Vergleichstests mit Zählerfotos
 
-Getestet mit der OCR von Meter OCR 0.8.2 (Beta) und Tesseract 5.5.0. In der Automatik lieferte keines der zehn Fotos einen übernehmbaren Stand. Bei einem Wasserzähler gelang die manuelle Ablesung der vollen Kubikmeter nach einem engeren Zuschnitt.
+## Zehn Fotos von Wikimedia Commons
+
+Getestet mit der OCR von Meter OCR und Tesseract 5.5.0. In der Automatik lieferte keines der zehn Fotos einen übernehmbaren Stand. Bei einem Wasserzähler gelang die manuelle Ablesung der vollen Kubikmeter nach einem engeren Zuschnitt.
 
 ## Ergebnisse
 
@@ -26,3 +28,22 @@ Die Bildorientierung aus EXIF wurde angewendet. Fotos über 1600 Pixel Kantenlä
 Fünf Fotos wurden mit angepasstem Ausschnitt und Ziffernfarbe bis zu zehnmal ausgewertet. Beim istameter II ergab der Ausschnitt `510,641,763,718` mit dunklen Ziffern und 253 Pixeln Vorkommabreite in zwei Profilen den richtigen Stand `00070` m³. Im manuellen Test erschien er als OCR-Lesung ohne Referenz. Für den selbstständigen Betrieb waren zwei der zehn Profile zu wenig.
 
 Meter OCR verarbeitet Ziffernfenster mit fünf Vorkommastellen. Zeigerstellungen und abweichende Einheiten wie kWh und Gallonen brauchen eine eigene Auswertung. Die Orientierungs- und Beleuchtungstests mit synthetischen Bildern prüfen gezielte Varianten. Die zehn Fotos zeigen zusätzlich, wie stark Ziffernschrift, Spiegelungen, Ausschnitt und Auflösung die Erkennung beeinflussen.
+
+## Zehn Aufnahmen aus der AI-on-the-Edge-Community
+
+Keiner der zehn Ausschnitte ergab einen vollständigen, mehrheitlich gelesenen Stand. Bei einem Gaszähler las ein einzelnes Profil die fünf Vorkommastellen richtig. Die automatische Rahmenerkennung fand in keinem der verfügbaren Forenbilder die erwartete Ziffernreihe. Neun Aufnahmen enthielten bereits eingezeichnete ROI-Rahmen. Zwei Anzeigen hatten mehr als fünf Vorkommastellen. Die Wasserzähler mit Zeigern wurden am Rollenfenster geprüft.
+
+| Sichtbares Ziffernfenster | Größe in Pixeln | Ausschnitt · Vorkommabreite | OCR nach fünf Profilen | Original |
+| --- | --- | --- | --- | --- |
+| Gas `37778.08?` | 660 × 568 | `165,244,638,334` · 289 | `?????.??2` | [Issue #570, erstes Bild](https://github.com/jomjol/AI-on-the-edge-device/issues/570) |
+| Strom `031204` kWh, sechs volle Stellen | 1003 × 633 | `229,349,487,423` · 208 | `?????.?5?` | [Issue #692, zweites Bild](https://github.com/jomjol/AI-on-the-edge-device/issues/692) |
+| Wasser `0055?` m³, letzte Rolle im Übergang | 1009 × 906 | `216,307,373,369` · 157 | `?????.???` | [Issue #786, Ziffernkonfiguration](https://github.com/jomjol/AI-on-the-edge-device/issues/786) |
+| Wasser-LCD `000033.828` m³, sechs volle Stellen | 640 × 480 | `139,193,449,252` · 219 | `?????.?25` | [Issue #658, Originalaufnahme](https://github.com/jomjol/AI-on-the-edge-device/issues/658) |
+| Gas `52719.5?` | 836 × 475 | `130,3,824,111` · 493 | `?????.???` | [Issue #423](https://github.com/jomjol/AI-on-the-edge-device/issues/423) |
+| Wasser `02074` m³ plus Zeiger | 433 × 378 | `97,52,317,116` · 220 | `?????.???` | [Issue #4112, Zählerbild](https://github.com/jomjol/AI-on-the-edge-device/issues/4112) |
+| Gas `37631.86?` | 1282 × 636 | `10,10,957,187` · 574 | `?????.???` | [Diskussion #1375, erster Bildausschnitt](https://github.com/jomjol/AI-on-the-edge-device/discussions/1375) |
+| Gas `10442.64` | 640 × 480 | `25,133,634,250` · 440 | `?????.??4`. Ein Profil las `10442.??4`. | [Diskussion #3551, erster Beitrag](https://github.com/jomjol/AI-on-the-edge-device/discussions/3551) |
+| Wasser `01391` m³ plus Zeiger | 690 × 466 | `194,184,332,230` · 138 | `?????.???` | [Home Assistant Community, TobiasGJ](https://community.home-assistant.io/t/ai-solution-for-analog-water-meter/378457/1) |
+| Wasser `01405` m³ plus Zeiger | 566 × 500 | `135,93,314,154` · 179 | `?????.???` | [Home Assistant Community, johandijkstra](https://community.home-assistant.io/t/ai-solution-for-analog-water-meter/378457/10) |
+
+Die Ausschnitte und die erwarteten Ziffern wurden vor den OCR-Durchläufen am Foto festgelegt. Getestet wurde mit Meter OCR und Tesseract 5.5.0, automatischer Ziffernfarbe und fünf OCR-Profilen ohne Referenzwert. Für den Test der Rahmenerkennung diente das verfügbare Forumsbild zusätzlich als Rahmenbild. Bei vier Gaszählern wurde auch die lesbare Nachkommagenauigkeit getestet. Keiner der Zusatzdurchläufe erreichte die erforderliche Übereinstimmung. Die Aufnahmen bleiben bei ihren Quellen.

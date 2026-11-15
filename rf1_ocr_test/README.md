@@ -10,15 +10,13 @@ Die ausführliche Einführung, Voraussetzungen, Installation und Konfiguration f
 
 ## Installation
 
-Diese App befindet sich in der Beta-Phase.
+**Meter OCR** ist die reguläre App. **Meter OCR Beta** ist die separate Testausgabe im selben Repository.
 
-Über **Einstellungen → Apps → App installieren → ⋮ → Repositories** die Adresse `https://github.com/Thunder86/rf1-kontrollmessung` hinzufügen und **Meter OCR** installieren. Im SLFork-Modus die `esp_url` eintragen, starten und die Weboberfläche öffnen.
-
-**Ältere lokale Installationen:** Der technische Ordner heißt weiter `rf1_ocr_test`. Beim Update innerhalb derselben App bleiben die Einstellungen normalerweise erhalten. Vor einem Wechsel zwischen lokaler und Repository-App die Einstellungen übernehmen und die alte App stoppen. Beide Varianten dürfen nicht gleichzeitig dieselben Sensoren aktualisieren.
+Über **Einstellungen → Apps → App installieren → ⋮ → Repositories** die Adresse `https://github.com/Eifellayer/rf1-kontrollmessung` hinzufügen und **Meter OCR** installieren. Im SLFork-Modus die `esp_url` eintragen, starten und die Weboberfläche öffnen.
 
 ## Sprache wählen
 
-**Automatisch (Home Assistant)** verwendet nach Möglichkeit die Profilsprache. Deutsch und Englisch lassen sich pro angemeldetem Nutzer dauerhaft auswählen. Fehlt eine unterstützte Profilsprache, verwendet die App die passende Browsersprache oder Deutsch. Details zum Wechsel von 0.8.1 stehen in der [Projektbeschreibung](../README.md#sprache-der-weboberfläche).
+**Automatisch (Home Assistant)** verwendet nach Möglichkeit die Profilsprache. Deutsch und Englisch lassen sich pro angemeldetem Nutzer dauerhaft auswählen. Fehlt eine unterstützte Profilsprache, verwendet die App die passende Browsersprache oder Deutsch.
 
 ## Automatische Kontrolle einstellen
 

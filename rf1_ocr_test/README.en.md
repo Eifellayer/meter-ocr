@@ -10,15 +10,13 @@ This is an additional plausibility check, **not a certified measurement device**
 
 ## Installation
 
-This app is in beta.
+**Meter OCR** is the regular app. **Meter OCR Beta** is the test app in the same repository.
 
-Add `https://github.com/Thunder86/rf1-kontrollmessung` under **Settings → Apps → Install app → ⋮ → Repositories**, then install **Meter OCR**. Set `esp_url` for SLFork, or configure `kamera_entitaet` and an optional `referenz_entitaet` sensor.
-
-For an upgrade from a separate local installation, copy the settings and stop the old app before starting the new one. Both use the same Home Assistant sensor entity IDs, so they should not run together.
+Add `https://github.com/Eifellayer/rf1-kontrollmessung` under **Settings → Apps → Install app → ⋮ → Repositories**, then install **Meter OCR**. Set `esp_url` for SLFork, or configure `kamera_entitaet` and an optional `referenz_entitaet` sensor.
 
 ## Choose a language
 
-Use **Sprache / Language** to follow your Home Assistant profile or select **Deutsch** or **English**. The app saves explicit choices per identified Ingress user. If the profile language is missing or unsupported, the app falls back to a supported browser language, then German. See the [upgrade notes](../README.en.md#language-selection) for the former browser-wide preference.
+Use **Sprache / Language** to follow your Home Assistant profile or select **Deutsch** or **English**. The app saves explicit choices per identified Ingress user. If the profile language is missing or unsupported, the app falls back to a supported browser language, then German.
 
 ## Automatic checks
 
@@ -47,4 +45,4 @@ The app publishes `sensor.rf1_kontrollbild` and `sensor.rf1_pruefstatus`, and st
 
 Full options and troubleshooting: [Project documentation](../README.en.md).
 
-Support: [GitHub Issues](https://github.com/Thunder86/rf1-kontrollmessung/issues). Optional voluntary donation: [PayPal](https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8).
+Support: [GitHub Issues](https://github.com/Eifellayer/rf1-kontrollmessung/issues). Optional voluntary donation: [PayPal](https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8).

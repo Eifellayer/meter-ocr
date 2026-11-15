@@ -32,6 +32,28 @@ EN_UI = {
     "Vorschlag bei wiederholt unlesbarer Ziffer ausblenden": "Hide the suggestion for a repeatedly unreadable digit",
     RAW_ROW_UNCLEAR: "Could not find a clear digit row. Set the crop in the manual test.",
     MANUAL_ROW_UNCLEAR: "The digits are hard to read. Check the image rotation, camera angle, focus and lighting.",
+    "Selbsteinrichtung für Ausschnitt und Drehung": "Automatic setup for crop and rotation",
+    "Die App tastet sich mit unterschiedlichen Bildern an einen passenden Rahmen und Winkel heran. Nach drei bestätigten Ablesungen übernimmt sie den Rahmen und die Drehung. Nach fünf Minuten endet der Versuch automatisch.":
+        "The app searches for a suitable crop and rotation using different images. It saves them after three confirmed readings. The search automatically ends after five minutes.",
+    "Ohne externen Vergleichswert hilft ein von Hand abgelesener Startwert. Ohne Startwert wartet die App zusätzlich auf einen plausiblen Zähleranstieg.":
+        "A manually entered starting reading helps if there is no external reference. Without either, the app also waits for a plausible increase.",
+    "Geprüfte Bilder der Selbsteinrichtung": "Images checked during automatic setup",
+    "Höchstens so viele unterschiedliche Bilder": "Maximum number of distinct images",
+    "Selbsteinrichtung starten": "Start automatic setup",
+    "Selbsteinrichtung stoppen": "Stop automatic setup",
+    "Warte auf ein neues Kamerabild …": "Waiting for a new camera image …",
+    "Prüfe Ausschnitt und Drehung …": "Checking crop and rotation …",
+    "Selbsteinrichtung prüft Bildausschnitt und Drehung.": "Automatic setup is checking the crop and rotation.",
+    "Ausschnitt und Drehung übernommen.": "Crop and rotation saved.",
+    "Selbsteinrichtung fehlgeschlagen. Prüfe Bildausschnitt, Kamerawinkel und Beleuchtung.":
+        "Automatic setup failed. Check the crop, camera angle and lighting.",
+    "Selbsteinrichtung nach fünf Minuten beendet. Keine Einstellung sicher bestätigt.":
+        "Automatic setup ended after five minutes without finding a reliable crop and rotation.",
+    "Selbsteinrichtung gestoppt.": "Automatic setup stopped.",
+    "Ausschnitt und Drehung konnten nicht gespeichert werden.": "Could not save the crop and rotation.",
+    "Bilder: ": "Images: ",
+    " · Bestätigungen: ": " · Confirmations: ",
+    " · Noch ": " · Remaining ",
     "Ausschnitt zurücksetzen": "Reset crop",
     "Ausschnitt zurückgesetzt. Die Automatik sucht die Ziffernreihe wieder selbst.":
         "Crop reset. Automatic checks will locate the digit row again.",

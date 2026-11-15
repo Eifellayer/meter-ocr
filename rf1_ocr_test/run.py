@@ -447,6 +447,7 @@ def main():
                         raise ValueError("Der ESP hat kein JPEG geliefert")
                     frame.load()
                     ocr_readings = []
+                    ocr_error = None
                     try:
                         # Manual crop is a diagnostic override for this test only.
                         manual_crop = crop
@@ -481,7 +482,12 @@ def main():
                             trace=ocr_readings,
                         )
                     except (OSError, ValueError, subprocess.SubprocessError) as error:
-                        print(f"Lokale OCR nicht verfügbar: {error}")
+                        print(f"OCR-Bildprüfung fehlgeschlagen: {error}")
+                        ocr_error = ("Der Bildausschnitt konnte nicht ausgewertet werden. "
+                                     "Bitte die Ausschnitt-Koordinaten und die Breite der "
+                                     "Vorkommastellen prüfen." if isinstance(error, ValueError)
+                                     else "Die Texterkennung ist fehlgeschlagen. Bitte "
+                                     "den Ziffernbereich und die OCR-Installation prüfen.")
                         register, ocr, source = frame, None, "unavailable"
                         ocr_confirmed, ocr_attempts = True, 0
                     if not manual:
@@ -492,7 +498,9 @@ def main():
                                        or image_time in history.get("confirmations", ()))
                     status, detail = compare_sample(sample, ocr, manual_options["decimals"],
                                                     ocr_confirmed=ocr_confirmed)
-                    if status == "ocr_unclear":
+                    if ocr_error:
+                        detail = ocr_error
+                    elif status == "ocr_unclear":
                         detail = explain_uncertain_positions(ocr_readings, manual_options["decimals"])
                     preview_available = False
                     if ocr_attempts and source != "unavailable":

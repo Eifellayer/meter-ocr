@@ -103,6 +103,9 @@ class ComparisonTests(unittest.TestCase):
         self.assertTrue(manual_confirms_failed_auto(history, sample, "10448.087", **kwargs))
         self.assertFalse(manual_confirms_failed_auto(history, sample, "10448.087", **{**kwargs, "image_time": 101}))
         self.assertFalse(manual_confirms_failed_auto(history, sample, "10448.087", **{**kwargs, "uploaded_image": True}))
+        for excluded in ("stale_sample", "capture_unavailable"):
+            self.assertFalse(manual_confirms_failed_auto(
+                {**history, "check_status": excluded}, sample, "10448.087", **kwargs))
 
     def test_two_failed_runs_return_to_the_configured_interval(self):
         history = {}

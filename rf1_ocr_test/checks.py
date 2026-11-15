@@ -153,7 +153,7 @@ def manual_confirms_failed_auto(history, sample, ocr, *, status, uploaded_image,
         and (reference_time or image_time)
             == (history.get("last_reference_time") or history.get("last_epoch"))
         and history.get("check_status") in (
-            "difference", "ocr_unclear", "slfork_unclear", "stale_sample", "capture_unavailable",
+            "difference", "ocr_unclear", "slfork_unclear",
         )
         and manual_decimals == auto_decimals
         and compare_sample(sample, ocr, auto_decimals, ocr_confirmed=ocr_confirmed,

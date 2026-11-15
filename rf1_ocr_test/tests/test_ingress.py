@@ -459,7 +459,7 @@ class BrowserTests(IngressFixture):
             def expect_language(language):
                 heading = frame.locator(f"html[lang='{language}'] h1")
                 heading.wait_for()
-                self.assertEqual("Meter OCR", heading.inner_text())
+                self.assertEqual("AI Meter Reader", heading.inner_text())
                 self.assertTrue(frame.locator("html").evaluate(
                     "element => element.scrollWidth <= element.clientWidth"))
 

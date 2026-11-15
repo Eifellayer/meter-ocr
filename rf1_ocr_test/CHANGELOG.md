@@ -7,7 +7,7 @@
 - Capture a fresh ESP or Home Assistant camera image after the first failed check; after two failed runs, return to the selected interval.
 - Added a persistent pause/resume control for automatic checks, with manual tests still available while paused.
 - Show live worker activity, source reachability, and clear reasons for stale images or failed image retrieval.
-- Successful manual tests restart the automatic timer; only a pass for the same current reference and capture can clear the automatic failure status.
+- Successful manual tests restart the automatic timer; a pass for the same capture and reference can clear a reading mismatch, but not a stale-image or connection failure.
 - Added German and English help text for retries, pausing, source status, and shorter intervals.
 
 ## 0.3.0 Alpha

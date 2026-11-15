@@ -559,7 +559,7 @@ def main():
     requested = Queue(maxsize=1)
     try:
         pause_state = json.loads(AUTO_PAUSED.read_text(encoding="utf-8"))
-        auto_paused = {"value": bool(pause_state.get("paused")) if isinstance(pause_state, dict) else False}
+        auto_paused = {"value": isinstance(pause_state, dict) and pause_state.get("paused") is True}
     except (OSError, ValueError, AttributeError):
         auto_paused = {"value": False}
 
@@ -569,11 +569,11 @@ def main():
     def save_auto_paused(value):
         if type(value) is not bool:
             raise ValueError("Pausenzustand muss wahr oder falsch sein")
-        atomic_write(AUTO_PAUSED, json.dumps({"paused": value}).encode("utf-8"), 0o600)
-        auto_paused["value"] = value
         if not value:
             history["next_check_at"] = time.time()
             atomic_write(HISTORY, json.dumps(history).encode("utf-8"), 0o600)
+        atomic_write(AUTO_PAUSED, json.dumps({"paused": value}).encode("utf-8"), 0o600)
+        auto_paused["value"] = value
         wake_worker.set()
     def save_language_modes(modes):
         atomic_write(LANGUAGE_MODES, json.dumps(modes).encode("utf-8"), 0o600)

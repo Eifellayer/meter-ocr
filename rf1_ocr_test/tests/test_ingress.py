@@ -754,7 +754,7 @@ class BrowserTests(IngressFixture):
             frame.locator("#auto-form input[name=max_flow]").fill("4,5")
             self.assertEqual("60", frame.locator("#auto-form input[name=interval_minutes]").input_value())
             frame.locator("#auto-form input[name=interval_minutes]").fill("15")
-            frame.locator("#auto-form button").click()
+            frame.locator('#auto-form button[type="submit"]:not([form])').click()
             frame.get_by_text("Automatische Prüfregeln gespeichert.", exact=True).wait_for()
             self.assertEqual(4500, self.rules["max_flow_lph"])
             self.assertEqual(15, self.rules["interval_minutes"])

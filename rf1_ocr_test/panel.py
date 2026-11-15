@@ -538,7 +538,7 @@ name: Zählerstand (OCR)</code></pre>
 <label>Breite der Vorkommastellen
 <input name="width" type="number" min="1" max="9999" value="{auto_width_value}"></label>
 <p class="settings-note">Wähle den Ausschnitt im Originalbild. Die Vorkommabreite gilt nach der Drehung.</p>
-<button type="submit" name="reset_crop" value="1" formnovalidate>Ausschnitt zurücksetzen</button>
+<button type="submit" form="reset-auto-crop-form" name="reset_crop" value="1">Ausschnitt zurücksetzen</button>
 </div>
 <details class="help setup-help" id="reflection-settings">
 <summary>ⓘ Spiegelungen und verdeckte Ziffern</summary>
@@ -547,6 +547,11 @@ name: Zählerstand (OCR)</code></pre>
 <label class="check-option"><input type="checkbox" name="reflection_suggestion_hidden" value="1" {reflection_hide_checked}> Vorschlag bei wiederholt unlesbarer Ziffer ausblenden</label>
 </details>
 <button type="submit">Speichern</button>
+</form>
+<form method="post" action="automatik" id="reset-auto-crop-form" hidden>
+<input type="hidden" name="lang" value="{language}">
+<input type="hidden" name="mode" value="{language_mode}">
+<input type="hidden" name="csrf" value="{csrf}">
 </form>
 <p class="settings-note">Nach zwei Fehlprüfungen mit kurzem Abstand gilt wieder dein eingestelltes Prüfintervall. Bei geänderter Vergleichsgenauigkeit beginnt die Trefferzählung neu.</p>
 </div></details>

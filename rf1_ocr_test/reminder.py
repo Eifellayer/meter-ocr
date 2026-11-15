@@ -4,9 +4,11 @@ import json
 import re
 from threading import Thread
 from time import sleep
-from urllib.request import Request, urlopen
+from urllib.request import Request
 
 from websocket import create_connection
+
+from transport import open_core
 
 REMINDER_DELAY = 24 * 60 * 60
 
@@ -27,7 +29,7 @@ class Reminder:
         )
         while True:
             try:
-                with urlopen(request, timeout=90) as stream:
+                with open_core(request, timeout=90) as stream:
                     for line in stream:
                         if not line.startswith(b"data:"):
                             continue
@@ -45,12 +47,12 @@ class Reminder:
             headers={"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"},
             method="POST",
         )
-        with urlopen(request, timeout=10):
+        with open_core(request, timeout=10):
             pass
 
     def notifications(self):
         socket = create_connection(
-            "ws://supervisor/core/websocket", timeout=6, suppress_origin=True,
+            "ws://supervisor/core/websocket", timeout=6, suppress_origin=True, redirect_limit=0,
             header={"Authorization": f"Bearer {self.token}"},
         )
         try:

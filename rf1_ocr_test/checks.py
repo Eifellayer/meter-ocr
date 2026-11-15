@@ -55,8 +55,10 @@ def read_polarity(image, digits, profile):
     )
     votes = Counter()
     for variant in variants:
-        prepared = ImageOps.expand(variant.resize((variant.width * 3, variant.height * 3)),
-                                   border=24, fill=255)
+        scale = min(3, 2200 / variant.width, 700 / variant.height)
+        resized = variant.resize((max(1, round(variant.width * scale)),
+                                  max(1, round(variant.height * scale))))
+        prepared = ImageOps.expand(resized, border=24, fill=255)
         with io.BytesIO() as png:
             prepared.save(png, "PNG")
             result = subprocess.run(
@@ -90,21 +92,32 @@ def comparison_scope(decimals):
     return f"volle Kubikmeter und {decimals} Nachkommastelle" + ("n" if decimals > 1 else "")
 
 
+def uncertain_positions(readings, decimals):
+    """Return 1-based digit positions and candidates, or None when all were unreadable."""
+    positions = list(range(5)) + list(range(6, 6 + decimals))
+    evidence = [
+        {value[position] if len(value) > position else "?" for value in readings}
+        for position in positions
+    ]
+    if not any(any(char in "0123456789" for char in chars) for chars in evidence):
+        return None
+    return [
+        (position >= 6, position - 5 if position >= 6 else position + 1,
+         sorted(char for char in chars if char in "0123456789"))
+        for position, chars in zip(positions, evidence)
+        if len(chars) != 1 or not all(char in "0123456789" for char in chars)
+    ]
+
+
 def explain_uncertain_positions(readings, decimals, *, show_details=False):
     """Explain differences at digit positions relevant to this comparison."""
-    if not readings:
+    positions = uncertain_positions(readings, decimals)
+    if positions is None:
         return ("Zählerstand nicht sicher erkannt. Es liegt keine verwertbare "
                 "OCR-Lesung vor. Bitte Bildausschnitt und Beleuchtung prüfen.")
-    positions = list(range(5)) + list(range(6, 6 + decimals))
     unclear = []
-    for position in positions:
-        candidates = {str(reading)[position] if len(str(reading)) > position else "?"
-                      for reading in readings}
-        if len(candidates) <= 1 and all(character.isdigit() for character in candidates):
-            continue
-        place = (f"{position + 1}. Vorkommastelle von links" if position < 5
-                 else f"{position - 5}. Nachkommastelle")
-        options = sorted(character for character in candidates if character.isdigit())
+    for fractional, index, options in positions:
+        place = f"{index}. Nachkommastelle" if fractional else f"{index}. Vorkommastelle von links"
         if len(options) >= 2:
             unclear.append(f"{place} (gelesen als {' oder '.join(options)})")
         else:

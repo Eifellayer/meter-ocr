@@ -26,3 +26,18 @@ Ausgangspunkt ist `main` bei `ee3294c` mit App-Version 0.8.1. Die offenen Issues
 3. SLFork sowie HA-Kamera mit und ohne Referenz ausführen. Mit tatsächlichen Meterbildern korrekte Treffer, Abweichungen und unsichere Rollen prüfen. Wiederanlauf und optionale Erinnerungen kontrollieren.
 4. Ingress im Desktop-Browser und in der Companion App mit zwei HA-Profilen testen. Die Sprache beim Wechsel während eines Tests, nach Speichern, nach Neuladen und bei nicht unterstützter Profilsprache prüfen.
 5. Installierbarkeit auf AMD64 und ARM64 bestätigen.
+
+## Umsetzung und Prüfprotokoll
+
+| Bereich | Geprüft |
+| --- | --- |
+| #1 · Manueller Status | Chromium mit 320 und 1280 Pixeln. Neue Prüfung startet neutral, auch nach einem Treffer. Laufende Aufträge lassen sich durch eine zweite Anfrage nicht ersetzen. |
+| #2 · Vergleich | Regressionstests für volle m³ und Dezimalstellen, fehlende Referenz und getrennte Genauigkeit in Automatik und Test. |
+| #3 · OCR-Diagnose | Einzelversuche in aufklappbaren Details. Nur verglichene Stellen werden als unklar gemeldet. Bei ausschließlich unlesbaren Versuchen entfallen Positionsangaben. Crop-Vorschau und Übernahme über den Browser geprüft. |
+| #4 · Sprache | Zwei nachgebildete Ingress-Nutzer, regionale Sprachcodes, Speichern, Wechsel während eines Tests, Neustart und Browser-Fallback geprüft. Ein fremder Elternkontext wird abgelehnt. |
+| Daten und Schnittstellen | Worker-Test mit echten Bilddateien und nachgebildeten HA-Endpunkten. Optionenmigration, Prüfhistorie und beide Sensor-IDs geprüft. Bestehende Historie und Regeln benötigen keine neue Migration. |
+| OCR und Toolchain | Lokal 24 Tests unter Python 3.11.18 bestanden, darunter Tesseract 5.5.0 mit einem synthetischen Zählwerk und ein Chromium-Test. JavaScript-Syntax beider Sprachvarianten geprüft. |
+
+Der Profilsprache-Zugriff verwendet den angemeldeten Home-Assistant-Frontend-Kontext und liest ausschließlich den Sprachschlüssel des aktuellen Nutzers. Der Quellcode-Abgleich umfasst die [Ingress-Einbettung](https://github.com/home-assistant/frontend/blob/2d6ebd26d995ccb6c2445af0bbb305cdcca58cfa/src/panels/app/ha-panel-app.ts), den [Frontend-User-Data-Aufruf](https://github.com/home-assistant/frontend/blob/2d6ebd26d995ccb6c2445af0bbb305cdcca58cfa/src/data/frontend.ts), die [Zuordnung zum Sprachschlüssel](https://github.com/home-assistant/frontend/blob/2d6ebd26d995ccb6c2445af0bbb305cdcca58cfa/src/data/translation.ts) und die [Supervisor-Ingress-Header](https://github.com/home-assistant/supervisor/blob/98a2322374ae3d0c248079d11f7435ad759935fa/supervisor/api/ingress.py).
+
+Der Workflow prüft die App-Images auf AMD64 und ARM64. Ein Live-Upgrade mit Supervisor, reale Zählerbilder, Companion App und Push-Erinnerung bleiben Freigabeprüfungen.

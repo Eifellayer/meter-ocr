@@ -30,13 +30,13 @@ A Home Assistant installation with Supervisor is required; supported platforms a
 
 ## Language selection
 
-The web interface offers **Deutsch / English** at the top. Switching language also translates the automatic check settings, manual test, progress updates, OCR results, and diagnostic hints. The language choice is kept in the browser. German remains the default for German-language browsers, and English for English-language browsers.
+**Automatic (Home Assistant)** uses the signed-in Home Assistant user's profile language when available through Ingress. German and English include regional variants such as `de-AT` and `en-US`. If the profile language is unavailable or unsupported, the app uses the first supported browser language, then German. Explicit **Deutsch** and **English** choices persist per identified Ingress user. Selecting **Automatic** uses the current profile again on the next open or reload. Without an Ingress user identity, a manual choice lasts for the current navigation.
 
-The language only changes what is shown in the web interface. It does not rename existing Home Assistant entities or modify stored readings.
+Version 0.8.1 used a browser-wide preference. To keep an explicit language, select it once in each account after upgrading. The app uses the authenticated frontend connection to read the profile and stores the manual choice per user.
 
 ## Automatic verification
 
-The main screen shows the last recognized value, reference value, verification result, image timestamp, and next scheduled check. The automatic settings can be saved directly in the web interface:
+The main screen shows the last recognized value, reference value, verification result, image timestamp, and next scheduled check. Expand **Automatic checks – settings** to change the persistent rules, or **Check images** to see the latest and last-confirmed photos.
 
 | Setting | Purpose |
 | --- | --- |
@@ -49,6 +49,8 @@ Saved automatic rules persist across app restarts. They take precedence over the
 
 A successful automatic check is normally repeated after **one hour**. When a check fails or data is uncertain, it retries after **five minutes**. After four hours without a successful confirmation, `sensor.rf1_pruefstatus` can report `review_due`; an optional mobile notification is available later.
 
+Each SLFork measurement timestamp counts at most once. In Home Assistant camera mode, the app uses the fetch time, so independent confirmations rely on the camera supplying fresh images. A configured reference sensor must report in `m³` and have a timestamp within five minutes of the image request.
+
 ## Advanced manual test
 
 The **Open manual test** section is collapsed by default. Open it only when you want to diagnose the camera image.
@@ -59,7 +61,7 @@ The status is neutral while a test runs, subtly **green only for a confirmed mat
 
 Afterward, the **annotated OCR image** outlines recognized digits in green and uncertain digits in red. These colors indicate OCR recognition, **not** reference-value agreement. When individual digit frames are unavailable, boxes are approximate. **More details** shows the OCR values from each attempt and, where possible, the uncertain digit positions.
 
-After testing a custom crop, use **Use tested crop for automatic checks** to save the crop and whole-digit width directly without copying coordinates to another settings page.
+When a custom crop produces a preview, use **Use tested crop for automatic checks** to save the crop and whole-digit width directly without copying coordinates to another settings page.
 
 ## Configuration reference
 

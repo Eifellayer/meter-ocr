@@ -16,7 +16,7 @@ For an upgrade from a separate local installation, copy the settings and stop th
 
 ## Choose a language
 
-Use **Sprache / Language** at the top of the web interface to switch between **Deutsch** and **English**. The selection is saved in the browser. All controls, status messages, OCR results and diagnostic hints are translated without changing Home Assistant's existing entity IDs.
+Use **Sprache / Language** to follow your Home Assistant profile or select **Deutsch** or **English**. The app saves explicit choices per identified Ingress user. If the profile language is missing or unsupported, the app falls back to a supported browser language, then German. See the [upgrade notes](../README.en.md#language-selection) for the former browser-wide preference.
 
 ## Automatic checks
 
@@ -35,7 +35,7 @@ Open **Open manual test** only when you need it. It lets you temporarily overrid
 
 The result appears below the progress indicator, using muted green only for a confirmed match, red for failures, and neutral styling while running or without a reference. It explains whether whole cubic meters or decimal places matched. The annotated image outlines digits the OCR recognized in green and unclear ones in red; red or green here does not establish agreement with the reference. The positions may be approximate without detected frames.
 
-Expand **More details** to see the individual attempt readings. You can **Use tested crop for automatic checks** to permanently apply the crop settings you have tried.
+Expand **More details** to see the individual attempt readings. When a custom crop produces a preview, you can **Use tested crop for automatic checks** to permanently apply the crop settings you have tried.
 
 ## Schedules and files
 

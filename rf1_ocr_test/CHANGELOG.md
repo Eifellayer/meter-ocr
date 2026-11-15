@@ -1,5 +1,12 @@
 # Änderungen
 
+## In Entwicklung
+
+- Automatische Übernahme der Home-Assistant-Profilsprache mit Deutsch und Englisch als dauerhafter Auswahl pro Ingress-Nutzer.
+- Kompakte Übersicht mit Hintergrundaktualisierung. Automatikregeln, Kontrollbilder und manueller Test lassen sich getrennt aufklappen.
+- Laufende manuelle Tests behalten ihren Auftrag. Die Ausschnittübernahme ist an die angezeigte Vorschau gebunden. Bei vollständig fehlender OCR-Lesung nennt das Ergebnis keine vermeintlich betroffenen Ziffern.
+- Core-Anfragen mit Supervisor-Anmeldedaten folgen keinen HTTP- oder WebSocket-Weiterleitungen. Tests prüfen OCR, Ingress und die App-Images.
+
 ## 0.8.1
 
 - **Deutsch / English** als Sprachauswahl oben in der App. Die ausgewählte Sprache wird im Browser gespeichert und nach erneuter Öffnung wiederhergestellt.

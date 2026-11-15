@@ -6,6 +6,8 @@ The language only affects text shown in the ingress interface.
 
 import re
 
+from checks import uncertain_positions
+
 
 EN_UI = {
     "Gaszähler OCR-Kontrolle": "Gas Meter OCR Verification",
@@ -73,6 +75,8 @@ EN_UI = {
     "Zählerbild mit grün markierten erkannten Ziffern und rot markierten unklaren Stellen":
         "Meter image with green boxes for recognized digits and red boxes for uncertain digits",
     "Getesteten Ausschnitt für die Automatik übernehmen": "Use tested crop for automatic checks",
+    "Kontrollbilder": "Check images",
+    "? steht für eine unklare Ziffer.": "? indicates an uncertain digit.",
     "Aktuelles Bild": "Current image",
     "Letzter Treffer": "Last confirmed match",
     "Aktuelles Kontrollbild": "Latest check image",
@@ -86,6 +90,7 @@ EN_UI = {
     "Neue Vergleichsgenauigkeit gespeichert. Die nächste automatische Prüfung zeigt das erste Ergebnis mit dieser Einstellung.":
         "New comparison precision saved. The next automatic check will show the first result using that setting.",
     "Noch kein manueller Test gestartet.": "No manual check has been run yet.",
+    "Ein manueller Test läuft bereits.": "A manual check is already in progress.",
     "Status wird geladen …": "Loading status …",
     "Test angenommen. Die Bearbeitung wird hier live angezeigt.":
         "Request accepted. Progress will appear here live.",
@@ -93,6 +98,7 @@ EN_UI = {
 }
 
 EN_DETAILS = {
+    "Das Prüfergebnis konnte nicht gespeichert werden.": "Could not save the check result.",
     "Das Zählerbild oder die Messwerte sind nicht verfügbar. Bitte die ESP- bzw. Kameraverbindung prüfen.":
         "The meter image or reference data is unavailable. Check the ESP or camera connection.",
     "Das Bild ist zu alt oder wurde schon ausgewertet.":
@@ -129,18 +135,14 @@ def translate_page(source):
 
 def english_uncertain_positions(readings, decimals, *, manual=False):
     """Describe each unreliable digit relevant to the configured precision."""
-    if not readings:
+    positions = uncertain_positions(readings, decimals)
+    if positions is None:
         return EN_DETAILS[
             "Zählerstand nicht sicher erkannt. Es liegt keine verwertbare OCR-Lesung vor. Bitte Bildausschnitt und Beleuchtung prüfen."
         ]
-    positions = list(range(5)) + list(range(6, 6 + decimals))
     uncertain = []
-    for pos in positions:
-        chars = {str(value)[pos] if len(str(value)) > pos else "?" for value in readings}
-        if len(chars) == 1 and all(char.isdigit() for char in chars):
-            continue
-        place = f"whole-number digit {pos + 1} from the left" if pos < 5 else f"decimal digit {pos - 5}"
-        candidates = sorted(char for char in chars if char.isdigit())
+    for fractional, index, candidates in positions:
+        place = f"decimal digit {index}" if fractional else f"whole-number digit {index} from the left"
         if len(candidates) > 1:
             place += " (read as " + " or ".join(candidates) + ")"
         uncertain.append(place)

@@ -18,7 +18,7 @@ from run import draw_test_preview  # noqa: E402
 def formatted_page(language="de"):
     template = translate_page(PAGE) if language == "en" else PAGE
     fields = {name for _, name, _, _ in Formatter().parse(template) if name is not None}
-    return template.format(**{field: "0" for field in fields})
+    return template.format(**{field: "" if field == "profile_script" else "0" for field in fields})
 
 
 class ComparisonTests(unittest.TestCase):

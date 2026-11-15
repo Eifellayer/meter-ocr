@@ -28,6 +28,8 @@ from layout import find_digit_row
 from reminder import Reminder
 from settings import SCHEMA_VERSION, load_options
 from panel import start_panel
+from language import load_preferences
+from transport import open_core
 
 MAX_RESPONSE_BYTES = 3_000_000
 MAX_TRANSFER_BYTES = 11_000
@@ -38,15 +40,18 @@ HISTORY = Path("/data/kontrollmessung.json")
 OPTIONS = Path("/data/options.json")
 EFFECTIVE_OPTIONS = Path("/data/rf1-settings.json")
 AUTO_RULES = Path("/data/auto-pruefregeln.json")
+LANGUAGE_MODES = Path("/data/rf1-language.json")
 ENTITY = "sensor.rf1_kontrollbild"
 CORE_URL = f"http://supervisor/core/api/states/{ENTITY}"
 CHECK_ENTITY = "sensor.rf1_pruefstatus"
-Image.MAX_IMAGE_PIXELS = 4_000_000
+MAX_IMAGE_PIXELS = 4_000_000
+Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
 
 
 def get_bytes(url, token=None):
     headers = {"Authorization": f"Bearer {token}"} if token else {}
-    with urlopen(Request(url, headers=headers), timeout=8) as response:
+    open_request = open_core if token else urlopen
+    with open_request(Request(url, headers=headers), timeout=8) as response:
         data = response.read(MAX_RESPONSE_BYTES + 1)
     if len(data) > MAX_RESPONSE_BYTES:
         raise ValueError("Antwort zu groß")
@@ -70,17 +75,23 @@ def slfork_diagnostics(data):
 
 
 def capture(base, diagnostics):
-    before = json.loads(get_bytes(base + "/process_data"))
+    def process_data():
+        payload = json.loads(get_bytes(base + "/process_data"))
+        if not isinstance(payload, dict):
+            raise ValueError("Ungültige SLFork-Messdaten")
+        return payload
+
+    before = process_data()
     diagnostics.update(slfork_diagnostics(before))
     picture = get_bytes(base + "/img_tmp/alg.jpg")
     try:
         overlay = get_bytes(base + "/img_tmp/alg_roi.jpg")
     except (OSError, ValueError):
         overlay = None
-    after = json.loads(get_bytes(base + "/process_data"))
+    after = process_data()
     diagnostics.update(slfork_diagnostics(after))
     timestamp = sequence_value(after, "timestamp_processed")
-    if not timestamp:
+    if not isinstance(timestamp, str) or not timestamp:
         raise ValueError("Kein Zeitstempel vom ESP")
     if sequence_value(before, "timestamp_processed") != timestamp:
         return None
@@ -101,10 +112,11 @@ def capture_camera(camera, reference, token, zone):
         try:
             state = json.loads(get_bytes(f"{base}/states/{reference}", token))
             reported = datetime.fromisoformat(state.get("last_reported") or state["last_updated"])
-            if (state.get("attributes", {}).get("unit_of_measurement") == "m³"
+            if (reported.tzinfo is not None
+                    and state.get("attributes", {}).get("unit_of_measurement") == "m³"
                     and abs((captured - reported).total_seconds()) <= 5 * 60):
                 value = state["state"]
-        except (OSError, ValueError, KeyError) as error:
+        except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
             print(f"Referenzsensor konnte nicht gelesen werden: {type(error).__name__}")
     return picture, None, {
         "esp_timestamp": captured.isoformat(),
@@ -119,7 +131,7 @@ def select_register(frame, overlay, manual_crop, manual_width):
     if overlay is not None:
         try:
             with Image.open(io.BytesIO(overlay)) as annotated:
-                if annotated.size == frame.size:
+                if annotated.size == frame.size and annotated.width * annotated.height <= MAX_IMAGE_PIXELS:
                     layout = find_digit_row(annotated)
                     if layout is not None:
                         crop, width, boxes = layout
@@ -271,7 +283,7 @@ def publish_state(url, payload, token):
         url, data=json.dumps(payload).encode("utf-8"), method="POST",
         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
     )
-    with urlopen(request, timeout=10) as response:
+    with open_core(request, timeout=10) as response:
         if response.status not in (200, 201):
             raise OSError(f"Home Assistant meldet HTTP {response.status}")
 
@@ -286,7 +298,10 @@ def check_reminder(reminder, history, now):
         print(f"RF1-Erinnerung konnte nicht aktualisiert werden: {type(error).__name__}")
     after = json.dumps(history)
     if after != before:
-        atomic_write(HISTORY, after.encode("utf-8"), 0o600)
+        try:
+            atomic_write(HISTORY, after.encode("utf-8"), 0o600)
+        except OSError as error:
+            print(f"RF1-Erinnerung konnte nicht gespeichert werden: {type(error).__name__}")
 
 
 def main():
@@ -364,9 +379,13 @@ def main():
         auto_rules = updated_rules
 
     requested = Queue(maxsize=1)
-    update_progress = start_panel(
+    def save_language_modes(modes):
+        atomic_write(LANGUAGE_MODES, json.dumps(modes).encode("utf-8"), 0o600)
+
+    _, update_progress = start_panel(
         HISTORY, DESTINATION, GOOD_IMAGE, requested, default_decimals, default_attempts,
         get_auto_rules, save_auto_rules, options["ausschnitt"], options["vorkomma_breite"], TEST_IMAGE,
+        partial(load_preferences, LANGUAGE_MODES), save_language_modes,
     )
     push_service = (options.get("push_dienst") or "").strip()
     reminder = None
@@ -423,7 +442,7 @@ def main():
             updated.pop("last_match_at", None)
         updated["comparison_decimals"] = decimals
         updated["check_detail"] = "Das Zählerbild oder die Messwerte sind nicht verfügbar. Bitte die ESP- bzw. Kameraverbindung prüfen."
-        manual_result = {"detail": updated["check_detail"]}
+        manual_result = {"status": "capture_unavailable", "detail": updated["check_detail"]}
         diagnostics = {}
         try:
             result = capture_camera(camera, reference, token, zone) if camera else capture(base, diagnostics)
@@ -443,8 +462,14 @@ def main():
                     result = None
             if result is not None:
                 with Image.open(io.BytesIO(picture)) as frame:
+                    if frame.width * frame.height > MAX_IMAGE_PIXELS:
+                        raise ValueError("Kamerabild hat zu viele Pixel")
                     if frame.format != "JPEG":
-                        raise ValueError("Der ESP hat kein JPEG geliefert")
+                        if not camera or frame.format != "PNG":
+                            raise ValueError("Das Kameraformat wird nicht unterstützt")
+                        with io.BytesIO() as normalized:
+                            frame.convert("RGB").save(normalized, "JPEG", quality=95)
+                            picture = normalized.getvalue()
                     frame.load()
                     ocr_readings = []
                     ocr_error = None
@@ -531,16 +556,22 @@ def main():
                                    ocr_confirmed=ocr_confirmed):
                     atomic_write(DESTINATION, picture, 0o644)
                     outcome = updated["status"]
+                    updated["ocr_readings"] = ocr_readings if outcome == "ocr_unclear" else []
                     if outcome == "ocr_unclear":
-                        updated["check_detail"] = explain_uncertain_positions(ocr_readings, decimals)
+                        updated["check_detail"] = ocr_error or explain_uncertain_positions(ocr_readings, decimals)
                     if outcome == "match":
                         atomic_write(GOOD_IMAGE, picture, 0o644)
                     data = {**sample, "crop_source": source, "ocr_attempts": ocr_attempts}
                     updated["last_reference"] = sample["actual_value"]
                 else:
                     outcome = "stale_sample"
+                    updated["check_detail"] = "Das Bild ist zu alt oder wurde schon ausgewertet."
         except (OSError, ValueError, Image.DecompressionBombError) as error:
-            print(f"Bildabruf fehlgeschlagen: {error}")
+            print(f"Bildabruf fehlgeschlagen: {type(error).__name__}")
+            if not manual and data is None:
+                detail = manual_result["detail"]
+                updated = {**history, "check_detail": detail}
+                outcome = "capture_unavailable"
 
         now = datetime.now(zone)
         if manual:
@@ -548,20 +579,36 @@ def main():
                             manual_result.get("ocr_attempts", 0))
             manual_result.update(checked_at=now.timestamp(), settings=manual_options, slfork_diagnostics=diagnostics)
             manual_options = None
-            history["manual_result"] = manual_result
-            atomic_write(HISTORY, json.dumps(history).encode("utf-8"), 0o600)
+            try:
+                next_history = {**history, "manual_result": manual_result}
+                atomic_write(HISTORY, json.dumps(next_history).encode("utf-8"), 0o600)
+                history = next_history
+            except OSError as error:
+                print(f"Manueller Test konnte nicht gespeichert werden: {type(error).__name__}")
+                manual_result.update(status="storage_error", can_apply_crop=False, preview=False,
+                                     detail="Das Prüfergebnis konnte nicht gespeichert werden.")
             update_progress(request_id, "done", "Prüfung beendet.",
                             manual_result.get("ocr_attempts", 0), now.timestamp(),
-                            outcome=manual_result.get("status", "capture_unavailable"),
-                            detail=manual_result["detail"], preview=manual_result.get("preview", False),
+                            outcome=manual_result["status"], detail=manual_result["detail"],
+                            preview=manual_result.get("preview", False),
                             can_apply_crop=manual_result.get("can_apply_crop", False),
-                            readings=manual_result.get("readings", []))
+                            readings=manual_result.get("readings", []),
+                            ocr=manual_result.get("ocr"), reference=manual_result.get("reference"))
             continue
         if keep_schedule and data is None and history.get("next_check_at", 0) > now.timestamp():
             continue
         updated["slfork_diagnostics"] = diagnostics
         schedule_next_check(updated, outcome, now.timestamp())
-        atomic_write(HISTORY, json.dumps(updated).encode("utf-8"), 0o600)
+        try:
+            atomic_write(HISTORY, json.dumps(updated).encode("utf-8"), 0o600)
+        except OSError as error:
+            print(f"Automatik konnte die Prüfhistorie nicht speichern: {type(error).__name__}")
+            startup = False
+            try:
+                manual_options = requested.get(timeout=RETRY_INTERVAL)
+            except Empty:
+                pass
+            continue
         history = updated
         if data is not None:
             pending_image = (data, jpeg, size)

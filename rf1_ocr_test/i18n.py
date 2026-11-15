@@ -350,11 +350,13 @@ def english_result(detail, status=None, decimals=0, readings=None):
     if status == "match":
         if decimals == 0:
             return "Confirmed: Whole cubic meters match. Decimal digits were ignored."
-        return (f"Confirmed: The OCR reading matches the reference through decimal place {decimals}.")
+        place = "decimal place" if decimals == 1 else "decimal places"
+        return f"Confirmed: OCR reading and reference match when rounded to {decimals} {place}."
     if status == "difference":
         if decimals == 0:
             return "Mismatch: Whole cubic meters do not match. Check the meter image."
-        return (f"Mismatch: The values do not match when comparing through decimal place {decimals}. "
+        place = "decimal place" if decimals == 1 else "decimal places"
+        return (f"Mismatch: The values do not match when rounded to {decimals} {place}. "
                 "Check the meter image.")
     if status == "ocr_only":
         return ("Digits read, but not verified: No reference reading is available. "

@@ -3,6 +3,8 @@
 ## 0.2.1 Alpha
 
 - Added quick Home Assistant dashboard and Energy dashboard guidance to the setup wizard.
+- Decimal comparisons round half up to the selected precision, including carry between digits.
+- Wait longer for Home Assistant profile language before showing the first setup screen.
 - Moved the voluntary PayPal link into the collapsible About section.
 - Kept existing entity IDs, stored settings, and the Alpha release channel.
 

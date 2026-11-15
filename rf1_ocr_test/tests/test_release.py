@@ -57,8 +57,17 @@ class ComparisonTests(unittest.TestCase):
     def test_decimal_precision_is_strict(self):
         status, message = compare_sample(self.data, "12345.199", 1)
         self.assertEqual("match", status)
-        self.assertIn("1. Nachkommastelle", message)
+        self.assertIn("Gerundet auf 1 Nachkommastelle", message)
         self.assertEqual("difference", compare_sample(self.data, "12345.199", 2)[0])
+
+    def test_decimal_comparison_rounds_the_selected_precision_half_up(self):
+        reference = {"raw_value": "10447.6528", "actual_value": "10447.6528"}
+        status, message = compare_sample(reference, "10447.653", 3)
+        self.assertEqual("match", status)
+        self.assertIn("Gerundet auf 3 Nachkommastellen", message)
+        self.assertEqual("difference", compare_sample(reference, "10447.652", 3)[0])
+        carry = {"raw_value": "9.995", "actual_value": "10.00"}
+        self.assertEqual("match", compare_sample(carry, "10.00", 2, integer_digits=4)[0])
 
     def test_ocr_stops_after_first_agreement(self):
         trace = []

@@ -369,7 +369,9 @@ class BrowserTests(IngressFixture):
                 if inner.path == "/favicon.ico":
                     inner.send_error(404)
                     return
-                user, profile, forwarded = self.profiles[urlsplit(inner.path).query]
+                profile_data = self.profiles[urlsplit(inner.path).query]
+                user, profile, forwarded = profile_data[:3]
+                delay_ms = profile_data[3] if len(profile_data) > 3 else 0
                 script = (
                     "document.querySelector('home-assistant').hass = {"
                     f"user: {{id: '{user}'}}, "
@@ -379,6 +381,8 @@ class BrowserTests(IngressFixture):
                     f"return Promise.resolve({{value: {{language: '{profile}'}}}});"
                     "}};"
                 )
+                if delay_ms:
+                    script = f"setTimeout(() => {{{script}}}, {delay_ms});"
                 result = (f"<home-assistant></home-assistant><script>window.calls=0;{script}</script>"
                           f"<iframe src='/ingress/{forwarded}/' style='width:100%;height:1000px'></iframe>").encode()
                 inner.send_response(200)
@@ -391,7 +395,8 @@ class BrowserTests(IngressFixture):
 
         self.profiles.update(en=(USER_EN, "en-US", USER_EN), de=(USER_DE, "de-AT", USER_DE),
                              unsupported=(USER_EN, "fr-FR", USER_EN),
-                             mismatch=(USER_DE, "de", USER_EN))
+                             mismatch=(USER_DE, "de", USER_EN),
+                             late_de=(USER_DE, "de-AT", USER_DE, 900))
         with serve(Parent) as parent, sync_playwright() as playwright:
             browser = playwright.chromium.launch(executable_path=os.getenv("RF1_CHROMIUM"))
             page = browser.new_page(viewport={"width": 320, "height": 850}, locale="en-US")
@@ -412,6 +417,9 @@ class BrowserTests(IngressFixture):
             expect_language("de")
             self.assertEqual(1, page.evaluate("window.calls"))
             self.assertIn("Home Assistant: Deutsch", frame.locator("#language-select").inner_text())
+            page.goto(parent + "/?late_de")
+            expect_language("de")
+            self.assertEqual(1, page.evaluate("window.calls"))
             page.goto(parent + "/?en")
             expect_language("en")
             if frame.locator("#setup-dialog").evaluate("dialog => dialog.open"):

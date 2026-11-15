@@ -24,7 +24,7 @@ Use **Sprache / Language** to follow your Home Assistant profile or select **Deu
 
 The always-visible overview contains the most recent OCR result, reference, status, image time and next check. Automatic settings are persistent and can be changed in the web interface:
 
-- **Comparison:** whole cubic meters or up to three decimal places. Decimals outside the configured precision are ignored, not rounded.
+- **Comparison:** whole cubic meters or up to three decimal places. Values are rounded half up to the selected precision; the next known digit determines rounding.
 - **Maximum OCR attempts:** 1–10 (default 5); stop on the first verified match.
 - **Digit color:** auto-detect, light or dark.
 - **Image region:** auto-detect digit frames or use a fixed image crop and width.

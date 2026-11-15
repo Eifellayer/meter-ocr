@@ -105,6 +105,21 @@ class ReminderTests(TestCase):
                          [service for service, _ in self.sent])
         self.assertTrue(all("weiterhin einen Ersatzwert" in payload["message"] for _, payload in self.sent))
 
+    def test_factory_reset_clears_existing_app_notice_and_push(self):
+        notification_id = "rf1_review_100000000"
+        self.notices.add(notification_id)
+        self.history["reminder"] = {
+            "id": notification_id, "incident": 100, "shown_at": 100,
+            "pushed": True, "push_service": "notify.mobile_app_phone",
+        }
+        self.reminder.clear_for_reset(self.history)
+        self.assertEqual(
+            ["persistent_notification.dismiss", "notify.mobile_app_phone"],
+            [service for service, _ in self.sent],
+        )
+        self.assertEqual({"message": "clear_notification", "data": {"tag": notification_id}}, self.sent[-1][1])
+        self.assertNotIn(notification_id, self.notices)
+
     def test_validation_rejects_non_notification_destinations(self):
         defaults = dict(enabled=True, review_minutes=240, delivery_hours=24, push="", target="")
         self.assertEqual(defaults, notification_rules(defaults))

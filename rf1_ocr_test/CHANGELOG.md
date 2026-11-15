@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.7 Alpha
+
+- Die bebilderte Bedienungsanleitung ist direkt über den Menüpunkt „Anleitung“ erreichbar.
+
+- Der Bildausschnitt lässt sich im manuellen Test zurücksetzen. In den Automatik-Einstellungen stellt der Knopf die automatische Ausschnitterkennung wieder her.
+
 ## 0.4.6 Alpha
 
 - Die Bilddrehung ist im manuellen Test gradweise einstellbar und kann mit dem Ausschnitt für die Automatik übernommen werden. Bei schwer lesbaren Ziffern weist die App auf diese Einstellung hin.

@@ -121,6 +121,21 @@ class IngressFixture(TestCase):
 
 
 class IngressTests(IngressFixture):
+    def test_reset_automatic_crop_preserves_other_saved_settings(self):
+        self.rules.update(crop_mode="manual", crop="10,10,290,100", width=150, rotation=-6,
+                          attempts=8, interval_minutes=20, reflection_estimate_enabled=True)
+        self.assertEqual((303, "./?saved=crop-reset&ui=settings"),
+                         self.submit("/automatik", reset_crop=1, attempts=1, interval_minutes=5))
+        self.assertEqual(("auto", "0,0,400,90", 250, 0), (
+            self.rules["crop_mode"], self.rules["crop"], self.rules["width"], self.rules["rotation"],
+        ))
+        self.assertEqual((8, 20, True), (
+            self.rules["attempts"], self.rules["interval_minutes"], self.rules["reflection_estimate_enabled"],
+        ))
+        self.assertIn("Die Automatik sucht die Ziffernreihe wieder selbst",
+                      self.request("/?saved=crop-reset&ui=settings")[0])
+        self.assertIn('id="reset-manual-crop"', self.request("/?test=open")[0])
+
     def test_reflection_notice_is_optional_and_only_marks_the_inferred_digit(self):
         self.history.write_text(json.dumps({
             "check_status": "ocr_unclear", "reflection_streak": {"count": 3, "position": 7},
@@ -739,7 +754,7 @@ class BrowserTests(IngressFixture):
             frame.locator("#auto-form input[name=max_flow]").fill("4,5")
             self.assertEqual("60", frame.locator("#auto-form input[name=interval_minutes]").input_value())
             frame.locator("#auto-form input[name=interval_minutes]").fill("15")
-            frame.locator("#auto-form button").click()
+            frame.locator('#auto-form button[type="submit"]:not([form])').click()
             frame.get_by_text("Automatische Prüfregeln gespeichert.", exact=True).wait_for()
             self.assertEqual(4500, self.rules["max_flow_lph"])
             self.assertEqual(15, self.rules["interval_minutes"])

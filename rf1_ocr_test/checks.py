@@ -14,6 +14,8 @@ DEFAULT_INTERVAL_MINUTES = 60
 MAX_INTERVAL_MINUTES = 24 * 60
 NORMAL_INTERVAL = DEFAULT_INTERVAL_MINUTES * 60
 RETRY_INTERVAL = 5 * 60
+FAILURE_RETRY_LIMIT = 3
+FAILURE_COOLDOWN_INTERVAL = 60 * 60
 WARNING_DETAIL_AFTER = 60 * 60
 REVIEW_AFTER = 4 * 60 * 60
 FRESH_SAMPLE_AGE = 15 * 60
@@ -406,7 +408,9 @@ def valid_interval_minutes(value):
 
 def _check_delay(outcome, interval_minutes, retry_suppressed=False):
     interval = interval_minutes * 60
-    return interval if outcome in ("match", "ocr_only") or retry_suppressed else min(interval, RETRY_INTERVAL)
+    if outcome in ("match", "ocr_only"):
+        return interval
+    return FAILURE_COOLDOWN_INTERVAL if retry_suppressed else min(interval, RETRY_INTERVAL)
 
 
 def schedule_next_check(history, outcome, checked_at, interval_minutes=DEFAULT_INTERVAL_MINUTES):
@@ -418,7 +422,7 @@ def schedule_next_check(history, outcome, checked_at, interval_minutes=DEFAULT_I
     else:
         history.setdefault("failure_since", checked_at)
         history["failure_attempts"] = history.get("failure_attempts", 0) + 1
-        if history["failure_attempts"] >= 2:
+        if history["failure_attempts"] >= FAILURE_RETRY_LIMIT:
             history["retry_suppressed"] = True
     if outcome == "capture_unavailable":
         history.setdefault("capture_failure_since", checked_at)

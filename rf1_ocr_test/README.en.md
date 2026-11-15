@@ -12,9 +12,9 @@ This is an additional plausibility check, **not a certified measurement device**
 
 ## Installation
 
-**AI Meter Reader (Alpha)** is the regular app and the test channel until version 0.5. From 0.5 onward, Beta builds are reserved for larger changes that need dedicated testing.
+**AI Meter Reader (Alpha)** is the regular test channel in version 0.4.0. After 0.4, a Hall / pulse sensor is planned as the first separate Beta feature because it needs a real hardware test.
 
-Add **Add-ons by Eifellayer** under **Settings → Apps → Install app → ⋮ → Repositories** using the [shared link](https://github.com/Eifellayer/meter-ocr), then install **AI Meter Reader (Alpha)**. Releases below 0.5 use the regular app as their test channel. From 0.5 onward, Beta builds are reserved for larger changes that need dedicated testing. Set `esp_url` for SLFork, or configure `kamera_entitaet` and an optional `referenz_entitaet` sensor.
+Add **Add-ons by Eifellayer** under **Settings → Apps → Install app → ⋮ → Repositories** using the [Stable link](https://github.com/Eifellayer/meter-ocr#stable), then install **AI Meter Reader (Alpha)**. Version 0.4.0 is the Alpha test build; the planned Hall / pulse sensor feature will be prepared separately on the Beta channel. Set `esp_url` for SLFork, or configure `kamera_entitaet` and an optional `referenz_entitaet` sensor.
 
 ## Choose a language
 
@@ -41,7 +41,7 @@ Expand **More details** to see the individual attempt readings. When a custom cr
 
 ## Schedules and files
 
-Successful automatic checks normally run hourly. After one failed check, the app takes a fresh image after five minutes; after a second failure, the selected interval applies again. The default delay for `review_due` is four hours. **Pause automatic checks** keeps a large yellow notice visible; manual tests still work. The overview shows whether the app is waiting, capturing an image, or reading it, and whether the ESP/camera returned an image or why it was stale. If the app is stopped or unreachable, an open page reports the lost connection. The **Notifications** panel controls Home Assistant notices, mobile push and email. See the [project guide](../README.en.md#notifications-and-automatic-status).
+Successful automatic checks normally run hourly. After a failed check, up to two more image checks follow at five-minute intervals. If all three fail, the app waits one hour for a higher reading or new image, then tries again. After a successful match, the selected interval applies again. The failed-check count and wait reason appear in the overview. The default delay for `review_due` is four hours. **Pause automatic checks** keeps a large yellow notice visible; manual tests still work. The overview shows whether the app is waiting, capturing an image, or reading it, and whether the ESP/camera returned an image or why it was stale. If the app is stopped or unreachable, an open page reports the lost connection. The **Notifications** panel controls Home Assistant notices, mobile push and email. See the [project guide](../README.en.md#notifications-and-automatic-status).
 
 The app publishes `sensor.rf1_kontrollbild` and `sensor.rf1_pruefstatus`, and stores the latest/last-confirmed images in **Media → Local Media → rf1**. Neither entity name is translated because dashboards and automations depend on it.
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0 Alpha
+
+- Retry automatic failures using up to three image checks: the first retry after five minutes, the second after another five minutes, then a one-hour wait for a higher meter reading or a new image.
+- Show the failed-check count and retry/wait explanation in the automatic overview.
+- Mark OCR digits yellow when repeated reads disagree or the final result was composed from multiple attempts; keep red for unresolved digits and green for recognized digits.
+- Rename the shared image area to **Latest test image / Letztes Testbild** because it can show either an automatic or manual test.
+- Refresh automatic app-language selection when the Home Assistant profile language changes, and avoid a red offline message for a single status-poll failure.
+- Add a German illustrated user guide PDF and link it from the project and app descriptions.
+- Preserve existing Home Assistant entity IDs, settings, and application slug.
+
 ## 0.3.1 Alpha
 
 - Renamed the user-facing app to AI Meter Reader while preserving the Home Assistant app slug, stored options, and existing entity IDs.
@@ -30,7 +40,7 @@
 
 ## 0.2.0 Alpha
 
-**AI Meter Reader – Alpha release.** Releases below 0.5 are Alpha and use the regular Home Assistant app as their test channel. There is no separate Beta app before version 0.5. From 0.5 onward, a Beta build is created only for larger changes that need dedicated testing.
+**AI Meter Reader – Alpha release.** Version 0.4.0 remains on the regular Alpha channel. After 0.4, the optional Hall / pulse sensor integration is planned as the first separate Beta change because it needs hardware testing.
 
 - Guided first setup for SLFork / AI on the Edge, Home Assistant cameras, and ESPHome cameras with local OCR. The wizard can be reopened later and shows current values for quick changes.
 - Meter format settings for whole and fractional digits, display type, comparison precision, crop, rotation, lighting, OCR attempts, check interval and plausibility limit.

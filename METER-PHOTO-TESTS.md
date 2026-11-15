@@ -1,8 +1,8 @@
 # Vergleichstests mit Zählerfotos
 
-## 0.8.2 · Zehn Fotos von Wikimedia Commons
+## Zehn Fotos von Wikimedia Commons
 
-Getestet mit der OCR von Meter OCR 0.8.2 (Beta) und Tesseract 5.5.0. In der Automatik lieferte keines der zehn Fotos einen übernehmbaren Stand. Bei einem Wasserzähler gelang die manuelle Ablesung der vollen Kubikmeter nach einem engeren Zuschnitt.
+Getestet mit der OCR von Meter OCR und Tesseract 5.5.0. In der Automatik lieferte keines der zehn Fotos einen übernehmbaren Stand. Bei einem Wasserzähler gelang die manuelle Ablesung der vollen Kubikmeter nach einem engeren Zuschnitt.
 
 ## Ergebnisse
 
@@ -29,7 +29,7 @@ Fünf Fotos wurden mit angepasstem Ausschnitt und Ziffernfarbe bis zu zehnmal au
 
 Meter OCR verarbeitet Ziffernfenster mit fünf Vorkommastellen. Zeigerstellungen und abweichende Einheiten wie kWh und Gallonen brauchen eine eigene Auswertung. Die Orientierungs- und Beleuchtungstests mit synthetischen Bildern prüfen gezielte Varianten. Die zehn Fotos zeigen zusätzlich, wie stark Ziffernschrift, Spiegelungen, Ausschnitt und Auflösung die Erkennung beeinflussen.
 
-## 0.8.3 · Zehn Aufnahmen aus der AI-on-the-Edge-Community
+## Zehn Aufnahmen aus der AI-on-the-Edge-Community
 
 Keiner der zehn Ausschnitte ergab einen vollständigen, mehrheitlich gelesenen Stand. Bei einem Gaszähler las ein einzelnes Profil die fünf Vorkommastellen richtig. Die automatische Rahmenerkennung fand in keinem der verfügbaren Forenbilder die erwartete Ziffernreihe. Neun Aufnahmen enthielten bereits eingezeichnete ROI-Rahmen. Zwei Anzeigen hatten mehr als fünf Vorkommastellen. Die Wasserzähler mit Zeigern wurden am Rollenfenster geprüft.
 
@@ -46,4 +46,4 @@ Keiner der zehn Ausschnitte ergab einen vollständigen, mehrheitlich gelesenen S
 | Wasser `01391` m³ plus Zeiger | 690 × 466 | `194,184,332,230` · 138 | `?????.???` | [Home Assistant Community, TobiasGJ](https://community.home-assistant.io/t/ai-solution-for-analog-water-meter/378457/1) |
 | Wasser `01405` m³ plus Zeiger | 566 × 500 | `135,93,314,154` · 179 | `?????.???` | [Home Assistant Community, johandijkstra](https://community.home-assistant.io/t/ai-solution-for-analog-water-meter/378457/10) |
 
-Die Ausschnitte und die erwarteten Ziffern wurden vor den OCR-Durchläufen am Foto festgelegt. Getestet wurde mit Meter OCR 0.8.3 und Tesseract 5.5.0, automatischer Ziffernfarbe und fünf OCR-Profilen ohne Referenzwert. Für den Test der Rahmenerkennung diente das verfügbare Forumsbild zusätzlich als Rahmenbild. Bei vier Gaszählern wurde auch die lesbare Nachkommagenauigkeit getestet. Keiner der Zusatzdurchläufe erreichte die erforderliche Übereinstimmung. Die Aufnahmen bleiben bei ihren Quellen.
+Die Ausschnitte und die erwarteten Ziffern wurden vor den OCR-Durchläufen am Foto festgelegt. Getestet wurde mit Meter OCR und Tesseract 5.5.0, automatischer Ziffernfarbe und fünf OCR-Profilen ohne Referenzwert. Für den Test der Rahmenerkennung diente das verfügbare Forumsbild zusätzlich als Rahmenbild. Bei vier Gaszählern wurde auch die lesbare Nachkommagenauigkeit getestet. Keiner der Zusatzdurchläufe erreichte die erforderliche Übereinstimmung. Die Aufnahmen bleiben bei ihren Quellen.

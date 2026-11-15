@@ -1,7 +1,6 @@
 name: Meter OCR
-version: "0.8.3"
+version: "0.1.0"
 slug: rf1_ocr_test
-stage: experimental
 description: "Local gas meter reading and verification with Tesseract OCR, ESPHome cameras, Home Assistant and AI on the Edge / SLFork."
 arch:
   - aarch64

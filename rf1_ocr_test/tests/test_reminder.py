@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from checks import rolling_summary, schedule_next_check
+from checks import rolling_summary
 from notification_settings import notification_rules
 from reminder import Reminder
 
@@ -87,23 +87,6 @@ class ReminderTests(TestCase):
         self.reminder.configure(enabled=True, push="", target="", delay=0)
         self.sync(160)
         self.assertEqual(["persistent_notification.create"], [name for name, _ in self.sent])
-
-    def test_temporary_fallback_stays_quiet_and_persistent_fallback_names_the_cause(self):
-        self.history = {"last_reference_is_fallback": True}
-        self.reminder.configure(enabled=True, push="notify.mobile_app_phone", target="notify.mail", delay=0)
-        schedule_next_check(self.history, "slfork_unclear", 100)
-        self.sync(159)
-        schedule_next_check(self.history, "match", 159)
-        self.sync(160)
-        self.assertEqual([], self.sent)
-        schedule_next_check(self.history, "slfork_unclear", 250)
-        self.sync(309)
-        self.assertEqual([], self.sent)
-        self.sync(310)
-        self.sync(350)
-        self.assertEqual(["persistent_notification.create", "notify.mobile_app_phone", "notify.send_message"],
-                         [service for service, _ in self.sent])
-        self.assertTrue(all("weiterhin einen Ersatzwert" in payload["message"] for _, payload in self.sent))
 
     def test_validation_rejects_non_notification_destinations(self):
         defaults = dict(enabled=True, review_minutes=240, delivery_hours=24, push="", target="")

@@ -4,15 +4,13 @@
 
 [Deutsch / German](README.md) · [English](README.en.md)
 
-**Release status: Beta.** Versions below 0.5.0 are alpha. The beta phase starts at 0.5.0, and the first stable version is 1.0.0.
-
-The tested GitHub branch is [stable](https://github.com/Thunder86/rf1-kontrollmessung/tree/stable). Future changes are tested on [beta](https://github.com/Thunder86/rf1-kontrollmessung/tree/beta). The existing Home Assistant repository URL continues to use `main` for published versions.
+**Current version: 0.1.0.** A regular app and a separate test build for Home Assistant.
 
 Meter OCR reads camera images with **local Tesseract OCR**. It can provide its own reading from an ESPHome or Home Assistant camera, or double-check an existing reading from AI on the Edge / SLFork or a reference sensor.
 
 Designed for mechanical gas meters such as the **Pipersberg G4 RF1**. The register format is five whole digits, with up to three decimal digits. The current Home Assistant sensor output uses cubic meters.
 
-> **Private hobby project, not a certified instrument.** OCR can misread digits. Check the physical meter directly for billing or official readings. Provided without warranty or guaranteed support.
+Meter OCR is a private hobby project for checking meter readings. [Usage notes](#usage-notes)
 
 ## What does it check?
 
@@ -20,23 +18,20 @@ By default, the app compares the **five digits for whole cubic meters (m³)**. U
 
 The app downloads the latest available meter image and reference reading from SLFork, or uses the configured Home Assistant camera and optionally a cumulative sensor in m³. It detects digit frames automatically when possible; otherwise you can specify a crop.
 
-When SLFork reports **Use Fallback**, the app shows the fallback reading and its known time separately from the image time. With **Rate Too High (<)**, SLFork can advance that timestamp while keeping the same reading. The app then uses the time of its last confirmed match for that value when available. It marks unknown measurement times explicitly. The plausibility check uses the elapsed time and maximum flow. A valid match is required to count the reading toward confirmations and consumption.
-
 For each image, OCR can attempt between **1 and 10 different processing profiles** (default 5). As soon as an attempt confirms the configured precision against the valid reference reading, processing stops. A successful OCR read without a reference is shown as **unverified**, not as a confirmed match.
 
 ## Install
 
-1. In Home Assistant, open **Settings → Apps → Install app → ⋮ → Repositories** and add:
-   `https://github.com/Thunder86/rf1-kontrollmessung`
-2. Install **Meter OCR**.
+1. In Home Assistant, open **Settings → Apps → Install app → ⋮ → Repositories** and add the [shared repository](https://github.com/Eifellayer/rf1-kontrollmessung).
+2. Install **Meter OCR** for regular use or **Meter OCR Beta** to test new builds.
 3. Configure `esp_url` for the SLFork ESP, for example `http://esp-gaszaehler.local`. Alternatively configure `kamera_entitaet` and optionally `referenz_entitaet`.
 4. Start the app and open its web interface.
 
-A Home Assistant installation with Supervisor is required; supported platforms are **AMD64 and ARM64**. Only one installed variant should publish the same sensor IDs at a time.
+A Home Assistant installation with Supervisor is required on **AMD64 or ARM64**. **Meter OCR Beta** is marked experimental and starts manually. It uses separate settings, images and sensors with the prefix `sensor.meter_ocr_beta_`.
 
 ## First setup and image source
 
-On a fresh installation, open the web interface and choose a mode under **Settings → Image source**. You can change it in the same place later.
+On a fresh installation, open the web interface and choose a mode under **Image source**. You can change it in the same place later.
 
 | Mode | What it uses |
 | --- | --- |
@@ -50,25 +45,25 @@ The standalone sensor requires a majority of at least two OCR profiles on the sa
 
 ## Set up the camera crop
 
-Under **Test settings**, specify an image region and enter pixel coordinates from the original frame. Use **Clockwise rotation** for sideways or upside-down photos. Measure the width of the whole digits after rotation. Run the test to inspect the result, then apply the tested crop and rotation to automatic checks.
+In the **manual test**, select a manual image region and enter pixel coordinates from the original frame. Use **Clockwise rotation** for sideways or upside-down photos. Measure the width of the whole digits after rotation. Run the test to inspect the result, then apply the tested crop and rotation to automatic checks.
 
 Automatic digit color handles light or dark digits. Later OCR attempts can compensate for uneven lighting in the register. Reflections that cover digits and severe perspective distortion require a clearer camera image. For a meter with a digit register and small pointer dials, test the register at **whole cubic meters** precision. The OCR reads the digit window and leaves the pointer dials unread.
 
-The [photo test report (German)](METER-PHOTO-TESTS.md) covers ten public meter photos and another ten contributed by AI on the Edge users.
+The [photo test report (German)](METER-PHOTO-TESTS.md) records the results for ten gas, water and electricity meters.
 
 ## Plausibility check and Energy dashboard
 
 Meter OCR records consumption from automatic reference matches or agreeing OCR profiles in standalone mode. The first accepted reading establishes the baseline. Later readings are checked against the last accepted value. An out-of-order time, backwards reading or increase above the configured flow limit is rejected. The check accounts for the selected digit precision.
 
-Under **Settings → Automatic checks → Maximum flow**, enter the Qmax marked on your meter. The G4 default is 6 m³/h. Rejected readings leave the cumulative counter untouched. The first accepted reading after a source or precision change establishes a baseline for later consumption differences.
+Under **Automatic check settings → Maximum flow**, enter the Qmax marked on your meter. The G4 default is 6 m³/h. Rejected readings leave the cumulative counter untouched. The first accepted reading after a source or precision change establishes a baseline for later consumption differences.
 
 In Home Assistant, go to **Energy → Configuration → Gas consumption** and select **Meter OCR Gasverbrauch gesamt** (`sensor.rf1_verbrauch_gesamt`). The sensor appears after the first accepted reading. It supplies cumulative gas consumption in m³. Home Assistant calculates hourly, daily, weekly and monthly views from this sensor.
 
 ## Notifications and automatic status
 
-A green check marks a confirmed comparison. A failed check first shows a short yellow notice. After an hour of failed checks, the notice includes details and an **Ignore** button. An image source that has been unavailable for an hour is marked in red.
+A green check marks a confirmed comparison. A red warning highlights a current problem at the top of the page. **Ignore** hides the current warning in the web interface. New incidents are shown again, and notification rules still apply.
 
-Open **Settings → Notifications** and enable **Notify me if checks keep failing**. Set how many minutes to wait before Home Assistant shows a notice, including when SLFork keeps using a fallback reading. Set the additional delay for push and email. **0 hours** sends them when the notice appears.
+Open **Notifications** and enable **Notify me if checks keep failing**. Set how many minutes of unsuccessful automatic checks should pass before Home Assistant shows a notice. Set the additional delay for push and email. **0 hours** sends them when the notice appears.
 
 - **Home Assistant only:** Leave both optional destinations blank.
 - **Mobile push:** Enter a Companion action such as `notify.mobile_app_my_phone`.
@@ -80,15 +75,12 @@ Each destination records at most one successful send per incident. Dismissing th
 
 **Automatic (Home Assistant)** uses the signed-in Home Assistant user's profile language when available through Ingress. German and English include regional variants such as `de-AT` and `en-US`. If the profile language is unavailable or unsupported, the app uses the first supported browser language, then German. Explicit **Deutsch** and **English** choices persist per identified Ingress user. Selecting **Automatic** uses the current profile again on the next open or reload. Without an Ingress user identity, a manual choice lasts for the current navigation.
 
-Version 0.8.1 used a browser-wide preference. To keep an explicit language, select it once in each account after upgrading. The app uses the authenticated frontend connection to read the profile and stores the manual choice per user.
-
 ## Automatic verification
 
-The main screen shows the reading, reference, status, image time, last automatic check, last confirmed match and next check. Open **Settings → Automatic checks** to change the persistent rules, or **Check images** to see the latest and last-confirmed photos.
+The main screen shows the last recognized value, reference value, verification result, image timestamp, and next scheduled check. Expand **Automatic checks – settings** to change the persistent rules, or **Check images** to see the latest and last-confirmed photos.
 
 | Setting | Purpose |
 | --- | --- |
-| Check interval | 1–1,440 minutes after a successful check, default 60. Applies to the next scheduled check. |
 | Comparison | Whole cubic meters only or 1–3 decimal places |
 | Max. OCR attempts | 1–10 profiles per image, default 5 |
 | Digit color | Automatic detection, light digits, or dark digits |
@@ -96,17 +88,17 @@ The main screen shows the reading, reference, status, image time, last automatic
 
 Saved automatic rules persist across app restarts. They take precedence over the corresponding Home Assistant configuration fields. When the comparison precision changes, the automatic confirmation count starts over so matches from the old precision are not treated as new evidence.
 
-A successful automatic check repeats after **one hour** by default. After a failed check, the app retries within **five minutes**. With the default settings, `sensor.rf1_pruefstatus` reports `review_due` after four hours of failed checks. A shorter interval polls SLFork more often. Capture frequency is configured on the ESP.
+A successful automatic check is normally repeated after **one hour**. When a check fails or data is uncertain, it retries after **five minutes**. With the default settings, `sensor.rf1_pruefstatus` reports `review_due` after four hours of failed checks.
 
 Each SLFork measurement timestamp counts at most once. In Home Assistant camera mode, the app uses the fetch time, so independent confirmations rely on the camera supplying fresh images. A configured reference sensor must report in `m³` and have a timestamp within five minutes of the image request.
 
-## Manual test
+## Advanced manual test
 
-Select **Start test** on the main screen to check the latest available image. The progress indicator and result appear below the button.
+The **Open manual test** section is collapsed by default. Open it only when you want to diagnose the camera image.
 
-Open **Test settings** to choose digit color, comparison precision, maximum OCR attempts and an image crop. The crop uses `left, top, right, bottom` and the width of the whole-number digit region. Select **Run check now** to apply those settings to the test. Manual tests use the existing image and leave automatic confirmation counts unchanged.
+You can independently select digit color, comparison precision, maximum OCR attempts, and a custom crop (`left, top, right, bottom`) with the width of the whole-number digit region. Press **Run check now** to re-evaluate the latest stored image. This does not trigger a new ESP capture and does not increase the automatic confirmation count.
 
-The status is neutral while a test runs, green for a confirmed match, and yellow for a mismatch or uncertain reading. The result explicitly states the comparison precision.
+The status is neutral while a test runs, subtly **green only for a confirmed match**, and red for failed checks. The result explicitly states the comparison precision.
 
 Afterward, the **annotated OCR image** outlines recognized digits in green and uncertain digits in red. These colors indicate OCR recognition, **not** reference-value agreement. When individual digit frames are unavailable, boxes are approximate. **More details** shows the OCR values from each attempt and, where possible, the uncertain digit positions.
 
@@ -129,9 +121,17 @@ When a custom crop produces a preview, use **Use tested crop for automatic check
 
 Existing entity IDs remain **`sensor.rf1_kontrollbild`** and **`sensor.rf1_pruefstatus`**. Check images are stored in **Media → Local Media → rf1**.
 
+## Usage notes
+
+Developed with AI assistance. OCR can misread digits. Check the physical meter for billing and official readings.
+
+To the extent permitted by law, the software is provided without warranties of accuracy, availability or fitness for a particular purpose. Liability for damages arising from its use is excluded to the extent permitted by law. Mandatory liability rules apply, including for intent, gross negligence, injury to life, body or health, and product liability.
+
+[Sources and credits](SOURCES.md)
+
 ## Support and optional donations
 
-For questions and bug reports, use the [GitHub issues](https://github.com/Thunder86/rf1-kontrollmessung/issues) page. Please include your app version, relevant log lines without secrets, and the result status.
+For questions and bug reports, use the [GitHub issues](https://github.com/Eifellayer/rf1-kontrollmessung/issues) page. Please include your app version, relevant log lines without secrets, and the result status.
 
 The project is free. If it helped you, you can [make a voluntary PayPal donation](https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8). Donations are never required for use or support.
 

@@ -33,7 +33,7 @@ Saving automatic settings starts a check immediately. Changing the precision res
 
 ## Advanced manual test
 
-Open **Open manual test** only when you need it. It lets you temporarily override all of the above settings and try a custom crop. **Run check now** uses the most recent image, or an optional uploaded JPG/PNG image (up to 3 MB); a live camera source captures a fresh still; an uploaded test image is used as-is.
+**Save and check** opens the overview and starts the automatic check immediately. A yellow progress bar shows image capture and OCR attempts. Choose **Test your own image** to open the manual test with an upload. It lets you temporarily override all of the above settings and try a custom crop. **Run check now** uses the most recent image, or an optional uploaded JPG/PNG image (up to 3 MB); a live camera source captures a fresh still; an uploaded test image is used as-is.
 
 The result appears below the progress indicator, using muted green only for a confirmed match, red for failures, and neutral styling while running or without a reference. It explains whether whole cubic meters or decimal places matched. The annotated image outlines digits the OCR recognized in green and unclear ones in red; red or green here does not establish agreement with the reference. The positions may be approximate without detected frames.
 

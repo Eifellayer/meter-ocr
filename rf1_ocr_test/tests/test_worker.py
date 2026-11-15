@@ -182,6 +182,58 @@ class OCRTests(TestCase):
 
 
 class StateTests(TestCase):
+    def test_saving_settings_bypasses_the_previous_interval(self):
+        class StopLoop(Exception):
+            pass
+
+        class NoWait(run.Event):
+            def wait(self, timeout=None):
+                raise AssertionError(f"Worker waited {timeout}s instead of checking the saved settings")
+
+        folder = Path(self.enterContext(TemporaryDirectory()))
+        files = {name: folder / name for name in (
+            "OPTIONS", "HISTORY", "EFFECTIVE_OPTIONS", "AUTO_RULES", "AUTO_PAUSED",
+            "LANGUAGE_MODES", "SOURCE_SETTINGS", "NOTIFICATIONS", "DESTINATION",
+            "GOOD_IMAGE", "TEST_IMAGE", "AUTOMATIC_PREVIEW",
+        )}
+        files["OPTIONS"].write_text(json.dumps({
+            "esp_url": "http://meter", "ausschnitt": "0,0,500,100", "vorkomma_breite": 350,
+        }))
+        self.enterContext(patch.multiple(run, **files, Event=NoWait))
+        self.enterContext(patch.dict(os.environ, {"SUPERVISOR_TOKEN": "stub"}))
+        with BytesIO() as stream:
+            synthetic_meter().save(stream, "JPEG")
+            photo = stream.getvalue()
+        rules = {}
+
+        def fake_panel(*args, **kwargs):
+            rules.update(read=args[6], save=args[7], activity=kwargs["get_activity"])
+            return None, None, None
+
+        self.enterContext(patch.object(run, "start_panel", fake_panel))
+        capture = self.enterContext(patch.object(run, "capture", side_effect=(
+            (photo, None, sample(datetime.now(timezone.utc) - timedelta(seconds=5))),
+            (photo, None, sample(datetime.now(timezone.utc))),
+        )))
+        self.enterContext(patch.object(run, "read_visible_digits", return_value="12345.170"))
+        self.enterContext(patch.object(run, "publish_state"))
+        published = []
+
+        def publish(history, _):
+            published.append(dict(history))
+            if len(published) == 1:
+                rules["save"]({**rules["read"](), "interval_minutes": 120})
+                self.assertEqual("queued", rules["activity"]()["state"])
+            else:
+                raise StopLoop
+
+        self.enterContext(patch.object(run, "publish_consumption", side_effect=publish))
+        with self.assertRaises(StopLoop):
+            run.main()
+        self.assertEqual(2, capture.call_count)
+        self.assertEqual(120, published[-1]["check_interval_minutes"])
+        self.assertEqual("match", published[-1]["check_status"])
+
     def test_startup_upgrade_keeps_values_and_supervisor_overrides(self):
         options = load_options({"ocr_versuche": 8}, {"options": {"esp_url": "http://my-meter",
                                                                "ausschnitt": "1,2,50,55",
@@ -245,7 +297,7 @@ class StateTests(TestCase):
                                                 "vorkomma_breite": 350, "vergleich_nachkommastellen": 3}))
         self.enterContext(patch.multiple(run, **files))
         self.enterContext(patch.dict(os.environ, {"SUPERVISOR_TOKEN": "stub"}))
-        self.enterContext(patch.object(run, "start_panel", return_value=(None, None)))
+        self.enterContext(patch.object(run, "start_panel", return_value=(None, None, None)))
         with BytesIO() as stream:
             synthetic_meter().save(stream, "JPEG")
             photo = stream.getvalue()
@@ -345,7 +397,7 @@ class StateTests(TestCase):
         with BytesIO() as stream:
             synthetic_meter().save(stream, "PNG")
             photo = stream.getvalue()
-        self.enterContext(patch.object(run, "start_panel", return_value=(None, None)))
+        self.enterContext(patch.object(run, "start_panel", return_value=(None, None, None)))
         fetch = self.enterContext(patch.object(run, "get_bytes", return_value=photo))
         recognize = self.enterContext(patch.object(run, "read_visible_digits", return_value="12345.???"))
         published = {}
@@ -422,7 +474,7 @@ class StateTests(TestCase):
                 "crop_mode": "manual", "crop": "0,0,480,100", "width": 350,
                 "manual_reference": "12345.129", "image": jpeg,
             })
-            return None, lambda *args, **kwargs: progress_updates.append((args, kwargs))
+            return None, lambda *args, **kwargs: progress_updates.append((args, kwargs)), None
 
         def fake_publish(url, payload, _):
             published.append((url, payload))

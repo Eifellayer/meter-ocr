@@ -2,7 +2,8 @@
 
 ## In Vorbereitung
 
-- Der Bestätigungsdialog meldet sofort, dass der Werkreset angefordert wurde. Läuft noch eine Prüfung, zeigt er an, warum es dauern kann, und sperrt die Schaltflächen vorübergehend.
+- Nach der Einrichtung startet die automatische Prüfung sofort. Die Übersicht zeigt in Gelb, auf welches Bild die App wartet und wie weit die OCR ist. Fehlt ein aktuelles Bild, bleibt ein gelber Hinweis sichtbar.
+- Der Werkreset zeigt die Wartezeit an. Sobald er fertig ist, sind auch der letzte manuelle Test und seine Vorschau aus der Oberfläche entfernt, und der Einrichtungsassistent öffnet sich.
 
 ## 0.4.1 Alpha
 

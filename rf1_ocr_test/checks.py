@@ -123,26 +123,26 @@ def read_with_retries(read, data, decimals, progress=None, max_attempts=5):
 
 def compare_sample(data, ocr, decimals, *, ocr_confirmed=True):
     if not ocr_confirmed:
-        return "ocr_unclear", "Die OCR-Versuche ergeben keine Mehrheit für die eingestellten Stellen."
+        return "ocr_unclear", "Zählerstand nicht sicher erkannt. Die Versuche lieferten unterschiedliche Ziffern. Bitte Bildausschnitt, Beleuchtung und Ziffern prüfen."
     value = meter_prefix(ocr, decimals)
     if value is None:
-        return "ocr_unclear", "OCR konnte die eingestellten Stellen nicht eindeutig lesen."
+        return "ocr_unclear", "Zählerstand nicht lesbar. Mindestens eine benötigte Ziffer konnte nicht erkannt werden. Bitte das Kamerabild prüfen."
     if data.get("reference_required") is False:
-        return "ocr_only", "OCR ausgewertet. Es ist kein Referenzsensor eingestellt."
+        return "ocr_only", "Zählerstand aus dem Bild gelesen. Eine Gegenprüfung ist ohne Referenzwert nicht möglich."
     source_status = data.get("slfork_value_status") or ""
     if re.match(r"^[EW][0-9]+(?:\s|$)", str(source_status)):
-        return "slfork_unclear", "AI on the Edge meldet eine Warnung oder einen Fehler zum Zählerstand."
+        return "slfork_unclear", "Der ESP meldet ein Problem mit der Zählerablesung. Bitte den Wert direkt am ESP prüfen."
     if data.get("slfork_process_error") in (-1, -2, "-1", "-2"):
-        return "slfork_unclear", "AI on the Edge hat den Messzyklus abgebrochen."
+        return "slfork_unclear", "Die Messung am ESP wurde abgebrochen. Bitte den ESP prüfen und die nächste Aufnahme abwarten."
     raw = meter_prefix(data["raw_value"], decimals)
     actual = meter_prefix(data["actual_value"], decimals)
     if raw is None or actual is None:
-        return "slfork_unclear", "Der Referenzwert fehlt, ist zu alt oder hat zu wenige lesbare Stellen."
+        return "slfork_unclear", "Kein gültiger Vergleichswert verfügbar. Bitte den Referenzsensor prüfen oder eine neue Messung abwarten."
     if raw != actual:
-        return "slfork_unclear", "Rohwert und übernommener Referenzwert weichen voneinander ab."
+        return "slfork_unclear", "Der ESP liefert widersprüchliche Zählerwerte. Bitte den angezeigten Stand am ESP prüfen."
     if value != actual:
-        return "difference", "OCR und Referenzwert weichen bei der eingestellten Genauigkeit ab."
-    return "match", "OCR und Referenzwert stimmen überein."
+        return "difference", "Der erkannte Zählerstand stimmt nicht mit dem Vergleichswert überein. Bitte das Zählerbild überprüfen."
+    return "match", "Zählerstand bestätigt: Bildauswertung und Vergleichswert stimmen überein."
 
 
 def rolling_summary(history, now):

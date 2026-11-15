@@ -67,6 +67,9 @@ class IngressFixture(TestCase):
         self.source = values
         self.setup_pending = False
 
+    def skip_setup(self):
+        self.setup_pending = False
+
     def start_panel(self):
         server, self.update = panel.start_panel(
             self.history, self.root / "current.jpg", self.root / "good.jpg",
@@ -75,7 +78,7 @@ class IngressFixture(TestCase):
             lambda modes: atomic_write(self.preferences, json.dumps(modes).encode(), 0o600),
             lambda: dict(self.delivery), self.delivery.update,
             lambda: (dict(self.source), self.setup_pending), self.save_source,
-            address=("127.0.0.1", 0),
+            address=("127.0.0.1", 0), skip_setup=self.skip_setup,
         )
         self.server = server
         self.addCleanup(server.server_close)

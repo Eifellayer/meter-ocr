@@ -2,7 +2,7 @@
 
 **Sprache / Language:** [Deutsch](README.md) · [English](README.en.md)
 
-**Aktueller Stand: 0.2.0 Alpha.** Bis Version 0.5 gibt es keine separate Beta-App; getestet wird über die reguläre Meter-OCR-App. Ab 0.5 gibt es Beta-Versionen nur bei größeren Änderungen mit zusätzlichem Testbedarf.
+**Aktueller Stand: 0.2.1 Alpha.** Bis Version 0.5 gibt es keine separate Beta-App; getestet wird über die reguläre Meter-OCR-App. Ab 0.5 gibt es Beta-Versionen nur bei größeren Änderungen mit zusätzlichem Testbedarf.
 
 **Zählerstände direkt in Home Assistant aus Kamerabildern lesen und prüfen.**
 

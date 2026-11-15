@@ -163,7 +163,7 @@ def explain_uncertain_positions(readings, decimals, integer_digits=5):
 
 
 def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace=None, *, standalone=False,
-                      integer_digits=5, stop_before_attempt=None):
+                      integer_digits=5, stop_before_attempt=None, force_all_attempts=False):
     """Read one image up to max_attempts times; stop on the first valid agreement."""
     if type(max_attempts) is not int or not 1 <= max_attempts <= MAX_OCR_ATTEMPTS:
         raise ValueError("OCR-Versuche müssen zwischen 1 und 10 liegen")
@@ -186,7 +186,7 @@ def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace
             progress(index, f"OCR-Versuch {index} von {max_attempts} abgeschlossen.")
         # Stop immediately on a verified match.
         # Without a reference, a valid OCR result ends the read.
-        if status == "match" or (status == "ocr_only" and not standalone):
+        if status == "match" or (status == "ocr_only" and not standalone and not force_all_attempts):
             return value, True, index
 
     # No match: show a majority reading for diagnostics if possible.
@@ -203,7 +203,28 @@ def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace
     display = "".join(display)
     if prefix is not None:
         display = prefix + display[prefix_length:]
-    return display, prefix is not None, len(readings)
+        return display, True, len(readings)
+
+    # If no complete read wins a majority, combine only positions with a
+    # strict digit majority after all configured OCR attempts are exhausted.
+    if len(readings) == max_attempts:
+        positions = list(range(integer_digits))
+        if decimals:
+            positions.extend(range(integer_digits + 1, integer_digits + 1 + decimals))
+        combined = {}
+        for position in positions:
+            votes = Counter(value[position] for value in readings
+                            if position < len(value) and value[position] in "0123456789")
+            digit, count = votes.most_common(1)[0] if votes else ("", 0)
+            if count < minimum_votes:
+                break
+            combined[position] = digit
+        if len(combined) == len(positions):
+            whole = "".join(combined[position] for position in range(integer_digits))
+            fraction = ("." + "".join(combined[position] for position in
+                        range(integer_digits + 1, integer_digits + 1 + decimals)) if decimals else "")
+            return whole + fraction, True, len(readings)
+    return display, False, len(readings)
 
 
 def compare_sample(data, ocr, decimals, *, ocr_confirmed=True, integer_digits=5):

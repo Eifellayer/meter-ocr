@@ -28,7 +28,7 @@ class AppIdentityTests(unittest.TestCase):
     def test_release_metadata_is_alpha_without_a_separate_beta_stage(self):
         config = yaml.safe_load((APP / "config.yaml").read_text(encoding="utf-8"))
         repository = yaml.safe_load((APP.parent / "repository.yaml").read_text(encoding="utf-8"))
-        self.assertEqual("0.2.1", config["version"])
+        self.assertEqual("0.3.0", config["version"])
         self.assertEqual("rf1_ocr_test", config["slug"])
         self.assertEqual("Meter OCR (Alpha)", config["name"])
         self.assertNotIn("stage", config)
@@ -56,7 +56,7 @@ class ComparisonTests(unittest.TestCase):
 
     def test_decimal_precision_is_strict(self):
         status, message = compare_sample(self.data, "12345.199", 1)
-        self.assertEqual("match", status)
+        self.assertEqual("difference", status)
         self.assertIn("Gerundet auf 1 Nachkommastelle", message)
         self.assertEqual("difference", compare_sample(self.data, "12345.199", 2)[0])
 
@@ -105,6 +105,17 @@ class ComparisonTests(unittest.TestCase):
                 values = iter(readings)
                 self.assertEqual(expected, read_with_retries(
                     lambda _: next(values), data, 0, max_attempts=len(readings), standalone=True))
+
+    def test_position_consensus_combines_partial_reads_after_all_ten_attempts(self):
+        data = {"raw_value": "99999.999", "actual_value": "99999.999"}
+        values = iter([
+            "12345.120", "123?5.120", "12345.12?", "123?5.12?", "12?45.120",
+            "12345.120", "12345.120", "123?5.120", "12345.12?", "12345.12?",
+        ])
+        value, confirmed, attempts = read_with_retries(
+            lambda _: next(values), {"reference_required": False}, 3, max_attempts=10,
+            force_all_attempts=True)
+        self.assertEqual(("12345.120", True, 10), (value, confirmed, attempts))
 
     def test_conflicting_reads_do_not_become_a_confirmed_match(self):
         values = iter(["12345.100", "12395.100", "12365.100"])
@@ -170,7 +181,7 @@ class PanelTests(unittest.TestCase):
 
     def test_english_status_and_specific_digit_diagnostics(self):
         self.assertIn("attempt 2 of 5", english_progress("OCR-Versuch 2 von 5 läuft …"))
-        self.assertIn("decimal place 2", english_result(
+        self.assertIn("rounded to 2 decimal places", english_result(
             "Bestätigt: Zählerstand und Referenzwert stimmen überein.",
             "match", 2))
         self.assertIn("Whole-number digits: 3", english_uncertain_positions(

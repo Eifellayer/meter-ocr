@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0 Alpha
+
+- After setup, open the manual test directly and allow a JPG/PNG test image upload up to 3 MB.
+- Saving automatic settings starts a new automatic check immediately.
+- After the configured OCR attempts, combine digits only when each required position has a strict majority vote; otherwise keep the reading uncertain.
+- Verify crop recovery against synthetic meter images at 0°, 90°, 180°, and 270°.
+- Keep uploaded test photos out of saved settings and automatic measurement history.
+
 ## 0.2.1 Alpha
 
 - Added quick Home Assistant dashboard and Energy dashboard guidance to the setup wizard.

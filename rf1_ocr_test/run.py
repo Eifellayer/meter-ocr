@@ -548,8 +548,10 @@ def main():
         updated_rules["crop"] = ",".join(str(part) for part in coords)
         atomic_write(AUTO_RULES, json.dumps(updated_rules, indent=2).encode("utf-8"), 0o600)
         auto_rules = updated_rules
-        if interval_changed:
-            wake_worker.set()
+        # Saving automatic settings schedules a fresh run immediately.
+        history["next_check_at"] = time.time()
+        atomic_write(HISTORY, json.dumps(history).encode("utf-8"), 0o600)
+        wake_worker.set()
 
     requested = Queue(maxsize=1)
     def save_language_modes(modes):
@@ -740,10 +742,21 @@ def main():
         live_deadline = (time.monotonic() + LIVE_CAPTURE_WINDOW_SECONDS
                          if active_source["mode"] == "camera" else None)
         try:
-            result = capture_camera(
-                camera, reference, token, zone,
-                timeout=min(8, max(0.2, live_deadline - time.monotonic())) if live_deadline else 8,
-            ) if camera else capture(base, diagnostics)
+            manual_upload = manual and bool(manual_options.get("image"))
+            if manual_upload:
+                update_progress(request_id, "running", "Testbild geladen – prüfe Ausschnitt und Ziffern …")
+                result = (manual_options["image"], None, {
+                    "esp_timestamp": datetime.now(zone).isoformat(),
+                    "reference_required": False,
+                    "image_source": "manual_upload",
+                    "raw_value": None,
+                    "actual_value": None,
+                })
+            else:
+                result = capture_camera(
+                    camera, reference, token, zone,
+                    timeout=min(8, max(0.2, live_deadline - time.monotonic())) if live_deadline else 8,
+                ) if camera else capture(base, diagnostics)
             if result is None:
                 print("SLFork hat während des Abrufs gemessen. Neuer Versuch in 10 Sekunden.")
                 time.sleep(10)
@@ -765,7 +778,7 @@ def main():
                     result = None
             if result is not None:
                 image_time = captured if captured is not None else sample_timestamp(sample, zone)
-                if not camera:
+                if not camera and not (manual and manual_options.get("image")):
                     sample.update(slfork_reference(sample, image_time, zone, updated.get("last_slfork_match", {})))
                 manual_reference = manual_options.get("manual_reference", "") if manual else ""
                 apply_manual_reference(sample, manual_reference,
@@ -775,7 +788,7 @@ def main():
                     if frame.width * frame.height > MAX_IMAGE_PIXELS:
                         raise ValueError("Kamerabild hat zu viele Pixel")
                     if frame.format != "JPEG":
-                        if not camera or frame.format != "PNG":
+                        if not (camera or manual and manual_options.get("image")) or frame.format != "PNG":
                             raise ValueError("Das Kameraformat wird nicht unterstützt")
                         with io.BytesIO() as normalized:
                             frame.convert("RGB").save(normalized, "JPEG", quality=95)
@@ -871,6 +884,7 @@ def main():
                                 time.monotonic() >= live_deadline
                                 or read_state["attempts"] >= LIVE_CAPTURE_MAX_ATTEMPTS
                             )),
+                            force_all_attempts=manual,
                         )
                         register = read_state["register"]
                         integer_width = read_state["integer_width"]
@@ -949,6 +963,9 @@ def main():
                     elif status == "ocr_unclear":
                         detail = explain_uncertain_positions(ocr_readings, manual_options["decimals"],
                                                              integer_digits)
+                    if (ocr_attempts == len(ocr_readings) and ocr not in ocr_readings
+                            and status in ("match", "ocr_only")):
+                        detail = "Ziffern aus mehreren OCR-Versuchen zusammengesetzt. " + detail
                     if status in ("match", "ocr_only") and not ocr_error and not validation_detail:
                         updated["next_check_at"] = datetime.now(zone).timestamp() + (
                             active_rules["interval_minutes"] * 60
@@ -994,6 +1011,8 @@ def main():
                     elif validation_detail:
                         updated["check_detail"] = validation_detail
                     if outcome == "match":
+                        if ocr_attempts == len(ocr_readings) and ocr not in ocr_readings:
+                            updated["check_detail"] = "Ziffern aus mehreren OCR-Versuchen zusammengesetzt."
                         atomic_write(GOOD_IMAGE, picture, 0o644)
                         if not camera:
                             updated["last_slfork_match"] = {"reading": sample["actual_value"], "time": image_time}
@@ -1017,7 +1036,9 @@ def main():
         if manual:
             update_progress(request_id, "running", "Ergebnis wird gespeichert …",
                             manual_result.get("ocr_attempts", 0))
-            manual_result.update(checked_at=now.timestamp(), settings=manual_options, slfork_diagnostics=diagnostics)
+            manual_result.update(checked_at=now.timestamp(),
+                                 settings={key: value for key, value in manual_options.items() if key != "image"},
+                                 slfork_diagnostics=diagnostics)
             try:
                 next_history = {**history, "manual_result": manual_result}
                 atomic_write(HISTORY, json.dumps(next_history).encode("utf-8"), 0o600)

@@ -29,11 +29,11 @@ The always-visible overview contains the most recent OCR result, reference, stat
 - **Digit color:** auto-detect, light or dark.
 - **Image region:** auto-detect digit frames or use a fixed image crop and width.
 
-Changing the precision resets the automatic confirmation counter from the next check. Five automatic confirmations in 24 hours are a separate target from the number of OCR attempts for a single image.
+Saving automatic settings starts a check immediately. Changing the precision resets the automatic confirmation counter from that check. Five automatic confirmations in 24 hours are a separate target from the number of OCR attempts for a single image.
 
 ## Advanced manual test
 
-Open **Open manual test** only when you need it. It lets you temporarily override all of the above settings and try a custom crop. **Run check now** reads the most recent image; it does not request a new capture.
+Open **Open manual test** only when you need it. It lets you temporarily override all of the above settings and try a custom crop. **Run check now** uses the most recent image, or an optional uploaded JPG/PNG image (up to 3 MB); it does not request a new camera capture.
 
 The result appears below the progress indicator, using muted green only for a confirmed match, red for failures, and neutral styling while running or without a reference. It explains whether whole cubic meters or decimal places matched. The annotated image outlines digits the OCR recognized in green and unclear ones in red; red or green here does not establish agreement with the reference. The positions may be approximate without detected frames.
 

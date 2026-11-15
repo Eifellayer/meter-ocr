@@ -265,8 +265,9 @@ def main():
     if reference and not re.fullmatch(r"sensor\.[a-z0-9_]+", reference):
         raise ValueError("referenz_entitaet muss ein Home-Assistant-Sensor sein")
     decimals = options["vergleich_nachkommastellen"]
+    max_attempts = options["ocr_versuche"]
     requested = Queue(maxsize=1)
-    update_progress = start_panel(HISTORY, DESTINATION, GOOD_IMAGE, requested, decimals)
+    update_progress = start_panel(HISTORY, DESTINATION, GOOD_IMAGE, requested, decimals, max_attempts)
     push_service = (options.get("push_dienst") or "").strip()
     reminder = None
     if push_service:
@@ -347,7 +348,7 @@ def main():
                             options["helle_ziffern"], manual_options["polarity"] if manual else "auto",
                         )
                         if manual:
-                            update_progress(request_id, "ocr", "OCR beginnt – bis zu fünf Aufbereitungen desselben Bilds.", 0)
+                            update_progress(request_id, "ocr", f"OCR-Prüfung gestartet (max. {manual_options['attempts']} Versuche).", 0)
                         def report_ocr(attempts, message):
                             if manual:
                                 update_progress(request_id, "ocr", message, attempts)
@@ -355,6 +356,7 @@ def main():
                             lambda profile: read(profile=profile), sample,
                             manual_options["decimals"] if manual else decimals,
                             progress=report_ocr if manual else None,
+                            max_attempts=manual_options["attempts"] if manual else max_attempts,
                         )
                     except (OSError, ValueError, subprocess.SubprocessError) as error:
                         print(f"Lokale OCR nicht verfügbar: {error}")
@@ -366,10 +368,10 @@ def main():
                     image_time = sample_timestamp(sample, zone)
                     already_checked = (image_time == history.get("last_epoch")
                                        or image_time in history.get("confirmations", ()))
-                    _, detail = compare_sample(sample, ocr, manual_options["decimals"], ocr_confirmed=ocr_confirmed)
-                    if ocr_attempts:
-                        detail += f" OCR-Durchläufe für dieses Bild: {ocr_attempts}."
+                    status, detail = compare_sample(sample, ocr, manual_options["decimals"],
+                                                    ocr_confirmed=ocr_confirmed)
                     manual_result = {
+                        "status": status,
                         "ocr_attempts": ocr_attempts,
                         "ocr": ocr,
                         "reference": sample["actual_value"],
@@ -399,8 +401,10 @@ def main():
             manual_options = None
             history["manual_result"] = manual_result
             atomic_write(HISTORY, json.dumps(history).encode("utf-8"), 0o600)
-            update_progress(request_id, "done", "Manueller OCR-Test abgeschlossen. Das Ergebnis steht unten.",
-                            manual_result.get("ocr_attempts", 0), now.timestamp())
+            update_progress(request_id, "done", "Prüfung beendet.",
+                            manual_result.get("ocr_attempts", 0), now.timestamp(),
+                            outcome=manual_result.get("status", "capture_unavailable"),
+                            detail=manual_result["detail"])
             continue
         if keep_schedule and data is None and history.get("next_check_at", 0) > now.timestamp():
             continue

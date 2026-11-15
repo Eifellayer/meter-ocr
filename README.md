@@ -2,9 +2,9 @@
 
 **Sprache / Language:** [Deutsch](README.md) · [English](README.en.md)
 
-**Teststand: 0.1.0.** Installiere **Meter OCR Beta** über das [gemeinsame Home-Assistant-Repository](https://github.com/Eifellayer/rf1-kontrollmessung).
+**Teststand: 0.1.0.** Installiere **Meter OCR Beta** über das [gemeinsame Home-Assistant-Repository](https://github.com/Eifellayer/meter-ocr).
 
-Der geprüfte GitHub-Stand liegt auf [stable](https://github.com/Eifellayer/rf1-kontrollmessung/tree/stable). Neue Änderungen werden auf [beta](https://github.com/Eifellayer/rf1-kontrollmessung/tree/beta) getestet. Das Home-Assistant-Repository behält seine bisherige Adresse und verwendet `main` für veröffentlichte Versionen.
+Der geprüfte GitHub-Stand liegt auf [stable](https://github.com/Eifellayer/meter-ocr/tree/stable). Neue Änderungen werden auf [beta](https://github.com/Eifellayer/meter-ocr/tree/beta) getestet. Das Home-Assistant-Repository behält seine bisherige Adresse und verwendet `main` für veröffentlichte Versionen.
 
 **Zählerstände lokal aus Kamerabildern lesen und mit Home Assistant abgleichen.**
 
@@ -117,7 +117,7 @@ Ein SLFork-Messzeitpunkt wird automatisch nur einmal gezählt. Alte Bilder lasse
 
 ## Installation
 
-1. In Home Assistant unter **Einstellungen → Apps → App installieren → ⋮ → Repositories** die Adresse `https://github.com/Eifellayer/rf1-kontrollmessung` hinzufügen.
+1. In Home Assistant unter **Einstellungen → Apps → App installieren → ⋮ → Repositories** die Adresse `https://github.com/Eifellayer/meter-ocr` hinzufügen.
 2. **Meter OCR** installieren.
 3. Für SLFork `esp_url` auf die Adresse des ESP setzen (z. B. `http://esp-gaszaehler.local`). Alternativ `kamera_entitaet`, `ausschnitt` und optional `referenz_entitaet` konfigurieren.
 4. App starten, **Weboberfläche öffnen** und mit **Jetzt prüfen** eine Testlesung durchführen.

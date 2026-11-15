@@ -1,6 +1,6 @@
 # Fahrplan für Version 1.0
 
-Ausgangspunkt ist `main` bei `ee3294c` mit App-Version 0.8.1. Die offenen Issues [#1](https://github.com/Eifellayer/rf1-kontrollmessung/issues/1), [#2](https://github.com/Eifellayer/rf1-kontrollmessung/issues/2) und [#3](https://github.com/Eifellayer/rf1-kontrollmessung/issues/3) sind teilweise umgesetzt. [#4](https://github.com/Eifellayer/rf1-kontrollmessung/issues/4) ersetzt den bisherigen browserweiten Sprachmodus.
+Ausgangspunkt ist `main` bei `ee3294c` mit App-Version 0.8.1. Die offenen Issues [#1](https://github.com/Eifellayer/meter-ocr/issues/1), [#2](https://github.com/Eifellayer/meter-ocr/issues/2) und [#3](https://github.com/Eifellayer/meter-ocr/issues/3) sind teilweise umgesetzt. [#4](https://github.com/Eifellayer/meter-ocr/issues/4) ersetzt den bisherigen browserweiten Sprachmodus.
 
 Die laufende Version 0.8.3 übernimmt 0.8.2 als Basis. Die Beta-Reihe beginnt bei 0.5.0. Die unten aufgeführten Live-Prüfungen gehören zur Freigabe von 1.0.
 

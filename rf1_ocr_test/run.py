@@ -24,7 +24,7 @@ from app_channel import APP_NAME, CHECK_ENTITY, LABEL_SUFFIX, NAMESPACE
 
 from checks import (
     DEFAULT_INTERVAL_MINUTES, RETRY_INTERVAL, REVIEW_AFTER, compare_sample, crop_register, read_register, read_with_retries, record_sample,
-    explain_uncertain_positions, meter_prefix,
+    explain_uncertain_positions, meter_prefix, common_exact_precision, manual_confirms_failed_auto,
     reschedule_next_check, rolling_summary, sample_epoch, sample_timestamp, schedule_next_check, slfork_reference,
     valid_interval_minutes,
 )
@@ -51,6 +51,7 @@ HISTORY = Path("/data/kontrollmessung.json")
 OPTIONS = Path("/data/options.json")
 EFFECTIVE_OPTIONS = Path("/data/rf1-settings.json")
 AUTO_RULES = Path("/data/auto-pruefregeln.json")
+AUTO_PAUSED = Path("/data/automatic-paused.json")
 LANGUAGE_MODES = Path("/data/rf1-language.json")
 NOTIFICATIONS = Path("/data/benachrichtigungen.json")
 SOURCE_SETTINGS = Path("/data/bildquelle.json")
@@ -65,7 +66,9 @@ Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
 
 
 def get_bytes(url, token=None, timeout=8):
-    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    headers = {"Cache-Control": "no-cache, no-store", "Pragma": "no-cache"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     open_request = open_core if token else urlopen
     with open_request(Request(url, headers=headers), timeout=timeout) as response:
         data = response.read(MAX_RESPONSE_BYTES + 1)
@@ -554,6 +557,24 @@ def main():
         wake_worker.set()
 
     requested = Queue(maxsize=1)
+    try:
+        pause_state = json.loads(AUTO_PAUSED.read_text(encoding="utf-8"))
+        auto_paused = {"value": bool(pause_state.get("paused")) if isinstance(pause_state, dict) else False}
+    except (OSError, ValueError, AttributeError):
+        auto_paused = {"value": False}
+
+    def get_auto_paused():
+        return auto_paused["value"]
+
+    def save_auto_paused(value):
+        if type(value) is not bool:
+            raise ValueError("Pausenzustand muss wahr oder falsch sein")
+        atomic_write(AUTO_PAUSED, json.dumps({"paused": value}).encode("utf-8"), 0o600)
+        auto_paused["value"] = value
+        if not value:
+            history["next_check_at"] = time.time()
+            atomic_write(HISTORY, json.dumps(history).encode("utf-8"), 0o600)
+        wake_worker.set()
     def save_language_modes(modes):
         atomic_write(LANGUAGE_MODES, json.dumps(modes).encode("utf-8"), 0o600)
 
@@ -602,12 +623,22 @@ def main():
         atomic_write(EFFECTIVE_OPTIONS, json.dumps(snapshot, indent=2).encode("utf-8"), 0o600)
         wake_worker.set()
 
+    activity = {"state": "paused" if auto_paused["value"] else "waiting",
+                "detail": ("Automatik pausiert. Manuelle Tests bleiben verfügbar." if auto_paused["value"] else
+                           "Einrichtung erforderlich. Bitte Bildquelle festlegen." if setup_pending else
+                           "App läuft. Wartet auf die nächste automatische Prüfung.")}
+
+    def set_activity(state, detail):
+        activity.update(state=state, detail=detail, updated_at=time.time())
+
     _, update_progress = start_panel(
         HISTORY, DESTINATION, GOOD_IMAGE, requested, default_decimals, default_attempts,
         get_auto_rules, save_auto_rules, options["ausschnitt"], options["vorkomma_breite"], TEST_IMAGE,
         partial(load_preferences, LANGUAGE_MODES), save_language_modes, get_delivery, save_delivery, get_source, save_source,
         wake_worker.set, test_source_image=TEST_SOURCE_IMAGE, automatic_preview=AUTOMATIC_PREVIEW,
         request_factory_reset=request_factory_reset, skip_setup=skip_setup,
+        get_activity=lambda: dict(activity),
+        get_auto_paused=get_auto_paused, save_auto_paused=save_auto_paused,
     )
     reminder = Reminder(token)
     pending_image = None
@@ -623,11 +654,12 @@ def main():
             paths = (
                 HISTORY, AUTO_RULES, SOURCE_SETTINGS, NOTIFICATIONS, LANGUAGE_MODES,
                 HISTORY.with_name("manual-test-settings.json"), DESTINATION, GOOD_IMAGE,
-                TEST_IMAGE, TEST_SOURCE_IMAGE, AUTOMATIC_PREVIEW,
+                TEST_IMAGE, TEST_SOURCE_IMAGE, AUTOMATIC_PREVIEW, AUTO_PAUSED,
             )
             for path in paths:
                 path.unlink(missing_ok=True)
             history = {}
+            auto_paused["value"] = False
             configured_source = dict(default_source)
             setup_pending = True
             auto_rules = dict(default_auto_rules)
@@ -684,10 +716,16 @@ def main():
         request_id = manual_options["request_id"] if manual else None
         if manual:
             update_progress(request_id, "running", "Lade Zählerbild und Referenzdaten …")
+        if get_auto_paused() and not manual:
+            set_activity("paused", "Automatik pausiert. Manuelle Tests bleiben verfügbar.")
+            wake_worker.wait(timeout=15)
+            continue
         if waiting_for_setup and not manual:
+            set_activity("waiting", "Einrichtung erforderlich. Bitte Bildquelle festlegen.")
             wake_worker.wait(timeout=2)
             continue
         if remaining > 0 and not startup and not manual and not source_changed:
+            set_activity("waiting", "App läuft. Wartet auf die nächste automatische Prüfung.")
             # Refresh status after a Home Assistant restart, even between checks.
             if "check_status" in history:
                 try:
@@ -712,7 +750,8 @@ def main():
         source_history = dict(history)
         if source_changed:
             source_history["confirmations"] = []
-            for field in ("last_epoch", "last_match_at", "failure_since", "capture_failure_since",
+            for field in ("last_epoch", "last_match_at", "failure_since", "failure_attempts", "retry_suppressed", "capture_failure_since",
+                          "source_connection_status", "source_connection_detail",
                           "last_slfork_match", "last_reference", "last_reference_time",
                           "last_reference_is_fallback", "ocr_value", "ocr_readings"):
                 source_history.pop(field, None)
@@ -739,6 +778,7 @@ def main():
         updated["check_detail"] = "Bild oder Messwert fehlt. Verbindung prüfen."
         manual_result = {"status": "capture_unavailable", "detail": updated["check_detail"]}
         diagnostics = {}
+        sample = None
         live_deadline = (time.monotonic() + LIVE_CAPTURE_WINDOW_SECONDS
                          if active_source["mode"] == "camera" else None)
         try:
@@ -753,6 +793,9 @@ def main():
                     "actual_value": None,
                 })
             else:
+                if not manual:
+                    set_activity("working", "Kamerabild wird aufgenommen." if camera else
+                                 "Bild und Messwerte werden vom ESP abgerufen.")
                 result = capture_camera(
                     camera, reference, token, zone,
                     timeout=min(8, max(0.2, live_deadline - time.monotonic())) if live_deadline else 8,
@@ -761,13 +804,36 @@ def main():
                 print("SLFork hat während des Abrufs gemessen. Neuer Versuch in 10 Sekunden.")
                 time.sleep(10)
                 result = capture(base, diagnostics)
+            if result is None and not manual:
+                updated["source_connection_status"] = "stale"
+                updated["source_connection_detail"] = (
+                    "ESP erreichbar, aber seit der letzten Prüfung kam kein neues Bild."
+                )
             if result is not None:
+                if not manual:
+                    set_activity("working", "Bild wird vorbereitet.")
+                    updated["source_connection_status"] = "connected"
+                    updated["source_connection_detail"] = (
+                        "Kamera erreichbar. Frisches Bild empfangen." if camera else
+                        "ESP erreichbar. Bild und Messwerte empfangen."
+                    )
                 if manual:
                     update_progress(request_id, "running", "Bild geladen – überprüfe Zeitstempel und Ziffernbereich …")
                 picture, overlay, sample = result
                 now = datetime.now(zone)
                 captured = sample_epoch(sample, zone, now)
                 if not manual and (captured is None or captured <= updated.get("last_epoch", 0)):
+                    updated["source_connection_status"] = "stale"
+                    if captured is None:
+                        updated["source_connection_detail"] = (
+                            "ESP erreichbar, aber Bild ist älter als 15 Minuten oder hat einen ungültigen Zeitstempel."
+                            if not camera else "Kamera erreichbar, aber das Bild hat einen ungültigen Zeitstempel."
+                        )
+                    else:
+                        updated["source_connection_detail"] = (
+                            "ESP erreichbar, aber seit der letzten Prüfung kam kein neues Bild."
+                            if not camera else "Home-Assistant-Kamera erreichbar; dieses Bild wurde bereits geprüft."
+                        )
                     if (captured is not None and captured == updated.get("last_epoch")
                             and history.get("check_status") and not format_changed):
                         outcome = history["check_status"]
@@ -872,6 +938,18 @@ def main():
                         def report_ocr(attempts, message):
                             if manual:
                                 update_progress(request_id, "ocr", message, attempts)
+                            else:
+                                running = "läuft" in message
+                                current_attempt = attempts + 1 if running else attempts
+                                state = "läuft." if running else "abgeschlossen."
+                                set_activity("working", f"Lese Zählerbild: OCR-Versuch {current_attempt} von {ocr_limit} {state}")
+                        configured_attempts = (manual_options["attempts"] if manual else
+                                               max(2, max_attempts) if standalone else max_attempts)
+                        extra_attempts = (10 if not manual and history.get("failure_attempts", 0) == 0
+                                          and not history.get("retry_suppressed") else 0)
+                        ocr_limit = min(15, configured_attempts + extra_attempts)
+                        if live_source:
+                            ocr_limit = min(ocr_limit, LIVE_CAPTURE_MAX_ATTEMPTS)
                         ocr, ocr_confirmed, ocr_attempts = read_with_retries(
                             read, sample,
                             manual_options["decimals"] if manual else decimals,
@@ -880,7 +958,8 @@ def main():
                                           max(2, max_attempts) if standalone else max_attempts),
                             trace=ocr_readings, standalone=standalone and not manual,
                             integer_digits=integer_digits,
-                            stop_before_attempt=(lambda: live_source and (
+                            extra_attempts=extra_attempts,
+                            stop_before_attempt=(lambda: (not manual and get_auto_paused()) or live_source and (
                                 time.monotonic() >= live_deadline
                                 or read_state["attempts"] >= LIVE_CAPTURE_MAX_ATTEMPTS
                             )),
@@ -960,6 +1039,14 @@ def main():
                         detail = ocr_error
                     elif validation_detail:
                         detail = validation_detail
+                    elif status == "match" and not manual_reference:
+                        precise = common_exact_precision(
+                            ocr, sample.get("reference", sample.get("actual_value")),
+                            fraction_digits, integer_digits,
+                        )
+                        if precise is not None and precise > manual_options["decimals"]:
+                            detail = (f"Bestätigt: Zählerstand und Referenzwert stimmen bis einschließlich "
+                                      f"der {precise}. Nachkommastelle überein.")
                     elif status == "ocr_unclear":
                         detail = explain_uncertain_positions(ocr_readings, manual_options["decimals"],
                                                              integer_digits)
@@ -970,6 +1057,21 @@ def main():
                         updated["next_check_at"] = datetime.now(zone).timestamp() + (
                             active_rules["interval_minutes"] * 60
                         )
+                    if sample is not None and manual_confirms_failed_auto(
+                            history, sample, ocr, status=status, uploaded_image=manual_upload,
+                            image_time=image_time,
+                            reference_time=sample.get("reference_time"), source_key=source_key,
+                            manual_decimals=manual_options["decimals"], auto_decimals=decimals,
+                            ocr_confirmed=ocr_confirmed, integer_digits=integer_digits,
+                            reference_overridden=bool(manual_reference)):
+                        updated["check_status"] = "match"
+                        updated["status"] = "match"
+                        updated["check_detail"] = detail
+                        updated["failure_since"] = None
+                        updated.pop("failure_attempts", None)
+                        updated.pop("retry_suppressed", None)
+                        updated.pop("capture_failure_since", None)
+                        updated["next_check_at"] = datetime.now(zone).timestamp() + active_rules["interval_minutes"] * 60
                     preview_available = False
                     if ocr_attempts and source != "unavailable":
                         try:
@@ -1030,6 +1132,11 @@ def main():
             if not manual and data is None:
                 detail = manual_result["detail"]
                 updated = {**source_history, "check_detail": detail}
+                updated["source_connection_status"] = "error"
+                updated["source_connection_detail"] = (
+                    "Home-Assistant-Kamera nicht erreichbar oder Bild unlesbar. Kamera und Zugriff prüfen."
+                    if camera else "ESP nicht erreichbar oder Antwort unvollständig. Adresse und Verbindung prüfen."
+                )
                 outcome = "capture_unavailable"
 
         now = datetime.now(zone)
@@ -1041,6 +1148,14 @@ def main():
                                  slfork_diagnostics=diagnostics)
             try:
                 next_history = {**history, "manual_result": manual_result}
+                if manual_result.get("status") in ("match", "ocr_only"):
+                    next_history["next_check_at"] = updated.get("next_check_at", history.get("next_check_at"))
+                if (sample is not None and updated.get("check_status") == "match"
+                        and history.get("check_status") != "match"):
+                    for key in ("check_status", "status", "check_detail", "failure_since", "failure_attempts",
+                                "retry_suppressed", "capture_failure_since", "next_check_at"):
+                        if key in updated:
+                            next_history[key] = updated[key]
                 atomic_write(HISTORY, json.dumps(next_history).encode("utf-8"), 0o600)
                 history = next_history
             except OSError as error:
@@ -1062,6 +1177,9 @@ def main():
             continue
         updated["slfork_diagnostics"] = diagnostics
         schedule_next_check(updated, outcome, now.timestamp(), interval_minutes)
+        set_activity("waiting", "Letzte Prüfung beendet. Nächster Versuch nach kurzer Wartezeit."
+                     if not updated.get("retry_suppressed") and outcome not in ("match", "ocr_only") else
+                     "Letzte Prüfung beendet. Wartet auf das eingestellte Prüfintervall.")
         try:
             atomic_write(HISTORY, json.dumps(updated).encode("utf-8"), 0o600)
         except OSError as error:

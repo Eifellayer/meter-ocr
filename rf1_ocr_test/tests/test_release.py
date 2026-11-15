@@ -10,7 +10,9 @@ APP = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(APP))
 
 from PIL import Image  # noqa: E402
-from checks import compare_sample, explain_uncertain_positions, read_with_retries  # noqa: E402
+from checks import (compare_sample, common_exact_precision, explain_uncertain_positions,
+                    manual_confirms_failed_auto, read_with_retries, schedule_next_check,
+                    MAX_OCR_ATTEMPTS)  # noqa: E402
 from i18n import english_progress, english_result, english_uncertain_positions, translate_page  # noqa: E402
 from panel import PAGE  # noqa: E402
 from run import draw_test_preview  # noqa: E402
@@ -20,7 +22,7 @@ def formatted_page(language="de"):
     template = translate_page(PAGE) if language == "en" else PAGE
     fields = {name for _, name, _, _ in Formatter().parse(template) if name is not None}
     values = dict.fromkeys(fields, "0")
-    values.update(profile_script="", app_name="Meter OCR")
+    values.update(profile_script="", app_name="AI Meter Reader")
     return template.format(**values)
 
 
@@ -28,9 +30,9 @@ class AppIdentityTests(unittest.TestCase):
     def test_release_metadata_is_alpha_without_a_separate_beta_stage(self):
         config = yaml.safe_load((APP / "config.yaml").read_text(encoding="utf-8"))
         repository = yaml.safe_load((APP.parent / "repository.yaml").read_text(encoding="utf-8"))
-        self.assertEqual("0.3.0", config["version"])
+        self.assertEqual("0.3.1", config["version"])
         self.assertEqual("rf1_ocr_test", config["slug"])
-        self.assertEqual("Meter OCR (Alpha)", config["name"])
+        self.assertEqual("AI Meter Reader (Alpha)", config["name"])
         self.assertNotIn("stage", config)
         self.assertIn("esp_url", config["options"])
         self.assertEqual("https://github.com/Eifellayer/meter-ocr", repository["url"])
@@ -42,6 +44,16 @@ class AppIdentityTests(unittest.TestCase):
         self.assertEqual("sensor.rf1_ocr_zaehlerstand", run.OCR_ENTITY)
         self.assertEqual("sensor.rf1_verbrauch_gesamt", run.CONSUMPTION_ENTITY)
         self.assertEqual("/media/rf1", str(run.DESTINATION.parent))
+
+    def test_camera_requests_disable_caching_for_fresh_retry_images(self):
+        from io import BytesIO
+        from unittest.mock import patch
+        import run
+        with patch.object(run, "open_core", return_value=BytesIO(b"image")) as fetch:
+            self.assertEqual(b"image", run.get_bytes("http://supervisor/core/api/camera_proxy/camera.meter", "token"))
+        request = fetch.call_args.args[0]
+        self.assertEqual("no-cache, no-store", request.get_header("Cache-control"))
+        self.assertEqual("no-cache", request.get_header("Pragma"))
 
 
 class ComparisonTests(unittest.TestCase):
@@ -68,6 +80,40 @@ class ComparisonTests(unittest.TestCase):
         self.assertEqual("difference", compare_sample(reference, "10447.652", 3)[0])
         carry = {"raw_value": "9.995", "actual_value": "10.00"}
         self.assertEqual("match", compare_sample(carry, "10.00", 2, integer_digits=4)[0])
+
+    def test_manual_result_can_report_a_more_precise_match(self):
+        self.assertEqual(3, common_exact_precision("10448.087", "10448.0870", 4))
+        self.assertEqual(2, common_exact_precision("10448.087", "10448.0869", 4))
+
+    def test_auto_cycle_can_use_fifteen_reads_with_majority_composition(self):
+        readings = iter(["12345.120"] * 8 + ["12346.120"] * 7)
+        value, confirmed, attempts = read_with_retries(
+            lambda _: next(readings), {"raw_value": "99999.000", "actual_value": "99999.000"},
+            0, max_attempts=5, extra_attempts=10)
+        self.assertEqual(15, MAX_OCR_ATTEMPTS)
+        self.assertEqual(("12345.120", True, 15), (value, confirmed, attempts))
+
+    def test_manual_success_only_clears_same_failed_auto_capture(self):
+        history = {"last_epoch": 100, "last_reference_time": 100, "check_source": ["camera", "cam", "sensor"],
+                   "check_status": "ocr_unclear"}
+        sample = {"raw_value": "10448.0870", "actual_value": "10448.0870"}
+        kwargs = dict(status="match", uploaded_image=False, image_time=100, reference_time=100,
+                      source_key=["camera", "cam", "sensor"], manual_decimals=2, auto_decimals=2,
+                      ocr_confirmed=True, integer_digits=5)
+        self.assertTrue(manual_confirms_failed_auto(history, sample, "10448.087", **kwargs))
+        self.assertFalse(manual_confirms_failed_auto(history, sample, "10448.087", **{**kwargs, "image_time": 101}))
+        self.assertFalse(manual_confirms_failed_auto(history, sample, "10448.087", **{**kwargs, "uploaded_image": True}))
+
+    def test_two_failed_runs_return_to_the_configured_interval(self):
+        history = {}
+        schedule_next_check(history, "ocr_unclear", 1_000, 60)
+        self.assertEqual(1_000 + 300, history["next_check_at"])
+        schedule_next_check(history, "ocr_unclear", 1_300, 60)
+        self.assertTrue(history["retry_suppressed"])
+        self.assertEqual(1_300 + 3_600, history["next_check_at"])
+        schedule_next_check(history, "match", 4_900, 60)
+        self.assertNotIn("retry_suppressed", history)
+        self.assertNotIn("failure_attempts", history)
 
     def test_ocr_stops_after_first_agreement(self):
         trace = []
@@ -133,15 +179,17 @@ class ComparisonTests(unittest.TestCase):
 class PanelTests(unittest.TestCase):
     def test_panel_template_and_donation_footer(self):
         page = formatted_page()
-        self.assertIn("Meter OCR", page)
+        self.assertIn("AI Meter Reader", page)
         self.assertIn("FG4Q7VKQJ9BW8", page)
-        self.assertIn("Über Meter OCR", page)
+        self.assertIn("Über AI Meter Reader", page)
         self.assertIn("Freiwillig mit PayPal unterstützen", page)
         self.assertIn('details class="about-project"', page)
         self.assertIn("Stand und Verbrauch im Dashboard anzeigen", page)
         self.assertIn("sensor.rf1_verbrauch_gesamt", page)
         self.assertIn("Projekt von EifelLayer auf GitHub", page)
         self.assertIn("Test starten", page)
+        self.assertIn('id="automatic-activity"', page)
+        self.assertIn('id="open-interval-settings"', page)
         self.assertIn("Test einstellen", page)
         self.assertIn("Testeinstellungen", page)
         self.assertIn('id="settings"', page)
@@ -162,7 +210,7 @@ class PanelTests(unittest.TestCase):
 
     def test_english_page_translates_controls_and_remains_format_safe(self):
         page = formatted_page("en")
-        self.assertIn("Meter OCR", page)
+        self.assertIn("AI Meter Reader", page)
         self.assertIn("Automatic verification", page)
         self.assertIn("Overview", page)
         self.assertIn("Show the reading on a Home Assistant dashboard", page)

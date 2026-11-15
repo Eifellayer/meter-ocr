@@ -1,8 +1,10 @@
 # Vergleichstests mit Zählerfotos
 
+> Die dokumentierten 10-Foto- und Community-Durchläufe wurden mit der früheren Fünf-Profil-Auswertung durchgeführt. Version 0.3.1 ergänzt bis zu zehn weitere Profile bei unsicheren automatischen Ablesungen. Diese alten Fototabellen wurden mit der erweiterten Schleife noch nicht neu ausgewertet; neue Tests und echte Feldtests sind weiterhin erforderlich.
+
 ## Zehn Fotos von Wikimedia Commons
 
-Getestet mit der OCR von Meter OCR und Tesseract 5.5.0. In der Automatik lieferte keines der zehn Fotos einen übernehmbaren Stand. Bei einem Wasserzähler gelang die manuelle Ablesung der vollen Kubikmeter nach einem engeren Zuschnitt.
+Getestet mit der OCR von AI Meter Reader und Tesseract 5.5.0. In der Automatik lieferte keines der zehn Fotos einen übernehmbaren Stand. Bei einem Wasserzähler gelang die manuelle Ablesung der vollen Kubikmeter nach einem engeren Zuschnitt.
 
 ## Ergebnisse
 
@@ -27,7 +29,7 @@ Die Bildorientierung aus EXIF wurde angewendet. Fotos über 1600 Pixel Kantenlä
 
 Fünf Fotos wurden mit angepasstem Ausschnitt und Ziffernfarbe bis zu zehnmal ausgewertet. Beim istameter II ergab der Ausschnitt `510,641,763,718` mit dunklen Ziffern und 253 Pixeln Vorkommabreite in zwei Profilen den richtigen Stand `00070` m³. Im manuellen Test erschien er als OCR-Lesung ohne Referenz. Für den selbstständigen Betrieb waren zwei der zehn Profile zu wenig.
 
-Meter OCR verarbeitet Ziffernfenster mit fünf Vorkommastellen. Zeigerstellungen und abweichende Einheiten wie kWh und Gallonen brauchen eine eigene Auswertung. Die Orientierungs- und Beleuchtungstests mit synthetischen Bildern prüfen gezielte Varianten. Die zehn Fotos zeigen zusätzlich, wie stark Ziffernschrift, Spiegelungen, Ausschnitt und Auflösung die Erkennung beeinflussen.
+AI Meter Reader verarbeitet Ziffernfenster mit fünf Vorkommastellen. Zeigerstellungen und abweichende Einheiten wie kWh und Gallonen brauchen eine eigene Auswertung. Die Orientierungs- und Beleuchtungstests mit synthetischen Bildern prüfen gezielte Varianten. Die zehn Fotos zeigen zusätzlich, wie stark Ziffernschrift, Spiegelungen, Ausschnitt und Auflösung die Erkennung beeinflussen.
 
 ## Zehn Aufnahmen aus der AI-on-the-Edge-Community
 
@@ -46,4 +48,4 @@ Keiner der zehn Ausschnitte ergab einen vollständigen, mehrheitlich gelesenen S
 | Wasser `01391` m³ plus Zeiger | 690 × 466 | `194,184,332,230` · 138 | `?????.???` | [Home Assistant Community, TobiasGJ](https://community.home-assistant.io/t/ai-solution-for-analog-water-meter/378457/1) |
 | Wasser `01405` m³ plus Zeiger | 566 × 500 | `135,93,314,154` · 179 | `?????.???` | [Home Assistant Community, johandijkstra](https://community.home-assistant.io/t/ai-solution-for-analog-water-meter/378457/10) |
 
-Die Ausschnitte und die erwarteten Ziffern wurden vor den OCR-Durchläufen am Foto festgelegt. Getestet wurde mit Meter OCR und Tesseract 5.5.0, automatischer Ziffernfarbe und fünf OCR-Profilen ohne Referenzwert. Für den Test der Rahmenerkennung diente das verfügbare Forumsbild zusätzlich als Rahmenbild. Bei vier Gaszählern wurde auch die lesbare Nachkommagenauigkeit getestet. Keiner der Zusatzdurchläufe erreichte die erforderliche Übereinstimmung. Die Aufnahmen bleiben bei ihren Quellen.
+Die Ausschnitte und die erwarteten Ziffern wurden vor den OCR-Durchläufen am Foto festgelegt. Getestet wurde mit AI Meter Reader und Tesseract 5.5.0, automatischer Ziffernfarbe und fünf OCR-Profilen ohne Referenzwert. Für den Test der Rahmenerkennung diente das verfügbare Forumsbild zusätzlich als Rahmenbild. Bei vier Gaszählern wurde auch die lesbare Nachkommagenauigkeit getestet. Keiner der Zusatzdurchläufe erreichte die erforderliche Übereinstimmung. Die Aufnahmen bleiben bei ihren Quellen.

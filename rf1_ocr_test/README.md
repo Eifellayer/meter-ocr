@@ -1,8 +1,8 @@
-# Meter OCR – Home-Assistant-App
+# AI Meter Reader – Home-Assistant-App
 
 **Sprache / Language:** [Deutsch](README.md) · [English](README.en.md)
 
-**Liest Zählerstände lokal aus Kamerabildern und kann sie mit einem vorhandenen Messwert abgleichen.** Entwickelt für Pipersberg G4 RF1 und AI on the Edge / SLFork; auch eine passende Home-Assistant-Kamera ist möglich.
+**Liest Zählerstände lokal aus Kamerabildern und kann sie mit einem vorhandenen Messwert abgleichen.** Geeignet für mechanische Rollenzähler mit einstellbarer Stellenzahl und verschiedene Bildquellen wie AI on the Edge / SLFork, ESPHome oder Home-Assistant-Kameras.
 
 Das ist eine **zusätzliche Plausibilitätskontrolle**, kein amtliches Messgerät. OCR-Fehler sind möglich; für eine Abrechnung zählt die direkt am Zähler überprüfte Ablesung. Privates Hobbyprojekt ohne garantierten Support.
 
@@ -12,9 +12,9 @@ Die ausführliche Einführung, Voraussetzungen, Installation und Konfiguration f
 
 ## Installation
 
-**Meter OCR (Alpha)** ist bis Version 0.5 die reguläre App und zugleich der Testkanal. Ab 0.5 gibt es Beta-Versionen nur für größere Änderungen mit zusätzlichem Testbedarf.
+**AI Meter Reader (Alpha)** ist bis Version 0.5 die reguläre App und zugleich der Testkanal. Ab 0.5 gibt es Beta-Versionen nur für größere Änderungen mit zusätzlichem Testbedarf.
 
-Über **Einstellungen → Apps → App installieren → ⋮ → Repositories** die Adresse `https://github.com/Eifellayer/meter-ocr` hinzufügen und **Meter OCR** installieren. Im SLFork-Modus die `esp_url` eintragen, starten und die Weboberfläche öffnen.
+Über **Einstellungen → Apps → App installieren → ⋮ → Repositories** die Adresse `https://github.com/Eifellayer/meter-ocr` hinzufügen und **AI Meter Reader** installieren. Im SLFork-Modus die `esp_url` eintragen, starten und die Weboberfläche öffnen.
 
 ## Sprache wählen
 
@@ -28,9 +28,9 @@ Die gespeicherten Werte bleiben auch nach einem Neustart erhalten. Nach dem Spei
 
 ## Was bedeutet „Jetzt prüfen“?
 
-Den Bereich **„Manuellen Test öffnen“** bei Bedarf aufklappen. Dort lassen sich zusätzlich zur Ziffernfarbe, Genauigkeit und Anzahl der OCR-Versuche auch ein **eigener Bildausschnitt und die Breite der Vorkommastellen** einstellen. Diese Testoptionen ändern die automatische Kontrolle nicht. Wenn ein manueller Ausschnitt eine Vorschau erzeugt, kann man die Koordinaten direkt über **„Getesteten Ausschnitt für die Automatik übernehmen“** dauerhaft speichern. Nach der Einrichtung öffnet **„Speichern und Test öffnen“** direkt den manuellen Test. Dort kann ein **eigenes JPG- oder PNG-Bild bis 3 MB** ausgewählt werden; ohne Upload nutzt der Test das letzte vorhandene Kamerabild. Ein manueller Test startet keine neue Kameraaufnahme. Die Statusanzeige zeigt **Anfrage → Bildabruf → OCR-Versuche → Ergebnis**. Im Infobereich neben dem Button steht die kurze Erklärung. Während der Prüfung ist der dezent hervorgehobene Button gesperrt und heißt **„Prüfung läuft …“**.
+Den Bereich **„Manuellen Test öffnen“** bei Bedarf aufklappen. Dort lassen sich zusätzlich zur Ziffernfarbe, Genauigkeit und Anzahl der OCR-Versuche auch ein **eigener Bildausschnitt und die Breite der Vorkommastellen** einstellen. Diese Testoptionen ändern die automatische Kontrolle nicht. Wenn ein manueller Ausschnitt eine Vorschau erzeugt, kann man die Koordinaten direkt über **„Getesteten Ausschnitt für die Automatik übernehmen“** dauerhaft speichern. Nach der Einrichtung öffnet **„Speichern und Test öffnen“** direkt den manuellen Test. Dort kann ein **eigenes JPG- oder PNG-Bild bis 3 MB** ausgewählt werden; ohne Upload nutzt der Test das letzte vorhandene Kamerabild. Bei einer Livebild-Quelle holt der Test ein neues Standbild; mit einem Upload verwendet er ausschließlich das ausgewählte Testbild. Die Statusanzeige zeigt **Anfrage → Bildabruf → OCR-Versuche → Ergebnis**. Im Infobereich neben dem Button steht die kurze Erklärung. Während der Prüfung ist der dezent hervorgehobene Button gesperrt und heißt **„Prüfung läuft …“**.
 
-Die Zahl der OCR-Versuche lässt sich **von 1 bis maximal 10** einstellen (Standard: 5). **Sobald ein Versuch den Vergleichswert bestätigt, endet die Prüfung sofort.** Der Balken zeigt die abgeschlossenen Versuche; eine Enddauer wird nicht geschätzt. Die maximal zehn Versuche sind unabhängig von den **fünf automatischen Treffern innerhalb von 24 Stunden**. Manuelle Tests zählen nicht als automatische Treffer.
+Bei einer unsicheren automatischen Ablesung folgen bis zu zehn zusätzliche Bildauswertungen (höchstens 15 insgesamt). Ziffern werden nur bei einer strikten Mehrheit zusammengesetzt. Nach der ersten Fehlprüfung wird nach fünf Minuten ein frisches Bild aufgenommen; nach einem zweiten Fehlschlag gilt wieder das eingestellte Intervall (Standard: eine Stunde). Der Balken zeigt die abgeschlossenen Versuche; eine Enddauer wird nicht geschätzt. Die maximal zehn Versuche sind unabhängig von den **fünf automatischen Treffern innerhalb von 24 Stunden**. Manuelle Tests zählen nicht als automatische Treffer.
 
 Die manuelle Testansicht zeigt **sofort das Ergebnis im Statusfeld**: sanftes Grün bei bestätigter Übereinstimmung, dezentes Rot bei Abweichung oder nicht lesbaren Ziffern, neutral während der Prüfung und ohne Referenzwert. Das **OCR-Testbild** zeigt grüne Rahmen an gelesenen Ziffern und rote Rahmen an unklaren Stellen. Bei manuell gesetzten Ausschnitten sind die Ziffernflächen näherungsweise aufgeteilt. Die Rahmenfarbe sagt **nicht** aus, ob die Ziffer mit dem Referenzwert übereinstimmt. Unter **„Mehr Infos“** werden die einzelnen Leseversuche aufgeführt. Fehlerhinweise erklären verständlich, was zu prüfen ist. Erkannter Stand und Referenz des Einzeltests stehen im Testergebnis. Die automatischen Kontrollbilder sind separat aufklappbar. Datum und Zeit sind kompakt. Technische Meldungen bleiben über Home Assistant verfügbar.
 
@@ -38,10 +38,12 @@ Die manuelle Testansicht zeigt **sofort das Ergebnis im Statusfeld**: sanftes Gr
 
 Standardmäßig zählen **nur volle m³** (`vergleich_nachkommastellen: 0`). Nachkommastellen werden angezeigt, aber bei 0 nicht bewertet. `?` bedeutet unklare Ziffer. Die **automatischen** Prüfregeln lassen sich im eigenen Webbereich dauerhaft speichern. Die erweiterten **manuellen** Testoptionen gelten nur für diesen einen Test. Die übrige App-Konfiguration wird weiterhin in Home Assistant gepflegt.
 
-Nach einem Treffer prüft die App üblicherweise stündlich, bei Unsicherheit etwa alle fünf Minuten. Standardmäßig meldet der Sensor nach vier Stunden ohne erfolgreiche Prüfung `review_due`. Unter **Benachrichtigungen** lassen sich Wartezeiten und Ziele ändern. Details stehen in der [Projektbeschreibung](../README.md#benachrichtigungen-und-prüfstatus).
+Nach einem Treffer prüft die App standardmäßig stündlich. Nach dem ersten Fehler nimmt sie einmal nach fünf Minuten ein frisches Bild auf; danach gilt wieder das eingestellte Intervall. Standardmäßig meldet der Sensor nach vier Stunden ohne erfolgreiche Prüfung `review_due`. Unter **Benachrichtigungen** lassen sich Wartezeiten und Ziele ändern. Details stehen in der [Projektbeschreibung](../README.md#benachrichtigungen-und-prüfstatus).
+
+Über **„Automatik pausieren“** hältst du automatische Prüfungen an. Eine auffällige gelbe Meldung zeigt die Pause; manuelle Tests funktionieren weiter. Die Pause bleibt nach einem Neustart bestehen. In der Übersicht siehst du außerdem, ob die App wartet, ein Bild aufnimmt oder es auswertet, und ob ESP oder Kamera erreichbar waren. Sie erklärt auch, ob das Bild zu alt, bereits geprüft oder nicht lesbar war. Ist die App gestoppt oder nicht erreichbar, meldet die geöffnete Seite den Verbindungsverlust.
 
 Die Bilddateien liegen unter **Medien → Lokale Medien → rf1**. Die bestehenden Entitäten `sensor.rf1_kontrollbild` und `sensor.rf1_pruefstatus` behalten ihre IDs für vorhandene Dashboards und Automationen.
 
 ## Projekt freiwillig unterstützen
 
-Der PayPal-Link steht in der Weboberfläche unter **Über Meter OCR**. Spenden sind freiwillig und keine Voraussetzung für die Nutzung.
+Der PayPal-Link steht in der Weboberfläche unter **Über AI Meter Reader**. Spenden sind freiwillig und keine Voraussetzung für die Nutzung.

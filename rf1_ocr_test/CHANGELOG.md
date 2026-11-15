@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.1 Alpha
+
+- Renamed the user-facing app to AI Meter Reader while preserving the Home Assistant app slug, stored options, and existing entity IDs.
+- Added up to ten bounded extra OCR variants after an uncertain automatic reading (15 attempts maximum) and strict-majority digit composition.
+- Capture a fresh ESP or Home Assistant camera image after the first failed check; after two failed runs, return to the selected interval.
+- Added a persistent pause/resume control for automatic checks, with manual tests still available while paused.
+- Show live worker activity, source reachability, and clear reasons for stale images or failed image retrieval.
+- Successful manual tests restart the automatic timer; only a pass for the same current reference and capture can clear the automatic failure status.
+- Added German and English help text for retries, pausing, source status, and shorter intervals.
+
 ## 0.3.0 Alpha
 
 - After setup, open the manual test directly and allow a JPG/PNG test image upload up to 3 MB.
@@ -20,7 +30,7 @@
 
 ## 0.2.0 Alpha
 
-**Meter OCR – Alpha release.** Releases below 0.5 are Alpha and use the regular Home Assistant app as their test channel. There is no separate Beta app before version 0.5. From 0.5 onward, a Beta build is created only for larger changes that need dedicated testing.
+**AI Meter Reader – Alpha release.** Releases below 0.5 are Alpha and use the regular Home Assistant app as their test channel. There is no separate Beta app before version 0.5. From 0.5 onward, a Beta build is created only for larger changes that need dedicated testing.
 
 - Guided first setup for SLFork / AI on the Edge, Home Assistant cameras, and ESPHome cameras with local OCR. The wizard can be reopened later and shows current values for quick changes.
 - Meter format settings for whole and fractional digits, display type, comparison precision, crop, rotation, lighting, OCR attempts, check interval and plausibility limit.

@@ -34,7 +34,13 @@ OCR_PROFILES = (
     (1, 185, 155, True),
     (5, 160, 135, False),
     (0, 210, 195, True),
+    (2, 140, 135, True),
+    (4, 225, 150, False),
+    (6, 130, 175, True),
+    (3, 160, 190, False),
+    (5, 210, 145, True),
 )
+MAX_CONFIGURED_OCR_ATTEMPTS = 10
 MAX_OCR_ATTEMPTS = len(OCR_PROFILES)
 
 
@@ -124,6 +130,37 @@ def rounded_meter_prefix(value, decimals, integer_digits=5):
     return prefix
 
 
+def common_exact_precision(first, second, max_decimals, integer_digits=5):
+    """Return the finest decimal precision explicitly present and equal in both readings."""
+    for decimals in range(max_decimals, -1, -1):
+        left = meter_prefix(first, decimals, integer_digits)
+        right = meter_prefix(second, decimals, integer_digits)
+        if left is not None and right is not None and left == right:
+            return decimals
+    return None
+
+
+def manual_confirms_failed_auto(history, sample, ocr, *, status, uploaded_image, image_time,
+                                reference_time, source_key, manual_decimals, auto_decimals,
+                                ocr_confirmed, integer_digits, reference_overridden=False):
+    """Only let a manual pass clear failure for the same automatically checked capture."""
+    return (
+        status == "match"
+        and not uploaded_image
+        and not reference_overridden
+        and image_time == history.get("last_epoch")
+        and history.get("check_source") == source_key
+        and (reference_time or image_time)
+            == (history.get("last_reference_time") or history.get("last_epoch"))
+        and history.get("check_status") in (
+            "difference", "ocr_unclear", "slfork_unclear", "stale_sample", "capture_unavailable",
+        )
+        and manual_decimals == auto_decimals
+        and compare_sample(sample, ocr, auto_decimals, ocr_confirmed=ocr_confirmed,
+                           integer_digits=integer_digits)[0] == "match"
+    )
+
+
 def comparison_scope(decimals):
     """Explain precisely which digits participate in a comparison."""
     if decimals == 0:
@@ -163,16 +200,20 @@ def explain_uncertain_positions(readings, decimals, integer_digits=5):
 
 
 def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace=None, *, standalone=False,
-                      integer_digits=5, stop_before_attempt=None, force_all_attempts=False):
+                      integer_digits=5, stop_before_attempt=None, force_all_attempts=False,
+                      extra_attempts=0):
     """Read one image up to max_attempts times; stop on the first valid agreement."""
-    if type(max_attempts) is not int or not 1 <= max_attempts <= MAX_OCR_ATTEMPTS:
+    if type(max_attempts) is not int or not 1 <= max_attempts <= MAX_CONFIGURED_OCR_ATTEMPTS:
         raise ValueError("OCR-Versuche müssen zwischen 1 und 10 liegen")
+    if type(extra_attempts) is not int or not 0 <= extra_attempts <= 10:
+        raise ValueError("Zusätzliche OCR-Versuche müssen zwischen 0 und 10 liegen")
+    attempt_limit = min(MAX_OCR_ATTEMPTS, max_attempts + extra_attempts)
     readings = []
-    for index, profile in enumerate(OCR_PROFILES[:max_attempts], start=1):
+    for index, profile in enumerate(OCR_PROFILES[:attempt_limit], start=1):
         if index > 1 and stop_before_attempt and stop_before_attempt():
             break
         if progress:
-            progress(index - 1, f"OCR-Versuch {index} von {max_attempts} läuft …")
+            progress(index - 1, f"OCR-Versuch {index} von {attempt_limit} läuft …")
         try:
             value = read(profile)
         except subprocess.TimeoutExpired as error:
@@ -183,13 +224,22 @@ def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace
         if trace is not None:
             trace.append(str(value))
         if progress:
-            progress(index, f"OCR-Versuch {index} von {max_attempts} abgeschlossen.")
+            progress(index, f"OCR-Versuch {index} von {attempt_limit} abgeschlossen.")
         # Stop immediately on a verified match.
         # Without a reference, a valid OCR result ends the read.
         if status == "match" or (status == "ocr_only" and not standalone and not force_all_attempts):
             return value, True, index
+        if standalone and index >= max_attempts:
+            majority = len(readings) // 2 + 1
+            minimum_votes = max(2, majority)
+            prefix_length = integer_digits + (decimals + 1 if decimals else 0)
+            prefixes = Counter(item[:prefix_length] for item in readings
+                               if meter_prefix(item, decimals, integer_digits) is not None)
+            stable = next((item for item, count in prefixes.items() if count >= minimum_votes), None)
+            if stable is not None:
+                return next(item for item in readings if item.startswith(stable)), True, index
 
-    # No match: show a majority reading for diagnostics if possible.
+    # Keep stable complete reads, then compose only strict-majority digits.
     majority = len(readings) // 2 + 1
     minimum_votes = max(2, majority) if standalone else majority
     prefix_length = integer_digits + (decimals + 1 if decimals else 0)
@@ -200,31 +250,31 @@ def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace
     for column in zip(*readings):
         digit, count = Counter(column).most_common(1)[0]
         display.append(digit if count >= majority else "?")
-    display = "".join(display)
     if prefix is not None:
-        display = prefix + display[prefix_length:]
-        return display, True, len(readings)
-
-    # If no complete read wins a majority, combine only positions with a
-    # strict digit majority after all configured OCR attempts are exhausted.
-    if len(readings) == max_attempts:
-        positions = list(range(integer_digits))
-        if decimals:
-            positions.extend(range(integer_digits + 1, integer_digits + 1 + decimals))
-        combined = {}
-        for position in positions:
-            votes = Counter(value[position] for value in readings
-                            if position < len(value) and value[position] in "0123456789")
-            digit, count = votes.most_common(1)[0] if votes else ("", 0)
-            if count < minimum_votes:
-                break
+        display[:prefix_length] = prefix
+    positions = list(range(integer_digits))
+    if decimals:
+        positions.extend(range(integer_digits + 1, integer_digits + 1 + decimals))
+    combined = {}
+    for position in positions:
+        votes = Counter(value[position] for value in readings
+                        if position < len(value) and value[position] in "0123456789")
+        digit, count = votes.most_common(1)[0] if votes else ("", 0)
+        if count >= majority:
             combined[position] = digit
-        if len(combined) == len(positions):
-            whole = "".join(combined[position] for position in range(integer_digits))
-            fraction = ("." + "".join(combined[position] for position in
-                        range(integer_digits + 1, integer_digits + 1 + decimals)) if decimals else "")
-            return whole + fraction, True, len(readings)
-    return display, False, len(readings)
+    for position in range(integer_digits):
+        if position in combined:
+            display[position] = combined[position]
+    if decimals:
+        for position in range(integer_digits + 1, integer_digits + 1 + decimals):
+            if position in combined and position < len(display):
+                display[position] = combined[position]
+    complete = len(combined) == len(positions)
+    if standalone:
+        return "".join(display), prefix is not None or (
+            attempt_limit > max_attempts and len(readings) >= 2 and complete
+        ), len(readings)
+    return "".join(display), prefix is not None or complete, len(readings)
 
 
 def compare_sample(data, ocr, decimals, *, ocr_confirmed=True, integer_digits=5):
@@ -354,22 +404,29 @@ def valid_interval_minutes(value):
     return type(value) is int and 1 <= value <= MAX_INTERVAL_MINUTES
 
 
-def _check_delay(outcome, interval_minutes):
+def _check_delay(outcome, interval_minutes, retry_suppressed=False):
     interval = interval_minutes * 60
-    return interval if outcome in ("match", "ocr_only") else min(interval, RETRY_INTERVAL)
+    return interval if outcome in ("match", "ocr_only") or retry_suppressed else min(interval, RETRY_INTERVAL)
 
 
 def schedule_next_check(history, outcome, checked_at, interval_minutes=DEFAULT_INTERVAL_MINUTES):
     history["check_status"] = outcome
     if outcome in ("match", "ocr_only"):
         history.pop("failure_since", None)
+        history.pop("failure_attempts", None)
+        history.pop("retry_suppressed", None)
     else:
         history.setdefault("failure_since", checked_at)
+        history["failure_attempts"] = history.get("failure_attempts", 0) + 1
+        if history["failure_attempts"] >= 2:
+            history["retry_suppressed"] = True
     if outcome == "capture_unavailable":
         history.setdefault("capture_failure_since", checked_at)
     else:
         history.pop("capture_failure_since", None)
-    history["next_check_at"] = checked_at + _check_delay(outcome, interval_minutes)
+    history["next_check_at"] = checked_at + _check_delay(
+        outcome, interval_minutes, history.get("retry_suppressed", False)
+    )
     history["check_interval_minutes"] = interval_minutes
 
 
@@ -381,7 +438,7 @@ def last_check_at(history):
     interval_minutes = history.get("check_interval_minutes", DEFAULT_INTERVAL_MINUTES)
     if not valid_interval_minutes(interval_minutes):
         interval_minutes = DEFAULT_INTERVAL_MINUTES
-    return deadline - _check_delay(outcome, interval_minutes)
+    return deadline - _check_delay(outcome, interval_minutes, history.get("retry_suppressed", False))
 
 
 def reschedule_next_check(history, interval_minutes):
@@ -391,6 +448,8 @@ def reschedule_next_check(history, interval_minutes):
     checked_at = last_check_at(history)
     if checked_at is None:
         return False
-    history["next_check_at"] = checked_at + _check_delay(history["check_status"], interval_minutes)
+    history["next_check_at"] = checked_at + _check_delay(
+        history["check_status"], interval_minutes, history.get("retry_suppressed", False)
+    )
     history["check_interval_minutes"] = interval_minutes
     return True

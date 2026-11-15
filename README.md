@@ -1,28 +1,28 @@
-# Meter OCR für Home Assistant
+# AI Meter Reader für Home Assistant
 
 **Sprache / Language:** [Deutsch](README.md) · [English](README.en.md)
 
-**Aktueller Stand: 0.2.1 Alpha.** Bis Version 0.5 gibt es keine separate Beta-App; getestet wird über die reguläre Meter-OCR-App. Ab 0.5 gibt es Beta-Versionen nur bei größeren Änderungen mit zusätzlichem Testbedarf.
+**Aktueller Stand: 0.3.1 Alpha.** Bis Version 0.5 gibt es keine separate Beta-App; getestet wird über die reguläre AI Meter Reader-App. Ab 0.5 gibt es Beta-Versionen nur bei größeren Änderungen mit zusätzlichem Testbedarf.
 
 **Zählerstände direkt in Home Assistant aus Kamerabildern lesen und prüfen.**
 
-**Langfristiges Ziel:** AI on the Edge / SLFork soll keine Voraussetzung mehr sein. Meter OCR soll Bilder direkt aus Home Assistant beziehen und die Auswertung lokal dort übernehmen – flexibel für unterschiedliche Zählertypen, Kamerawinkel, Bildausschnitte und Lichtverhältnisse. Das ist das Projektziel, kein Versprechen, dass jeder Zähler bereits unterstützt oder praktisch getestet ist.
+**Langfristiges Ziel:** AI on the Edge / SLFork soll keine Voraussetzung mehr sein. AI Meter Reader soll Bilder direkt aus Home Assistant beziehen und die Auswertung lokal dort übernehmen – flexibel für unterschiedliche Zählertypen, Kamerawinkel, Bildausschnitte und Lichtverhältnisse. Das ist das Projektziel, kein Versprechen, dass jeder Zähler bereits unterstützt oder praktisch getestet ist.
 
 ## Beta-Tester gesucht
 
 Du nutzt Home Assistant mit einem Gas-, Wasser- oder anderen Zähler? Gesucht werden Tester mit unterschiedlichen Kameras, Ausschnitten und Lichtverhältnissen. Der reguläre App-Stand ist bis Version 0.5 der Testkanal. Für reale Prüfungen nutze ich selbst AI on the Edge; andere Quellen und Zählertypen sind bislang nur simuliert getestet. Wenn du beim Testen helfen möchtest, melde dich über [GitHub Issues](https://github.com/Eifellayer/meter-ocr/issues) und nenne App-Version, Zählertyp und Bildquelle. Bitte keine Zugangsdaten oder ungeschwärzten Fotos mit persönlichen Informationen posten.
 
-Meter OCR liest das Zählerfoto mit **Tesseract OCR**. Mit ESPHome oder einer anderen Home-Assistant-Kamera kann die App einen eigenen OCR-Stand liefern. Mit **AI on the Edge / SLFork** oder einem Referenzsensor prüft sie zusätzlich, ob der vorhandene Messwert zum Bild passt.
+AI Meter Reader liest das Zählerfoto mit **Tesseract OCR**. Mit ESPHome oder einer anderen Home-Assistant-Kamera kann die App einen eigenen OCR-Stand liefern. Mit **AI on the Edge / SLFork** oder einem Referenzsensor prüft sie zusätzlich, ob der vorhandene Messwert zum Bild passt.
 
 Der aktuelle Schwerpunkt liegt auf mechanischen Gaszählern mit einstellbaren Ziffern vor und nach dem Komma. Kleine Zeiger und analoge Rädchen werden noch nicht automatisch ausgewertet. Die Messwertausgabe ist derzeit auf Kubikmeter ausgelegt; weitere Zählertypen und Situationen sollen mit Tester-Rückmeldungen schrittweise dazukommen.
 
-Meter OCR ist ein privates Hobbyprojekt für die Plausibilitätskontrolle. [Hinweise zur Nutzung](#hinweise-zur-nutzung)
+AI Meter Reader ist ein privates Hobbyprojekt für die Plausibilitätskontrolle. [Hinweise zur Nutzung](#hinweise-zur-nutzung)
 
 ## Was wird kontrolliert?
 
 Die Standardeinstellung vergleicht **fünf Vorkommastellen, also volle m³**. Erkannte Nachkommastellen werden zusätzlich angezeigt. Ein `?` steht für eine unklare Ziffer. Solange `vergleich_nachkommastellen: 0` eingestellt ist, werden Nachkommastellen nicht bewertet. Bei 1–3 Vergleichsstellen wird der Wert auf die gewählte Stelle gerundet (ab 5 aufwärts); die nächste bekannte Ziffer entscheidet über die Rundung.
 
-Die App holt das letzte vorhandene Foto sowie die zugehörigen Werte aus SLFork. Sie erkennt den Ziffernausschnitt anhand der grünen Rahmen oder nutzt einen eingestellten Bildausschnitt. Tesseract OCR liest den Zählerstand unabhängig aus dem Bild. Bei unklarer oder abweichender Erstlesung probiert sie weitere Bildaufbereitungen **bis zum einstellbaren Maximum von 1 bis 10 Versuchen** (Standard: 5). **Bei der ersten bestätigten Übereinstimmung stoppt die Prüfung sofort.**
+Die App holt das letzte vorhandene Foto sowie die zugehörigen Werte aus SLFork. Sie erkennt den Ziffernausschnitt anhand der grünen Rahmen oder nutzt einen eingestellten Bildausschnitt. Tesseract OCR liest den Zählerstand unabhängig aus dem Bild. Bei einer unsicheren automatischen Erstlesung nutzt die App bis zu zehn zusätzliche Bildaufbereitungen (höchstens 15 Versuche insgesamt) und setzt Ziffern nur bei einer strikten Mehrheit zusammen. Nach der ersten Fehlprüfung nimmt sie nach fünf Minuten ein frisches Bild auf – auch von der Home-Assistant-Kamera. Scheitert auch der zweite Lauf, gilt wieder das eingestellte Intervall (Standard: eine Stunde).
 
 Im SLFork-Modus gleicht die App den OCR-Wert mit **Raw Value** und **Actual Value** ab. Im Kameramodus kann ein aktueller kumulierter m³-Sensor als Referenz dienen. Ohne Referenzsensor wird nur das OCR-Ergebnis ausgegeben.
 
@@ -35,7 +35,7 @@ In der Weboberfläche stehen unter **„Automatische Prüfung – Einstellungen�
 - **Ziffernfarbe:** Automatisch erkennen (Standard) oder gezielt helle bzw. dunkle Ziffern lesen.
 - **Bildbereich:** Ziffernrahmen automatisch erkennen (Standard) oder einen festen Ausschnitt samt Breite der Vorkommastellen dauerhaft verwenden.
 
-Auf **„Speichern“** klicken. Die Einstellungen gelten für die **folgenden automatischen Prüfdurchläufe** und bleiben auch nach einem Neustart erhalten. Wird die Vergleichsgenauigkeit geändert, beginnt die Bestätigungszählung bei der nächsten automatischen Prüfung neu: Treffer mit der bisherigen Genauigkeit gelten nicht als Nachweis für die neue Regel.
+Auf **„Speichern“** klicken. Die Einstellungen gelten sofort; eine neue automatische Prüfung startet direkt und bleiben auch nach einem Neustart erhalten. Wird die Vergleichsgenauigkeit geändert, beginnt die Bestätigungszählung bei der nächsten automatischen Prüfung neu: Treffer mit der bisherigen Genauigkeit gelten nicht als Nachweis für die neue Regel.
 
 Technisch werden die Web-Einstellungen separat im App-Datenverzeichnis (`/data/auto-pruefregeln.json`) abgelegt. Solange diese Datei existiert, haben ihre Werte für Vergleich, Versuche, Ziffernfarbe und Bildbereich **Vorrang vor den entsprechenden Feldern der Home-Assistant-App-Konfiguration**. Ohne gespeicherte Web-Einstellungen verwendet die App die Werte ihrer Konfiguration.
 
@@ -47,9 +47,9 @@ Beim ersten Öffnen führt ein kompakter Einrichtungsassistent durch Bildquelle,
 | --- | --- |
 | **SLFork / AI on the Edge** | Dein vorhandener ESP liefert das Foto und den Vergleichswert. Gib seine Adresse ein. |
 | **Home-Assistant-Kamera** | Wähle eine `camera.*`-Entität und bei Bedarf einen aktuellen Referenzsensor in m³. |
-| **ESPHome oder Kamera mit lokaler OCR** | Die Kamera liefert nur das Bild. RF1 liest den Stand lokal und stellt ihn als `sensor.rf1_ocr_zaehlerstand` in m³ bereit. |
+| **ESPHome oder Kamera mit lokaler Ablesung** | Die Kamera liefert das Bild. AI Meter Reader liest den Stand lokal und stellt ihn als `sensor.rf1_ocr_zaehlerstand` bereit. |
 
-Für ESPHome richte eine [ESP32-Kamera](https://esphome.io/components/esp32_camera/) mit [nativer API](https://esphome.io/components/api/) ein und füge das Gerät in Home Assistant hinzu. Prüfe das Kamerabild dort und trage anschließend die `camera.*`-Entität in RF1 ein. Öffne **Manuellen Test**, passe den Bildausschnitt an und übernimm die Vorschau in die Automatik. Die App benötigt für diese Betriebsart weder SLFork noch einen Referenzsensor.
+Für ESPHome richte eine [ESP32-Kamera](https://esphome.io/components/esp32_camera/) mit [nativer API](https://esphome.io/components/api/) ein und füge das Gerät in Home Assistant hinzu. Prüfe das Kamerabild dort und wähle anschließend die `camera.*`-Entität in AI Meter Reader. Öffne **Manuellen Test**, passe den Bildausschnitt an und übernimm die Vorschau in die Automatik. Die App benötigt für diese Betriebsart weder SLFork noch einen Referenzsensor.
 
 Der OCR-Sensor benötigt eine Mehrheit von mindestens zwei OCR-Profilen desselben Bildes. Bei einer unsicheren Lesung oder einem Rückgang gegenüber dem letzten gültigen Stand derselben Kamera wird er als **nicht verfügbar** gemeldet. Ein OCR-Stand ohne Referenz ist eine eigenständige Ablesung. Für das Energie-Dashboard gibt es einen kumulativen Verbrauchssensor. Ein späterer Wechsel startet die automatische Bestätigungszählung für die neue Quelle neu.
 
@@ -65,11 +65,11 @@ Der [Vergleichstest mit zehn Gas-, Wasser- und Stromzählerfotos](METER-PHOTO-TE
 
 ## Plausibilitätsprüfung und Energie-Dashboard
 
-Für den Verbrauch verwendet Meter OCR automatische Treffer mit Referenz oder übereinstimmende OCR-Versuche im eigenständigen Modus. Der erste gültige Stand setzt die Basis. Danach vergleicht die App den neuen Stand mit der letzten gültigen Messung. Sie verwirft Rücksprünge und Anstiege, die für die verstrichene Zeit zu groß sind. Die berücksichtigte Ziffernauflösung bestimmt den Rundungsspielraum.
+Für den Verbrauch verwendet AI Meter Reader automatische Treffer mit Referenz oder übereinstimmende OCR-Versuche im eigenständigen Modus. Der erste gültige Stand setzt die Basis. Danach vergleicht die App den neuen Stand mit der letzten gültigen Messung. Sie verwirft Rücksprünge und Anstiege, die für die verstrichene Zeit zu groß sind. Die berücksichtigte Ziffernauflösung bestimmt den Rundungsspielraum.
 
 Unter **Automatische Prüfung – Einstellungen → Maximaler Durchfluss** trägst du den Qmax-Wert vom Zähler ein. Die Vorgabe für G4 beträgt 6 m³/h. Ein abgelehnter Wert verändert den Verbrauchszähler nicht. Wechselt die Bildquelle oder die Vergleichsgenauigkeit, dient die nächste gültige Ablesung als Basis für weitere Verbrauchsdifferenzen.
 
-Füge in Home Assistant unter **Energie → Einstellungen → Gasverbrauch** den Sensor **Meter OCR Gasverbrauch gesamt** (`sensor.rf1_verbrauch_gesamt`) hinzu. Er entsteht mit der ersten gültigen Messung und summiert die bestätigten Verbrauchsdifferenzen in m³. Home Assistant berechnet aus diesem kumulativen Wert die Ansichten für Stunde, Tag, Woche und Monat.
+Füge in Home Assistant unter **Energie → Einstellungen → Gasverbrauch** den Sensor **AI Meter Reader Gasverbrauch gesamt** (`sensor.rf1_verbrauch_gesamt`) hinzu. Er entsteht mit der ersten gültigen Messung und summiert die bestätigten Verbrauchsdifferenzen in m³. Home Assistant berechnet aus diesem kumulativen Wert die Ansichten für Stunde, Tag, Woche und Monat.
 
 ## Benachrichtigungen und Prüfstatus
 
@@ -95,7 +95,7 @@ Der Button **„Jetzt prüfen“** startet einen manuellen Test mit dem bereits 
 
 1. Anfrage angenommen
 2. Bild und Referenzwerte laden
-3. OCR-Auswertung, **1 bis maximal 10 Versuche** mit Fortschrittsbalken
+3. OCR-Auswertung: bei unsicherer automatischer Ablesung bis zu 15 begrenzte Versuche; Fortschritt wird in der Oberfläche angezeigt
 4. Ergebnis speichern und abschließen
 
 Der Balken zeigt **tatsächlich abgeschlossene OCR-Versuche**, nicht eine geschätzte Laufzeit. Die Schaltfläche wird während der Prüfung zu **„Prüfung läuft …“** und ist vorübergehend gesperrt. Danach erscheint direkt **„Test erfolgreich“** bei Übereinstimmung (dezent grün) oder eine verständliche Fehler- bzw. Abweichungsmeldung (dezent rot). Eine erfolgreiche Bildlesung ohne Referenz wird neutral angezeigt. Der manuelle Test verändert weder den automatischen Zeitplan noch die Trefferzahl. Das **OCR-Testbild** markiert mit **grünen Rahmen** gelesene Ziffern und mit **roten Rahmen** unklare Ziffern. Ohne erkannte Einzelrahmen sind die Rahmen nur eine angenäherte Aufteilung. Grün bedeutet lediglich **als Ziffer gelesen**, nicht automatisch eine Übereinstimmung mit dem Referenzwert.
@@ -108,7 +108,11 @@ Die kompakte Weboberfläche zeigt die wichtigsten Angaben in getrennten Bereiche
 
 ## Automatische Kontrolle
 
-Nach erfolgreichem Abgleich prüft die App normalerweise nach einer Stunde erneut. Bei Abweichungen, unklarer Erkennung oder fehlenden Daten versucht sie es alle fünf Minuten. Standardmäßig nach vier Stunden ohne erfolgreiche Prüfung meldet `sensor.rf1_pruefstatus` den Zustand `review_due`. Die Wartezeiten und zusätzliche Benachrichtigungsziele lassen sich in der Weboberfläche einstellen.
+Nach erfolgreichem Abgleich prüft die App normalerweise nach einer Stunde erneut. Nach dem ersten Fehler nimmt sie einmal nach fünf Minuten ein frisches Bild auf; scheitert dieser Lauf ebenfalls, gilt wieder das eingestellte Prüfintervall. Standardmäßig meldet `sensor.rf1_pruefstatus` nach vier Stunden ohne erfolgreiche Prüfung `review_due`. Wartezeiten und Benachrichtigungsziele lassen sich einstellen.
+
+Über **„Automatik pausieren“** kannst du automatische Prüfungen anhalten und später fortsetzen. Die gelbe Meldung zeigt die Pause; manuelle Tests bleiben verfügbar. Der Pausenzustand bleibt nach einem Neustart erhalten. Die Übersicht zeigt, ob die App läuft und wartet, ein Bild aufnimmt oder auswertet, sowie ob ESP/Kamera erreichbar sind und warum ein Bild als zu alt oder unlesbar gilt. Wenn die App selbst gestoppt oder vorübergehend nicht erreichbar ist, meldet die geöffnete Oberfläche den Verbindungsverlust.
+
+Die Automatik lässt sich über **„Automatik pausieren“** anhalten und später fortsetzen. Eine gelbe Meldung zeigt den Pausenzustand; manuelle Tests bleiben verfügbar. Das bleibt auch nach einem Neustart erhalten. Im Übersichtsbereich zeigt AI Meter Reader außerdem, ob es auf den nächsten Prüftermin wartet, gerade ein Bild aufnimmt und auswertet oder ob ESP/Kamera kein neues beziehungsweise kein lesbares Bild geliefert hat. Bei gestoppter oder nicht erreichbarer App meldet die geöffnete Oberfläche den Verbindungsverlust.
 
 Ein SLFork-Messzeitpunkt wird automatisch nur einmal gezählt. Alte Bilder lassen sich weiterhin manuell prüfen. Bei einer allgemeinen Home-Assistant-Kamera verwendet die App den Abrufzeitpunkt. Für unabhängige Bestätigungen muss die Kamera aktuelle Bilder liefern. Ein konfigurierter Referenzsensor muss den Stand in `m³` melden und innerhalb von fünf Minuten zum Bildabruf aktualisiert worden sein.
 
@@ -121,7 +125,7 @@ Ein SLFork-Messzeitpunkt wird automatisch nur einmal gezählt. Alte Bilder lasse
 ## Installation
 
 1. In Home Assistant unter **Einstellungen → Apps → App installieren → ⋮ → Repositories** das Repository **Add-ons by Eifellayer** über den [gemeinsamen Link](https://github.com/Eifellayer/meter-ocr) hinzufügen.
-2. **Meter OCR (Alpha)** installieren. Releases unter 0.5 sind Alpha und verwenden dieselbe reguläre App als Teststand.
+2. **AI Meter Reader (Alpha)** installieren. Releases unter 0.5 sind Alpha und verwenden dieselbe reguläre App als Teststand.
 3. Für SLFork `esp_url` auf die Adresse des ESP setzen (z. B. `http://esp-gaszaehler.local`). Alternativ `kamera_entitaet`, `ausschnitt` und optional `referenz_entitaet` konfigurieren.
 4. App starten, **Weboberfläche öffnen** und mit **Jetzt prüfen** eine Testlesung durchführen.
 
@@ -158,7 +162,7 @@ Soweit gesetzlich zulässig, wird die Software ohne Gewähr für Richtigkeit, Ve
 
 ## Projekt unterstützen
 
-Meter OCR ist ein kostenloses Hobbyprojekt. Wenn sie dir hilft, freue ich mich über eine [freiwillige PayPal-Spende](https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8).
+AI Meter Reader ist ein kostenloses Hobbyprojekt. Wenn sie dir hilft, freue ich mich über eine [freiwillige PayPal-Spende](https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8).
 
 [Änderungsprotokoll](rf1_ocr_test/CHANGELOG.md) · [Quellen](SOURCES.md) · [Home-Assistant-App](rf1_ocr_test/README.md) · [English documentation](README.en.md)
 

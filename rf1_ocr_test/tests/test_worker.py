@@ -258,7 +258,7 @@ class StateTests(TestCase):
                 run.main()
             return publish.call_args.args[0]
 
-        initial = check({**sample(original), "raw_value": "12346.0416", "actual_value": "12346.0416"}, "12346.041")
+        initial = check({**sample(original), "raw_value": "12346.0416", "actual_value": "12346.0416"}, "12346.042")
         fallback_stamp = now - timedelta(minutes=1)
         fallback = {**sample(fallback_stamp), "slfork_value_status": "E92 Rate Too High (<) | Use Fallback",
                     "slfork_last_valid_timestamp": fallback_stamp.isoformat(), "slfork_fallback_value": "12346.0416",
@@ -276,7 +276,7 @@ class StateTests(TestCase):
         self.assertEqual("match", recovered["check_status"])
         self.assertNotIn("failure_since", recovered)
         self.assertFalse(recovered["last_reference_is_fallback"])
-        self.assertEqual(310, recovered["consumption"]["total_litres"])
+        self.assertEqual(309, recovered["consumption"]["total_litres"])
         self.assertEqual(2, len(recovered["confirmations"]))
     def test_standalone_sensor_retains_exact_precision_and_rejects_lower_readings(self):
         data = sample(datetime.now(timezone.utc))
@@ -388,6 +388,7 @@ class StateTests(TestCase):
             requested.put_nowait({
                 "request_id": 1, "decimals": 2, "attempts": 1, "polarity": "dark",
                 "crop_mode": "manual", "crop": "0,0,480,100", "width": 350,
+                "manual_reference": "12345.129", "image": jpeg,
             })
             return None, lambda *args, **kwargs: progress_updates.append((args, kwargs))
 
@@ -399,12 +400,15 @@ class StateTests(TestCase):
 
         data = sample(datetime.now(timezone.utc))
         self.enterContext(patch.object(run, "start_panel", fake_panel))
-        self.enterContext(patch.object(run, "capture", return_value=(jpeg, None, data)))
+        capture = self.enterContext(patch.object(run, "capture", side_effect=AssertionError("uploaded image should bypass camera capture")))
         self.enterContext(patch.object(run, "read_visible_digits", return_value="12345.120"))
         self.enterContext(patch.object(run, "publish_state", fake_publish))
         with self.assertRaises(StopLoop):
             run.main()
         self.assertEqual("difference", progress_updates[-1][1]["outcome"])
+        capture.assert_not_called()
+        with Image.open(paths["TEST_SOURCE_IMAGE"]) as source_image:
+            self.assertEqual((500, 100), source_image.size)
         with Image.open(paths["TEST_IMAGE"]) as preview:
             self.assertEqual((480, 100), preview.size)
         self.assertEqual([run.CHECK_ENTITY, run.ENTITY, run.CONSUMPTION_ENTITY],
@@ -413,6 +417,7 @@ class StateTests(TestCase):
         self.assertEqual(0, published[1][1]["attributes"]["decimal_places"])
         history = history_updates[-1]
         self.assertEqual("difference", history["manual_result"]["status"])
+        self.assertNotIn("image", history["manual_result"]["settings"])
         self.assertEqual(1, len(history["confirmations"]))
         self.assertEqual(0, history["comparison_decimals"])
         self.assertEqual(0, history["consumption"]["total_litres"])

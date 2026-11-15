@@ -253,7 +253,7 @@ class IngressTests(IngressFixture):
             "notifications_enabled": 1, "review_minutes": 60, "delivery_hours": 0,
             "push": "notify.mobile_app_phone", "target": "notify.email",
         }
-        self.assertEqual((303, "./?saved=setup"), self.submit("/einrichtung", **values))
+        self.assertEqual((303, "./?saved=setup&test=ready&ui=overview"), self.submit("/einrichtung", **values))
         self.assertEqual("camera", self.source["mode"])
         self.assertEqual("sensor.meter", self.source["reference"])
         self.assertEqual((6, 2, "mixed", 1), (self.rules["integer_digits"], self.rules["fraction_digits"],

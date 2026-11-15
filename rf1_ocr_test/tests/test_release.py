@@ -56,7 +56,7 @@ class ComparisonTests(unittest.TestCase):
 
     def test_decimal_precision_is_strict(self):
         status, message = compare_sample(self.data, "12345.199", 1)
-        self.assertEqual("match", status)
+        self.assertEqual("difference", status)
         self.assertIn("Gerundet auf 1 Nachkommastelle", message)
         self.assertEqual("difference", compare_sample(self.data, "12345.199", 2)[0])
 
@@ -181,7 +181,7 @@ class PanelTests(unittest.TestCase):
 
     def test_english_status_and_specific_digit_diagnostics(self):
         self.assertIn("attempt 2 of 5", english_progress("OCR-Versuch 2 von 5 läuft …"))
-        self.assertIn("decimal place 2", english_result(
+        self.assertIn("rounded to 2 decimal places", english_result(
             "Bestätigt: Zählerstand und Referenzwert stimmen überein.",
             "match", 2))
         self.assertIn("Whole-number digits: 3", english_uncertain_positions(

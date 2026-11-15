@@ -16,9 +16,22 @@ Die App holt das letzte vorhandene Foto sowie die zugehörigen Werte aus SLFork.
 
 Im SLFork-Modus gleicht die App den OCR-Wert mit **Raw Value** und **Actual Value** ab. Im Kameramodus kann ein aktueller kumulierter m³-Sensor als Referenz dienen. Ohne Referenzsensor wird nur das OCR-Ergebnis ausgegeben.
 
-## „Jetzt prüfen“ – Live-Status
+## Dauerhafte Einstellungen für die automatische Kontrolle
 
-Der Button startet einen **manuellen Test mit dem bereits vorhandenen Bild**. Er löst keine neue Aufnahme am ESP aus. Die Weboberfläche zeigt unmittelbar den aktuellen Schritt:
+In der Weboberfläche stehen unter **„Automatische Prüfung – Einstellungen“** zwei dauerhaft gespeicherte Prüfregeln:
+
+- **Vergleich:** Nur volle m³ (0) oder zusätzlich 1–3 Nachkommastellen. Die nicht ausgewählten Nachkommastellen werden ignoriert, nicht gerundet.
+- **Max. OCR-Versuche:** 1–10 Versuche pro Zählerbild (Standard: 5). Bei einer bestätigten Übereinstimmung endet die Prüfung sofort.
+
+Auf **„Speichern“** klicken. Die Einstellungen gelten für die **folgenden automatischen Prüfdurchläufe** und bleiben auch nach einem Neustart erhalten. Bereits gezählte Prüfungen werden dadurch nicht rückwirkend neu bewertet.
+
+Technisch werden die Web-Einstellungen separat im App-Datenverzeichnis (`/data/auto-pruefregeln.json`) abgelegt. Solange diese Datei existiert, haben ihre Werte für Vergleich und Versuche **Vorrang vor den entsprechenden Feldern der Home-Assistant-App-Konfiguration**. Ohne gespeicherte Web-Einstellungen verwendet die App die Werte ihrer Konfiguration.
+
+## „Jetzt prüfen“ – erweiterter manueller Test
+
+Der Bereich **„Manuellen Test öffnen“** bleibt im Normalbetrieb zugeklappt. Bei Bedarf aufklappen: Dort lassen sich **Ziffernfarbe, Vergleichsgenauigkeit und maximale OCR-Versuche** für diesen einen Test einstellen. Zusätzlich kann man die automatische Bildausschnitterkennung deaktivieren und einen **manuellen Ausschnitt (links, oben, rechts, unten) sowie die Breite der Vorkommastellen** ausprobieren, ohne die automatischen Prüfregeln zu verändern.
+
+Der Button **„Jetzt prüfen“** startet einen manuellen Test mit dem bereits vorhandenen Bild. Er löst keine neue Aufnahme am ESP aus. Die Weboberfläche zeigt unmittelbar den aktuellen Schritt:
 
 1. Anfrage angenommen
 2. Bild und Referenzwerte laden
@@ -64,7 +77,7 @@ Wer von einer alten lokalen RF1-App auf die Repository-Version wechselt, sollte 
 | `ausschnitt`, `vorkomma_breite` | Manueller Ziffernbereich, falls nötig |
 | `push_dienst` | Optionaler Benachrichtigungsdienst |
 
-Die Einstellungen „Ziffernfarbe“, „Vergleichsgenauigkeit“ und „Max. OCR-Versuche“ auf der Weboberfläche gelten für den **manuellen Test**; die dauerhaft verwendeten Optionen werden in der App-Konfiguration verwaltet. Eine kurze Erklärung von „Jetzt prüfen“ lässt sich über das Infosymbol aufklappen.
+**Automatik:** Vergleichsgenauigkeit und maximale OCR-Versuche im eigenen Einstellungsbereich speichern. **Manuell:** Die erweiterten Testoptionen gelten nur für den geöffneten Einzeltest. Die kurze Erklärung von „Jetzt prüfen“ lässt sich über das Infosymbol aufklappen.
 
 ## Wo stehen die Ergebnisse?
 

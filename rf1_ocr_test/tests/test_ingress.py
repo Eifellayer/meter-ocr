@@ -496,6 +496,34 @@ class RedirectTests(TestCase):
 
 
 class BrowserTests(IngressFixture):
+    def test_drawing_a_crop_sets_coordinates_for_the_manual_test(self):
+        from playwright.sync_api import sync_playwright
+
+        self.setup_pending = False
+        Image.new("RGB", (640, 480), "white").save(self.root / "current.jpg", "JPEG")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(executable_path=os.getenv("RF1_CHROMIUM"))
+            page = browser.new_page(viewport={"width": 600, "height": 850}, locale="de-DE")
+            page.set_default_timeout(7000)
+            page.goto(self.base + "/?test=open")
+            page.locator("#crop-draw summary").click()
+            image = page.locator("#crop-draw-area")
+            image.wait_for(state="visible")
+            image.scroll_into_view_if_needed()
+            box = image.bounding_box()
+            page.mouse.move(box["x"] + box["width"] * .25, box["y"] + box["height"] * .25)
+            page.mouse.down()
+            page.mouse.move(box["x"] + box["width"] * .75, box["y"] + box["height"] * .50, steps=4)
+            page.mouse.up()
+            self.assertEqual("manual", page.locator("#crop-mode").input_value())
+            page.locator("#start-check-with-options").click()
+            job = self.requested.get(timeout=2)
+            self.assertEqual("manual", job["crop_mode"])
+            for actual, expected in zip(map(int, job["crop"].split(",")), (160, 120, 480, 240)):
+                self.assertAlmostEqual(expected, actual, delta=2)
+            self.assertAlmostEqual(200, job["width"], delta=2)
+            browser.close()
+
     def test_selecting_a_discovered_meter_prefills_the_wizard(self):
         from playwright.sync_api import sync_playwright
 
@@ -534,7 +562,7 @@ class BrowserTests(IngressFixture):
             page.set_default_timeout(7000)
             page.goto(self.base)
             page.locator("#automatic-progress").wait_for(state="visible")
-            page.locator("#automatic-images summary").click()
+            self.assertTrue(page.locator("#automatic-images").evaluate("section => section.open"))
             preview = page.locator("#test-preview-image")
             self.assertEqual(240, preview.evaluate("async image => { await image.decode(); return image.naturalWidth; }"))
             self.assertFalse(page.locator("#preview-legend").is_visible())

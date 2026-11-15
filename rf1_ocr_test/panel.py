@@ -22,7 +22,7 @@ from checks import (DEFAULT_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, WARNING_DETA
 from consumption import DEFAULT_FLOW_LPH, format_cubic_metres, parse_flow_limit
 from i18n import EN_UI, english_progress, english_result, translate_page
 from language import MODES, SUPPORTED, USER_ID, browser_locale, profile_script
-from layout import ROTATIONS, crop_coordinates
+from layout import MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, ROTATIONS, crop_coordinates
 from notification_settings import notification_rules
 from source_settings import source_rules
 
@@ -124,6 +124,11 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .source-mode-guide{{grid-column:1/-1;display:grid;gap:.75rem;grid-template-columns:repeat(auto-fit,minmax(min(100%,14rem),1fr))}}
 .source-mode-guide ul{{padding-inline-start:1.25rem;margin:0}}
 .source-mode-guide li + li{{margin-top:.35rem}}
+.crop-draw{{grid-column:1/-1}}
+.crop-draw summary{{cursor:pointer}}
+.crop-draw-image{{position:relative;max-width:700px;touch-action:none;user-select:none;cursor:crosshair}}
+.crop-draw-image img{{display:block;width:100%;height:auto;pointer-events:none}}
+.crop-draw-outline{{position:absolute;box-sizing:border-box;border:3px solid #ffcf53;background:#ffcf5320;pointer-events:none}}
 .setup-help summary{{cursor:help;color:var(--muted);font-size:.88rem}}
 .setup-help p{{margin:.4rem 0 0;color:var(--muted);font-size:.88rem}}
 .setup-warning{{padding:.7rem .8rem;border-radius:.6rem;background:light-dark(#fff7e6,#3b321c);color:light-dark(#72540e,#e7d28a);grid-column:1/-1}}
@@ -258,7 +263,7 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 entity: sensor.rf1_ocr_zaehlerstand
 name: Zählerstand (OCR)</code></pre>
 </details>
-<details class="automatic-images" id="automatic-images"><summary>Letztes Testbild</summary>
+<details class="automatic-images" id="automatic-images" open><summary>Letztes Testbild</summary>
 <p id="preview-empty" class="legend" {preview_empty_hidden}>Noch kein Testbild verfügbar.</p>
 <div class="preview" id="test-preview" {automatic_preview_hidden}>
 <h2 id="preview-heading">Letztes Testbild</h2>
@@ -329,6 +334,15 @@ name: Zählerstand (OCR)</code></pre>
 <label>Eigenes Testbild (optional, JPG oder PNG)
 <input type="file" name="image" accept="image/jpeg,image/png"></label>
 <p class="settings-note">Ein ausgewähltes Bild wird nur für diesen manuellen Test verwendet (max. 3 MB).</p>
+<details class="crop-draw" id="crop-draw">
+<summary>Ausschnitt im Bild ziehen</summary>
+<p class="settings-note">Ziehe mit Maus oder Finger einen Rahmen um die gesamte Ziffernreihe. Prüfe danach den Ausschnitt mit „Jetzt prüfen“.</p>
+<div class="crop-draw-image" id="crop-draw-area" hidden>
+<img id="crop-draw-original" alt="Originalbild zum Einstellen des Ausschnitts" draggable="false">
+<span class="crop-draw-outline" id="crop-draw-outline" hidden></span>
+</div>
+<p class="settings-note" id="crop-draw-empty" hidden>Kein Bild vorhanden. Starte einen manuellen Test oder wähle ein eigenes Bild.</p>
+</details>
 <button id="start-check-with-options" type="submit">Jetzt prüfen</button>
 </form>
 <details class="help"><summary title="Informationen zum manuellen Bildtest">ⓘ Was passiert bei „Jetzt prüfen“?</summary>
@@ -751,6 +765,93 @@ function setTestActive(active) {{
 }}
 const cropMode = document.querySelector('#crop-mode');
 const cropFields = document.querySelector('#crop-fields');
+const drawPanel = document.querySelector('#crop-draw');
+const drawArea = document.querySelector('#crop-draw-area');
+const drawImage = document.querySelector('#crop-draw-original');
+const drawOutline = document.querySelector('#crop-draw-outline');
+const drawEmpty = document.querySelector('#crop-draw-empty');
+const uploadInput = manualForm.elements.image;
+let drawUploadUrl = '';
+let drawStart = null;
+let lastManualImageTime = 0;
+
+function drawCropOutline(box) {{
+  const [left, top, right, bottom] = box;
+  const w = drawImage.naturalWidth;
+  const h = drawImage.naturalHeight;
+  drawOutline.style.left = left / w * 100 + '%';
+  drawOutline.style.top = top / h * 100 + '%';
+  drawOutline.style.width = (right - left) / w * 100 + '%';
+  drawOutline.style.height = (bottom - top) / h * 100 + '%';
+  drawOutline.hidden = !w || !h;
+}}
+function loadCropDrawImage() {{
+  if (drawUploadUrl) URL.revokeObjectURL(drawUploadUrl);
+  const file = uploadInput.files[0];
+  drawUploadUrl = file ? URL.createObjectURL(file) : '';
+  const time = Date.now();
+  const images = drawUploadUrl ? [drawUploadUrl] : lastManualImageTime ?
+    ['testbild.jpg?v=' + lastManualImageTime, 'aktuell.jpg?v=' + time] :
+    ['aktuell.jpg?v=' + time, 'testbild.jpg?v=' + time];
+  drawArea.hidden = true;
+  drawEmpty.hidden = true;
+  drawOutline.hidden = true;
+  let index = 0;
+  drawImage.onerror = () => {{
+    index += 1;
+    if (index < images.length) drawImage.src = images[index];
+    else drawEmpty.hidden = false;
+  }};
+  drawImage.onload = () => {{
+    drawArea.hidden = false;
+    const box = manualForm.elements.crop.value.split(',').map(Number);
+    if (cropMode.value === 'manual' && box.length === 4 && box.every(Number.isFinite) &&
+        box[0] >= 0 && box[1] >= 0 && box[0] < box[2] && box[1] < box[3] &&
+        box[2] <= drawImage.naturalWidth && box[3] <= drawImage.naturalHeight) drawCropOutline(box);
+  }};
+  drawImage.src = images[index];
+}}
+function pointerPosition(event) {{
+  const rect = drawImage.getBoundingClientRect();
+  const w = drawImage.naturalWidth;
+  const h = drawImage.naturalHeight;
+  return [Math.round(Math.max(0, Math.min(w, (event.clientX - rect.left) * w / rect.width))),
+          Math.round(Math.max(0, Math.min(h, (event.clientY - rect.top) * h / rect.height)))];
+}}
+function rectangleTo(event) {{
+  const [x, y] = pointerPosition(event);
+  const [left, top] = drawStart.point;
+  return [Math.min(left, x), Math.min(top, y), Math.max(left, x), Math.max(top, y)];
+}}
+drawPanel.addEventListener('toggle', () => {{ if (drawPanel.open) loadCropDrawImage(); }});
+uploadInput.addEventListener('change', () => {{ if (drawPanel.open) loadCropDrawImage(); }});
+drawArea.addEventListener('pointerdown', event => {{
+  if (event.button !== 0 || drawStart || !drawImage.naturalWidth) return;
+  event.preventDefault();
+  drawStart = {{id: event.pointerId, point: pointerPosition(event)}};
+  drawArea.setPointerCapture(event.pointerId);
+  drawCropOutline(rectangleTo(event));
+}});
+drawArea.addEventListener('pointermove', event => {{
+  if (drawStart?.id === event.pointerId) drawCropOutline(rectangleTo(event));
+}});
+drawArea.addEventListener('pointerup', event => {{
+  if (drawStart?.id !== event.pointerId) return;
+  const box = rectangleTo(event);
+  drawStart = null;
+  const [left, top, right, bottom] = box;
+  if (right - left < 8 || bottom - top < 8) {{
+    drawOutline.hidden = true;
+    return;
+  }}
+  const width = ['90', '270'].includes(manualForm.elements.rotation.value) ? bottom - top : right - left;
+  manualForm.elements.crop.value = box.join(',');
+  manualForm.elements.width.value = Math.max(1, Math.round(width * {crop_whole_ratio}));
+  cropMode.value = 'manual';
+  showCropFields();
+  drawCropOutline(box);
+}});
+drawArea.addEventListener('pointercancel', () => {{ drawStart = null; drawOutline.hidden = true; }});
 const autoCropMode = document.querySelector('#auto-crop-mode');
 const autoCropFields = document.querySelector('#auto-crop-fields');
 const sourceMode = document.querySelector('#source-mode');
@@ -845,6 +946,7 @@ async function refreshTestStatus() {{
       job.phase === 'done' ? (done === 1 ? '1 OCR-Versuch' : done + ' OCR-Versuche') : 'Bereit für den manuellen Test.';
 
     if (job.phase === 'done') {{
+      lastManualImageTime = job.checked_at;
       sourcePreview.hidden = false;
       sourceImage.hidden = false;
       sourceImage.onload = () => {{ sourceImage.hidden = false; sourceEmpty.hidden = true; }};
@@ -1243,7 +1345,9 @@ def start_panel(
                           "Warte auf ein aktuelles Zählerbild. Die App versucht es automatisch erneut.")
             else:
                 detail = ""
-            if history.get("check_detail") == LAST_DIGIT_NOTICE:
+            if history.get("check_detail") in (RAW_ROW_UNCLEAR, MANUAL_ROW_UNCLEAR):
+                detail = history["check_detail"] if language == "de" else EN_UI[history["check_detail"]]
+            elif history.get("check_detail") == LAST_DIGIT_NOTICE:
                 heading = "Letzte Nachkommastelle unsicher"
                 detail = LAST_DIGIT_NOTICE if language == "de" else EN_UI[LAST_DIGIT_NOTICE]
             elif status == "difference":
@@ -1592,6 +1696,8 @@ def start_panel(
                     settings.get("crop_mode", "auto"),
                 ),
                 crop_value=html.escape(str(settings.get("crop", default_crop)), quote=True),
+                crop_whole_ratio=auto_rules["integer_digits"] /
+                    (auto_rules["integer_digits"] + auto_rules["fraction_digits"]),
                 width_value=int(settings.get("width", default_width)),
                 rotation_options=select_options(ROTATION_OPTIONS, str(settings.get("rotation", 0))),
 

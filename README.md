@@ -4,7 +4,7 @@
 
 📘 [Bebilderte Bedienungsanleitung (PDF)](docs/Bedienungsanleitung-AI-Meter-Reader.pdf) · [App-Dokumentation](rf1_ocr_test/DOCS.md)
 
-**Aktueller Stand: 0.4.4 Alpha.** Diese Version bleibt auf dem regulären Testkanal. Danach ist ein Hall-/Impuls-Sensor als erste separate Beta-Funktion geplant, weil dafür ein realer Hardwaretest nötig ist.
+**Aktueller Stand: 0.4.5 Alpha.** Diese Version bleibt auf dem regulären Testkanal. Danach ist ein Hall-/Impuls-Sensor als erste separate Beta-Funktion geplant, weil dafür ein realer Hardwaretest nötig ist.
 
 **Zählerstände direkt in Home Assistant aus Kamerabildern lesen und prüfen.**
 
@@ -12,7 +12,7 @@
 
 ## Beta-Tester gesucht
 
-Du nutzt Home Assistant mit einem Gas-, Wasser- oder anderen Zähler? Gesucht werden Tester mit unterschiedlichen Kameras, Ausschnitten und Lichtverhältnissen. Version 0.4.4 bleibt auf dem regulären Alpha-Testkanal. Danach ist ein Hall-/Impuls-Sensor als erste separate Beta-Funktion geplant, weil dafür ein realer Hardwaretest nötig ist. Für reale Prüfungen nutze ich selbst AI on the Edge; andere Quellen und Zählertypen sind bislang nur simuliert getestet. Wenn du beim Testen helfen möchtest, melde dich über [GitHub Issues](https://github.com/Eifellayer/meter-ocr/issues) und nenne App-Version, Zählertyp und Bildquelle. Bitte keine Zugangsdaten oder ungeschwärzten Fotos mit persönlichen Informationen posten.
+Du nutzt Home Assistant mit einem Gas-, Wasser- oder anderen Zähler? Gesucht werden Tester mit unterschiedlichen Kameras, Ausschnitten und Lichtverhältnissen. Version 0.4.5 bleibt auf dem regulären Alpha-Testkanal. Danach ist ein Hall-/Impuls-Sensor als erste separate Beta-Funktion geplant, weil dafür ein realer Hardwaretest nötig ist. Für reale Prüfungen nutze ich selbst AI on the Edge; andere Quellen und Zählertypen sind bislang nur simuliert getestet. Wenn du beim Testen helfen möchtest, melde dich über [GitHub Issues](https://github.com/Eifellayer/meter-ocr/issues) und nenne App-Version, Zählertyp und Bildquelle. Bitte keine Zugangsdaten oder ungeschwärzten Fotos mit persönlichen Informationen posten.
 
 AI Meter Reader liest das Zählerfoto mit **Tesseract OCR**. Mit ESPHome oder einer anderen Home-Assistant-Kamera kann die App einen eigenen OCR-Stand liefern. Mit **AI on the Edge / SLFork** oder einem Referenzsensor prüft sie zusätzlich, ob der vorhandene Messwert zum Bild passt.
 
@@ -63,6 +63,8 @@ Für ESPHome richte eine [ESP32-Kamera](https://esphome.io/components/esp32_came
 Der OCR-Sensor benötigt eine Mehrheit von mindestens zwei OCR-Profilen desselben Bildes. Bei einer unsicheren Lesung oder einem Rückgang gegenüber dem letzten gültigen Stand derselben Kamera wird er als **nicht verfügbar** gemeldet. Ein OCR-Stand ohne Referenz ist eine eigenständige Ablesung. Für das Energie-Dashboard gibt es einen kumulativen Verbrauchssensor. Ein späterer Wechsel startet die automatische Bestätigungszählung für die neue Quelle neu.
 
 ## Kamerabild und Ausschnitt einrichten
+
+Im Kameramodus sucht die App die Ziffernreihe im Originalbild. Wenn der automatische Ausschnitt nicht passt, öffne **Test einstellen → Ausschnitt im Bild ziehen**. Markiere die gesamte Ziffernreihe mit Maus oder Finger und wähle **Jetzt prüfen**. Passt die Vorschau, kannst du den Ausschnitt für die Automatik übernehmen. Sind die Ziffern im gewählten Ausschnitt weiterhin schwer lesbar, prüfe Kamerawinkel, Fokus und Beleuchtung.
 
 Öffne **Manuellen Test** und wähle unter **Bildbereich** die manuelle Einstellung. Gib die Koordinaten im Originalbild in Pixeln ein. Wenn das Foto seitlich oder auf dem Kopf steht, wähle die passende **Bilddrehung**. Die Breite der Vorkommastellen bezieht sich auf den Ausschnitt nach der Drehung. Mit **Jetzt prüfen** siehst du das Auswertungsergebnis und kannst den getesteten Ausschnitt mitsamt Drehung für die Automatik übernehmen.
 
@@ -133,12 +135,12 @@ Ein SLFork-Messzeitpunkt wird automatisch nur einmal gezählt. Alte Bilder lasse
 
 ## Installation
 
-1. In Home Assistant unter **Einstellungen → Apps → App installieren → ⋮ → Repositories** das Repository **Add-ons by Eifellayer** über den [Stable-Link](https://github.com/Eifellayer/meter-ocr#stable) hinzufügen. Version 0.4.4 ist die Alpha-Testversion; die geplante Hall-/Impuls-Sensorfunktion wird separat im Beta-Kanal vorbereitet.
+1. In Home Assistant unter **Einstellungen → Apps → App installieren → ⋮ → Repositories** das Repository **Add-ons by Eifellayer** über den [Stable-Link](https://github.com/Eifellayer/meter-ocr#stable) hinzufügen. Version 0.4.5 ist die Alpha-Testversion; die geplante Hall-/Impuls-Sensorfunktion wird separat im Beta-Kanal vorbereitet.
 2. **AI Meter Reader (Alpha)** installieren. Releases unter 0.5 sind Alpha und verwenden dieselbe reguläre App als Teststand.
 3. Für SLFork `esp_url` auf die Adresse des ESP setzen (z. B. `http://esp-gaszaehler.local`). Alternativ `kamera_entitaet`, `ausschnitt` und optional `referenz_entitaet` konfigurieren.
 4. App starten, **Weboberfläche öffnen** und mit **Jetzt prüfen** eine Testlesung durchführen.
 
-Der geplante Hall-/Impuls-Sensor ist nicht Teil von 0.4.4 und wird separat im Beta-Kanal getestet. Bitte vor jedem Update eine Sicherung deiner Home-Assistant-Konfiguration erstellen.
+Der geplante Hall-/Impuls-Sensor ist nicht Teil von 0.4.5 und wird separat im Beta-Kanal getestet. Bitte vor jedem Update eine Sicherung deiner Home-Assistant-Konfiguration erstellen.
 
 ## Wichtige Einstellungen
 

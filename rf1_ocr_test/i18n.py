@@ -7,12 +7,21 @@ The language only affects text shown in the ingress interface.
 import re
 
 from checks import FALLBACK_NOTICE, LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, uncertain_positions
+from layout import MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR
 
 
 EN_UI = {
     "Erkennungsbild": "Recognition image",
     "Letztes Testbild": "Latest test image",
     "Noch kein Testbild verfügbar.": "No test image available yet.",
+    RAW_ROW_UNCLEAR: "Could not find a clear digit row. Set the crop in the manual test.",
+    MANUAL_ROW_UNCLEAR: "The digits in the crop are hard to read. Check the camera angle, focus and lighting.",
+    "Ausschnitt im Bild ziehen": "Draw a crop on the image",
+    "Ziehe mit Maus oder Finger einen Rahmen um die gesamte Ziffernreihe. Prüfe danach den Ausschnitt mit „Jetzt prüfen“.":
+        "Draw a rectangle around the full digit row with a mouse or finger. Then select “Run check now” to test the crop.",
+    "Originalbild zum Einstellen des Ausschnitts": "Original image for setting the crop",
+    "Kein Bild vorhanden. Starte einen manuellen Test oder wähle ein eigenes Bild.":
+        "No image available. Run a manual test or choose your own image.",
     "Stand aus AI on the Edge oder aus dem gewählten Home-Assistant-Sensor": "Reading from AI on the Edge or the selected Home Assistant sensor",
     "Vergleichswert": "Reference reading",
     "Die letzte Stelle kann beim Weiterdrehen schwer lesbar sein. Das kann zu Fehlmeldungen führen.":
@@ -443,7 +452,7 @@ def english_result(detail, status=None, decimals=0, readings=None):
     """Translate a saved result without changing the Home Assistant sensor state."""
     if not isinstance(detail, str):
         return "No result available."
-    if detail in (LAST_DIGIT_NOTICE, LAST_DIGIT_PASS):
+    if detail in (LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, RAW_ROW_UNCLEAR, MANUAL_ROW_UNCLEAR):
         return EN_UI[detail]
     if detail in EN_DETAILS:
         return EN_DETAILS[detail]

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.5 Alpha
+
+- Das letzte Testbild ist beim Öffnen der Übersicht bereits ausgeklappt.
+- Der Kameramodus sucht die Ziffernreihe auch ohne vorhandene SLFork-Markierungen.
+- Im manuellen Test kannst du den Bildausschnitt mit Maus oder Finger ziehen. Sind die Ziffern danach noch schwer lesbar, weist die App auf Kamerawinkel, Fokus und Beleuchtung hin.
+
 ## 0.4.4 Alpha
 
 - Beim ersten Einrichten wählst du die Bildquelle selbst. Der Assistent erklärt die drei Modi direkt neben der Auswahl und empfiehlt ESPHome für den Einstieg mit einer Kamera.

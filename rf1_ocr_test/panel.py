@@ -330,6 +330,10 @@ def start_panel(
             rule_label = ("Volle m³" if auto_rules["decimals"] == 0
                           else f'{auto_rules["decimals"]} Nachkommastelle(n)')
             auto_rule_description = f'{rule_label} · max. {auto_rules["attempts"]} OCR-Versuche'
+            if (history.get("comparison_decimals") is not None
+                    and history["comparison_decimals"] != auto_rules["decimals"]):
+                values["detail"] = ("Neue Vergleichsgenauigkeit gespeichert. Die nächste automatische "
+                                    "Prüfung zeigt das erste Ergebnis mit dieser Einstellung.")
             request_status = (
                 "Test angenommen. Die Bearbeitung wird hier live angezeigt."
                 if url.query == "test=queued" else "Status wird geladen …"

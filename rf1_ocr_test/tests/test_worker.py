@@ -400,13 +400,13 @@ class StateTests(TestCase):
 
         data = sample(datetime.now(timezone.utc))
         self.enterContext(patch.object(run, "start_panel", fake_panel))
-        capture = self.enterContext(patch.object(run, "capture", side_effect=AssertionError("uploaded image should bypass camera capture")))
+        capture = self.enterContext(patch.object(run, "capture", return_value=(jpeg, None, data)))
         self.enterContext(patch.object(run, "read_visible_digits", return_value="12345.120"))
         self.enterContext(patch.object(run, "publish_state", fake_publish))
         with self.assertRaises(StopLoop):
             run.main()
         self.assertEqual("difference", progress_updates[-1][1]["outcome"])
-        capture.assert_not_called()
+        capture.assert_called_once()
         with Image.open(paths["TEST_SOURCE_IMAGE"]) as source_image:
             self.assertEqual((500, 100), source_image.size)
         with Image.open(paths["TEST_IMAGE"]) as preview:

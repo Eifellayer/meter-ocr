@@ -35,6 +35,14 @@ def synthetic_meter():
 
 
 class SourceTests(TestCase):
+    def test_slfork_aborted_cycle_skips_aligned_images(self):
+        payload = {"process_error": -2, "timestamp_processed": {"main": "2026-11-15T08:01:00"}}
+        diagnostics = {}
+        with patch.object(run, "get_bytes", return_value=json.dumps(payload)) as fetch:
+            self.assertIsNone(run.capture("http://meter", diagnostics))
+            fetch.assert_called_once_with("http://meter/process_data")
+        self.assertTrue(run.slfork_cycle_failed(diagnostics))
+
     def test_slfork_checks_cycle_on_both_sides_of_image_download(self):
         expected = {"timestamp_processed": {"main": "2026-11-15T08:01:00"},
                     "raw_value": {"main": "12345.170"}, "actual_value": {"main": "12345.170"}}
@@ -250,7 +258,12 @@ class StateTests(TestCase):
 
         def check(payload, ocr):
             recognize.return_value = ocr
-            capture.side_effect = lambda *_: (photo, None, dict(payload))
+
+            def fake_capture(_, diagnostics):
+                diagnostics["slfork_process_error"] = payload.get("slfork_process_error")
+                return None if run.slfork_cycle_failed(diagnostics) else (photo, None, dict(payload))
+
+            capture.side_effect = fake_capture
             if files["HISTORY"].exists():
                 history = json.loads(files["HISTORY"].read_text())
                 files["HISTORY"].write_text(json.dumps({**history, "next_check_at": 0}))
@@ -278,6 +291,25 @@ class StateTests(TestCase):
         self.assertFalse(recovered["last_reference_is_fallback"])
         self.assertEqual(309, recovered["consumption"]["total_litres"])
         self.assertEqual(2, len(recovered["confirmations"]))
+
+        old_sample = {**sample(now - timedelta(minutes=30)), "actual_value": "12346.351"}
+        for payload in (old_sample, {**sample(now), "slfork_process_error": -2}):
+            with self.subTest(payload=payload):
+                with patch.object(run, "get_bytes", return_value=photo) as fetch:
+                    local = check(payload, "12346.351")
+                    fetch.assert_called_once_with("http://meter/camera?task=capture")
+                self.assertEqual("ocr_only", local["check_status"])
+                self.assertEqual("12346.351", local["ocr_value"])
+                self.assertIsNone(local["last_reference"])
+                self.assertEqual(run.SLFORK_RAW_SUCCESS, local["source_connection_detail"])
+                self.assertEqual("stale", local["source_connection_status"])
+                self.assertEqual(recovered["confirmations"], local["confirmations"])
+                self.assertEqual(recovered["consumption"], local["consumption"])
+
+        with patch.object(run, "get_bytes", return_value=photo):
+            uncertain = check(old_sample, "?????.???")
+        self.assertEqual("ocr_unclear", uncertain["check_status"])
+        self.assertNotEqual(run.SLFORK_RAW_SUCCESS, uncertain["source_connection_detail"])
     def test_standalone_sensor_retains_exact_precision_and_rejects_lower_readings(self):
         data = sample(datetime.now(timezone.utc))
         latest = run.standalone_reading("camera.meter", data, "12345.170", 2, None)

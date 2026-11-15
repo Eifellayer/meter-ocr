@@ -19,8 +19,13 @@ OCR_PROFILES = (
     (1, 225, 140),
     (4, 150, 165),
     (6, 200, 180),
+    (2, 130, 145),
+    (3, 215, 175),
+    (1, 185, 155),
+    (5, 160, 135),
+    (0, 210, 195),
 )
-OCR_MAJORITY = len(OCR_PROFILES) // 2 + 1
+MAX_OCR_ATTEMPTS = len(OCR_PROFILES)
 
 
 def crop_register(picture, crop):
@@ -78,37 +83,38 @@ def meter_prefix(value, decimals):
     return int(match[1] + fractional)
 
 
-def read_with_retries(read, data, decimals, progress=None):
+def read_with_retries(read, data, decimals, progress=None, max_attempts=5):
+    """Read one image up to max_attempts times; stop on the first valid agreement."""
+    if type(max_attempts) is not int or not 1 <= max_attempts <= MAX_OCR_ATTEMPTS:
+        raise ValueError("OCR-Versuche müssen zwischen 1 und 10 liegen")
     readings = []
-    matching_read = None
-    for index, profile in enumerate(OCR_PROFILES, start=1):
+    for index, profile in enumerate(OCR_PROFILES[:max_attempts], start=1):
         if progress:
-            progress(index - 1, f"OCR-Aufbereitung {index} von {len(OCR_PROFILES)} läuft …")
+            progress(index - 1, f"OCR-Versuch {index} von {max_attempts} läuft …")
         try:
             value = read(profile)
         except subprocess.TimeoutExpired as error:
             print(f"OCR-Variante hat das Zeitlimit überschritten: {error}")
             value = "?????.???"
         status, _ = compare_sample(data, value, decimals)
-        if progress:
-            progress(index, f"OCR-Aufbereitung {index} von {len(OCR_PROFILES)} abgeschlossen.")
-        if not readings and status not in ("difference", "ocr_unclear"):
-            return value, True, 1
-        if status == "match" and matching_read is None:
-            matching_read = value
         readings.append(value)
-    if matching_read is not None:
-        return matching_read, True, len(readings)
+        if progress:
+            progress(index, f"OCR-Versuch {index} von {max_attempts} abgeschlossen.")
+        # Stop immediately on a verified match.
+        # Without a reference, a valid OCR result ends the read.
+        if status in ("match", "ocr_only"):
+            return value, True, index
 
-    # Without a match, report the majority reading and mark any uncertain digits.
+    # No match: show a majority reading for diagnostics if possible.
+    majority = len(readings) // 2 + 1
     prefix_length = 5 + (decimals + 1 if decimals else 0)
     prefixes = Counter(value[:prefix_length] for value in readings
                        if meter_prefix(value, decimals) is not None)
-    prefix = next((value for value, count in prefixes.items() if count >= OCR_MAJORITY), None)
+    prefix = next((value for value, count in prefixes.items() if count >= majority), None)
     display = []
     for column in zip(*readings):
         digit, count = Counter(column).most_common(1)[0]
-        display.append(digit if count >= OCR_MAJORITY else "?")
+        display.append(digit if count >= majority else "?")
     display = "".join(display)
     if prefix is not None:
         display = prefix + display[prefix_length:]
@@ -117,7 +123,7 @@ def read_with_retries(read, data, decimals, progress=None):
 
 def compare_sample(data, ocr, decimals, *, ocr_confirmed=True):
     if not ocr_confirmed:
-        return "ocr_unclear", "Die fünf OCR-Lesungen ergeben keine Mehrheit für die eingestellten Stellen."
+        return "ocr_unclear", "Die OCR-Versuche ergeben keine Mehrheit für die eingestellten Stellen."
     value = meter_prefix(ocr, decimals)
     if value is None:
         return "ocr_unclear", "OCR konnte die eingestellten Stellen nicht eindeutig lesen."

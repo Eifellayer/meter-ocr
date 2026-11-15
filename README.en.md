@@ -22,7 +22,7 @@ For each image, OCR can attempt between **1 and 10 different processing profiles
 
 ## Install
 
-1. In Home Assistant, open **Settings → Apps → Install app → ⋮ → Repositories** and add the [shared repository](https://github.com/Eifellayer/meter-ocr).
+1. In Home Assistant, open **Settings → Apps → Install app → ⋮ → Repositories** and add **Add-ons by Eifellayer** using the [shared link](https://github.com/Eifellayer/meter-ocr).
 2. Install **Meter OCR** for regular use or **Meter OCR Beta** to test new builds.
 3. Configure `esp_url` for the SLFork ESP, for example `http://esp-gaszaehler.local`. Alternatively configure `kamera_entitaet` and optionally `referenz_entitaet`.
 4. Start the app and open its web interface.

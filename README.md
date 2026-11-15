@@ -1,5 +1,7 @@
 # Gaszähler OCR-Kontrolle für Home Assistant
 
+**Sprache / Language:** [Deutsch](README.md) · [English](README.en.md)
+
 **Unabhängige optische Zweitprüfung für automatisch ausgelesene mechanische Gaszähler.**
 
 Du liest deinen Gaszähler bereits mit Kamera und ESP aus, möchtest aber prüfen, ob die erkannten Ziffern wirklich zum Zählerbild passen? Diese App liest das vorhandene Foto **ein zweites Mal lokal mit Tesseract OCR** und vergleicht die Ziffern mit dem vorhandenen Messwert. Damit ist sie eine zusätzliche Plausibilitätskontrolle, kein zweiter Gaszähler.
@@ -96,4 +98,4 @@ Eine Meldung `match` bedeutet Übereinstimmung **bei der eingestellten Genauigke
 
 Die Gaszähler OCR-Kontrolle ist ein kostenloses Hobbyprojekt. Wenn sie dir hilft, freue ich mich über eine [freiwillige PayPal-Spende](https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8).
 
-[Änderungsprotokoll](rf1_ocr_test/CHANGELOG.md) · [Installationshinweise für lokale Altversionen](rf1_ocr_test/README.md)
+[Änderungsprotokoll](rf1_ocr_test/CHANGELOG.md) · [Installationshinweise für lokale Altversionen](rf1_ocr_test/README.md) · [English documentation](README.en.md)

@@ -90,13 +90,19 @@ class Reminder:
 
         if incident is None or not self.enabled:
             return
+        uses_fallback = summary["check_status"] == "slfork_unclear" and history.get("last_reference_is_fallback")
+        message = (
+            "Der ESP verwendet weiterhin einen Ersatzwert. Bitte den aktuellen Stand am Zähler prüfen."
+            if uses_fallback else
+            "Die automatische Kontrolle konnte den Zählerstand wiederholt nicht bestätigen."
+        )
         if reminder is None:
             notification_id = f"rf1_review_{round(incident * 1_000_000)}"
             if notification_id not in notices:
                 self.call_service("persistent_notification.create", {
                     "notification_id": notification_id,
                     "title": "Gaszähler bitte prüfen",
-                    "message": "Die automatische Kontrolle konnte den Zählerstand wiederholt nicht bestätigen. "
+                    "message": message + " "
                                "Das Kontrollbild findest du unter Medien → Lokale Medien → rf1. "
                                "Wenn du den Stand geprüft hast, kannst du diesen Hinweis schließen.",
                 })
@@ -115,8 +121,9 @@ class Reminder:
 
         payload = {
             "title": "Gaszähler bitte prüfen",
-            "message": "Die automatische Kontrolle konnte den Zählerstand wiederholt nicht bestätigen. "
-                       "Bitte prüfe den Stand am Zähler oder öffne das Kontrollbild in Home Assistant.",
+            "message": message + (
+                "" if uses_fallback else " Bitte prüfe den Stand am Zähler oder öffne das Kontrollbild in Home Assistant."
+            ),
         }
         if self.push and not reminder.get("pushed"):
             try:

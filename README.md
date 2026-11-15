@@ -4,6 +4,8 @@
 
 **Versionsstatus: Beta.** Unter 0.5.0 gilt Alpha, ab 0.5.0 bis vor 1.0.0 Beta und ab 1.0.0 stabil.
 
+Der geprüfte GitHub-Stand liegt auf [stable](https://github.com/Thunder86/rf1-kontrollmessung/tree/stable). Neue Änderungen werden auf [beta](https://github.com/Thunder86/rf1-kontrollmessung/tree/beta) getestet. Das Home-Assistant-Repository behält seine bisherige Adresse und verwendet `main` für veröffentlichte Versionen.
+
 **Zählerstände lokal aus Kamerabildern lesen und mit Home Assistant abgleichen.**
 
 Meter OCR liest das Zählerfoto mit **Tesseract OCR**. Mit ESPHome oder einer anderen Home-Assistant-Kamera kann die App einen eigenen OCR-Stand liefern. Mit **AI on the Edge / SLFork** oder einem Referenzsensor prüft sie zusätzlich, ob der vorhandene Messwert zum Bild passt.
@@ -20,10 +22,13 @@ Die App holt das letzte vorhandene Foto sowie die zugehörigen Werte aus SLFork.
 
 Im SLFork-Modus gleicht die App den OCR-Wert mit **Raw Value** und **Actual Value** ab. Im Kameramodus kann ein aktueller kumulierter m³-Sensor als Referenz dienen. Ohne Referenzsensor wird nur das OCR-Ergebnis ausgegeben.
 
+Meldet SLFork **Use Fallback**, zeigt die App den Ersatzwert und dessen bekannte Messzeit separat zur Bildzeit. Bei **Rate Too High (<)** kann SLFork die Referenzzeit weiterstellen, obwohl der Wert gleich bleibt. In diesem Fall nutzt die App die Zeit des letzten bestätigten Abgleichs mit diesem Wert, falls vorhanden. Ist die Messzeit unbekannt, steht das in der Übersicht. Die Plausibilitätsprüfung berücksichtigt die Zeit zum aktuellen Bild und den eingestellten maximalen Durchfluss. Erst ein gültiger Abgleich zählt als Treffer und fließt in den Verbrauch ein.
+
 ## Dauerhafte Einstellungen für die automatische Kontrolle
 
-In der Weboberfläche stehen unter **„Automatische Prüfung – Einstellungen“** vier dauerhaft gespeicherte Prüfregeln:
+In der Weboberfläche stehen unter **Einstellungen → Automatische Prüfung** die dauerhaft gespeicherten Prüfregeln.
 
+- **Prüfintervall:** 1–1.440 Minuten nach einer erfolgreichen Prüfung, standardmäßig 60 Minuten. Die Änderung gilt bereits für die nächste geplante Prüfung.
 - **Vergleich:** Nur volle m³ (0) oder zusätzlich 1–3 Nachkommastellen. Die nicht ausgewählten Nachkommastellen werden ignoriert, nicht gerundet.
 - **Max. OCR-Versuche:** 1–10 Versuche pro Zählerbild (Standard: 5). Bei einer bestätigten Übereinstimmung endet die Prüfung sofort.
 - **Ziffernfarbe:** Automatisch erkennen (Standard) oder gezielt helle bzw. dunkle Ziffern lesen.
@@ -35,7 +40,7 @@ Technisch werden die Web-Einstellungen separat im App-Datenverzeichnis (`/data/a
 
 ## Bildquelle und Ersteinrichtung
 
-Beim ersten Öffnen einer frischen Installation wählst du unter **Bildquelle** den Betriebsmodus. Dieselbe Auswahl steht später in der Weboberfläche zur Verfügung.
+Beim ersten Öffnen einer frischen Installation wählst du unter **Einstellungen → Bildquelle** den Betriebsmodus. Dieselbe Auswahl steht später in der Weboberfläche zur Verfügung.
 
 | Modus | Wann passt er? |
 | --- | --- |
@@ -49,25 +54,25 @@ Der OCR-Sensor benötigt eine Mehrheit von mindestens zwei OCR-Profilen desselbe
 
 ## Kamerabild und Ausschnitt einrichten
 
-Öffne **Manuellen Test** und wähle unter **Bildbereich** die manuelle Einstellung. Gib die Koordinaten im Originalbild in Pixeln ein. Wenn das Foto seitlich oder auf dem Kopf steht, wähle die passende **Bilddrehung**. Die Breite der Vorkommastellen bezieht sich auf den Ausschnitt nach der Drehung. Mit **Jetzt prüfen** siehst du das Auswertungsergebnis und kannst den getesteten Ausschnitt mitsamt Drehung für die Automatik übernehmen.
+Öffne **Testeinstellungen** und wähle unter **Bildbereich** die manuelle Einstellung. Gib die Koordinaten im Originalbild in Pixeln ein. Wenn das Foto seitlich oder auf dem Kopf steht, wähle die passende **Bilddrehung**. Die Breite der Vorkommastellen bezieht sich auf den Ausschnitt nach der Drehung. Mit **Jetzt prüfen** siehst du das Auswertungsergebnis und kannst den getesteten Ausschnitt mitsamt Drehung für die Automatik übernehmen.
 
 Die Voreinstellung erkennt helle oder dunkle Ziffern automatisch. Weitere OCR-Versuche können ungleichmäßiges Licht im Ziffernfenster ausgleichen. Glanzstellen, die Ziffern verdecken, und starke Perspektivverzerrungen erfordern ein besseres Kamerabild. Bei Zählern mit Rollenfenster und kleinen Zeigern lässt sich mit **volle m³** das Rollenfenster einzeln testen. Die Zeiger selbst werden nicht ausgewertet.
 
-Die Ergebnisse mit zehn Gas-, Wasser- und Stromzählerfotos stehen im [Vergleichstest](METER-PHOTO-TESTS.md).
+Der [Vergleichstest](METER-PHOTO-TESTS.md) dokumentiert zehn öffentliche Zählerfotos und weitere zehn Aufnahmen aus der AI-on-the-Edge-Community.
 
 ## Plausibilitätsprüfung und Energie-Dashboard
 
 Für den Verbrauch verwendet Meter OCR automatische Treffer mit Referenz oder übereinstimmende OCR-Versuche im eigenständigen Modus. Der erste gültige Stand setzt die Basis. Danach vergleicht die App den neuen Stand mit der letzten gültigen Messung. Sie verwirft Rücksprünge und Anstiege, die für die verstrichene Zeit zu groß sind. Die berücksichtigte Ziffernauflösung bestimmt den Rundungsspielraum.
 
-Unter **Automatische Prüfung – Einstellungen → Maximaler Durchfluss** trägst du den Qmax-Wert vom Zähler ein. Die Vorgabe für G4 beträgt 6 m³/h. Ein abgelehnter Wert verändert den Verbrauchszähler nicht. Wechselt die Bildquelle oder die Vergleichsgenauigkeit, dient die nächste gültige Ablesung als Basis für weitere Verbrauchsdifferenzen.
+Unter **Einstellungen → Automatische Prüfung → Maximaler Durchfluss** trägst du den Qmax-Wert vom Zähler ein. Die Vorgabe für G4 beträgt 6 m³/h. Wechselt die Bildquelle oder die Vergleichsgenauigkeit, dient die nächste gültige Ablesung als Basis für weitere Verbrauchsdifferenzen.
 
 Füge in Home Assistant unter **Energie → Einstellungen → Gasverbrauch** den Sensor **Meter OCR Gasverbrauch gesamt** (`sensor.rf1_verbrauch_gesamt`) hinzu. Er entsteht mit der ersten gültigen Messung und summiert die bestätigten Verbrauchsdifferenzen in m³. Home Assistant berechnet aus diesem kumulativen Wert die Ansichten für Stunde, Tag, Woche und Monat.
 
 ## Benachrichtigungen und Prüfstatus
 
-Oben zeigt ein grüner Haken einen bestätigten Vergleich. Bei einem aktuellen Problem erscheint ein roter Hinweis. **Ignorieren** blendet diesen Vorfall in der Oberfläche aus. Ein neuer Vorfall erscheint wieder, und die Benachrichtigungsregeln gelten weiterhin.
+Oben zeigt ein grüner Haken einen bestätigten Vergleich. Bei einem Fehlschlag erscheint zunächst gelb **Letzte Prüfung fehlgeschlagen**. Nach einer Stunde ohne Erfolg kannst du die Details sehen und den Hinweis über **Ignorieren** ausblenden. Fällt die Bildquelle durchgehend eine Stunde aus, erscheint der Hinweis rot.
 
-Öffne **Benachrichtigungen** und aktiviere **Bei anhaltenden Problemen benachrichtigen**. **Hinweis nach** bestimmt, wie viele Minuten ohne erfolgreiche automatische Prüfung bis zum Home-Assistant-Hinweis vergehen. Mit der zweiten Wartezeit legst du fest, wann ein noch offener Hinweis per Handy-Push oder E-Mail weitergeleitet wird. **0 Stunden** versendet die Nachricht zusammen mit dem Hinweis.
+Öffne **Einstellungen → Benachrichtigungen** und aktiviere **Bei anhaltenden Problemen benachrichtigen**. **Hinweis nach** bestimmt die Wartezeit für den Home-Assistant-Hinweis, auch während SLFork einen Ersatzwert meldet. Mit der zweiten Wartezeit legst du fest, wann ein noch offener Hinweis per Handy-Push oder E-Mail weitergeleitet wird. **0 Stunden** versendet die Nachricht zusammen mit dem Hinweis.
 
 - **Nur in Home Assistant:** Beide optionalen Ziele leer lassen.
 - **Handy-Push:** Den Companion-Dienst eintragen, zum Beispiel `notify.mobile_app_mein_handy`.
@@ -81,18 +86,18 @@ Je Ziel wird pro Vorfall höchstens eine erfolgreiche Nachricht erfasst. Wenn du
 
 Die frühere Sprachauswahl von 0.8.1 war browserweit. Wähle eine gewünschte dauerhafte Sprache nach dem Update einmal im jeweiligen Konto. Die App übernimmt die Sprache aus der bereits angemeldeten Frontend-Verbindung. In den App-Einstellungen wird nur die manuelle Auswahl je Nutzer gespeichert.
 
-## „Jetzt prüfen“ – erweiterter manueller Test
+## Manueller Test
 
-Der Bereich **„Manuellen Test öffnen“** bleibt im Normalbetrieb zugeklappt. Bei Bedarf aufklappen: Dort lassen sich **Ziffernfarbe, Vergleichsgenauigkeit und maximale OCR-Versuche** für diesen einen Test einstellen. Zusätzlich kann man die automatische Bildausschnitterkennung deaktivieren und einen **manuellen Ausschnitt (links, oben, rechts, unten) sowie die Breite der Vorkommastellen** ausprobieren, ohne die automatischen Prüfregeln zu verändern. Wenn für den manuellen Ausschnitt eine Vorschau erstellt werden konnte, erscheint **„Getesteten Ausschnitt für die Automatik übernehmen“**. So lassen sich die Koordinaten direkt speichern, ohne sie erneut in Home Assistant einzugeben.
+Unter **Testeinstellungen** kannst du Ziffernfarbe, Vergleichsgenauigkeit, OCR-Versuche und Bildausschnitt für den manuellen Test bearbeiten. Nach **Jetzt prüfen** kannst du einen erprobten Ausschnitt mit **Getesteten Ausschnitt für die Automatik übernehmen** dauerhaft speichern.
 
-Der Button **„Jetzt prüfen“** startet einen manuellen Test mit dem bereits vorhandenen Bild. Er löst keine neue Aufnahme am ESP aus. Die Weboberfläche zeigt unmittelbar den aktuellen Schritt:
+Mit **Test starten** prüfst du direkt von der Hauptseite das vorhandene Bild. Die Weboberfläche zeigt den Fortschritt unter dem Startknopf.
 
 1. Anfrage angenommen
 2. Bild und Referenzwerte laden
 3. OCR-Auswertung, **1 bis maximal 10 Versuche** mit Fortschrittsbalken
 4. Ergebnis speichern und abschließen
 
-Der Balken zeigt **tatsächlich abgeschlossene OCR-Versuche**, nicht eine geschätzte Laufzeit. Die Schaltfläche wird während der Prüfung zu **„Prüfung läuft …“** und ist vorübergehend gesperrt. Danach erscheint direkt **„Test erfolgreich“** bei Übereinstimmung (dezent grün) oder eine verständliche Fehler- bzw. Abweichungsmeldung (dezent rot). Eine erfolgreiche Bildlesung ohne Referenz wird neutral angezeigt. Der manuelle Test verändert weder den automatischen Zeitplan noch die Trefferzahl. Das **OCR-Testbild** markiert mit **grünen Rahmen** gelesene Ziffern und mit **roten Rahmen** unklare Ziffern. Ohne erkannte Einzelrahmen sind die Rahmen nur eine angenäherte Aufteilung. Grün bedeutet lediglich **als Ziffer gelesen**, nicht automatisch eine Übereinstimmung mit dem Referenzwert.
+Der Balken zeigt die abgeschlossenen OCR-Versuche. Währenddessen heißt der Knopf **Prüfung läuft …**. Das Ergebnis erscheint darunter, grün bei Übereinstimmung, gelb bei Abweichung oder Unsicherheit und neutral bei einer erfolgreichen Lesung ohne Referenz. Das **OCR-Testbild** markiert gelesene Ziffern grün und unklare Stellen rot. Ohne erkannte Einzelrahmen sind die Markierungen näherungsweise aufgeteilt.
 
 Unter **„Mehr Infos“** lassen sich die einzelnen OCR-Versuche mit ihren gelesenen Werten ansehen. Bei unsicherer Erkennung nennt das Ergebnis – soweit ermittelbar – die betroffenen Vorkomma- und Nachkommastellen. Eine bestätigte Prüfung erklärt direkt, auf welcher Vergleichsgenauigkeit sie beruht.
 
@@ -102,7 +107,7 @@ Die kompakte Weboberfläche zeigt die wichtigsten Angaben in getrennten Bereiche
 
 ## Automatische Kontrolle
 
-Nach erfolgreichem Abgleich prüft die App normalerweise nach einer Stunde erneut. Bei Abweichungen, unklarer Erkennung oder fehlenden Daten versucht sie es alle fünf Minuten. Standardmäßig nach vier Stunden ohne erfolgreiche Prüfung meldet `sensor.rf1_pruefstatus` den Zustand `review_due`. Die Wartezeiten und zusätzliche Benachrichtigungsziele lassen sich in der Weboberfläche einstellen.
+Nach einem Treffer prüft die App standardmäßig nach einer Stunde erneut. Bei Fehlschlägen versucht sie es spätestens nach fünf Minuten. Standardmäßig nach vier Stunden ohne erfolgreiche Prüfung meldet `sensor.rf1_pruefstatus` den Zustand `review_due`. Ein kürzeres Prüfintervall ruft das vorhandene Bild häufiger ab. Die Aufnahmefrequenz des ESP stellst du am Gerät ein.
 
 Ein SLFork-Messzeitpunkt wird automatisch nur einmal gezählt. Alte Bilder lassen sich weiterhin manuell prüfen. Bei einer allgemeinen Home-Assistant-Kamera verwendet die App den Abrufzeitpunkt. Für unabhängige Bestätigungen muss die Kamera aktuelle Bilder liefern. Ein konfigurierter Referenzsensor muss den Stand in `m³` melden und innerhalb von fünf Minuten zum Bildabruf aktualisiert worden sein.
 

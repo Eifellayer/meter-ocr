@@ -2,7 +2,7 @@
 
 import re
 
-from checks import meter_prefix
+from checks import FALLBACK_NOTICE, meter_prefix
 
 DEFAULT_FLOW_LPH = 6_000
 MAX_FLOW_LPH = 999_999_999
@@ -10,6 +10,9 @@ MAX_FLOW_LPH = 999_999_999
 LOWER_READING = "Zählerstand liegt unter dem letzten gültigen Wert."
 EXCESSIVE_INCREASE = "Zählerstand steigt schneller als der eingestellte Durchfluss erlaubt."
 INVALID_TIME = "Messzeitpunkt liegt vor der letzten gültigen Messung."
+FALLBACK_PLAUSIBLE = "OCR-Zuwachs plausibel. Warte auf den Abgleich."
+FALLBACK_UNKNOWN_TIME = "Für die Plausibilitätsprüfung fehlt ein gültiger Messzeitpunkt."
+FALLBACK_UNCLEAR_OCR = "OCR-Stand unsicher."
 
 
 class ImplausibleReading(ValueError):
@@ -63,3 +66,35 @@ def accumulate_consumption(previous, source, stamp, reading, decimals, max_flow_
         "step_litres": step,
         "total_litres": total,
     }
+
+
+def fallback_detail(sample, image_time, ocr, readings, previous, source, max_flow_lph):
+    """Assess repeatable OCR against dated readings, without accepting consumption."""
+    for decimals in (3, 2, 1, 0):
+        prefix = meter_prefix(ocr, decimals)
+        if prefix is not None and sum(meter_prefix(value, decimals) == prefix
+                                      for value in readings) * 2 > len(readings):
+            break
+    else:
+        return f"{FALLBACK_NOTICE} {FALLBACK_UNCLEAR_OCR}"
+
+    baselines = []
+    if previous.get("source") == source and previous["timestamp"] < image_time:
+        baselines.append(previous)
+    reference, reference_time = sample["reference"], sample["reference_time"]
+    if reference_time is not None:
+        for reference_decimals in (3, 2, 1, 0):
+            if meter_prefix(reference, reference_decimals) is not None:
+                baselines.append(accumulate_consumption(
+                    {}, source, reference_time, reference, reference_decimals, max_flow_lph,
+                ))
+                break
+    if not baselines:
+        return f"{FALLBACK_NOTICE} {FALLBACK_UNKNOWN_TIME}"
+
+    try:
+        for baseline in baselines:
+            accumulate_consumption(baseline, source, image_time, ocr, decimals, max_flow_lph)
+    except ImplausibleReading as error:
+        return f"{FALLBACK_NOTICE} OCR: {error}"
+    return f"{FALLBACK_NOTICE} {FALLBACK_PLAUSIBLE}"

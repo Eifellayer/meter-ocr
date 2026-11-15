@@ -2,6 +2,14 @@
 
 Versionen unter 0.5.0 sind Alpha. Ab 0.5.0 bis vor 1.0.0 gilt Beta. Ab 1.0.0 beginnt die stabile Reihe.
 
+## 0.8.3 · Beta
+
+- Das Prüfintervall ist von 1 bis 1.440 Minuten einstellbar. Standard sind 60 Minuten nach einer erfolgreichen Prüfung und fünf Minuten bis zum nächsten Versuch bei Fehlern.
+- Die Übersicht zeigt die letzte automatische Prüfung und den letzten bestätigten Abgleich. **Test starten** zeigt Fortschritt und Ergebnis direkt an. **Testeinstellungen**, **Bildquelle**, **Automatische Prüfung** und **Benachrichtigungen** lassen sich aufklappen.
+- Gelber Hinweis nach einem fehlgeschlagenen Abgleich. Details und **Ignorieren** erscheinen nach einer Stunde. Eine durchgehend ausgefallene Bildquelle wird nach einer Stunde rot angezeigt.
+- SLFork-Ersatzwerte sind mit ihrer bekannten Messzeit beschriftet. Die App prüft den OCR-Stand anhand der Zeitdifferenz und des eingestellten Durchflusslimits. Erst ein neuer gültiger Abgleich zählt für Bestätigungen und Verbrauch.
+- Vorübergehende ESP-Ersatzwerte nutzen die bestehende Wartezeit für Benachrichtigungen. Ein anhaltender Ersatzwert wird im Hinweis benannt.
+
 ## 0.8.2 · Beta
 
 - Die App heißt jetzt **Meter OCR**. Der technische App-Slug und die bestehenden Home-Assistant-Entitäts-IDs bleiben erhalten.

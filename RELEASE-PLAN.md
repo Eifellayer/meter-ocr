@@ -2,7 +2,13 @@
 
 Ausgangspunkt ist `main` bei `ee3294c` mit App-Version 0.8.1. Die offenen Issues [#1](https://github.com/Thunder86/rf1-kontrollmessung/issues/1), [#2](https://github.com/Thunder86/rf1-kontrollmessung/issues/2) und [#3](https://github.com/Thunder86/rf1-kontrollmessung/issues/3) sind teilweise umgesetzt. [#4](https://github.com/Thunder86/rf1-kontrollmessung/issues/4) ersetzt den bisherigen browserweiten Sprachmodus.
 
-Die Beta 0.8.2 folgt auf die Beta 0.8.1 im bestehenden Home-Assistant-Repository. Die Beta-Reihe beginnt bei 0.5.0. Die unten aufgeführten Live-Prüfungen gehören zur Freigabe von 1.0.
+Die laufende Version 0.8.3 übernimmt 0.8.2 als Basis. Die Beta-Reihe beginnt bei 0.5.0. Die unten aufgeführten Live-Prüfungen gehören zur Freigabe von 1.0.
+
+## GitHub-Zweige
+
+- `stable` enthält den geprüften Stand, einschließlich der laufenden Version 0.8.3.
+- `beta` startet von diesem Stand. Künftige Änderungen gehen zuerst auf `beta`. Nach erfolgreichen Prüftests und dokumentierter Abnahme werden sie in `stable` übernommen.
+- `main` bleibt der Standardzweig für das bestehende Home-Assistant-Repository. Veröffentlichte Versionen werden aus `stable` nach `main` übernommen.
 
 | Priorität | Arbeit | Abnahme |
 | --- | --- | --- |
@@ -45,6 +51,14 @@ Der Profilsprache-Zugriff verwendet den angemeldeten Home-Assistant-Frontend-Kon
 Der Workflow prüft die App-Images auf AMD64 und ARM64. Ein Live-Upgrade mit Supervisor, reale Zählerbilder einer SLFork- und ESPHome-Kamera, Companion App und Zustellung von Push und SMTP-E-Mail bleiben Freigabeprüfungen.
 
 Die [Foto-Vergleichstests](METER-PHOTO-TESTS.md) dokumentieren zehn reale Anzeigen mit Ausschnitt, sichtbarer Ziffernfolge und OCR-Ergebnis.
+
+### 0.8.3
+
+Die 50 lokalen Tests unter Python 3.11 umfassen den direkten manuellen Start mit Fortschritt, eingeklappte Einstellungen, das erneute Planen nach einem Intervallwechsel und den gelben Hinweis vor Ablauf einer Stunde. Der ESP-Regressionstest prüft den Ersatzwert mit fortgeschriebenem Zeitstempel, den plausiblen OCR-Verlauf, den unveränderten Verbrauch und die anschließende Erholung. Der Benachrichtigungstest simuliert sowohl die Erholung vor Ablauf der Wartezeit als auch den Versand bei anhaltendem Ersatzwert.
+
+Die App wertet die Zeitfelder und den Messstatus aus [SLForks Prozessdaten](https://github.com/Slider0007/AI-on-the-edge-device/blob/develop/docs/API/REST/process_data.md) aus. Beim negativen Grenzwert kann [die Firmware den Ersatzwert-Zeitstempel aktualisieren](https://github.com/Slider0007/AI-on-the-edge-device/blob/v17.4.1-SLFork/code/components/mainprocess_ctrl/ClassFlowPostProcessing.cpp), während sie den alten Wert weiter ausgibt. Der Test deckt diesen Ablauf ab.
+
+Zehn weitere [Aufnahmen aus der AI-on-the-Edge-Community](METER-PHOTO-TESTS.md#083--zehn-aufnahmen-aus-der-ai-on-the-edge-community) ergänzen die OCR-Stichprobe. Keine ergab einen mehrheitlich gelesenen Stand. Die App benötigt für eine Freigabe zur allgemeinen Zählererkennung weitere Tests mit unveränderten Kamerabildern und unterschiedlichen Zählwerken.
 
 ## Ergänzungen für die Bedienung
 

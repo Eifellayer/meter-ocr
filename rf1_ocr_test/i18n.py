@@ -6,7 +6,7 @@ The language only affects text shown in the ingress interface.
 
 import re
 
-from checks import uncertain_positions
+from checks import FALLBACK_NOTICE, uncertain_positions
 
 
 EN_UI = {
@@ -18,9 +18,17 @@ EN_UI = {
     "Vergleich": "Comparison",
     "Erkannter Stand": "OCR reading",
     "Referenz": "Reference",
+    "ESP-Ersatzwert": "ESP fallback reading",
+    "Zeitpunkt unbekannt": "Time unknown",
     "Prüfergebnis": "Check result",
     "Bildzeit": "Image time",
-    "Automatische Prüfung – Einstellungen": "Automatic checks – settings",
+    "Letzte automatische Prüfung": "Last automatic check",
+    "Letzter bestätigter Abgleich": "Last confirmed match",
+    "Einstellungen": "Settings",
+    "Automatische Prüfung": "Automatic checks",
+    "Prüfintervall (Minuten)": "Check interval (minutes)",
+    "Zeit nach einer erfolgreichen Prüfung. Bei einem Fehler erfolgt der nächste Versuch spätestens nach fünf Minuten.":
+        "Wait after a successful check. After a failure, retry within five minutes.",
     "Max. OCR-Versuche": "Max. OCR attempts",
     "Ziffernfarbe": "Digit color",
     "Bildbereich (links, oben, rechts, unten)": "Image region (left, top, right, bottom)",
@@ -34,9 +42,11 @@ EN_UI = {
     "Breite der Vorkommastellen": "Width of whole-number digits",
     "Bildbereich": "Image region",
     "Speichern": "Save",
-    "Gilt dauerhaft ab der nächsten automatischen Prüfung. Bei geänderter Vergleichsgenauigkeit beginnt die Trefferzählung neu.":
-        "Saved rules apply from the next automatic check and persist after restart. Changing the comparison precision resets the confirmation count.",
-    "Manuellen Test öffnen": "Open manual test",
+    "Das Prüfintervall gilt auch für die bereits geplante nächste Prüfung. Bei geänderter Vergleichsgenauigkeit beginnt die Trefferzählung neu.":
+        "The interval also applies to the next scheduled check. Changing comparison precision resets the match count.",
+    "Manueller Test": "Manual test",
+    "Test starten": "Start test",
+    "Testeinstellungen": "Test settings",
     "Zusätzliche Bild- und OCR-Einstellungen": "Advanced image and OCR settings",
     "Manueller Bildtest": "Manual image test",
     "Jetzt prüfen": "Run check now",
@@ -104,6 +114,7 @@ EN_UI = {
     "Automatischer Prüfstatus": "Automatic check status",
     "Zählerstand bestätigt": "Meter reading confirmed",
     "Zählerstand bitte prüfen": "Check the meter reading",
+    "Letzte Prüfung fehlgeschlagen": "Last check failed",
     "Blendet diesen Hinweis hier aus. Prüfungen und Benachrichtigungen laufen weiter.":
         "Hide this warning here. Checks and notifications will continue.",
     "Ignorieren": "Ignore",
@@ -157,6 +168,11 @@ EN_UI = {
 }
 
 EN_DETAILS = {
+    FALLBACK_NOTICE: "The ESP is using a fallback reading.",
+    "OCR-Zuwachs plausibel. Warte auf den Abgleich.": "OCR increase looks plausible. Waiting for a match.",
+    "Für die Plausibilitätsprüfung fehlt ein gültiger Messzeitpunkt.":
+        "A valid measurement time is needed to assess the change.",
+    "OCR-Stand unsicher.": "OCR reading uncertain.",
     "Zählerstand liegt unter dem letzten gültigen Wert.": "Reading is lower than the last accepted value.",
     "Zählerstand steigt schneller als der eingestellte Durchfluss erlaubt.":
         "Reading increased faster than the configured maximum flow.",
@@ -225,6 +241,10 @@ def english_result(detail, status=None, decimals=0, readings=None):
         return "No result available."
     if detail in EN_DETAILS:
         return EN_DETAILS[detail]
+    if detail.startswith(FALLBACK_NOTICE + " "):
+        reason = detail[len(FALLBACK_NOTICE) + 1:]
+        translated = EN_DETAILS.get(reason.removeprefix("OCR: "), "")
+        return " ".join(part for part in (EN_DETAILS[FALLBACK_NOTICE], translated) if part)
     if detail.startswith("Neue Vergleichsgenauigkeit gespeichert."):
         return EN_UI[
             "Neue Vergleichsgenauigkeit gespeichert. Die nächste automatische Prüfung zeigt das erste Ergebnis mit dieser Einstellung."

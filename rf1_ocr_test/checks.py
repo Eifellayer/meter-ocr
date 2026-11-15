@@ -1,6 +1,7 @@
 """Independent OCR and restart-safe agreement counts over a rolling window."""
 from collections import Counter
 from datetime import datetime
+from decimal import Decimal
 import io
 import re
 import subprocess
@@ -9,10 +10,18 @@ from PIL import Image, ImageChops, ImageFilter, ImageOps
 
 WINDOW_SECONDS = 24 * 60 * 60
 REQUIRED_MATCHES = 5
-NORMAL_INTERVAL = 60 * 60
+DEFAULT_INTERVAL_MINUTES = 60
+MAX_INTERVAL_MINUTES = 24 * 60
+NORMAL_INTERVAL = DEFAULT_INTERVAL_MINUTES * 60
 RETRY_INTERVAL = 5 * 60
+WARNING_DETAIL_AFTER = 60 * 60
 REVIEW_AFTER = 4 * 60 * 60
 FRESH_SAMPLE_AGE = 15 * 60
+FALLBACK_NOTICE = "Der ESP verwendet einen Ersatzwert."
+FALLBACK_STATUS = re.compile(
+    r"^(?:E9[123]|00[234])(?:\s|$)|\b(?:use|using) fallback\b|\brate (?:too high|negative)\b",
+    re.IGNORECASE,
+)
 # Cutoff, sharpening, threshold and optional correction for uneven lighting.
 OCR_PROFILES = (
     (2, 175, 155, False),
@@ -181,6 +190,8 @@ def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace
 
 
 def compare_sample(data, ocr, decimals, *, ocr_confirmed=True):
+    if data.get("reference_is_fallback"):
+        return "slfork_unclear", FALLBACK_NOTICE
     if not ocr_confirmed:
         return "ocr_unclear", "Zählerstand nicht sicher erkannt. Bitte die unklaren Stellen im Kamerabild prüfen."
     value = meter_prefix(ocr, decimals)
@@ -230,10 +241,50 @@ def rolling_summary(history, now, review_after=REVIEW_AFTER):
 
 
 def sample_timestamp(data, zone):
-    stamp = datetime.fromisoformat(data["esp_timestamp"])
+    return timestamp_epoch(data["esp_timestamp"], zone)
+
+
+def timestamp_epoch(value, zone):
+    stamp = datetime.fromisoformat(value)
     if stamp.tzinfo is None:
         stamp = stamp.replace(tzinfo=zone)
     return stamp.timestamp()
+
+
+def slfork_reference(data, image_time, zone, previous_match):
+    """Label carried-forward values and find the time of a trusted observation."""
+    actual = data["actual_value"]
+    fallback = data.get("slfork_fallback_value")
+    status = str(data.get("slfork_value_status") or "")
+    try:
+        reported_time = timestamp_epoch(data.get("slfork_last_valid_timestamp"), zone)
+    except (TypeError, ValueError, OverflowError, OSError):
+        reported_time = None
+
+    def amount(value):
+        text = str(value).replace(",", ".")
+        return Decimal(text) if re.fullmatch(r"[0-9]{1,5}(?:\.[0-9]+)?", text) else None
+
+    fallback_amount = amount(fallback)
+    is_fallback = bool(FALLBACK_STATUS.search(status)) or (
+        fallback_amount is not None and fallback_amount == amount(actual)
+        and reported_time is not None and reported_time != image_time
+    )
+    if not is_fallback:
+        valid = not (re.match(r"^[EW][0-9]+(?:\s|$)", status)
+                     or data.get("slfork_process_error") in (-1, -2, "-1", "-2"))
+        return {"reference_is_fallback": False, "reference": actual,
+                "reference_time": image_time if valid and amount(actual) is not None else None}
+
+    displayed = fallback if fallback_amount is not None else actual
+    verified_time = previous_match.get("time")
+    # Negative-rate handling can advance the fallback timestamp without updating the value.
+    if reported_time is None or reported_time >= image_time:
+        reported_time = None
+    if (amount(displayed) is not None and amount(displayed) == amount(previous_match.get("reading"))
+            and isinstance(verified_time, (int, float)) and verified_time < image_time):
+        reported_time = max(verified_time, reported_time or verified_time)
+    return {"reference_is_fallback": True, "reference": displayed, "reference_time": reported_time}
 
 
 def sample_epoch(data, zone, now):
@@ -260,13 +311,47 @@ def record_sample(history, data, ocr, zone, now, decimals=0, *, ocr_confirmed=Tr
     return True
 
 
-def schedule_next_check(history, outcome, checked_at):
+def valid_interval_minutes(value):
+    return type(value) is int and 1 <= value <= MAX_INTERVAL_MINUTES
+
+
+def _check_delay(outcome, interval_minutes):
+    interval = interval_minutes * 60
+    return interval if outcome in ("match", "ocr_only") else min(interval, RETRY_INTERVAL)
+
+
+def schedule_next_check(history, outcome, checked_at, interval_minutes=DEFAULT_INTERVAL_MINUTES):
     history["check_status"] = outcome
     if outcome in ("match", "ocr_only"):
         history.pop("failure_since", None)
-        interval = NORMAL_INTERVAL
     else:
         history.setdefault("failure_since", checked_at)
-        interval = RETRY_INTERVAL
-    history["next_check_at"] = checked_at + interval
+    if outcome == "capture_unavailable":
+        history.setdefault("capture_failure_since", checked_at)
+    else:
+        history.pop("capture_failure_since", None)
+    history["next_check_at"] = checked_at + _check_delay(outcome, interval_minutes)
+    history["check_interval_minutes"] = interval_minutes
 
+
+def last_check_at(history):
+    deadline = history.get("next_check_at")
+    outcome = history.get("check_status")
+    if not deadline or not outcome:
+        return None
+    interval_minutes = history.get("check_interval_minutes", DEFAULT_INTERVAL_MINUTES)
+    if not valid_interval_minutes(interval_minutes):
+        interval_minutes = DEFAULT_INTERVAL_MINUTES
+    return deadline - _check_delay(outcome, interval_minutes)
+
+
+def reschedule_next_check(history, interval_minutes):
+    """Apply a new interval relative to the same last check, including older schedules."""
+    if history.get("check_interval_minutes", DEFAULT_INTERVAL_MINUTES) == interval_minutes:
+        return False
+    checked_at = last_check_at(history)
+    if checked_at is None:
+        return False
+    history["next_check_at"] = checked_at + _check_delay(history["check_status"], interval_minutes)
+    history["check_interval_minutes"] = interval_minutes
+    return True

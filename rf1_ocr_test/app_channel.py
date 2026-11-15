@@ -1,5 +1,5 @@
 """Stable Home Assistant app identity and backward-compatible entity namespace."""
-APP_NAME = "Meter OCR"
+APP_NAME = "AI Meter Reader"
 NAMESPACE = "rf1"
 LABEL_SUFFIX = ""
 CHECK_ENTITY = f"sensor.{NAMESPACE}_pruefstatus"

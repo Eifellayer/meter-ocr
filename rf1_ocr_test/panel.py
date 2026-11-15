@@ -73,6 +73,17 @@ header{{display:flex;align-items:baseline;justify-content:space-between;gap:.5re
 .automatic-banner p{{margin:.2rem 0 0;overflow-wrap:anywhere}}
 .automatic-banner p:empty{{display:none}}
 .automatic-banner button{{margin-left:auto;padding:.35rem .7rem;min-height:2.75rem}}
+.automatic-interval-hint{{display:flex;align-items:center;gap:.6rem;margin:.6rem 0 1rem;color:var(--muted)}}
+.automatic-interval-hint[hidden]{{display:none}}
+.activity-status{{margin:.15rem 0 0;color:var(--muted);font-size:.9rem;overflow-wrap:anywhere}}
+.activity-status[data-offline="true"]{{color:light-dark(#8d282e,#ffc0c1);font-weight:650}}
+.connection-status{{margin:.35rem 0;color:var(--muted);font-size:.9rem}}
+.connection-status[data-state="connected"]{{color:light-dark(#155d39,#a2e5bc)}}
+.connection-status[data-state="stale"]{{color:light-dark(#704c08,#ffdf8a)}}
+.connection-status[data-state="error"]{{color:light-dark(#8d282e,#ffc0c1)}}
+.paused-notice{{margin:0 0 1rem;padding:1rem;border:2px solid #c28a25;border-radius:.85rem;background:light-dark(#fff3c4,#453718);color:light-dark(#654400,#ffe29a);font-size:1.05rem}}
+.paused-notice strong{{display:block;font-size:1.15rem;margin-bottom:.25rem}}
+.paused-notice p{{margin:.15rem 0 .7rem}}
 @media(max-width:500px){{.automatic-banner{{flex-wrap:wrap}}.automatic-banner-text{{flex:1;min-width:0}}}}
 .notification-help li + li{{margin-top:.35rem}}
 .automatic-images > summary{{cursor:pointer;color:var(--muted)}}
@@ -189,6 +200,7 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <button type="button" id="open-manual-settings">Test einstellen</button>
 <button id="start-check" type="submit" form="manual-form">Test starten</button>
 </div></div>
+<div class="paused-notice" id="paused-notice" {paused_notice_hidden} role="status" aria-live="polite"><strong>Automatik pausiert</strong><p>Es starten keine neuen automatischen Prüfungen. Ein bereits laufender Durchlauf darf noch enden. Manuelle Tests bleiben verfügbar.</p><form method="post" action="automatik-pause" id="resume-auto-form"><input type="hidden" name="lang" value="{language}"><input type="hidden" name="mode" value="{language_mode}"><input type="hidden" name="csrf" value="{csrf}"><input type="hidden" name="paused" value="0"><button type="submit">Automatik fortsetzen</button></form></div>
 <div class="automatic-banner" id="automatic-banner" data-tone="{automatic_tone}"
  data-incident="{automatic_incident}" data-preference-key="{banner_preference_key}">
 <span class="automatic-banner-icon" aria-hidden="true">{automatic_icon}</span>
@@ -199,14 +211,18 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <button id="ignore-automatic-warning" type="button" {ignore_hidden}
  title="Blendet diesen Hinweis hier aus. Prüfungen und Benachrichtigungen laufen weiter.">Ignorieren</button>
 </div>
+<div class="automatic-interval-hint" id="automatic-interval-hint" hidden><span>Wiederholte Fehlablesung? Ein kürzeres Prüfintervall kann helfen, wenn sich der Zähler nach einer Weile wieder klarer ablesen lässt.</span><button type="button" id="open-interval-settings">Prüfintervall ändern</button></div>
+<form method="post" action="automatik-pause" id="pause-auto-form" {pause_button_hidden}><input type="hidden" name="lang" value="{language}"><input type="hidden" name="mode" value="{language_mode}"><input type="hidden" name="csrf" value="{csrf}"><input type="hidden" name="paused" value="1"><button type="submit">Automatik pausieren</button></form>
+<p class="connection-status" id="source-connection" data-state="{source_connection_state}">Quelle: {source_connection}</p>
 <dl><dt>Erkannter Stand</dt><dd id="automatic-ocr">{ocr}</dd>
 <dt>Referenz</dt><dd><span id="automatic-reference">{reference}</span>
 <small id="automatic-reference-note" class="reference-note" data-epoch="{reference_time}"
  data-fallback="{reference_is_fallback}" hidden></small></dd>
 <dt>Bildzeit</dt><dd id="automatic-image-time" class="stamp" data-epoch="{image_time}">–</dd>
-<dt>Letzte automatische Prüfung</dt><dd id="automatic-last-check" class="stamp" data-epoch="{last_check}">–</dd>
+<dt>Letzte Prüfung</dt><dd id="automatic-last-check" class="stamp" data-epoch="{last_check}">–</dd>
 <dt>Letzter bestätigter Abgleich</dt><dd id="automatic-last-match" class="stamp" data-epoch="{last_match}">–</dd>
 <dt>Nächste Prüfung</dt><dd id="countdown">–</dd></dl>
+<p class="activity-status"><strong>Automatik:</strong> <span id="automatic-activity">{automatic_activity}</span></p>
 <details class="ocr-details" id="automatic-ocr-details" hidden>
 <summary>Mehr Infos: Was wurde bei den OCR-Versuchen gelesen?</summary>
 <p class="ocr-scope"></p>
@@ -215,7 +231,7 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 </details>
 <details class="dashboard-help">
 <summary>Stand im Home-Assistant-Dashboard anzeigen</summary>
-<p>Wenn Meter OCR selbst aus einer ESPHome- oder Home-Assistant-Kamera liest, kannst du den Sensor „OCR-Zählerstand“ zum Dashboard hinzufügen. Seine Entitäts-ID lautet <code>sensor.rf1_ocr_zaehlerstand</code>.</p>
+<p>Wenn AI Meter Reader selbst aus einer ESPHome- oder Home-Assistant-Kamera liest, kannst du den Sensor „Zählerstand“ zum Dashboard hinzufügen. Seine Entitäts-ID lautet <code>sensor.rf1_ocr_zaehlerstand</code>.</p>
 <p>Oder füge diese kurze YAML-Konfiguration in eine manuelle Karte ein:</p>
 <pre><code>type: entity
 entity: sensor.rf1_ocr_zaehlerstand
@@ -318,7 +334,7 @@ name: Zählerstand (OCR)</code></pre>
 <label id="wizard-source-url">SLFork-Adresse<input name="url" value="{source_url}" maxlength="150" placeholder="http://esp-gaszaehler.local"></label>
 <label id="wizard-source-camera">Home-Assistant-Kamera<input name="camera" value="{source_camera}" maxlength="80" placeholder="camera.gaszaehler"></label>
 <label id="wizard-source-reference">Vergleichssensor (optional)<input name="reference" value="{source_reference}" maxlength="80" placeholder="sensor.gaszaehler"></label>
-<details class="setup-help"><summary>ⓘ Welcher Weg passt?</summary><p>SLFork liefert Bild und Messwert. Die Livebild-Quelle ruft bei jeder Prüfung ein aktuelles Standbild deiner Home-Assistant-Kamera ab; ein Video wird nicht dauerhaft ausgewertet. Du kannst dazu einen Zählerstandssensor – etwa von AI on the Edge – als Vergleich eintragen. Ohne Referenzsensor liest Meter OCR selbst und prüft die Werte auf Plausibilität.</p></details>
+<details class="setup-help"><summary>ⓘ Welcher Weg passt?</summary><p>SLFork liefert Bild und Messwert. Die Livebild-Quelle ruft bei jeder Prüfung ein aktuelles Standbild deiner Home-Assistant-Kamera ab; ein Video wird nicht dauerhaft ausgewertet. Du kannst dazu einen Zählerstandssensor – etwa von AI on the Edge – als Vergleich eintragen. Ohne Referenzsensor liest AI Meter Reader selbst und prüft die Werte auf Plausibilität.</p></details>
 <details class="setup-help"><summary>ⓘ Hinweis zum Teststand</summary><p>Für reale Tests nutze ich ausschließlich AI on the Edge. Die übrigen Kamera- und Zählermodi sind bisher nur mit simulierten Bildern und automatisierten Tests geprüft.</p></details>
 <div class="setup-controls"><span class="setup-count"></span><button type="button" class="setup-next">Weiter</button></div>
 </fieldset>
@@ -330,7 +346,7 @@ name: Zählerstand (OCR)</code></pre>
 <p class="settings-note setup-help">Die Vergleichsgenauigkeit darf kleiner sein als die angezeigte Stellenzahl. Kleine Zeiger werden nicht automatisch gelesen; bei Rollen und Zeigern bitte nur die Ziffernrollen einstellen.</p>
 <label>Fallback-Zählerstand (optional)<input name="fallback_value" value="{fallback_value}" inputmode="decimal" maxlength="16" placeholder="z. B. 10446,337"></label>
 <label>Stand abgelesen am<input name="fallback_time" type="datetime-local" value="{fallback_time}"></label>
-<details class="setup-help"><summary>ⓘ Wie wird der Fallback verwendet?</summary><p>Er ist ein Startwert, solange noch keine sichere automatische Ablesung gespeichert ist. Meter OCR prüft die erste Ablesung gegen den Zeitabstand und den maximalen Durchfluss. Danach wird der letzte bestätigte Stand als Referenz genutzt. Ohne Fallback beginnt die Plausibilitätsprüfung mit der ersten sicheren Ablesung.</p></details>
+<details class="setup-help"><summary>ⓘ Wie wird der Fallback verwendet?</summary><p>Er ist ein Startwert, solange noch keine sichere automatische Ablesung gespeichert ist. AI Meter Reader prüft die erste Ablesung gegen den Zeitabstand und den maximalen Durchfluss. Danach wird der letzte bestätigte Stand als Referenz genutzt. Ohne Fallback beginnt die Plausibilitätsprüfung mit der ersten sicheren Ablesung.</p></details>
 <div class="setup-controls"><button type="button" class="setup-back">Zurück</button><span class="setup-count"></span><button type="button" class="setup-next">Weiter</button></div>
 </fieldset>
 <fieldset class="setup-step" data-step="2"><legend>3. Bildausschnitt und Prüfplan</legend>
@@ -338,13 +354,14 @@ name: Zählerstand (OCR)</code></pre>
 <label>OCR-Versuche pro Bild<select name="attempts">{auto_attempt_options}</select></label>
 <label>Ziffernfarbe<select name="polarity">{auto_polarity_options}</select></label>
 <label>Prüfintervall (Minuten)<input type="number" name="interval_minutes" min="5" max="1440" value="{interval_minutes}" required></label>
+<details class="setup-help"><summary>ⓘ Warum das Prüfintervall ändern?</summary><p>Nach einer unklaren Ablesung prüft die App einmal nach fünf Minuten erneut. Schlägt auch diese Prüfung fehl, kehrt sie zum eingestellten Intervall zurück – standardmäßig eine Stunde. Ein kürzeres Intervall kann helfen, wenn sich der Zähler während der Drehung vorübergehend schlecht lesen lässt.</p></details>
 <label>Maximaler Durchfluss (m³/h)<input name="max_flow" type="text" inputmode="decimal" maxlength="10" value="{max_flow}" required></label>
 <div class="crop-fields setup-help" id="wizard-crop-fields">
 <label>Bildbereich (links, oben, rechts, unten)<input name="crop" value="{auto_crop_value}" maxlength="30" placeholder="52,56,564,132"></label>
 <label>Bilddrehung im Uhrzeigersinn<select name="rotation">{auto_rotation_options}</select></label>
 <label>Breite des Vorkomma-Bereichs in Pixeln<input name="width" type="number" min="1" max="9999" value="{auto_width_value}"></label>
 </div>
-<details class="setup-help"><summary>ⓘ Bild einrichten</summary><p>Die automatische Erkennung versucht, den Ziffernrahmen zu finden. Wenn sie das nicht schafft, öffne den manuellen Test: Dort wird das aktuelle Bild mit den erkannten Ziffern angezeigt. Einen getesteten Ausschnitt kannst du danach ausdrücklich für die Automatik übernehmen. Beim Livebild kann Meter OCR bis zu 10 frische Standbilder innerhalb von höchstens 20 Sekunden prüfen.</p></details>
+<details class="setup-help"><summary>ⓘ Bild einrichten</summary><p>Die automatische Erkennung versucht, den Ziffernrahmen zu finden. Bei einer unsicheren Ablesung folgen bis zu zehn zusätzliche Bildauswertungen; die App setzt einzelne Ziffern nur zusammen, wenn sie in der Mehrheit der Versuche gleich erkannt wurden. Nach zwei erfolglosen Prüfungen mit kurzem Abstand wartet sie wieder das eingestellte Intervall ab. Beim Livebild kann AI Meter Reader bis zu 10 frische Standbilder innerhalb von höchstens 20 Sekunden prüfen.</p></details>
 <div class="setup-controls"><button type="button" class="setup-back">Zurück</button><span class="setup-count"></span><button type="button" class="setup-next">Weiter</button></div>
 </fieldset>
 <fieldset class="setup-step" data-step="3"><legend>4. Hinweise und speichern</legend>
@@ -405,7 +422,7 @@ name: Zählerstand (OCR)</code></pre>
 <input type="hidden" name="csrf" value="{csrf}">
 <label>Vergleich
 <select name="decimals">{auto_decimal_options}</select></label>
-<label title="Zeit nach einer erfolgreichen Prüfung. Bei einem Fehler erfolgt der nächste Versuch spätestens nach fünf Minuten.">Prüfintervall (Minuten)
+<label title="Nach einer unklaren Ablesung folgt ein zusätzlicher Versuch nach fünf Minuten. Schlägt auch der fehl, gilt wieder dieses Intervall.">Prüfintervall (Minuten)
 <input name="interval_minutes" type="number" min="1" max="{max_interval_minutes}" value="{interval_minutes}" required></label>
 <label>Max. OCR-Versuche
 <select name="attempts">{auto_attempt_options}</select></label>
@@ -426,7 +443,7 @@ name: Zählerstand (OCR)</code></pre>
 </div>
 <button type="submit">Speichern</button>
 </form>
-<p class="settings-note">Das Prüfintervall gilt auch für die bereits geplante nächste Prüfung. Bei geänderter Vergleichsgenauigkeit beginnt die Trefferzählung neu.</p>
+<p class="settings-note">Nach zwei Fehlprüfungen mit kurzem Abstand gilt wieder dein eingestelltes Prüfintervall. Bei geänderter Vergleichsgenauigkeit beginnt die Trefferzählung neu.</p>
 </div></details>
 {auto_saved_notice}
 <details class="manual-panel settings-item" id="notification-settings" {notifications_open}>
@@ -461,7 +478,7 @@ Bei anhaltenden Problemen benachrichtigen
 <details class="settings-item reset-section">
 <summary><strong>App-Daten zurücksetzen</strong></summary>
 <div class="manual-content">
-<p class="settings-note">Setzt die Meter-OCR-Einstellungen und Prüfhistorie auf Standardwerte zurück und entfernt gespeicherte Testbilder. Die Home-Assistant-App-Konfiguration und vorhandenen Entitäten bleiben erhalten.</p>
+<p class="settings-note">Setzt die AI-Meter-Reader-Einstellungen und Prüfhistorie auf Standardwerte zurück und entfernt gespeicherte Testbilder. Die Home-Assistant-App-Konfiguration und vorhandenen Entitäten bleiben erhalten.</p>
 <button type="button" id="open-reset">Auf Werkseinstellungen zurücksetzen</button>
 </div></details>
 {reset_notice}
@@ -480,7 +497,7 @@ Bei anhaltenden Problemen benachrichtigen
 </main>
 
 <footer class="page-footer">Kostenloses Hobbyprojekt
-<details class="about-project"><summary>Über Meter OCR</summary><p><a href="https://github.com/Eifellayer" target="_blank" rel="noopener noreferrer">Projekt von EifelLayer auf GitHub</a></p><p>KI-unterstützt entwickelt. Keine geeichte Messung oder Gewähr für OCR-Ergebnisse. Bitte Zählerstände bei Bedarf direkt am Gerät prüfen.</p><p><a href="https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8" target="_blank" rel="noopener noreferrer">Freiwillig mit PayPal unterstützen</a></p></details></footer>
+<details class="about-project"><summary>Über AI Meter Reader</summary><p><a href="https://github.com/Eifellayer" target="_blank" rel="noopener noreferrer">Projekt von EifelLayer auf GitHub</a></p><p>KI-unterstützt entwickelt. Keine geeichte Messung oder Gewähr für OCR-Ergebnisse. Bitte Zählerstände bei Bedarf direkt am Gerät prüfen.</p><p><a href="https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8" target="_blank" rel="noopener noreferrer">Freiwillig mit PayPal unterstützen</a></p></details></footer>
 <script>
 let next = {next_check};
 const lang = '{language}';
@@ -529,6 +546,11 @@ document.querySelector('#open-setup').addEventListener('click', () => {{
   activateTab('settings');
   showSetupStep(0);
   if (!setupDialog.open) setupDialog.showModal();
+}});
+document.querySelector('#open-interval-settings').addEventListener('click', () => {{
+  activateTab('settings');
+  document.querySelector('#automatic-settings').open = true;
+  document.querySelector('#automatic-settings').scrollIntoView({{behavior: 'smooth', block: 'start'}});
 }});
 if (searchPrefs.get('reset') === 'done') localStorage.removeItem(setupDismissKey);
 if (searchPrefs.get('reset') === 'pending') {{
@@ -841,8 +863,11 @@ async function refreshAutomatic() {{
     if (!response.ok) throw new Error();
     const sample = await response.json();
     next = sample.next_check;
+    document.querySelector('#paused-notice').hidden = !sample.paused;
+    document.querySelector('#pause-auto-form').hidden = sample.paused;
     automaticBanner.dataset.tone = sample.tone;
     automaticBanner.dataset.incident = sample.incident;
+    document.querySelector('#automatic-interval-hint').hidden = !(sample.failure_attempts > 0 && sample.tone !== 'ok');
     ignoreWarning.hidden = !sample.incident;
     const heading = document.querySelector('#automatic-status-heading');
     const icon = automaticBanner.querySelector('.automatic-banner-icon');
@@ -852,6 +877,10 @@ async function refreshAutomatic() {{
     if (detail.textContent !== sample.detail) detail.textContent = sample.detail;
     updateBannerVisibility();
     document.querySelector('#automatic-ocr').textContent = sample.ocr;
+    document.querySelector('.activity-status').dataset.offline = 'false';
+    document.querySelector('#automatic-activity').textContent = sample.activity;
+    document.querySelector('#source-connection').textContent = 'Quelle: ' + sample.source_connection;
+    document.querySelector('#source-connection').dataset.state = sample.source_connection_state;
     document.querySelector('#automatic-reference').textContent = sample.reference;
     renderReferenceNote('automatic', sample.reference_time, sample.reference_is_fallback);
     renderAttempts(document.querySelector('#automatic-ocr-details'), sample.readings, sample.decimals);
@@ -870,7 +899,10 @@ async function refreshAutomatic() {{
       image.src = url;
       if (!image.parentNode) container.replaceChildren(image);
     }}
-  }} catch (_) {{ /* Keep the last available result while reconnecting. */ }}
+  }} catch (_) {{
+    document.querySelector('.activity-status').dataset.offline = 'true';
+    document.querySelector('#automatic-activity').textContent = 'Keine Verbindung zur App. Sie könnte gestoppt oder vorübergehend nicht erreichbar sein.';
+  }}
   setTimeout(refreshAutomatic, 15000);
 }}
 refreshAutomatic();
@@ -900,7 +932,7 @@ def start_panel(
     get_auto_rules, save_auto_rules, default_crop, default_width, test_image,
     load_language_modes, save_language_modes, get_delivery, save_delivery, get_source, save_source,
     wake_worker=None, *, address=("0.0.0.0", 8099), test_source_image=None, automatic_preview=None,
-    request_factory_reset=None, skip_setup=None,
+    request_factory_reset=None, skip_setup=None, get_activity=None, get_auto_paused=None, save_auto_paused=None,
 ):
     images = {"/aktuell.jpg": current_image, "/treffer.jpg": good_image,
               "/testvorschau.jpg": test_image}
@@ -1042,6 +1074,15 @@ def start_panel(
                 detail = ""
         if language == "en":
             heading = EN_UI[heading]
+        activity = get_activity() if get_activity else {"detail": "Wartet auf die nächste automatische Prüfung."}
+        if language == "en":
+            from i18n import english_activity
+            activity = {**activity, "detail": english_activity(activity.get("state"), activity.get("detail"))}
+            source_connection = EN_UI.get(
+                history.get("source_connection_detail", ""), "No image has been fetched yet."
+            )
+        else:
+            source_connection = history.get("source_connection_detail", "Noch kein Bildabruf erfolgt.")
         return {
             "detail": (detail if detail is not None else
                        "No automatic result yet." if language == "en" else "Noch kein automatisches Prüfergebnis."),
@@ -1056,6 +1097,11 @@ def start_panel(
             "last_check": last_check_at(history),
             "last_match": history.get("last_match_at"),
             "readings": history.get("ocr_readings", []) if show_attempts else [],
+            "failure_attempts": history.get("failure_attempts", 0),
+            "activity": activity.get("detail", "Wartet auf die nächste automatische Prüfung."),
+            "paused": bool(get_auto_paused()) if get_auto_paused else False,
+            "source_connection": source_connection,
+            "source_connection_state": history.get("source_connection_status", "unknown"),
             "decimals": history.get("comparison_decimals", default_decimals),
             "current": current_image.stat().st_mtime_ns if current_image.exists() else None,
             "good": good_image.stat().st_mtime_ns if good_image.exists() else None,
@@ -1162,6 +1208,9 @@ def start_panel(
             intro = ("Choose a source to start automatic checks." if language == "en" else
                      "Wähle eine Bildquelle, um die automatische Kontrolle zu starten.")
             values = {name: html.escape(summary[name]) for name in ("ocr", "reference", "detail")}
+            values["automatic_activity"] = html.escape(summary["activity"])
+            values["source_connection"] = html.escape(summary["source_connection"])
+            values["source_connection_state"] = html.escape(summary["source_connection_state"])
             manual_saved = load_manual_settings()
             settings = {**auto_rules, **history.get("manual_result", {}).get("settings", {}), **manual_saved}
             decimals_by_language = DECIMALS_EN if language == "en" else DECIMALS
@@ -1313,6 +1362,8 @@ def start_panel(
                 attempt_options=select_options(ATTEMPTS, str(settings.get("attempts", auto_rules["attempts"]))),
                 default_attempts=default_attempts,
                 csrf=csrf_token,
+                paused_notice_hidden="" if summary["paused"] else "hidden",
+                pause_button_hidden="hidden" if summary["paused"] else "",
                 reference_time=summary["reference_time"] or 0,
                 reference_is_fallback=int(summary["reference_is_fallback"]),
                 image_time=summary["image_time"],
@@ -1339,7 +1390,7 @@ def start_panel(
             path = urlsplit(self.path).path
             if path not in ("/pruefen", "/automatik", "/ausschnitt-uebernehmen", "/sprache",
                             "/benachrichtigungen", "/bildquelle", "/einrichtung",
-                            "/einrichtung-ueberspringen", "/werkreset"):
+                            "/einrichtung-ueberspringen", "/werkreset", "/automatik-pause"):
                 self.send_error(404)
                 return
             fallback = browser_locale(self.headers.get("Accept-Language", ""))
@@ -1432,6 +1483,19 @@ def start_panel(
                             "Setup could not be skipped.")
                     return
                 self.redirect("?saved=skip" + keep_mode)
+                return
+            if path == "/automatik-pause":
+                target = form.get("paused", [])
+                if len(target) != 1 or target[0] not in ("0", "1") or save_auto_paused is None:
+                    problem(400)
+                    return
+                try:
+                    save_auto_paused(target[0] == "1")
+                except (OSError, ValueError):
+                    problem(503, "Der Pausenzustand konnte nicht gespeichert werden.",
+                            "Could not save the pause state.")
+                    return
+                self.redirect("?paused=" + target[0] + keep_mode)
                 return
             if path == "/werkreset":
                 result = request_factory_reset() if request_factory_reset is not None else "failed"

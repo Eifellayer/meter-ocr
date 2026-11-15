@@ -16,6 +16,7 @@ from tempfile import NamedTemporaryFile
 from urllib.parse import parse_qs, urlsplit
 
 from app_channel import APP_NAME, NAMESPACE
+from calibration import DEFAULT_LIMIT, MIN_IMAGES, MAX_IMAGES
 from checks import (DEFAULT_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, WARNING_DETAIL_AFTER, meter_prefix,
                     LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, REFLECTION_SUGGEST_AFTER, STANDALONE_PENDING, STANDALONE_REJECTED_NOTICE,
                     STANDALONE_VERIFIED_NOTICE, last_check_at, reschedule_next_check,
@@ -569,6 +570,24 @@ name: Zählerstand (OCR)</code></pre>
 <input type="hidden" name="mode" value="{language_mode}">
 <input type="hidden" name="csrf" value="{csrf}">
 </form>
+<details class="help setup-help" id="calibration-settings" {calibration_open} {calibration_hidden}>
+<summary>Selbsteinrichtung für Ausschnitt und Drehung</summary>
+<p>Die App tastet sich mit unterschiedlichen Bildern an einen passenden Rahmen und Winkel heran. Nach drei bestätigten Ablesungen übernimmt sie den Rahmen und die Drehung. Nach fünf Minuten endet der Versuch automatisch.</p>
+<p>Ohne externen Vergleichswert hilft ein von Hand abgelesener Startwert. Ohne Startwert wartet die App zusätzlich auf einen plausiblen Zähleranstieg.</p>
+<p id="calibration-state" role="status" hidden></p>
+<progress id="calibration-progress" max="50" value="0" aria-label="Geprüfte Bilder der Selbsteinrichtung" hidden></progress>
+<form method="post" action="selbsteinrichtung">
+<input type="hidden" name="lang" value="{language}">
+<input type="hidden" name="mode" value="{language_mode}">
+<input type="hidden" name="csrf" value="{csrf}">
+<label id="calibration-limit-label">Höchstens so viele unterschiedliche Bilder
+<input id="calibration-limit" name="image_limit" type="number" min="{calibration_min}" max="{calibration_max}" value="{calibration_limit}" required></label>
+<div class="crop-actions">
+<button id="calibration-start" type="submit" name="action" value="start">Selbsteinrichtung starten</button>
+<button id="calibration-cancel" type="submit" name="action" value="cancel" formnovalidate hidden>Selbsteinrichtung stoppen</button>
+</div>
+</form>
+</details>
 <p class="settings-note">Nach zwei Fehlprüfungen mit kurzem Abstand gilt wieder dein eingestelltes Prüfintervall. Bei geänderter Vergleichsgenauigkeit beginnt die Trefferzählung neu.</p>
 </div></details>
 {auto_saved_notice}
@@ -999,6 +1018,42 @@ function renderAttempts(details, readings, decimals) {{
   }});
   body.dataset.values = key;
 }}
+let lastCalibrationState = null;
+function refreshCalibration(status) {{
+  if (!status) return;
+  const active = status.state === 'waiting' || status.state === 'testing';
+  const label = document.querySelector('#calibration-state');
+  const progress = document.querySelector('#calibration-progress');
+  label.hidden = false;
+  const messages = {{
+    waiting: 'Warte auf ein neues Kamerabild …',
+    testing: 'Prüfe Ausschnitt und Drehung …',
+    saved: 'Ausschnitt und Drehung übernommen.',
+    failed: 'Selbsteinrichtung fehlgeschlagen. Prüfe Bildausschnitt, Kamerawinkel und Beleuchtung.',
+    timeout: 'Selbsteinrichtung nach fünf Minuten beendet. Keine Einstellung sicher bestätigt.',
+    cancelled: 'Selbsteinrichtung gestoppt.',
+    save_failed: 'Ausschnitt und Drehung konnten nicht gespeichert werden.',
+  }};
+  const clock = Math.floor(status.seconds / 60) + ':' + String(status.seconds % 60).padStart(2, '0');
+  const message = messages[status.state] || '';
+  const detail = 'Bilder: ' + status.tested + '/' + status.limit +
+    ' · Bestätigungen: ' + status.confirmations + '/' + status.required +
+    (active ? ' · Noch ' + clock + ' min' : '');
+  label.textContent = message + ' ' + detail;
+  if (status.state === 'saved' && lastCalibrationState && lastCalibrationState !== 'saved' && status.settings) {{
+    const form = document.querySelector('#auto-form');
+    for (const [name, value] of Object.entries(status.settings)) form.elements[name].value = value;
+    form.dataset.savedCropMode = status.settings.crop_mode;
+    form.elements.crop_mode.dispatchEvent(new Event('change'));
+  }}
+  lastCalibrationState = status.state;
+  progress.hidden = !active;
+  progress.max = status.limit;
+  progress.value = status.tested;
+  document.querySelector('#calibration-limit-label').hidden = active;
+  document.querySelector('#calibration-start').hidden = active;
+  document.querySelector('#calibration-cancel').hidden = !active;
+}}
 async function refreshTestStatus() {{
   if (statusPending || sendingCheck) return;
   statusPending = true;
@@ -1007,6 +1062,7 @@ async function refreshTestStatus() {{
     if (!response.ok) throw new Error();
     const job = await response.json();
     if (sendingCheck) return;
+    refreshCalibration(job.calibration);
     const bar = document.querySelector('#test-progress');
     const detail = document.querySelector('#test-result');
     const preview = document.querySelector('#test-preview');
@@ -1312,6 +1368,7 @@ def start_panel(
     wake_worker=None, *, address=("0.0.0.0", 8099), test_source_image=None, automatic_preview=None,
     request_factory_reset=None, get_reset_status=None, skip_setup=None, get_activity=None,
     get_auto_paused=None, save_auto_paused=None, discover_sources=None,
+    settings_lock=None, get_calibration=None, control_calibration=None,
 ):
     images = {"/aktuell.jpg": current_image, "/treffer.jpg": good_image,
               "/testvorschau.jpg": test_image}
@@ -1323,7 +1380,7 @@ def start_panel(
     csrf_token = token_urlsafe(32)
     request_lock = Lock()
     preferences_lock = Lock()
-    rules_lock = Lock()
+    rules_lock = settings_lock if settings_lock is not None else Lock()
     delivery_lock = Lock()
     def read_auto_rules():
         return {"integer_digits": 5, "fraction_digits": 3, "meter_display": "rollers",
@@ -1346,7 +1403,7 @@ def start_panel(
             temporary_name = temporary.name
         os.chmod(temporary_name, 0o600)
         os.replace(temporary_name, manual_settings_path)
-    source_lock = Lock()
+    source_lock = settings_lock if settings_lock is not None else Lock()
     progress = {
         "request_id": 0, "phase": "idle", "message": "Noch kein manueller Test gestartet.",
         "attempts": 0, "max_attempts": default_attempts,
@@ -1638,6 +1695,7 @@ def start_panel(
                 snapshot["automatic_preview"] = image_version(automatic_preview)
                 snapshot["current_image"] = image_version(current_image)
                 snapshot["manual_source_image"] = image_version(test_source_image)
+                snapshot["calibration"] = get_calibration() if get_calibration else None
                 if language == "en":
                     snapshot["message"] = english_progress(snapshot.get("message"))
                     if snapshot.get("detail"):
@@ -1700,6 +1758,7 @@ def start_panel(
             manual_precision = min(int(settings.get("decimals", auto_rules["decimals"])),
                                    auto_rules["fraction_digits"])
             saved = query.get("saved", [""])[0]
+            calibration = get_calibration() if get_calibration else None
             reset_state = query.get("reset", [""])[0]
             if reset_state == "pending" and get_reset_status is not None:
                 reset_state = get_reset_status()
@@ -1769,7 +1828,11 @@ def start_panel(
                 overview_hidden="hidden" if settings_tab_active else "",
                 settings_hidden="" if settings_tab_active else "hidden",
                 language_options=select_options({"auto": automatic, "de": "Deutsch", "en": "English"}, mode),
-                settings_open="open" if saved in ("1", "crop", "crop-reset") else "",
+                settings_open="open" if saved in ("1", "crop", "crop-reset", "calibration") else "",
+                calibration_open="open" if saved == "calibration" else "",
+                calibration_hidden="" if control_calibration else "hidden",
+                calibration_min=MIN_IMAGES, calibration_max=MAX_IMAGES,
+                calibration_limit=calibration["limit"] if calibration else DEFAULT_LIMIT,
                 setup_first_run=str(bool(setup_pending or reset_state == "done")).lower(),
                 precision_hidden="" if auto_rules["decimals"] == 3 else "hidden",
                 precision_checked="checked" if auto_rules.get("precision_mode") else "",
@@ -1903,7 +1966,7 @@ def start_panel(
             if path not in ("/pruefen", "/automatik", "/ausschnitt-uebernehmen", "/sprache",
                             "/benachrichtigungen", "/bildquelle", "/einrichtung",
                             "/einrichtung-ueberspringen", "/werkreset", "/automatik-pause",
-                            "/spiegelungs-hinweis-ausblenden", "/ergaenzte-ziffer-bestaetigen"):
+                            "/spiegelungs-hinweis-ausblenden", "/ergaenzte-ziffer-bestaetigen", "/selbsteinrichtung"):
                 self.send_error(404)
                 return
             fallback = browser_locale(self.headers.get("Accept-Language", ""))
@@ -2200,6 +2263,24 @@ def start_panel(
                             "Could not save the image crop.")
                     return
                 self.redirect("?saved=crop&ui=settings" + keep_mode)
+                return
+            if path == "/selbsteinrichtung":
+                if control_calibration is None:
+                    self.send_error(404)
+                    return
+                try:
+                    action = field("action")
+                    if action not in ("start", "cancel"):
+                        raise ValueError("Invalid calibration action")
+                    limit = int(field("image_limit", str(DEFAULT_LIMIT))) if action == "start" else 0
+                    if action == "start" and not MIN_IMAGES <= limit <= MAX_IMAGES:
+                        raise ValueError("Invalid calibration image limit")
+                    control_calibration(action, limit)
+                except ValueError:
+                    problem(400, "Bitte Bildquelle einrichten, die Automatik fortsetzen und das Bildlimit prüfen.",
+                            "Set up an image source, resume automatic checks and check the image limit.")
+                    return
+                self.redirect("?saved=calibration&ui=settings" + keep_mode)
                 return
             if path == "/automatik":
                 if form.get("reset_crop") == ["1"]:

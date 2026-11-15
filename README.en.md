@@ -8,11 +8,11 @@
 
 📘 [German illustrated user guide (PDF)](docs/Bedienungsanleitung-AI-Meter-Reader.pdf) · [App documentation](rf1_ocr_test/DOCS.md)
 
-**Current version: 0.4.8 Alpha.** This release remains on the regular test channel. After 0.4, a Hall / pulse sensor is planned as the first separate Beta feature because it needs a real hardware test.
+**Current version: 0.4.9 Alpha.** This release remains on the regular test channel. After 0.4, a Hall / pulse sensor is planned as the first separate Beta feature because it needs a real hardware test.
 
 ## Beta testers wanted
 
-Do you use Home Assistant with a gas, water, or other meter? We are looking for testers with different cameras, crops, and lighting conditions. Version 0.4.8 remains on the regular Alpha test channel. After 0.4, a Hall / pulse sensor is planned as the first separate Beta feature because it needs a real hardware test. I use AI on the Edge for real-world checks; other sources and meter types have so far been tested with simulations only. To help, report your app version, meter type, and image source through [GitHub Issues](https://github.com/Eifellayer/meter-ocr/issues). Please do not post credentials or unredacted photos containing personal information.
+Do you use Home Assistant with a gas, water, or other meter? We are looking for testers with different cameras, crops, and lighting conditions. Version 0.4.9 remains on the regular Alpha test channel. After 0.4, a Hall / pulse sensor is planned as the first separate Beta feature because it needs a real hardware test. I use AI on the Edge for real-world checks; other sources and meter types have so far been tested with simulations only. To help, report your app version, meter type, and image source through [GitHub Issues](https://github.com/Eifellayer/meter-ocr/issues). Please do not post credentials or unredacted photos containing personal information.
 
 AI Meter Reader reads camera images with **local Tesseract OCR**. It can provide its own reading from an ESPHome or Home Assistant camera, or double-check an existing reading from AI on the Edge / SLFork or a reference sensor.
 
@@ -34,12 +34,12 @@ For an uncertain automatic reading, the app can run up to ten additional image-p
 
 ## Install
 
-1. In Home Assistant, open **Settings → Apps → Install app → ⋮ → Repositories** and add **Add-ons by Eifellayer** using the [Stable link](https://github.com/Eifellayer/meter-ocr#stable). Version 0.4.8 is the Alpha test build; the planned Hall / pulse sensor feature will be prepared separately on the Beta channel.
+1. In Home Assistant, open **Settings → Apps → Install app → ⋮ → Repositories** and add **Add-ons by Eifellayer** using the [Stable link](https://github.com/Eifellayer/meter-ocr#stable). Version 0.4.9 is the Alpha test build; the planned Hall / pulse sensor feature will be prepared separately on the Beta channel.
 2. Install **AI Meter Reader (Alpha)**. Releases below 0.5 are Alpha and use the same regular app as their test channel.
 3. Configure `esp_url` for the SLFork ESP, for example `http://esp-gaszaehler.local`. Alternatively configure `kamera_entitaet` and optionally `referenz_entitaet`.
 4. Start the app and open its web interface.
 
-A Home Assistant installation with Supervisor is required on **AMD64 or ARM64**. The planned Hall / pulse sensor is not part of 0.4.8; it will be tested separately on the Beta channel. Back up your Home Assistant configuration before updating.
+A Home Assistant installation with Supervisor is required on **AMD64 or ARM64**. The planned Hall / pulse sensor is not part of 0.4.9; it will be tested separately on the Beta channel. Back up your Home Assistant configuration before updating.
 
 ## First setup and image source
 
@@ -65,7 +65,7 @@ Under **Automatic checks → Reflections and obscured digits**, optionally recon
 
 Set **Image rotation (°)** in the manual crop settings to correct the angle one degree at a time. Recovery checks try slightly different angles and reuse the angle from a confirmed result for the same camera and crop. In standalone mode, the first image gives a provisional reading. A second image five minutes later must confirm the same value or a plausible increase before it is published.
 
-In camera mode, the app looks for the digit row in the original image. If it cannot find the right area, open the manual test settings and choose **Draw a crop on the image**. Draw around the full digit row and run the test. If the preview looks right, apply the tested crop to automatic checks. If the digits are still hard to read, check the camera angle, focus and lighting.
+In camera mode, the app looks for the digit row in the original image. If it cannot find the right area, open the manual test settings and choose **Draw a frame**. Draw around the full digit row and run the test. If the preview looks right, apply the tested crop to automatic checks. If the digits are still hard to read, check the camera angle, focus and lighting.
 
 In the **manual test**, select a manual image region and enter pixel coordinates from the original frame. Use **Clockwise rotation** for sideways or upside-down photos. Measure the width of the whole digits after rotation. Run the test to inspect the result, then apply the tested crop and rotation to automatic checks.
 
@@ -74,6 +74,10 @@ Automatic digit color handles light or dark digits. Later OCR attempts can compe
 The [photo test report (German)](METER-PHOTO-TESTS.md) documents simulated OCR runs on ten public gas, water and electricity meter images. It is not a hardware test.
 
 > **Test status:** The maintainer uses AI on the Edge / SLFork for real meter tests. Camera and ESPHome modes and other meter types have automated and simulated coverage only; no real-device test is claimed for them.
+
+### Automatic crop and rotation setup
+
+Open **Settings → Automatic check → Automatic setup for crop and rotation**. Choose the maximum number of distinct images to check (3 to 50, default 50). The app tries different crops and angles and saves a setting after at least three confirmations on fresh, distinct images. Without an external reference or a manually entered starting reading, the meter must show a plausible increase. The search ends after five minutes or when it reaches the image limit. If unsuccessful, it keeps your existing settings. You can stop the search at any time.
 
 ## Plausibility check and Energy dashboard
 

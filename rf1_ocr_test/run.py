@@ -1,6 +1,7 @@
 """Bridge the latest matched SLFork picture and reading to Home Assistant."""
 
 import base64
+from copy import deepcopy
 from datetime import datetime
 from functools import partial
 import hashlib
@@ -12,7 +13,7 @@ import re
 import subprocess
 from queue import Empty, Queue
 from tempfile import NamedTemporaryFile
-from threading import Event, Lock
+from threading import Event, Lock, RLock
 import time
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -34,6 +35,7 @@ from checks import (
     timestamp_epoch, track_reflection,
     valid_interval_minutes,
 )
+from calibration import Calibration, CAPTURE_INTERVAL, MIN_IMAGES, MAX_IMAGES, TIME_LIMIT
 from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, MAX_FLOW_LPH, ImplausibleReading,
                          accumulate_consumption, fallback_detail, format_cubic_metres)
 from layout import (MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, find_digit_row,
@@ -112,8 +114,8 @@ def slfork_cycle_failed(diagnostics):
     return diagnostics.get("slfork_process_error") in (-1, -2, "-1", "-2")
 
 
-def capture_esp_snapshot(url, zone, source):
-    picture = get_bytes(url)
+def capture_esp_snapshot(url, zone, source, *, fetch=None):
+    picture = (fetch or get_bytes)(url)
     return picture, None, {
         "esp_timestamp": datetime.now(zone).isoformat(),
         "image_source": source,
@@ -123,19 +125,19 @@ def capture_esp_snapshot(url, zone, source):
     }
 
 
-def capture_slfork_raw(base, zone):
+def capture_slfork_raw(base, zone, *, fetch=None):
     # The buffered raw JPEG has no independent capture timestamp.
-    return capture_esp_snapshot(base + "/camera?task=capture", zone, SLFORK_RAW_SOURCE)
+    return capture_esp_snapshot(base + "/camera?task=capture", zone, SLFORK_RAW_SOURCE, fetch=fetch)
 
 
-def capture_edge_camera(base, zone):
+def capture_edge_camera(base, zone, *, fetch=None):
     try:
-        return capture_slfork_raw(base, zone)
+        return capture_slfork_raw(base, zone, fetch=fetch) if fetch else capture_slfork_raw(base, zone)
     except HTTPError as error:
         if error.code not in (404, 405, 501):
             raise
         error.close()
-    return capture_esp_snapshot(base + "/capture_with_flashlight", zone, "edge_camera")
+    return capture_esp_snapshot(base + "/capture_with_flashlight", zone, "edge_camera", fetch=fetch)
 
 
 def discover_ha_sources(token):
@@ -169,9 +171,11 @@ def discover_ha_sources(token):
         return []
 
 
-def capture(base, diagnostics):
+def capture(base, diagnostics, *, fetch=None):
+    fetch = fetch or get_bytes
+
     def process_data():
-        payload = json.loads(get_bytes(base + "/process_data"))
+        payload = json.loads(fetch(base + "/process_data"))
         if not isinstance(payload, dict):
             raise ValueError("Ungültige SLFork-Messdaten")
         return payload
@@ -181,13 +185,13 @@ def capture(base, diagnostics):
     if slfork_cycle_failed(diagnostics):
         return None
     try:
-        picture = get_bytes(base + "/img_tmp/alg.jpg")
+        picture = fetch(base + "/img_tmp/alg.jpg")
     except HTTPError as error:
         if error.code not in (404, 410):
             raise
         return None
     try:
-        overlay = get_bytes(base + "/img_tmp/alg_roi.jpg")
+        overlay = fetch(base + "/img_tmp/alg_roi.jpg")
     except (OSError, ValueError):
         overlay = None
     after = process_data()
@@ -210,15 +214,16 @@ def capture(base, diagnostics):
     }
 
 
-def capture_camera(camera, reference, token, zone, timeout=8):
+def capture_camera(camera, reference, token, zone, timeout=8, *, fetch=None):
+    fetch = fetch or get_bytes
     base = "http://supervisor/core/api"
-    picture = get_bytes(f"{base}/camera_proxy/{camera}", token, timeout=timeout)
+    picture = fetch(f"{base}/camera_proxy/{camera}", token, timeout=timeout)
     captured = datetime.now(zone)
     value = None
     reference_time = None
     if reference:
         try:
-            state = json.loads(get_bytes(f"{base}/states/{reference}", token, timeout=timeout))
+            state = json.loads(fetch(f"{base}/states/{reference}", token, timeout=timeout))
             reported = datetime.fromisoformat(state.get("last_reported") or state["last_updated"])
             if (reported.tzinfo is not None
                     and state.get("attributes", {}).get("unit_of_measurement") == "m³"
@@ -308,12 +313,13 @@ def read_digit(register, box, read, trim_vertical=False):
 
 
 def read_visible_digits(register, integer_width, whole_boxes, fraction_boxes, light_digits, polarity, *, profile,
-                        whole_digits=5, fraction_digits=3):
+                        whole_digits=5, fraction_digits=3, deadline=None):
     if polarity != "auto":
         light_digits = polarity == "light"
 
     def read(picture, digits=whole_digits):
-        return read_register(picture, light_digits, digits, force_polarity=polarity != "auto", profile=profile)
+        kwargs = {"deadline": deadline} if deadline is not None else {}
+        return read_register(picture, light_digits, digits, force_polarity=polarity != "auto", profile=profile, **kwargs)
 
     whole = read(register.crop((0, 0, integer_width, register.height)))
     if whole is None:
@@ -788,6 +794,150 @@ def main():
             return {"state": "queued", "detail": "Einstellungen gespeichert. Prüfung startet gleich."}
         return dict(activity)
 
+    settings_lock = RLock()
+    calibration = None
+    calibration_configuration = None
+    calibration_next = 0.0
+
+    def calibration_configuration_now():
+        return get_auto_rules(), get_source()
+
+    def control_calibration(action, limit):
+        nonlocal calibration, calibration_configuration, calibration_next
+        with settings_lock:
+            if action == "cancel":
+                if calibration is not None and calibration.state in ("waiting", "testing"):
+                    calibration.state = "cancelled"
+            else:
+                source, pending = get_source()
+                if pending or not source["selected"] or get_auto_paused():
+                    raise ValueError("Choose a source and resume automatic checks first.")
+                if not MIN_IMAGES <= limit <= MAX_IMAGES:
+                    raise ValueError("Invalid calibration image limit")
+                now = time.monotonic()
+                if calibration is not None and calibration.state in ("waiting", "testing") and not calibration.expired(now):
+                    return
+                calibration = Calibration(limit=limit, started=now)
+                calibration_configuration = calibration_configuration_now()
+                calibration_next = now
+            wake_worker.set()
+
+    def calibration_status():
+        with settings_lock:
+            if calibration is None:
+                return None
+            status = calibration.status(time.monotonic())
+            if not status["seconds"] and status["state"] in ("waiting", "testing"):
+                status["state"] = "timeout"
+            if status["state"] == "saved":
+                status["settings"] = calibration.candidate.settings()
+            return status
+
+    def run_calibration(active_rules, active_source, mode, base, camera, reference, source_key):
+        nonlocal calibration, calibration_next
+        with settings_lock:
+            now = time.monotonic()
+            job = calibration
+            if job is None or job.state not in ("waiting", "testing"):
+                return False
+            if job.expired(now):
+                job.state = "timeout"
+                return False
+            if calibration_configuration_now() != calibration_configuration or get_auto_paused():
+                job.state = "cancelled"
+                return False
+            configured_rules, (configured_camera, _) = calibration_configuration
+            if now < calibration_next or (active_rules, active_source) != (configured_rules, configured_camera):
+                return True
+            job.state = "testing"
+            attempt = deepcopy(job)
+        deadline = job.started + TIME_LIMIT
+
+        def stopped():
+            return time.monotonic() >= deadline or calibration is not job or job.state == "cancelled" or get_auto_paused()
+
+        def fetch(url, token=None, timeout=8):
+            if stopped():
+                raise TimeoutError("Calibration stopped")
+            return get_bytes(url, token, timeout=min(timeout, max(0.01, deadline - time.monotonic())))
+
+        set_activity("working", "Selbsteinrichtung prüft Bildausschnitt und Drehung.")
+        result = None
+        selected = None
+        try:
+            if mode == "slfork":
+                result = capture(base, {}, fetch=fetch)
+            elif mode == "slfork_camera":
+                result = capture_edge_camera(base, zone, fetch=fetch)
+            elif camera:
+                result = capture_camera(camera, reference, token, zone, fetch=fetch)
+            if result is not None and not stopped():
+                picture, drawn, sample = result
+                captured = sample_epoch(sample, zone, datetime.now(zone))
+                if captured is not None:
+                    if mode == "slfork":
+                        sample.update(slfork_reference(sample, captured, zone, history.get("last_slfork_match", {})))
+                    baseline = history.get("consumption", {})
+                    if baseline.get("source") == source_key and baseline.get("timestamp", 0) < captured:
+                        baseline = {**baseline, "source": "calibration"}
+                    else:
+                        baseline = None
+                    if baseline is None and active_rules["fallback_value"] and active_rules["fallback_time"]:
+                        stamp = timestamp_epoch(active_rules["fallback_time"], zone)
+                        if stamp < captured:
+                            baseline = accumulate_consumption(
+                                {}, "calibration", stamp, active_rules["fallback_value"], active_rules["decimals"],
+                                active_rules["max_flow_lph"], active_rules["integer_digits"],
+                            )
+                    with Image.open(io.BytesIO(picture)) as frame:
+                        if frame.width * frame.height > MAX_IMAGE_PIXELS:
+                            raise ValueError("Kamerabild hat zu viele Pixel")
+                        frame.load()
+                        overlay = None
+                        if drawn:
+                            try:
+                                with Image.open(io.BytesIO(drawn)) as marked:
+                                    if marked.size == frame.size:
+                                        overlay = marked.convert("RGB")
+                            except (OSError, ValueError, Image.DecompressionBombError):
+                                pass
+
+                        def read(layout, profile):
+                            register = select_register(
+                                frame, None, layout.box, layout.width, layout.rotation,
+                                active_rules["integer_digits"], active_rules["fraction_digits"],
+                            )
+                            return read_visible_digits(
+                                *register[:4], options["helle_ziffern"], active_rules["polarity"], profile=profile,
+                                whole_digits=active_rules["integer_digits"],
+                                fraction_digits=active_rules["fraction_digits"], deadline=deadline,
+                            )
+
+                        selected = attempt.examine(frame, overlay, sample, captured, active_rules, read, stopped, baseline)
+        except (OSError, ValueError, TypeError, Image.DecompressionBombError) as error:
+            print(f"Selbsteinrichtung konnte die Aufnahme nicht prüfen: {type(error).__name__}")
+        with settings_lock:
+            now = time.monotonic()
+            if calibration is not job or job.state == "cancelled":
+                return True
+            if attempt.expired(now):
+                attempt.state = "timeout"
+            elif calibration_configuration_now() != calibration_configuration or get_auto_paused():
+                attempt.state = "cancelled"
+            elif selected:
+                try:
+                    save_auto_rules({**get_auto_rules(), **selected.settings()})
+                    attempt.state = "saved"
+                except (OSError, ValueError):
+                    attempt.state = "save_failed"
+            elif len(attempt.seen) >= attempt.limit:
+                attempt.state = "failed"
+            else:
+                attempt.state = "waiting"
+            calibration = attempt
+            calibration_next = now + CAPTURE_INTERVAL
+        return True
+
     _, update_progress, reset_manual_progress = start_panel(
         HISTORY, DESTINATION, GOOD_IMAGE, requested, default_decimals, default_attempts,
         get_auto_rules, save_auto_rules, options["ausschnitt"], options["vorkomma_breite"], TEST_IMAGE,
@@ -798,6 +948,7 @@ def main():
         discover_sources=partial(discover_ha_sources, token),
         get_activity=get_automatic_activity,
         get_auto_paused=get_auto_paused, save_auto_paused=save_auto_paused,
+        settings_lock=settings_lock, get_calibration=calibration_status, control_calibration=control_calibration,
     )
     reminder = Reminder(token)
     pending_image = None
@@ -832,6 +983,7 @@ def main():
             atomic_write(EFFECTIVE_OPTIONS, json.dumps(snapshot, indent=2).encode("utf-8"), 0o600)
             handled_automatic_request = automatic_request
             reset_manual_progress()
+            control_calibration("cancel", 0)
             reset_result["value"] = "done"
         except (OSError, ValueError, TypeError) as error:
             print(f"Werkreset konnte nicht abgeschlossen werden: {type(error).__name__}")
@@ -883,6 +1035,9 @@ def main():
         request_id = manual_options["request_id"] if manual else None
         if manual:
             update_progress(request_id, "running", "Lade Zählerbild und Referenzdaten …")
+        if not manual and run_calibration(active_rules, active_source, mode, base, camera, reference, source_key):
+            wake_worker.wait(timeout=min(1, CAPTURE_INTERVAL))
+            continue
         if get_auto_paused() and not manual:
             set_activity("paused", "Automatik pausiert. Manuelle Tests bleiben verfügbar.")
             wake_worker.wait(timeout=15)

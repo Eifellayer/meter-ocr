@@ -63,6 +63,7 @@ class IngressFixture(TestCase):
         self.setup_pending = True
         self.source_selected = False
         self.suggestions = []
+        self.calibration = None
         self.reset_state = "idle"
         self.activity = {"state": "waiting", "detail": "Wartet auf die nächste automatische Prüfung."}
         self.paused = False
@@ -77,6 +78,10 @@ class IngressFixture(TestCase):
 
     def skip_setup(self):
         self.setup_pending = False
+
+    def control_calibration(self, action, limit):
+        self.calibration = {"state": "waiting" if action == "start" else "cancelled",
+                            "limit": limit, "tested": 0, "confirmations": 0, "required": 3, "seconds": 300}
 
     def start_panel(self):
         def request_reset():
@@ -94,6 +99,7 @@ class IngressFixture(TestCase):
             request_factory_reset=request_reset, get_reset_status=lambda: self.reset_state,
             automatic_preview=self.automatic_preview, get_activity=lambda: dict(self.activity),
             discover_sources=lambda: self.suggestions,
+            get_calibration=lambda: self.calibration, control_calibration=self.control_calibration,
             get_auto_paused=lambda: self.paused,
             save_auto_paused=lambda value: setattr(self, "paused", value),
         )
@@ -121,6 +127,18 @@ class IngressFixture(TestCase):
 
 
 class IngressTests(IngressFixture):
+    def test_calibration_uses_the_selected_image_limit_and_can_be_stopped(self):
+        for invalid in ("2", "51", "x"):
+            self.assertEqual(400, self.submit("/selbsteinrichtung", action="start", image_limit=invalid)[0])
+        self.assertIsNone(self.calibration)
+        self.assertEqual((303, "./?saved=calibration&ui=settings"),
+                         self.submit("/selbsteinrichtung", action="start", image_limit="24"))
+        status = json.loads(self.request("/status")[0])["calibration"]
+        self.assertEqual(24, status["limit"])
+        self.assertEqual("waiting", status["state"])
+        self.assertEqual(303, self.submit("/selbsteinrichtung", action="cancel")[0])
+        self.assertEqual("cancelled", self.calibration["state"])
+
     def test_reset_automatic_crop_preserves_other_saved_settings(self):
         self.rules.update(crop_mode="manual", crop="10,10,290,100", width=150, rotation=-6,
                           attempts=8, interval_minutes=20, reflection_estimate_enabled=True)

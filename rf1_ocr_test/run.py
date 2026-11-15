@@ -216,10 +216,11 @@ def read_visible_digits(register, integer_width, whole_boxes, fraction_boxes, li
 
 
 def draw_test_preview(register, integer_width, whole_boxes, fraction_boxes, reading,
-                      whole_digits=5, fraction_digits=3):
+                      whole_digits=5, fraction_digits=3, readings=None, composed=False):
     """Mark OCR digit regions and the actual read characters for manual diagnostics.
 
-    Green: OCR returned a digit at this position, red: it returned '?'.
+    Green: a digit was read without observed variation; yellow: attempts disagreed
+    or the final reading was composed; red: the position remains unclear.
     The coordinates are approximate for manually configured crops without digit frames.
     They do NOT assert a match against the reference value.
     """
@@ -244,6 +245,22 @@ def draw_test_preview(register, integer_width, whole_boxes, fraction_boxes, read
              + str(reading or "").split(".", 1)[-1].ljust(fraction_digits, "?")[:fraction_digits]
              if fraction_digits and "." in str(reading or "")
              else str(reading or "").ljust(whole_digits, "?")[:whole_digits])
+    uncertain = set()
+    if composed:
+        uncertain.update(index for index, char in enumerate(chars) if char.isdigit())
+    elif readings:
+        normalized = []
+        for value in readings:
+            parts = str(value or "").split(".", 1)
+            digits = parts[0].ljust(whole_digits, "?")[:whole_digits]
+            if fraction_digits:
+                fraction_text = (parts[1] if len(parts) > 1 else "").ljust(fraction_digits, "?")[:fraction_digits]
+                digits += fraction_text
+            normalized.append(digits)
+        for index, char in enumerate(chars):
+            votes = [value[index] if index < len(value) else "?" for value in normalized]
+            if char.isdigit() and any(vote != char for vote in votes):
+                uncertain.add(index)
     stroke = max(2, min(6, w // 240))
     for idx, box in enumerate(boxes + fraction):
         if idx >= 8:
@@ -251,7 +268,8 @@ def draw_test_preview(register, integer_width, whole_boxes, fraction_boxes, read
         l, t, r, b = [int(coord) for coord in box]
         if not (0 <= l < r <= w and 0 <= t < b <= h):
             continue
-        color = (36, 170, 92) if chars[idx].isdigit() else (203, 65, 77)
+        color = ((203, 65, 77) if not chars[idx].isdigit() else
+                 (241, 184, 54) if idx in uncertain else (36, 170, 92))
         draw.rectangle((l, t, r - 1, b - 1), outline=color, width=stroke)
         # The label is drawn on a filled patch for contrast against the counter.
         label = chars[idx]
@@ -807,7 +825,7 @@ def main():
             if result is None and not manual:
                 updated["source_connection_status"] = "stale"
                 updated["source_connection_detail"] = (
-                    "ESP erreichbar, aber seit der letzten Prüfung kam kein neues Bild."
+                    "ESP erreichbar. Seit der letzten Prüfung kam kein neues Bild; das vorhandene Bild ist noch nicht veraltet."
                 )
             if result is not None:
                 if not manual:
@@ -831,7 +849,7 @@ def main():
                         )
                     else:
                         updated["source_connection_detail"] = (
-                            "ESP erreichbar, aber seit der letzten Prüfung kam kein neues Bild."
+                            "ESP erreichbar. Seit der letzten Prüfung kam kein neues Bild; das vorhandene Bild ist noch nicht veraltet."
                             if not camera else "Home-Assistant-Kamera erreichbar; dieses Bild wurde bereits geprüft."
                         )
                     if (captured is not None and captured == updated.get("last_epoch")
@@ -1022,8 +1040,11 @@ def main():
                     )
                 if not manual and ocr_attempts and source != "unavailable":
                     try:
-                        preview = draw_test_preview(register, integer_width, whole_boxes,
-                                                    fraction_boxes, ocr, integer_digits, fraction_digits)
+                        preview = draw_test_preview(
+                            register, integer_width, whole_boxes, fraction_boxes, ocr,
+                            integer_digits, fraction_digits, readings=ocr_readings,
+                            composed=bool(ocr_readings and ocr not in ocr_readings),
+                        )
                         with io.BytesIO() as buffer:
                             preview.save(buffer, "JPEG", quality=88, optimize=True)
                             atomic_write(AUTOMATIC_PREVIEW, buffer.getvalue(), 0o600)
@@ -1075,8 +1096,11 @@ def main():
                     preview_available = False
                     if ocr_attempts and source != "unavailable":
                         try:
-                            preview = draw_test_preview(register, integer_width, whole_boxes,
-                                                        fraction_boxes, ocr, integer_digits, fraction_digits)
+                            preview = draw_test_preview(
+                                register, integer_width, whole_boxes, fraction_boxes, ocr,
+                                integer_digits, fraction_digits, readings=ocr_readings,
+                                composed=bool(ocr_readings and ocr not in ocr_readings),
+                            )
                             with io.BytesIO() as buffer:
                                 preview.save(buffer, "JPEG", quality=88, optimize=True)
                                 atomic_write(TEST_IMAGE, buffer.getvalue(), 0o600)

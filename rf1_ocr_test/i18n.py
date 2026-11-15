@@ -11,6 +11,7 @@ from checks import FALLBACK_NOTICE, uncertain_positions
 
 EN_UI = {
     "Erkennungsbild": "Recognition image",
+    "Letztes Testbild": "Latest test image",
     "Letzte automatische Erkennung": "Latest automatic reading",
     "Schließen": "Close",
     "Originalbild zum Ablesen": "Original image for reading",
@@ -68,7 +69,10 @@ EN_UI = {
     "Letzte Prüfung": "Last check",
     "Wiederholte Fehlablesung? Ein kürzeres Prüfintervall kann helfen, wenn sich der Zähler nach einer Weile wieder klarer ablesen lässt.": "Repeated reading errors? A shorter check interval can help if the meter becomes easier to read after it turns.",
     "Prüfintervall ändern": "Change check interval",
-    "Nach einer unklaren Ablesung folgt ein zusätzlicher Versuch nach fünf Minuten. Schlägt auch der fehl, gilt wieder dieses Intervall.": "After an unclear reading, one retry follows after five minutes. If it also fails, this interval applies again.",
+    "ⓘ Warum das Prüfintervall ändern?": "ⓘ Why change the check interval?",
+    "Nach einem fehlgeschlagenen automatischen Test folgen bis zu zwei weitere Prüfungen im Abstand von fünf Minuten. Sind alle drei erfolglos, wartet die App eine Stunde und prüft dann erneut. Nach Erfolg gilt wieder dein eingestelltes Intervall. Ein kürzeres Intervall kann helfen, wenn sich der Zähler beim Weiterdrehen vorübergehend schlecht lesen lässt.":
+        "After a failed automatic check, up to two more checks follow at five-minute intervals. If all three fail, the app waits one hour before trying again. After a successful check, your selected interval applies again. A shorter interval can help when the meter is temporarily hard to read as it turns.",
+    "Nach einer fehlgeschlagenen automatischen Prüfung folgen bis zu zwei weitere Bildprüfungen im Abstand von fünf Minuten. Bleiben alle drei Prüfungen erfolglos, wartet AI Meter Reader eine Stunde auf einen höheren Zählerstand oder ein neues Bild und versucht es dann erneut. Beleuchtung, Abstand und Fokus prüfen.": "After a failed automatic check, up to two more image checks follow at five-minute intervals. If all three fail, AI Meter Reader waits one hour for a higher reading or a new image, then tries again. Check lighting, distance, and focus.",
     "Wartet auf die nächste automatische Prüfung.": "Waiting for the next automatic check.",
     "App läuft. Wartet auf die nächste automatische Prüfung.": "App is running and waiting for the next automatic check.",
     "Automatik:": "Automatic checks:",
@@ -86,7 +90,7 @@ EN_UI = {
     "Kamera erreichbar. Frisches Bild empfangen.": "Camera reachable. Fresh image received.",
     "ESP erreichbar, aber Bild ist älter als 15 Minuten oder hat einen ungültigen Zeitstempel.": "ESP reachable, but the image is older than 15 minutes or has an invalid timestamp.",
     "Kamera erreichbar, aber das Bild hat einen ungültigen Zeitstempel.": "Camera reachable, but the image has an invalid timestamp.",
-    "ESP erreichbar, aber seit der letzten Prüfung kam kein neues Bild.": "ESP reachable, but no new image has arrived since the last check.",
+    "ESP erreichbar. Seit der letzten Prüfung kam kein neues Bild; das vorhandene Bild ist noch nicht veraltet.": "ESP reachable. No new image since the last check; the current image is not stale yet.",
     "Home-Assistant-Kamera erreichbar; dieses Bild wurde bereits geprüft.": "Home Assistant camera reachable; this image was already checked.",
     "Home-Assistant-Kamera nicht erreichbar oder Bild unlesbar. Kamera und Zugriff prüfen.": "Home Assistant camera unavailable or image unreadable. Check the camera and access.",
     "ESP nicht erreichbar oder Antwort unvollständig. Adresse und Verbindung prüfen.": "ESP unavailable or response incomplete. Check its address and connection.",
@@ -96,17 +100,17 @@ EN_UI = {
     "Automatische Prüfung wird abgeschlossen.": "Finishing the automatic check.",
     "Letzte Prüfung beendet. Nächster Versuch nach kurzer Wartezeit.": "Last check finished. The next attempt follows after a short wait.",
     "Letzte Prüfung beendet. Wartet auf das eingestellte Prüfintervall.": "Last check finished. Waiting for the selected check interval.",
-    "Nach einer unklaren Ablesung prüft die App einmal nach fünf Minuten erneut. Schlägt auch diese Prüfung fehl, kehrt sie zum eingestellten Intervall zurück – standardmäßig eine Stunde. Ein kürzeres Intervall kann helfen, wenn sich der Zähler während der Drehung vorübergehend schlecht lesen lässt.": "After an unclear reading, the app retries once after five minutes. If that check also fails, it returns to the selected interval—one hour by default. A shorter interval can help if the meter is temporarily hard to read while turning.",
-    "Nach zwei Fehlprüfungen mit kurzem Abstand gilt wieder dein eingestelltes Prüfintervall. Bei geänderter Vergleichsgenauigkeit beginnt die Trefferzählung neu.": "After two checks fail close together, the selected check interval applies again. Changing comparison precision resets the match count.",
-    "Die automatische Erkennung versucht, den Ziffernrahmen zu finden. Bei einer unsicheren Ablesung folgen bis zu zehn zusätzliche Bildauswertungen; die App setzt einzelne Ziffern nur zusammen, wenn sie in der Mehrheit der Versuche gleich erkannt wurden. Nach zwei erfolglosen Prüfungen mit kurzem Abstand wartet sie wieder das eingestellte Intervall ab. Beim Livebild kann AI Meter Reader bis zu 10 frische Standbilder innerhalb von höchstens 20 Sekunden prüfen.": "Automatic detection tries to find the digit area. If a reading is uncertain, up to ten extra image analyses follow; digits are combined only when a majority of attempts agree. After two failed checks close together, the app returns to the selected interval. For live images, AI Meter Reader can try up to 10 fresh snapshots within 20 seconds.",
+    "Nach einer fehlgeschlagenen automatischen Prüfung folgen bis zu zwei weitere Bildprüfungen im Abstand von fünf Minuten. Bleiben alle drei Prüfungen erfolglos, wartet die App eine Stunde auf einen höheren Zählerstand oder ein neues Bild. Beleuchtung, Abstand und Fokus prüfen.": "After a failed automatic check, up to two more image checks follow at five-minute intervals. If all three fail, the app waits one hour for a higher reading or a new image. Check lighting, distance, and focus.",
+    "Nach drei fehlgeschlagenen automatischen Prüfungen mit unterschiedlichen Bildabrufen wartet die App eine Stunde und versucht es dann erneut. Nach einem erfolgreichen Abgleich gilt wieder dein eingestelltes Prüfintervall. Bei geänderter Vergleichsgenauigkeit beginnt die Trefferzählung neu.": "After three failed automatic checks using different image captures, the app waits one hour and tries again. After a successful match, the selected interval applies again. Changing comparison precision resets the match count.",
+    "Die automatische Erkennung versucht, den Ziffernrahmen zu finden. Bei einer unsicheren Ablesung folgen bis zu zehn zusätzliche Bildauswertungen; die App setzt einzelne Ziffern nur bei einer strikten Mehrheit zusammen. Nach drei fehlgeschlagenen automatischen Prüfungen mit unterschiedlichen Bildabrufen wartet sie eine Stunde auf ein neues Bild oder einen höheren Zählerstand. Prüfe bei wiederholten Fehlern auch Beleuchtung, Abstand und Fokus. Beim Livebild kann AI Meter Reader bis zu 10 frische Standbilder innerhalb von höchstens 20 Sekunden prüfen.": "Automatic detection tries to find the digit area. If a reading is uncertain, up to ten extra image analyses follow; digits are combined only when a strict majority agrees. After three failed automatic checks using different image captures, the app waits one hour for a higher reading or a new image. If errors continue, check lighting, distance, and focus. For live images, AI Meter Reader can try up to 10 fresh snapshots within 20 seconds.",
     "SLFork liefert Bild und Messwert. Die Livebild-Quelle ruft bei jeder Prüfung ein aktuelles Standbild deiner Home-Assistant-Kamera ab; ein Video wird nicht dauerhaft ausgewertet. Du kannst dazu einen Zählerstandssensor – etwa von AI on the Edge – als Vergleich eintragen. Ohne Referenzsensor liest AI Meter Reader selbst und prüft die Werte auf Plausibilität.": "SLFork supplies the image and reading. The live image source takes a fresh snapshot from your Home Assistant camera for each check; video is not continuously processed. You can add a meter reading sensor, such as AI on the Edge, for comparison. Without a reference sensor, AI Meter Reader reads the image itself and checks plausibility.",
     "Er ist ein Startwert, solange noch keine sichere automatische Ablesung gespeichert ist. AI Meter Reader prüft die erste Ablesung gegen den Zeitabstand und den maximalen Durchfluss. Danach wird der letzte bestätigte Stand als Referenz genutzt. Ohne Fallback beginnt die Plausibilitätsprüfung mit der ersten sicheren Ablesung.": "This is a starting value until a reliable automatic reading is saved. AI Meter Reader checks the first reading against elapsed time and maximum flow. After that, it uses the latest confirmed reading as its reference. Without a fallback, plausibility checks begin with the first reliable reading.",
     "Letzter bestätigter Abgleich": "Last confirmed match",
     "Einstellungen": "Settings",
     "Automatische Prüfung": "Automatic checks",
     "Prüfintervall (Minuten)": "Check interval (minutes)",
-    "Nach einer unklaren Ablesung folgt ein zusätzlicher Versuch nach fünf Minuten. Schlägt auch der fehl, gilt wieder dieses Intervall.":
-        "After an unclear reading, one retry follows after five minutes. If it also fails, this interval applies again.",
+    "Nach einer fehlgeschlagenen automatischen Prüfung folgen bis zu zwei weitere Bildprüfungen im Abstand von fünf Minuten. Bleiben alle drei Prüfungen erfolglos, wartet AI Meter Reader eine Stunde auf einen höheren Zählerstand oder ein neues Bild und versucht es dann erneut. Beleuchtung, Abstand und Fokus prüfen.":
+        "After a failed automatic check, up to two more image checks follow at five-minute intervals. If all three fail, AI Meter Reader waits one hour for a higher reading or a new image, then tries again. Check lighting, distance, and focus.",
     "Max. OCR-Versuche": "Max. OCR attempts",
     "Ziffernfarbe": "Digit color",
     "Bildbereich (links, oben, rechts, unten)": "Image region (left, top, right, bottom)",
@@ -166,9 +170,16 @@ EN_UI = {
     " Nachkommastelle(n).": " decimal place(s).",
     "OCR-Testbild mit erkannten Stellen": "OCR image showing recognized digits",
     "Grün:": "Green:",
+    "Gelb:": "Yellow:",
     "Rot:": "Red:",
     "Ziffer wurde gelesen": "Digit recognized",
+    "Ziffer schwankte zwischen OCR-Versuchen oder wurde aus mehreren Versuchen zusammengesetzt" :
+        "Digit varied across OCR attempts or was composed from multiple attempts",
+    "Ziffer gelesen": "Digit read",
+    "Ziffer weiterhin unklar": "Digit still unclear",
     "Ziffer unklar": "Digit unclear",
+    "Die Farben zeigen OCR-Sicherheit, nicht die Übereinstimmung mit dem Referenzstand.":
+        "The colors show OCR confidence, not whether the reading matches the reference.",
     "Die Farbrahmen zeigen die OCR-Erkennung, nicht die Übereinstimmung mit dem Referenzstand. Ohne automatisch erkannte Ziffernrahmen sind die Bereiche nur näherungsweise aufgeteilt.":
         "The colored boxes show OCR recognition, not whether the digits match the reference. Without detected digit frames, the individual regions are approximate.",
     "Zählerbild mit grün markierten erkannten Ziffern und rot markierten unklaren Stellen":

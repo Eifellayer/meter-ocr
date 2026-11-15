@@ -1,7 +1,7 @@
 name: AI Meter Reader (Alpha)
-version: "0.3.1"
+version: "0.4.0"
 slug: rf1_ocr_test
-description: "AI-gestützte Zählerablesung und Plausibilitätsprüfung / AI-assisted meter reading and verification. Alpha (<0.5)."
+description: "AI-gestützte Zählerablesung und Plausibilitätsprüfung / AI-assisted meter reading and verification. Alpha (<0.5). Bebilderte Anleitung / illustrated guide: https://github.com/Eifellayer/meter-ocr/blob/main/docs/Bedienungsanleitung-AI-Meter-Reader.pdf"
 arch:
   - aarch64
   - amd64

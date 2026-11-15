@@ -27,10 +27,10 @@ def formatted_page(language="de"):
 
 
 class AppIdentityTests(unittest.TestCase):
-    def test_release_metadata_is_alpha_without_a_separate_beta_stage(self):
+    def test_release_metadata_is_alpha_040_with_preserved_identity(self):
         config = yaml.safe_load((APP / "config.yaml").read_text(encoding="utf-8"))
         repository = yaml.safe_load((APP.parent / "repository.yaml").read_text(encoding="utf-8"))
-        self.assertEqual("0.3.1", config["version"])
+        self.assertEqual("0.4.0", config["version"])
         self.assertEqual("rf1_ocr_test", config["slug"])
         self.assertEqual("AI Meter Reader (Alpha)", config["name"])
         self.assertNotIn("stage", config)
@@ -107,14 +107,21 @@ class ComparisonTests(unittest.TestCase):
             self.assertFalse(manual_confirms_failed_auto(
                 {**history, "check_status": excluded}, sample, "10448.087", **kwargs))
 
-    def test_two_failed_runs_return_to_the_configured_interval(self):
+    def test_three_failed_runs_back_off_for_one_hour_then_success_resets_counter(self):
         history = {}
         schedule_next_check(history, "ocr_unclear", 1_000, 60)
         self.assertEqual(1_000 + 300, history["next_check_at"])
         schedule_next_check(history, "ocr_unclear", 1_300, 60)
+        self.assertFalse(history.get("retry_suppressed", False))
+        self.assertEqual(1_300 + 300, history["next_check_at"])
+        schedule_next_check(history, "ocr_unclear", 1_600, 60)
         self.assertTrue(history["retry_suppressed"])
-        self.assertEqual(1_300 + 3_600, history["next_check_at"])
-        schedule_next_check(history, "match", 4_900, 60)
+        self.assertEqual(1_600 + 3_600, history["next_check_at"])
+        self.assertEqual(3, history["failure_attempts"])
+        schedule_next_check(history, "ocr_unclear", 5_200, 60)
+        self.assertEqual(5_200 + 3_600, history["next_check_at"])
+        self.assertEqual(4, history["failure_attempts"])
+        schedule_next_check(history, "match", 8_800, 60)
         self.assertNotIn("retry_suppressed", history)
         self.assertNotIn("failure_attempts", history)
 
@@ -192,6 +199,12 @@ class PanelTests(unittest.TestCase):
         self.assertIn("Projekt von EifelLayer auf GitHub", page)
         self.assertIn("Test starten", page)
         self.assertIn('id="automatic-activity"', page)
+        self.assertIn("Letztes Testbild", page)
+        self.assertIn("Gelb:", page)
+        self.assertIn('id="automatic-recovery"', page)
+        self.assertIn("automaticStatusFailures >= 3", page)
+        self.assertIn("Statusaktualisierung kurz fehlgeschlagen", page)
+        self.assertNotIn("Keine Verbindung zur App. Sie könnte gestoppt", page)
         self.assertIn('id="open-interval-settings"', page)
         self.assertIn("Test einstellen", page)
         self.assertIn("Testeinstellungen", page)
@@ -248,6 +261,15 @@ class PanelTests(unittest.TestCase):
         preview = draw_test_preview(source, 400, [], [], "1234?.?21")
         self.assertEqual((36, 170, 92), preview.getpixel((1, 3)))
         self.assertEqual((203, 65, 77), preview.getpixel((321, 3)))
+
+    def test_overlay_marks_variable_or_composed_digits_yellow(self):
+        source = Image.new("RGB", (500, 100), "white")
+        varied = draw_test_preview(source, 500, [], [], "12345", 5, 0,
+                                   readings=["12345", "12945"])
+        self.assertEqual((241, 184, 54), varied.getpixel((201, 3)))
+        composed = draw_test_preview(source, 500, [], [], "12345", 5, 0,
+                                     readings=["12345", "12346"], composed=True)
+        self.assertEqual((241, 184, 54), composed.getpixel((1, 3)))
 
 
 if __name__ == "__main__":

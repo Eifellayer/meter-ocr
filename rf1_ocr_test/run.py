@@ -21,6 +21,7 @@ from websocket import WebSocketException
 
 from checks import (
     RETRY_INTERVAL, compare_sample, crop_register, read_register, read_with_retries, record_sample,
+    explain_uncertain_positions,
     rolling_summary, sample_epoch, sample_timestamp, schedule_next_check,
 )
 from layout import find_digit_row
@@ -445,6 +446,7 @@ def main():
                     if frame.format != "JPEG":
                         raise ValueError("Der ESP hat kein JPEG geliefert")
                     frame.load()
+                    ocr_readings = []
                     try:
                         # Manual crop is a diagnostic override for this test only.
                         manual_crop = crop
@@ -476,6 +478,7 @@ def main():
                             manual_options["decimals"] if manual else decimals,
                             progress=report_ocr if manual else None,
                             max_attempts=manual_options["attempts"] if manual else max_attempts,
+                            trace=ocr_readings,
                         )
                     except (OSError, ValueError, subprocess.SubprocessError) as error:
                         print(f"Lokale OCR nicht verfügbar: {error}")
@@ -489,6 +492,8 @@ def main():
                                        or image_time in history.get("confirmations", ()))
                     status, detail = compare_sample(sample, ocr, manual_options["decimals"],
                                                     ocr_confirmed=ocr_confirmed)
+                    if status == "ocr_unclear":
+                        detail = explain_uncertain_positions(ocr_readings, manual_options["decimals"])
                     preview_available = False
                     if ocr_attempts and source != "unavailable":
                         try:
@@ -502,6 +507,7 @@ def main():
                             print(f"OCR-Testvorschau konnte nicht erstellt werden: {error}")
                     manual_result = {
                         "preview": preview_available,
+                        "readings": ocr_readings,
                         "status": status,
                         "ocr_attempts": ocr_attempts,
                         "ocr": ocr,
@@ -517,6 +523,8 @@ def main():
                                    ocr_confirmed=ocr_confirmed):
                     atomic_write(DESTINATION, picture, 0o644)
                     outcome = updated["status"]
+                    if outcome == "ocr_unclear":
+                        updated["check_detail"] = explain_uncertain_positions(ocr_readings, decimals)
                     if outcome == "match":
                         atomic_write(GOOD_IMAGE, picture, 0o644)
                     data = {**sample, "crop_source": source, "ocr_attempts": ocr_attempts}
@@ -538,7 +546,8 @@ def main():
                             manual_result.get("ocr_attempts", 0), now.timestamp(),
                             outcome=manual_result.get("status", "capture_unavailable"),
                             detail=manual_result["detail"], preview=manual_result.get("preview", False),
-                            can_apply_crop=manual_result.get("can_apply_crop", False))
+                            can_apply_crop=manual_result.get("can_apply_crop", False),
+                            readings=manual_result.get("readings", []))
             continue
         if keep_schedule and data is None and history.get("next_check_at", 0) > now.timestamp():
             continue

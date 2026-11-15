@@ -1,7 +1,7 @@
 name: Gaszähler OCR-Kontrolle
 version: "0.8.0"
 slug: rf1_ocr_test
-description: "Unabhängige lokale Bildkontrolle automatisch abgelesener Gaszählerstände mit OCR. Privates Hobbyprojekt ohne Gewähr."
+description: "Lokaler OCR-Abgleich von Gaszählerständen / Independent local OCR verification of gas meter readings. Privates Hobbyprojekt / free hobby project."
 arch:
   - aarch64
   - amd64

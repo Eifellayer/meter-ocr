@@ -82,11 +82,11 @@ async function refreshTestStatus() {{
     const done = Math.min(Number(job.attempts) || 0, 5);
     bar.max = 5;
     if (job.phase === 'queued' || job.phase === 'running') bar.removeAttribute('value');
-    else bar.value = job.phase === 'done' ? 5 : done;
-    const seconds = job.started_at ? Math.floor(Math.max(0, Date.now()/1000 - job.started_at)) : 0;
+    else bar.value = done;
+    const seconds = job.started_at ? Math.floor(Math.max(0, (job.phase === 'done' ? job.checked_at : Date.now()/1000) - job.started_at)) : 0;
     let meta = active ? 'Verstrichen: ' + seconds + ' s · keine verlässliche Restzeit möglich' : '';
     if (job.phase === 'ocr') meta = 'Fortschritt: ' + done + '/5 OCR-Durchläufen · ' + meta;
-    if (job.phase === 'done') meta = 'Fertig · ' + done + ' OCR-Durchläufe · Ergebnis unten';
+    if (job.phase === 'done') meta = 'Fertig · ' + done + ' OCR-Durchlauf/Durchläufe · ' + seconds + ' s · Ergebnis unten';
     if (job.phase === 'idle') meta = 'Bereit für einen manuellen Test.';
     document.querySelector('#test-meta').textContent = meta;
     if (job.phase === 'done' && Number(job.checked_at) > lastRenderedManual + .001) {{
@@ -106,7 +106,7 @@ function tick() {{
 }}
 for (const el of document.querySelectorAll('.stamp')) {{
   const epoch = Number(el.dataset.epoch);
-  if (epoch) el.textContent = new Intl.DateTimeFormat('de-DE', {day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'}).format(new Date(epoch * 1000));
+  if (epoch) el.textContent = new Intl.DateTimeFormat('de-DE', {{day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'}}).format(new Date(epoch * 1000));
 }}
 if (location.search === '?test=queued') history.replaceState(null, '', location.pathname);
 let edited = false;

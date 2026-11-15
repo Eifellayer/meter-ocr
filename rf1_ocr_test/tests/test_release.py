@@ -28,7 +28,7 @@ class AppIdentityTests(unittest.TestCase):
     def test_release_metadata_is_alpha_without_a_separate_beta_stage(self):
         config = yaml.safe_load((APP / "config.yaml").read_text(encoding="utf-8"))
         repository = yaml.safe_load((APP.parent / "repository.yaml").read_text(encoding="utf-8"))
-        self.assertEqual("0.2.0", config["version"])
+        self.assertEqual("0.3.0", config["version"])
         self.assertEqual("rf1_ocr_test", config["slug"])
         self.assertEqual("Meter OCR (Alpha)", config["name"])
         self.assertNotIn("stage", config)
@@ -56,9 +56,18 @@ class ComparisonTests(unittest.TestCase):
 
     def test_decimal_precision_is_strict(self):
         status, message = compare_sample(self.data, "12345.199", 1)
-        self.assertEqual("match", status)
-        self.assertIn("1. Nachkommastelle", message)
+        self.assertEqual("difference", status)
+        self.assertIn("Gerundet auf 1 Nachkommastelle", message)
         self.assertEqual("difference", compare_sample(self.data, "12345.199", 2)[0])
+
+    def test_decimal_comparison_rounds_the_selected_precision_half_up(self):
+        reference = {"raw_value": "10447.6528", "actual_value": "10447.6528"}
+        status, message = compare_sample(reference, "10447.653", 3)
+        self.assertEqual("match", status)
+        self.assertIn("Gerundet auf 3 Nachkommastellen", message)
+        self.assertEqual("difference", compare_sample(reference, "10447.652", 3)[0])
+        carry = {"raw_value": "9.995", "actual_value": "10.00"}
+        self.assertEqual("match", compare_sample(carry, "10.00", 2, integer_digits=4)[0])
 
     def test_ocr_stops_after_first_agreement(self):
         trace = []
@@ -97,6 +106,17 @@ class ComparisonTests(unittest.TestCase):
                 self.assertEqual(expected, read_with_retries(
                     lambda _: next(values), data, 0, max_attempts=len(readings), standalone=True))
 
+    def test_position_consensus_combines_partial_reads_after_all_ten_attempts(self):
+        data = {"raw_value": "99999.999", "actual_value": "99999.999"}
+        values = iter([
+            "12345.120", "123?5.120", "12345.12?", "123?5.12?", "12?45.120",
+            "12345.120", "12345.120", "123?5.120", "12345.12?", "12345.12?",
+        ])
+        value, confirmed, attempts = read_with_retries(
+            lambda _: next(values), {"reference_required": False}, 3, max_attempts=10,
+            force_all_attempts=True)
+        self.assertEqual(("12345.120", True, 10), (value, confirmed, attempts))
+
     def test_conflicting_reads_do_not_become_a_confirmed_match(self):
         values = iter(["12345.100", "12395.100", "12365.100"])
         trace = []
@@ -116,6 +136,10 @@ class PanelTests(unittest.TestCase):
         self.assertIn("Meter OCR", page)
         self.assertIn("FG4Q7VKQJ9BW8", page)
         self.assertIn("Über Meter OCR", page)
+        self.assertIn("Freiwillig mit PayPal unterstützen", page)
+        self.assertIn('details class="about-project"', page)
+        self.assertIn("Stand und Verbrauch im Dashboard anzeigen", page)
+        self.assertIn("sensor.rf1_verbrauch_gesamt", page)
         self.assertIn("Projekt von EifelLayer auf GitHub", page)
         self.assertIn("Test starten", page)
         self.assertIn("Test einstellen", page)
@@ -142,6 +166,8 @@ class PanelTests(unittest.TestCase):
         self.assertIn("Automatic verification", page)
         self.assertIn("Overview", page)
         self.assertIn("Show the reading on a Home Assistant dashboard", page)
+        self.assertIn("Show the reading and usage on a dashboard", page)
+        self.assertIn("Support the project voluntarily with PayPal", page)
         self.assertIn("Reset app data", page)
         self.assertIn("Set up later", page)
         self.assertIn("Start test", page)
@@ -155,7 +181,7 @@ class PanelTests(unittest.TestCase):
 
     def test_english_status_and_specific_digit_diagnostics(self):
         self.assertIn("attempt 2 of 5", english_progress("OCR-Versuch 2 von 5 läuft …"))
-        self.assertIn("decimal place 2", english_result(
+        self.assertIn("rounded to 2 decimal places", english_result(
             "Bestätigt: Zählerstand und Referenzwert stimmen überein.",
             "match", 2))
         self.assertIn("Whole-number digits: 3", english_uncertain_positions(

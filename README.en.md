@@ -20,7 +20,7 @@ Meter OCR is a private hobby project for checking meter readings. [Usage notes](
 
 ## What does it check?
 
-By default, the app compares the **five digits for whole cubic meters (m³)**. Up to three decimal places can optionally be included. Ignored decimal digits are displayed when available but **do not affect the result**. `?` means a digit was not reliably recognized. Digits are truncated for comparison, never rounded.
+By default, the app compares the **five digits for whole cubic meters (m³)**. Up to three decimal places can optionally be included. Values are rounded half up to the selected precision; the next known digit determines the rounding. `?` means a digit was not reliably recognized.
 
 The app downloads the latest available meter image and reference reading from SLFork, or uses the configured Home Assistant camera and optionally a cumulative sensor in m³. It detects digit frames automatically when possible; otherwise you can specify a crop.
 

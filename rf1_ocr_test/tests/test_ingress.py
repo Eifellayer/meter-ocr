@@ -2,6 +2,7 @@
 
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from io import BytesIO
 import json
 import os
 from pathlib import Path
@@ -166,6 +167,37 @@ class IngressTests(IngressFixture):
                          (self.rules["crop_mode"], self.rules["crop"], self.rules["width"],
                           self.rules["rotation"], self.rules["decimals"]))
 
+    def test_manual_test_accepts_only_a_small_jpeg_or_png_upload(self):
+        image = Image.new("RGB", (32, 24), "white")
+        encoded = BytesIO()
+        image.save(encoded, format="JPEG")
+        picture = encoded.getvalue()
+        boundary = "meter-ocr-test-boundary"
+        body = (
+            f"--{boundary}\r\nContent-Disposition: form-data; name=\"csrf\"\r\n\r\n{self.csrf}\r\n"
+            f"--{boundary}\r\nContent-Disposition: form-data; name=\"image\"; filename=\"meter.jpg\"\r\n"
+            "Content-Type: image/jpeg\r\n\r\n"
+        ).encode() + picture + f"\r\n--{boundary}--\r\n".encode()
+        headers = {"Content-Type": f"multipart/form-data; boundary={boundary}",
+                   "X-Remote-User-Id": USER_DE}
+        with self.assertRaises(HTTPError) as caught:
+            open_core(Request(self.base + "/pruefen", data=body, headers=headers))
+        self.assertEqual(303, caught.exception.code)
+        self.assertEqual(picture, self.requested.get_nowait()["image"])
+
+        unsupported = body.replace(b"image/jpeg", b"image/gif")
+        headers["Content-Type"] = f"multipart/form-data; boundary={boundary}"
+        with self.assertRaises(HTTPError) as caught:
+            open_core(Request(self.base + "/pruefen", data=unsupported, headers=headers))
+        self.assertEqual(400, caught.exception.code)
+        self.assertTrue(self.requested.empty())
+
+        oversized = body.replace(picture, b"x" * (panel.MAX_MANUAL_IMAGE_BYTES + 1))
+        with self.assertRaises(HTTPError) as caught:
+            open_core(Request(self.base + "/pruefen", data=oversized, headers=headers))
+        self.assertEqual(400, caught.exception.code)
+        self.assertTrue(self.requested.empty())
+
     def test_invalid_manual_crop_returns_localized_form_error(self):
         for language, message in (("en", "Check the form values"), ("de", "Bitte die Formulareingaben prüfen")):
             with self.subTest(language=language), self.assertRaises(HTTPError) as caught:
@@ -221,7 +253,7 @@ class IngressTests(IngressFixture):
             "notifications_enabled": 1, "review_minutes": 60, "delivery_hours": 0,
             "push": "notify.mobile_app_phone", "target": "notify.email",
         }
-        self.assertEqual((303, "./?saved=setup"), self.submit("/einrichtung", **values))
+        self.assertEqual((303, "./?saved=setup&test=ready&ui=overview"), self.submit("/einrichtung", **values))
         self.assertEqual("camera", self.source["mode"])
         self.assertEqual("sensor.meter", self.source["reference"])
         self.assertEqual((6, 2, "mixed", 1), (self.rules["integer_digits"], self.rules["fraction_digits"],
@@ -369,7 +401,9 @@ class BrowserTests(IngressFixture):
                 if inner.path == "/favicon.ico":
                     inner.send_error(404)
                     return
-                user, profile, forwarded = self.profiles[urlsplit(inner.path).query]
+                profile_data = self.profiles[urlsplit(inner.path).query]
+                user, profile, forwarded = profile_data[:3]
+                delay_ms = profile_data[3] if len(profile_data) > 3 else 0
                 script = (
                     "document.querySelector('home-assistant').hass = {"
                     f"user: {{id: '{user}'}}, "
@@ -379,6 +413,8 @@ class BrowserTests(IngressFixture):
                     f"return Promise.resolve({{value: {{language: '{profile}'}}}});"
                     "}};"
                 )
+                if delay_ms:
+                    script = f"setTimeout(() => {{{script}}}, {delay_ms});"
                 result = (f"<home-assistant></home-assistant><script>window.calls=0;{script}</script>"
                           f"<iframe src='/ingress/{forwarded}/' style='width:100%;height:1000px'></iframe>").encode()
                 inner.send_response(200)
@@ -391,7 +427,8 @@ class BrowserTests(IngressFixture):
 
         self.profiles.update(en=(USER_EN, "en-US", USER_EN), de=(USER_DE, "de-AT", USER_DE),
                              unsupported=(USER_EN, "fr-FR", USER_EN),
-                             mismatch=(USER_DE, "de", USER_EN))
+                             mismatch=(USER_DE, "de", USER_EN),
+                             late_de=(USER_DE, "de-AT", USER_DE, 900))
         with serve(Parent) as parent, sync_playwright() as playwright:
             browser = playwright.chromium.launch(executable_path=os.getenv("RF1_CHROMIUM"))
             page = browser.new_page(viewport={"width": 320, "height": 850}, locale="en-US")
@@ -412,6 +449,9 @@ class BrowserTests(IngressFixture):
             expect_language("de")
             self.assertEqual(1, page.evaluate("window.calls"))
             self.assertIn("Home Assistant: Deutsch", frame.locator("#language-select").inner_text())
+            page.goto(parent + "/?late_de")
+            expect_language("de")
+            self.assertEqual(1, page.evaluate("window.calls"))
             page.goto(parent + "/?en")
             expect_language("en")
             if frame.locator("#setup-dialog").evaluate("dialog => dialog.open"):

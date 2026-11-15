@@ -20,7 +20,7 @@ Meter OCR ist ein privates Hobbyprojekt für die Plausibilitätskontrolle. [Hinw
 
 ## Was wird kontrolliert?
 
-Die Standardeinstellung vergleicht **fünf Vorkommastellen, also volle m³**. Erkannte Nachkommastellen werden zusätzlich angezeigt. Ein `?` steht für eine unklare Ziffer. Solange `vergleich_nachkommastellen: 0` eingestellt ist, werden unklare Nachkommastellen nicht bewertet.
+Die Standardeinstellung vergleicht **fünf Vorkommastellen, also volle m³**. Erkannte Nachkommastellen werden zusätzlich angezeigt. Ein `?` steht für eine unklare Ziffer. Solange `vergleich_nachkommastellen: 0` eingestellt ist, werden Nachkommastellen nicht bewertet. Bei 1–3 Vergleichsstellen wird der Wert auf die gewählte Stelle gerundet (ab 5 aufwärts); die nächste bekannte Ziffer entscheidet über die Rundung.
 
 Die App holt das letzte vorhandene Foto sowie die zugehörigen Werte aus SLFork. Sie erkennt den Ziffernausschnitt anhand der grünen Rahmen oder nutzt einen eingestellten Bildausschnitt. Tesseract OCR liest den Zählerstand unabhängig aus dem Bild. Bei unklarer oder abweichender Erstlesung probiert sie weitere Bildaufbereitungen **bis zum einstellbaren Maximum von 1 bis 10 Versuchen** (Standard: 5). **Bei der ersten bestätigten Übereinstimmung stoppt die Prüfung sofort.**
 
@@ -30,7 +30,7 @@ Im SLFork-Modus gleicht die App den OCR-Wert mit **Raw Value** und **Actual Valu
 
 In der Weboberfläche stehen unter **„Automatische Prüfung – Einstellungen“** vier dauerhaft gespeicherte Prüfregeln:
 
-- **Vergleich:** Nur volle m³ (0) oder zusätzlich 1–3 Nachkommastellen. Die nicht ausgewählten Nachkommastellen werden ignoriert, nicht gerundet.
+- **Vergleich:** Nur volle m³ (0) oder zusätzlich 1–3 Nachkommastellen. Bei Nachkommastellen wird auf die gewählte Genauigkeit gerundet; die nächste bekannte Stelle entscheidet über die Rundung.
 - **Max. OCR-Versuche:** 1–10 Versuche pro Zählerbild (Standard: 5). Bei einer bestätigten Übereinstimmung endet die Prüfung sofort.
 - **Ziffernfarbe:** Automatisch erkennen (Standard) oder gezielt helle bzw. dunkle Ziffern lesen.
 - **Bildbereich:** Ziffernrahmen automatisch erkennen (Standard) oder einen festen Ausschnitt samt Breite der Vorkommastellen dauerhaft verwenden.

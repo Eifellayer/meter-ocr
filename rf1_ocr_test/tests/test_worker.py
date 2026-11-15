@@ -112,20 +112,30 @@ class SourceTests(TestCase):
             run.select_register(frame, None, (0, 0, 400, 100), 80)
 
 
-    def test_rotated_high_resolution_camera_crop_is_readable(self):
-        frame = Image.new("RGB", (2560, 1440), "gray")
+    def test_camera_crop_is_readable_at_all_four_rotations(self):
         upright = synthetic_meter()
-        sideways = upright.transpose(Image.Transpose.ROTATE_90)
-        frame.paste(sideways, (2190, 310))
+        rotations = {
+            0: None,
+            90: Image.Transpose.ROTATE_90,
+            180: Image.Transpose.ROTATE_180,
+            270: Image.Transpose.ROTATE_270,
+        }
+        for rotation, transform in rotations.items():
+            with self.subTest(rotation=rotation):
+                raw = upright if transform is None else upright.transpose(transform)
+                frame = Image.new("RGB", (3000, 1200), "gray")
+                left, top = 2190, 310
+                frame.paste(raw, (left, top))
+                crop_text = f"{left},{top},{left + raw.width},{top + raw.height}"
+                crop = crop_coordinates(crop_text, upright.width, rotation=rotation)
+                register, width, _, _, mode = run.select_register(
+                    frame, None, crop, upright.width, rotation=rotation)
 
-        crop = crop_coordinates("2190,310,2290,810", upright.width, rotation=90)
-        register, width, _, _, mode = run.select_register(frame, None, crop, upright.width, rotation=90)
-
-        self.assertEqual("manual", mode)
-        self.assertEqual(upright.size, register.size)
-        self.assertEqual(upright.width, width)
-        self.assertEqual(upright.tobytes(), register.tobytes())
-        self.assertEqual("12345", read_register(register, False))
+                self.assertEqual("manual", mode)
+                self.assertEqual(upright.size, register.size)
+                self.assertEqual(upright.width, width)
+                self.assertEqual(upright.tobytes(), register.tobytes())
+                self.assertEqual("12345", read_register(register, False))
         with self.assertRaises(ValueError):
             crop_coordinates("2190,310,2290,810", upright.width)
 
@@ -248,7 +258,7 @@ class StateTests(TestCase):
                 run.main()
             return publish.call_args.args[0]
 
-        initial = check({**sample(original), "raw_value": "12346.0416", "actual_value": "12346.0416"}, "12346.041")
+        initial = check({**sample(original), "raw_value": "12346.0416", "actual_value": "12346.0416"}, "12346.042")
         fallback_stamp = now - timedelta(minutes=1)
         fallback = {**sample(fallback_stamp), "slfork_value_status": "E92 Rate Too High (<) | Use Fallback",
                     "slfork_last_valid_timestamp": fallback_stamp.isoformat(), "slfork_fallback_value": "12346.0416",
@@ -266,7 +276,7 @@ class StateTests(TestCase):
         self.assertEqual("match", recovered["check_status"])
         self.assertNotIn("failure_since", recovered)
         self.assertFalse(recovered["last_reference_is_fallback"])
-        self.assertEqual(310, recovered["consumption"]["total_litres"])
+        self.assertEqual(309, recovered["consumption"]["total_litres"])
         self.assertEqual(2, len(recovered["confirmations"]))
     def test_standalone_sensor_retains_exact_precision_and_rejects_lower_readings(self):
         data = sample(datetime.now(timezone.utc))
@@ -378,6 +388,7 @@ class StateTests(TestCase):
             requested.put_nowait({
                 "request_id": 1, "decimals": 2, "attempts": 1, "polarity": "dark",
                 "crop_mode": "manual", "crop": "0,0,480,100", "width": 350,
+                "manual_reference": "12345.129", "image": jpeg,
             })
             return None, lambda *args, **kwargs: progress_updates.append((args, kwargs))
 
@@ -389,12 +400,15 @@ class StateTests(TestCase):
 
         data = sample(datetime.now(timezone.utc))
         self.enterContext(patch.object(run, "start_panel", fake_panel))
-        self.enterContext(patch.object(run, "capture", return_value=(jpeg, None, data)))
+        capture = self.enterContext(patch.object(run, "capture", return_value=(jpeg, None, data)))
         self.enterContext(patch.object(run, "read_visible_digits", return_value="12345.120"))
         self.enterContext(patch.object(run, "publish_state", fake_publish))
         with self.assertRaises(StopLoop):
             run.main()
         self.assertEqual("difference", progress_updates[-1][1]["outcome"])
+        capture.assert_called_once()
+        with Image.open(paths["TEST_SOURCE_IMAGE"]) as source_image:
+            self.assertEqual((500, 100), source_image.size)
         with Image.open(paths["TEST_IMAGE"]) as preview:
             self.assertEqual((480, 100), preview.size)
         self.assertEqual([run.CHECK_ENTITY, run.ENTITY, run.CONSUMPTION_ENTITY],
@@ -403,6 +417,7 @@ class StateTests(TestCase):
         self.assertEqual(0, published[1][1]["attributes"]["decimal_places"])
         history = history_updates[-1]
         self.assertEqual("difference", history["manual_result"]["status"])
+        self.assertNotIn("image", history["manual_result"]["settings"])
         self.assertEqual(1, len(history["confirmations"]))
         self.assertEqual(0, history["comparison_decimals"])
         self.assertEqual(0, history["consumption"]["total_litres"])

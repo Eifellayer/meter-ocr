@@ -93,7 +93,12 @@ EN_UI = {
     "Zusätzliche Bild- und OCR-Einstellungen": "Advanced image and OCR settings",
     "Manueller Bildtest": "Manual image test",
     "Jetzt prüfen": "Run check now",
+    "Eigenes Testbild (optional, JPG oder PNG)": "Choose a test image (optional, JPG or PNG)",
+    "Ein ausgewähltes Bild wird nur für diesen manuellen Test verwendet (max. 3 MB).": "The selected image is used only for this manual test (max. 3 MB).",
+    "Speichern und Test öffnen": "Save and open test",
     "ⓘ Was passiert bei „Jetzt prüfen“?": "ⓘ What happens when I run a check?",
+    "Die App verwendet das letzte vorhandene Zählerbild oder ein ausgewähltes eigenes JPG-/PNG-Testbild (bis 3 MB). Sie liest die Zahlen aus dem Bild und vergleicht sie mit dem Referenzwert. Sobald die Werte übereinstimmen, stoppt die Prüfung. Andernfalls werden höchstens so viele OCR-Versuche durchgeführt wie eingestellt (1–10). Der Test verändert die automatische Trefferzahl nicht.": "The app uses the latest available meter image or a selected JPG/PNG test image (up to 3 MB). It reads the digits and compares them with the reference. The check stops as soon as they match. Otherwise it runs up to the configured number of OCR attempts (1–10). A manual test does not change the automatic confirmation count.",
+    "Ziffern aus mehreren OCR-Versuchen zusammengesetzt.": "Digits combined from multiple OCR attempts.",
     "Die App verwendet das letzte vorhandene Zählerbild, ohne eine neue Aufnahme zu starten. Sie liest die Zahlen aus dem Bild und vergleicht sie mit dem Referenzwert. Sobald die Werte übereinstimmen, stoppt die Prüfung. Andernfalls werden höchstens so viele OCR-Versuche durchgeführt wie eingestellt (1–10). Der Test verändert die automatische Trefferzahl nicht.":
         "The app uses the most recent meter image without triggering a new capture. It independently reads the digits and compares them with the reference value. Checking stops as soon as the values agree; otherwise it tries up to the configured number of OCR attempts (1–10). Manual checks do not affect automatic confirmation counts.",
     "Informationen zum manuellen Bildtest": "Information about the manual image test",
@@ -350,11 +355,13 @@ def english_result(detail, status=None, decimals=0, readings=None):
     if status == "match":
         if decimals == 0:
             return "Confirmed: Whole cubic meters match. Decimal digits were ignored."
-        return (f"Confirmed: The OCR reading matches the reference through decimal place {decimals}.")
+        place = "decimal place" if decimals == 1 else "decimal places"
+        return f"Confirmed: OCR reading and reference match when rounded to {decimals} {place}."
     if status == "difference":
         if decimals == 0:
             return "Mismatch: Whole cubic meters do not match. Check the meter image."
-        return (f"Mismatch: The values do not match when comparing through decimal place {decimals}. "
+        place = "decimal place" if decimals == 1 else "decimal places"
+        return (f"Mismatch: The values do not match when rounded to {decimals} {place}. "
                 "Check the meter image.")
     if status == "ocr_only":
         return ("Digits read, but not verified: No reference reading is available. "

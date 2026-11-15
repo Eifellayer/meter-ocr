@@ -112,6 +112,18 @@ def meter_prefix(value, decimals, integer_digits=5):
     return int(match[1] + fractional)
 
 
+def rounded_meter_prefix(value, decimals, integer_digits=5):
+    """Return the selected meter precision rounded half up when the next digit is known."""
+    prefix = meter_prefix(value, decimals, integer_digits)
+    if prefix is None or decimals == 0:
+        return prefix
+    match = re.fullmatch(rf"([0-9]{{1,{integer_digits}}})(?:[.,]([0-9Nn?]+))?", str(value))
+    fraction = match[2] or ""
+    if len(fraction) > decimals and fraction[decimals].isdigit() and fraction[decimals] >= "5":
+        prefix += 1
+    return prefix
+
+
 def comparison_scope(decimals):
     """Explain precisely which digits participate in a comparison."""
     if decimals == 0:
@@ -151,7 +163,7 @@ def explain_uncertain_positions(readings, decimals, integer_digits=5):
 
 
 def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace=None, *, standalone=False,
-                      integer_digits=5, stop_before_attempt=None):
+                      integer_digits=5, stop_before_attempt=None, force_all_attempts=False):
     """Read one image up to max_attempts times; stop on the first valid agreement."""
     if type(max_attempts) is not int or not 1 <= max_attempts <= MAX_OCR_ATTEMPTS:
         raise ValueError("OCR-Versuche müssen zwischen 1 und 10 liegen")
@@ -174,7 +186,7 @@ def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace
             progress(index, f"OCR-Versuch {index} von {max_attempts} abgeschlossen.")
         # Stop immediately on a verified match.
         # Without a reference, a valid OCR result ends the read.
-        if status == "match" or (status == "ocr_only" and not standalone):
+        if status == "match" or (status == "ocr_only" and not standalone and not force_all_attempts):
             return value, True, index
 
     # No match: show a majority reading for diagnostics if possible.
@@ -191,7 +203,28 @@ def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace
     display = "".join(display)
     if prefix is not None:
         display = prefix + display[prefix_length:]
-    return display, prefix is not None, len(readings)
+        return display, True, len(readings)
+
+    # If no complete read wins a majority, combine only positions with a
+    # strict digit majority after all configured OCR attempts are exhausted.
+    if len(readings) == max_attempts:
+        positions = list(range(integer_digits))
+        if decimals:
+            positions.extend(range(integer_digits + 1, integer_digits + 1 + decimals))
+        combined = {}
+        for position in positions:
+            votes = Counter(value[position] for value in readings
+                            if position < len(value) and value[position] in "0123456789")
+            digit, count = votes.most_common(1)[0] if votes else ("", 0)
+            if count < minimum_votes:
+                break
+            combined[position] = digit
+        if len(combined) == len(positions):
+            whole = "".join(combined[position] for position in range(integer_digits))
+            fraction = ("." + "".join(combined[position] for position in
+                        range(integer_digits + 1, integer_digits + 1 + decimals)) if decimals else "")
+            return whole + fraction, True, len(readings)
+    return display, False, len(readings)
 
 
 def compare_sample(data, ocr, decimals, *, ocr_confirmed=True, integer_digits=5):
@@ -199,7 +232,7 @@ def compare_sample(data, ocr, decimals, *, ocr_confirmed=True, integer_digits=5)
         return "slfork_unclear", FALLBACK_NOTICE
     if not ocr_confirmed:
         return "ocr_unclear", "Zählerstand nicht sicher erkannt. Bitte die unklaren Stellen im Kamerabild prüfen."
-    value = meter_prefix(ocr, decimals, integer_digits)
+    value = rounded_meter_prefix(ocr, decimals, integer_digits)
     if value is None:
         return "ocr_unclear", "Zählerstand nicht lesbar. Mindestens eine benötigte Ziffer konnte nicht erkannt werden. Bitte das Kamerabild prüfen."
     if data.get("reference_required") is False:
@@ -209,8 +242,8 @@ def compare_sample(data, ocr, decimals, *, ocr_confirmed=True, integer_digits=5)
         return "slfork_unclear", "Der ESP meldet ein Problem mit der Zählerablesung. Bitte den Wert direkt am ESP prüfen."
     if data.get("slfork_process_error") in (-1, -2, "-1", "-2"):
         return "slfork_unclear", "Die Messung am ESP wurde abgebrochen. Bitte den ESP prüfen und die nächste Aufnahme abwarten."
-    raw = meter_prefix(data["raw_value"], decimals, integer_digits)
-    actual = meter_prefix(data["actual_value"], decimals, integer_digits)
+    raw = rounded_meter_prefix(data["raw_value"], decimals, integer_digits)
+    actual = rounded_meter_prefix(data["actual_value"], decimals, integer_digits)
     if raw is None or actual is None:
         return "slfork_unclear", "Referenzwert fehlt oder ist ungültig."
     if raw != actual:
@@ -219,13 +252,13 @@ def compare_sample(data, ocr, decimals, *, ocr_confirmed=True, integer_digits=5)
         if decimals == 0:
             return "difference", "Abweichung: Die vollen Kubikmeter stimmen nicht überein. Bitte das Zählerbild prüfen."
         return ("difference",
-                f"Abweichung: Die Werte stimmen beim Vergleich bis zur {decimals}. Nachkommastelle "
-                "nicht überein. Bitte das Zählerbild prüfen.")
+                f"Abweichung: Gerundet auf {decimals} Nachkommastelle{'' if decimals == 1 else 'n'} "
+                "stimmen die Werte nicht überein. Bitte das Zählerbild prüfen.")
     if decimals == 0:
         return "match", "Bestätigt: Die vollen Kubikmeter stimmen überein. Nachkommastellen wurden nicht berücksichtigt."
-    if decimals == 1:
-        return "match", "Bestätigt: Zählerstand und Referenzwert stimmen bis einschließlich der 1. Nachkommastelle überein."
-    return "match", f"Bestätigt: Zählerstand und Referenzwert stimmen bis einschließlich der {decimals}. Nachkommastelle überein."
+    return ("match",
+            f"Bestätigt: Gerundet auf {decimals} Nachkommastelle{'' if decimals == 1 else 'n'} "
+            "stimmen Zählerstand und Referenzwert überein.")
 
 
 def rolling_summary(history, now, review_after=REVIEW_AFTER):

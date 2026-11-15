@@ -411,7 +411,8 @@ class BrowserTests(IngressFixture):
             self.assertIn("Home Assistant: Deutsch", frame.locator("#language-select").inner_text())
             page.goto(parent + "/?en")
             expect_language("en")
-            frame.locator("#setup-skip").click()
+            if frame.locator("#setup-dialog").evaluate("dialog => dialog.open"):
+                frame.locator("#setup-skip").click()
             frame.locator("#open-manual-settings").click()
             frame.locator("#manual-form select[name=crop_mode]").select_option("manual")
             frame.locator("#manual-form input[name=crop]").fill("0,0,90,400")

@@ -8,11 +8,11 @@
 
 📘 [German illustrated user guide (PDF)](docs/Bedienungsanleitung-AI-Meter-Reader.pdf) · [App documentation](rf1_ocr_test/DOCS.md)
 
-**Current version: 0.4.3 Alpha.** This release remains on the regular test channel. After 0.4, a Hall / pulse sensor is planned as the first separate Beta feature because it needs a real hardware test.
+**Current version: 0.4.4 Alpha.** This release remains on the regular test channel. After 0.4, a Hall / pulse sensor is planned as the first separate Beta feature because it needs a real hardware test.
 
 ## Beta testers wanted
 
-Do you use Home Assistant with a gas, water, or other meter? We are looking for testers with different cameras, crops, and lighting conditions. Version 0.4.3 remains on the regular Alpha test channel. After 0.4, a Hall / pulse sensor is planned as the first separate Beta feature because it needs a real hardware test. I use AI on the Edge for real-world checks; other sources and meter types have so far been tested with simulations only. To help, report your app version, meter type, and image source through [GitHub Issues](https://github.com/Eifellayer/meter-ocr/issues). Please do not post credentials or unredacted photos containing personal information.
+Do you use Home Assistant with a gas, water, or other meter? We are looking for testers with different cameras, crops, and lighting conditions. Version 0.4.4 remains on the regular Alpha test channel. After 0.4, a Hall / pulse sensor is planned as the first separate Beta feature because it needs a real hardware test. I use AI on the Edge for real-world checks; other sources and meter types have so far been tested with simulations only. To help, report your app version, meter type, and image source through [GitHub Issues](https://github.com/Eifellayer/meter-ocr/issues). Please do not post credentials or unredacted photos containing personal information.
 
 AI Meter Reader reads camera images with **local Tesseract OCR**. It can provide its own reading from an ESPHome or Home Assistant camera, or double-check an existing reading from AI on the Edge / SLFork or a reference sensor.
 
@@ -34,18 +34,20 @@ For an uncertain automatic reading, the app can run up to ten additional image-p
 
 ## Install
 
-1. In Home Assistant, open **Settings → Apps → Install app → ⋮ → Repositories** and add **Add-ons by Eifellayer** using the [Stable link](https://github.com/Eifellayer/meter-ocr#stable). Version 0.4.3 is the Alpha test build; the planned Hall / pulse sensor feature will be prepared separately on the Beta channel.
+1. In Home Assistant, open **Settings → Apps → Install app → ⋮ → Repositories** and add **Add-ons by Eifellayer** using the [Stable link](https://github.com/Eifellayer/meter-ocr#stable). Version 0.4.4 is the Alpha test build; the planned Hall / pulse sensor feature will be prepared separately on the Beta channel.
 2. Install **AI Meter Reader (Alpha)**. Releases below 0.5 are Alpha and use the same regular app as their test channel.
 3. Configure `esp_url` for the SLFork ESP, for example `http://esp-gaszaehler.local`. Alternatively configure `kamera_entitaet` and optionally `referenz_entitaet`.
 4. Start the app and open its web interface.
 
-A Home Assistant installation with Supervisor is required on **AMD64 or ARM64**. The planned Hall / pulse sensor is not part of 0.4.3; it will be tested separately on the Beta channel. Back up your Home Assistant configuration before updating.
+A Home Assistant installation with Supervisor is required on **AMD64 or ARM64**. The planned Hall / pulse sensor is not part of 0.4.4; it will be tested separately on the Beta channel. Back up your Home Assistant configuration before updating.
 
 ## First setup and image source
 
 On first open, a compact setup wizard guides you through the image source, meter type, digit format, crop, schedule and notifications. You can reopen it later; saved values are prefilled for quick edits. Explanations expand on demand. Automatic checks remain separate from manual diagnostics.
 
-Choose an image source first. If you are starting with a camera, **ESPHome / camera** is the recommended choice. The guide next to the selector explains when to use the other modes. If you skip setup, automatic checks wait until you save an image source.
+Choose an image source first. If you are starting with a camera, **ESPHome / camera** is the recommended choice. The guide next to the selector explains when to use the other modes. **Found in Home Assistant** offers existing cameras and reported AI on the Edge addresses. If you skip setup, automatic checks wait until you save an image source.
+
+Under **AI on the Edge / SLFork**, enable **Use the ESP as a camera only** and enter its address. AI Meter Reader requests a fresh image and reads the meter locally, even if alignment or recognition fails on the ESP. Configure a fixed crop from the raw image if needed.
 
 | Mode | What it uses |
 | --- | --- |

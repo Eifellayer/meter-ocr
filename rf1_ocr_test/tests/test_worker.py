@@ -9,6 +9,7 @@ import sys
 from tempfile import TemporaryDirectory
 from unittest import TestCase
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
@@ -21,6 +22,7 @@ from checks import (FRESH_SAMPLE_AGE, NORMAL_INTERVAL, OCR_PROFILES, RETRY_INTER
 from consumption import EXCESSIVE_INCREASE, FALLBACK_PLAUSIBLE, FALLBACK_UNKNOWN_TIME, LOWER_READING, fallback_detail
 from layout import crop_coordinates, find_digit_row
 from settings import load_options
+from source_settings import discovered_sources
 import run
 
 
@@ -36,6 +38,28 @@ def synthetic_meter():
 
 
 class SourceTests(TestCase):
+    def test_edge_camera_reads_fresh_jpeg_from_either_firmware(self):
+        base = "http://meter"
+        modern = base + "/camera?task=capture"
+        legacy = base + "/capture_with_flashlight"
+        not_found = HTTPError(modern, 404, "Not found", {}, None)
+        for responses, urls in (([b"jpeg"], [modern]), ([not_found, b"jpeg"], [modern, legacy])):
+            with self.subTest(urls=urls), patch.object(run, "get_bytes", side_effect=responses) as fetch:
+                picture, overlay, data = run.capture_edge_camera(base, timezone.utc)
+                self.assertEqual((b"jpeg", None, False), (picture, overlay, data["reference_required"]))
+                self.assertIsNone(data["actual_value"])
+                self.assertEqual(urls, [call.args[0] for call in fetch.call_args_list])
+
+    def test_discovery_lists_only_camera_entities_and_valid_esp_addresses(self):
+        sources = discovered_sources({
+            "cameras": [{"camera": "camera.test", "label": "Camera"}, {"camera": "sensor.extra"}],
+            "devices": [{"url": "http://meter/", "label": "Meter"}, {"url": "http://meter"},
+                        {"ip": "192.168.0.10", "label": "Second meter"},
+                        {"url": "http://user:secret@meter"}, {"url": "file:///tmp/example"}],
+        })
+        self.assertEqual(["camera.test", "http://meter", "http://192.168.0.10"],
+                         [source.get("camera") or source["url"] for source in sources])
+
     def test_slfork_aborted_cycle_skips_aligned_images(self):
         payload = {"process_error": -2, "timestamp_processed": {"main": "2026-11-15T08:01:00"}}
         diagnostics = {}
@@ -183,6 +207,43 @@ class OCRTests(TestCase):
 
 
 class StateTests(TestCase):
+    def test_edge_camera_only_publishes_local_ocr_without_the_esp_reading(self):
+        class StopLoop(Exception):
+            pass
+
+        folder = Path(self.enterContext(TemporaryDirectory()))
+        files = {key: folder / key for key in (
+            "OPTIONS", "HISTORY", "EFFECTIVE_OPTIONS", "AUTO_RULES", "AUTO_PAUSED",
+            "LANGUAGE_MODES", "SOURCE_SETTINGS", "NOTIFICATIONS", "DESTINATION",
+            "GOOD_IMAGE", "TEST_IMAGE", "AUTOMATIC_PREVIEW",
+        )}
+        files["OPTIONS"].write_text(json.dumps({
+            "ausschnitt": "0,0,500,100", "vorkomma_breite": 350, "ocr_versuche": 1,
+        }))
+        files["SOURCE_SETTINGS"].write_text(json.dumps({
+            "mode": "slfork_camera", "url": "http://meter", "camera": "", "reference": "",
+        }))
+        self.enterContext(patch.multiple(run, **files))
+        self.enterContext(patch.dict(os.environ, {"SUPERVISOR_TOKEN": "stub"}))
+        self.enterContext(patch.object(run, "start_panel", return_value=(None, None, None)))
+        with BytesIO() as stream:
+            synthetic_meter().save(stream, "JPEG")
+            photo = stream.getvalue()
+        fetch = self.enterContext(patch.object(run, "get_bytes", return_value=photo))
+        recognize = self.enterContext(patch.object(run, "read_visible_digits", return_value="12345.???"))
+        published = self.enterContext(patch.object(run, "publish_state"))
+        self.enterContext(patch.object(run, "publish_consumption", side_effect=StopLoop))
+        with self.assertRaises(StopLoop):
+            run.main()
+        fetch.assert_called_once_with("http://meter/camera?task=capture")
+        self.assertEqual(2, recognize.call_count)
+        sensor = published.call_args.args[1]
+        self.assertEqual("12345", sensor["state"])
+        self.assertEqual("http://meter", sensor["attributes"]["source_camera"])
+        history = json.loads(files["HISTORY"].read_text())
+        self.assertEqual("ocr_only", history["check_status"])
+        self.assertIsNone(history["last_reference"])
+
     def test_skipping_setup_does_not_fetch_the_placeholder_slfork_url(self):
         class WaitingForSource(Exception):
             pass

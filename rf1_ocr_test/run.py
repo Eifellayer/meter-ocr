@@ -38,7 +38,8 @@ from reminder import Reminder
 from notification_settings import (DEFAULT_DELIVERY_HOURS, DEFAULT_REVIEW_MINUTES, PUSH_SERVICE,
                                    notification_rules)
 from settings import DEFAULTS, SCHEMA_VERSION, load_options
-from source_settings import CAMERA, REFERENCE, source_rules
+from source_settings import (CAMERA, DISCOVERY_TEMPLATE, ESP_ADDRESS_MODES, REFERENCE,
+                             discovered_sources, source_rules)
 from panel import start_panel
 from language import load_preferences
 from transport import open_core
@@ -104,16 +105,61 @@ def slfork_cycle_failed(diagnostics):
     return diagnostics.get("slfork_process_error") in (-1, -2, "-1", "-2")
 
 
-def capture_slfork_raw(base, zone):
-    # The buffered raw JPEG has no independent capture timestamp.
-    picture = get_bytes(base + "/camera?task=capture")
+def capture_esp_snapshot(url, zone, source):
+    picture = get_bytes(url)
     return picture, None, {
         "esp_timestamp": datetime.now(zone).isoformat(),
-        "image_source": SLFORK_RAW_SOURCE,
+        "image_source": source,
         "reference_required": False,
         "raw_value": None,
         "actual_value": None,
     }
+
+
+def capture_slfork_raw(base, zone):
+    # The buffered raw JPEG has no independent capture timestamp.
+    return capture_esp_snapshot(base + "/camera?task=capture", zone, SLFORK_RAW_SOURCE)
+
+
+def capture_edge_camera(base, zone):
+    try:
+        return capture_slfork_raw(base, zone)
+    except HTTPError as error:
+        if error.code not in (404, 405, 501):
+            raise
+        error.close()
+    return capture_esp_snapshot(base + "/capture_with_flashlight", zone, "edge_camera")
+
+
+def discover_ha_sources(token):
+    request = Request(
+        "http://supervisor/core/api/template",
+        data=json.dumps({"template": DISCOVERY_TEMPLATE}).encode("utf-8"),
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+    )
+    try:
+        with open_core(request, timeout=5) as response:
+            data = json.loads(response.read(512_001))
+        return discovered_sources(data)
+    except (OSError, ValueError, TypeError, AttributeError) as error:
+        print(f"Bildquellen aus Home Assistant konnten nicht geladen werden: {type(error).__name__}")
+    # The state API can still provide cameras and meters with the standard MQTT sensors.
+    try:
+        states = json.loads(get_bytes("http://supervisor/core/api/states", token, timeout=5))
+        by_id = {entity["entity_id"]: entity for entity in states if isinstance(entity.get("entity_id"), str)}
+        cameras = []
+        devices = []
+        for entity_id, entity in by_id.items():
+            if entity_id.startswith("camera."):
+                cameras.append({"camera": entity_id, "label": entity.get("attributes", {}).get("friendly_name")})
+            elif entity_id.startswith("sensor.") and entity_id.endswith("_ip_address"):
+                prefix = entity_id.removesuffix("_ip_address")
+                if prefix + "_process_state" in by_id and prefix + "_main_last_processed" in by_id:
+                    label = entity.get("attributes", {}).get("friendly_name") or entity_id
+                    devices.append({"label": label, "ip": entity.get("state")})
+        return discovered_sources({"cameras": cameras, "devices": devices})
+    except (OSError, ValueError, TypeError, AttributeError):
+        return []
 
 
 def capture(base, diagnostics):
@@ -703,6 +749,7 @@ def main():
         wake_worker.set, test_source_image=TEST_SOURCE_IMAGE, automatic_preview=AUTOMATIC_PREVIEW,
         request_factory_reset=request_factory_reset, get_reset_status=lambda: reset_result["value"],
         skip_setup=skip_setup,
+        discover_sources=partial(discover_ha_sources, token),
         get_activity=get_automatic_activity,
         get_auto_paused=get_auto_paused, save_auto_paused=save_auto_paused,
     )
@@ -760,12 +807,14 @@ def main():
             except OSError as error:
                 print(f"Prüfintervall konnte nicht in der Historie gespeichert werden: {type(error).__name__}")
         active_source, waiting_for_setup = get_source()
-        standalone = (active_source["mode"] == "esphome"
-                      or active_source["mode"] == "camera" and not active_source["reference"])
+        mode = active_source["mode"]
+        esp_camera_only = mode == "slfork_camera"
+        standalone = mode in ("esphome", "slfork_camera") or mode == "camera" and not active_source["reference"]
         base = active_source["url"].rstrip("/")
-        camera = active_source["camera"] if active_source["mode"] != "slfork" else ""
-        reference = active_source["reference"] if active_source["mode"] == "camera" else ""
-        source_key = [active_source["mode"], camera or base, reference]
+        camera = active_source["camera"] if mode not in ESP_ADDRESS_MODES else ""
+        reference = active_source["reference"] if mode == "camera" else ""
+        source_key = [mode, camera or base, reference]
+        standalone_source = source_key[1] if standalone else ""
         source_changed = history.get("check_source", initial_source_key) != source_key
         if source_changed:
             pending_image = None
@@ -806,7 +855,7 @@ def main():
                         publish(*pending_image, history, now, token, review_after)
                         pending_image = None
                     if standalone or published_standalone:
-                        publish_standalone(history, camera if standalone else "", token)
+                        publish_standalone(history, standalone_source, token)
                         published_standalone = standalone
                     publish_consumption(history, token)
                 except OSError as error:
@@ -875,19 +924,24 @@ def main():
                 })
             else:
                 if not manual:
-                    set_activity("working", "Warte auf ein Kamerabild …" if camera else
+                    set_activity("working", "Warte auf ein Kamerabild …" if camera or esp_camera_only else
                                  "Warte auf Bild und Messwerte vom ESP …")
-                result = capture_camera(
-                    camera, reference, token, zone,
-                    timeout=min(8, max(0.2, live_deadline - time.monotonic())) if live_deadline else 8,
-                ) if camera else capture(base, diagnostics)
-            if result is None and not slfork_cycle_failed(diagnostics):
+                if camera:
+                    result = capture_camera(
+                        camera, reference, token, zone,
+                        timeout=min(8, max(0.2, live_deadline - time.monotonic())) if live_deadline else 8,
+                    )
+                elif esp_camera_only:
+                    result = capture_edge_camera(base, zone)
+                else:
+                    result = capture(base, diagnostics)
+            if mode == "slfork" and result is None and not slfork_cycle_failed(diagnostics):
                 print("Noch kein ausgerichtetes SLFork-Bild verfügbar. Neuer Versuch in 10 Sekunden.")
                 if not manual:
                     set_activity("working", "Warte auf ein aktuelles Bild vom ESP …")
                 time.sleep(10)
                 result = capture(base, diagnostics)
-            if not camera and not manual_upload and (
+            if mode == "slfork" and not manual_upload and (
                 result is None or slfork_cycle_failed(diagnostics)
                 or sample_epoch(result[2], zone, datetime.now(zone)) is None
             ):
@@ -903,7 +957,7 @@ def main():
                     updated["source_connection_status"] = "stale" if raw_fallback else "connected"
                     updated["source_connection_detail"] = (
                         "Aufbereitetes ESP-Bild nicht nutzbar. Rohbild ohne ESP-Referenz geprüft." if raw_fallback else
-                        "Kamera erreichbar. Frisches Bild empfangen." if camera else
+                        "Kamera erreichbar. Frisches Bild empfangen." if camera or esp_camera_only else
                         "ESP erreichbar. Bild und Messwerte empfangen."
                     )
                 if manual:
@@ -933,7 +987,7 @@ def main():
                     result = None
             if result is not None:
                 image_time = captured if captured is not None else sample_timestamp(sample, zone)
-                if not camera and not manual_upload and not raw_fallback:
+                if mode == "slfork" and not manual_upload and not raw_fallback:
                     sample.update(slfork_reference(sample, image_time, zone, updated.get("last_slfork_match", {})))
                 manual_reference = manual_options.get("manual_reference", "") if manual else ""
                 apply_manual_reference(sample, manual_reference,
@@ -1083,7 +1137,7 @@ def main():
                             try:
                                 if standalone:
                                     new_standalone = standalone_reading(
-                                        camera, sample, ocr, decimals, history.get("standalone_reading"),
+                                        standalone_source, sample, ocr, decimals, history.get("standalone_reading"),
                                         integer_digits,
                                     )
                                     if new_standalone is None:
@@ -1235,7 +1289,7 @@ def main():
                         if ocr_attempts == len(ocr_readings) and ocr not in ocr_readings:
                             updated["check_detail"] = "Ziffern aus mehreren OCR-Versuchen zusammengesetzt."
                         atomic_write(GOOD_IMAGE, picture, 0o644)
-                        if not camera:
+                        if mode == "slfork":
                             updated["last_slfork_match"] = {"reading": sample["actual_value"], "time": image_time}
                     data = {**sample, "crop_source": source, "ocr_attempts": ocr_attempts}
                     updated.update(
@@ -1323,7 +1377,7 @@ def main():
                 publish(*pending_image, history, now, token, review_after)
                 pending_image = None
             if standalone or published_standalone:
-                publish_standalone(history, camera if standalone else "", token)
+                publish_standalone(history, standalone_source, token)
                 published_standalone = standalone
             publish_consumption(history, token)
         except OSError as error:

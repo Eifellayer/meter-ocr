@@ -116,9 +116,9 @@ class SourceTests(TestCase):
         upright = synthetic_meter()
         rotations = {
             0: None,
-            90: Image.Transpose.ROTATE_270,
+            90: Image.Transpose.ROTATE_90,
             180: Image.Transpose.ROTATE_180,
-            270: Image.Transpose.ROTATE_90,
+            270: Image.Transpose.ROTATE_270,
         }
         for rotation, transform in rotations.items():
             with self.subTest(rotation=rotation):

@@ -443,6 +443,7 @@ class BrowserTests(IngressFixture):
             self.assertEqual(400, frame.locator("#test-preview-image").evaluate(
                 "async image => { await image.decode(); return image.naturalWidth; }"))
             frame.locator("#apply-crop-form button").click()
+            frame.locator("#tab-settings").click()
             frame.get_by_text("Getesteten Bildausschnitt für die Automatik übernommen.", exact=True).wait_for()
             self.assertEqual("manual", self.rules["crop_mode"])
             self.assertEqual(90, self.rules["rotation"])

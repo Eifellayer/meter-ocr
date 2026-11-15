@@ -1,0 +1,48 @@
+# Gas Meter OCR Verification – Home Assistant App
+
+[Deutsch](README.md) · [Project documentation (English)](../README.en.md)
+
+**Independent local OCR verification of mechanical gas meter readings.**
+
+This Home Assistant app takes the latest available gas meter image from **AI on the Edge / SLFork**, or from a compatible Home Assistant camera, reads the digits again with **Tesseract OCR**, and compares the result with an existing reference reading. Designed for the **Pipersberg G4 RF1**.
+
+This is an additional plausibility check, **not a certified measurement device**. OCR may be wrong. Read the physical meter for billing and legally relevant measurements. Private hobby project, no warranty or guaranteed support.
+
+## Installation
+
+Add `https://github.com/Thunder86/rf1-kontrollmessung` under **Settings → Apps → Install app → ⋮ → Repositories**, then install **Gaszähler OCR-Kontrolle**. Set `esp_url` for SLFork, or configure `kamera_entitaet` and an optional `referenz_entitaet` sensor.
+
+For an upgrade from a separate local installation, copy the settings and stop the old app before starting the new one. Both use the same Home Assistant sensor entity IDs, so they should not run together.
+
+## Choose a language
+
+Use **Sprache / Language** at the top of the web interface to switch between **Deutsch** and **English**. The selection is saved in the browser. All controls, status messages, OCR results and diagnostic hints are translated without changing Home Assistant's existing entity IDs.
+
+## Automatic checks
+
+The always-visible overview contains the most recent OCR result, reference, status, image time and next check. Automatic settings are persistent and can be changed in the web interface:
+
+- **Comparison:** whole cubic meters or up to three decimal places. Decimals outside the configured precision are ignored, not rounded.
+- **Maximum OCR attempts:** 1–10 (default 5); stop on the first verified match.
+- **Digit color:** auto-detect, light or dark.
+- **Image region:** auto-detect digit frames or use a fixed image crop and width.
+
+Changing the precision resets the automatic confirmation counter from the next check. Five automatic confirmations in 24 hours are a separate target from the number of OCR attempts for a single image.
+
+## Advanced manual test
+
+Open **Open manual test** only when you need it. It lets you temporarily override all of the above settings and try a custom crop. **Run check now** reads the most recent image; it does not request a new capture.
+
+The result appears below the progress indicator, using muted green only for a confirmed match, red for failures, and neutral styling while running or without a reference. It explains whether whole cubic meters or decimal places matched. The annotated image outlines digits the OCR recognized in green and unclear ones in red; red or green here does not establish agreement with the reference. The positions may be approximate without detected frames.
+
+Expand **More details** to see the individual attempt readings. You can **Use tested crop for automatic checks** to permanently apply the crop settings you have tried.
+
+## Schedules and files
+
+Successful automatic checks normally run hourly; errors and uncertain readings cause five-minute retries. The `review_due` state is reported after four hours without a valid confirmation. Optionally, mobile reminders can be configured.
+
+The app publishes `sensor.rf1_kontrollbild` and `sensor.rf1_pruefstatus`, and stores the latest/last-confirmed images in **Media → Local Media → rf1**. Neither entity name is translated because dashboards and automations depend on it.
+
+Full options and troubleshooting: [Project documentation](../README.en.md).
+
+Support: [GitHub Issues](https://github.com/Thunder86/rf1-kontrollmessung/issues). Optional voluntary donation: [PayPal](https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8).

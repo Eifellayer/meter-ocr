@@ -620,13 +620,15 @@ def start_panel(
                     previous = history["manual_result"]
                     settings = previous["settings"]
                     if settings.get("crop_mode") != "manual" or previous.get("ocr_attempts", 0) < 1:
-                        self.send_error(400, "Kein getesteter manueller Ausschnitt vorhanden")
+                        self.send_error(400, ("No tested custom crop is available." if language == "en"
+                                              else "Kein getesteter manueller Ausschnitt vorhanden"))
                         return
                     current = get_auto_rules()
                     current.update(crop_mode="manual", crop=settings["crop"], width=settings["width"])
                     save_auto_rules(current)
                 except (OSError, ValueError, KeyError, TypeError):
-                    self.send_error(503, "Ausschnitt konnte nicht gespeichert werden")
+                    self.send_error(503, ("Could not save the image crop." if language == "en"
+                                          else "Ausschnitt konnte nicht gespeichert werden"))
                     return
                 self.send_response(303)
                 self.send_header("Location", "./?saved=crop&lang=" + language)

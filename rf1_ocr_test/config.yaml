@@ -1,7 +1,7 @@
-name: Meter OCR
-version: "0.1.0"
+name: Meter OCR (Alpha)
+version: "0.2.0"
 slug: rf1_ocr_test
-description: "Local gas meter reading and verification with Tesseract OCR, ESPHome cameras, Home Assistant and AI on the Edge / SLFork."
+description: "Lokale optische Zählerkontrolle / Local optical meter verification. Alpha release (<0.5)."
 arch:
   - aarch64
   - amd64

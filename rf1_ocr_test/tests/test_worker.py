@@ -15,9 +15,9 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from checks import (FRESH_SAMPLE_AGE, NORMAL_INTERVAL, OCR_PROFILES, RETRY_INTERVAL, WINDOW_SECONDS,
-                    explain_uncertain_positions, read_register, record_sample, rolling_summary,
-                    schedule_next_check)
-from consumption import EXCESSIVE_INCREASE
+                    compare_sample, explain_uncertain_positions, last_check_at, read_register, record_sample,
+                    reschedule_next_check, rolling_summary, schedule_next_check, slfork_reference)
+from consumption import EXCESSIVE_INCREASE, FALLBACK_PLAUSIBLE, FALLBACK_UNKNOWN_TIME, LOWER_READING, fallback_detail
 from layout import crop_coordinates, find_digit_row
 from settings import load_options
 import run
@@ -69,6 +69,28 @@ class SourceTests(TestCase):
             _, _, result = run.capture_camera("camera.meter", "", "dummy", timezone.utc)
         self.assertFalse(result["reference_required"])
         self.assertEqual(1, fetch.call_count)
+
+    def test_slfork_fallback_timestamps_do_not_masquerade_as_new_measurements(self):
+        now = datetime.now(timezone.utc)
+        stamp = now.timestamp()
+        earlier = now - timedelta(minutes=10)
+        data = {**sample(now), "actual_value": "12346.0416", "raw_value": "12340",
+                "slfork_fallback_value": "12346.0416",
+                "slfork_value_status": "Rate Too High (<) | Use Fallback",
+                "slfork_last_valid_timestamp": now.isoformat()}
+        self.assertIsNone(slfork_reference(data, stamp, timezone.utc, {})["reference_time"])
+        known = {"reading": "12346.04160", "time": earlier.timestamp()}
+        info = slfork_reference(data, stamp, timezone.utc, known)
+        self.assertTrue(info["reference_is_fallback"])
+        self.assertEqual(("12346.0416", earlier.timestamp()), (info["reference"], info["reference_time"]))
+        self.assertEqual("slfork_unclear", compare_sample({**data, **info}, "12346.337", 0)[0])
+        self.assertEqual("slfork_unclear", compare_sample(
+            {**data, **info, "raw_value": "12346.0416"}, "12346.041", 3)[0])
+        old_timestamp = {**data, "slfork_last_valid_timestamp": earlier.isoformat(), "slfork_value_status": None}
+        self.assertEqual(info, slfork_reference(old_timestamp, stamp, timezone.utc, {}))
+        fresh = {**data, "slfork_value_status": "000 Valid", "raw_value": "12346.0416"}
+        self.assertEqual({"reference": "12346.0416", "reference_time": stamp, "reference_is_fallback": False},
+                         slfork_reference(fresh, stamp, timezone.utc, known))
 
     def test_automatic_overlay_and_manual_fallback(self):
         overlay = Image.new("RGB", (360, 130), "white")
@@ -167,6 +189,85 @@ class StateTests(TestCase):
         self.assertNotIn("failure_since", history)
         self.assertEqual(now.timestamp() + NORMAL_INTERVAL, history["next_check_at"])
 
+    def test_interval_change_keeps_the_original_check_and_failure_times(self):
+        history = {"check_status": "match", "next_check_at": 4600}
+        self.assertTrue(reschedule_next_check(history, 15))
+        self.assertEqual((1000, 1900), (last_check_at(history), history["next_check_at"]))
+        self.assertTrue(reschedule_next_check(history, 45))
+        self.assertEqual((1000, 3700), (last_check_at(history), history["next_check_at"]))
+        schedule_next_check(history, "slfork_unclear", 2000, 45)
+        self.assertEqual(2300, history["next_check_at"])
+        self.assertTrue(reschedule_next_check(history, 1))
+        self.assertEqual((2000, 2060, 2000),
+                         (last_check_at(history), history["next_check_at"], history["failure_since"]))
+
+    def test_fallback_plausibility_uses_time_repeatable_digits_and_flow_limit(self):
+        reference = {"reference": "12346.0416", "reference_time": 1000}
+        source = ["slfork", "http://meter", ""]
+        for ocr, expected in (("12346.337", FALLBACK_PLAUSIBLE),
+                              ("12340.000", LOWER_READING),
+                              ("12347.500", EXCESSIVE_INCREASE)):
+            with self.subTest(ocr=ocr):
+                self.assertIn(expected, fallback_detail(reference, 1600, ocr, [ocr] * 3, {}, source, 6000))
+        self.assertIn(FALLBACK_UNKNOWN_TIME, fallback_detail(
+            {**reference, "reference_time": None}, 1600, "12346.337", ["12346.337"] * 3, {}, source, 6000))
+        self.assertIn("OCR-Stand unsicher", fallback_detail(
+            reference, 1600, "12346.337", ["12346.337", "12345.337", "12347.337"], {}, source, 6000))
+
+    def test_main_does_not_count_fallback_and_recovers_with_a_new_reference(self):
+        class StopLoop(Exception):
+            pass
+
+        folder = Path(self.enterContext(TemporaryDirectory()))
+        files = {name: folder / name for name in (
+            "OPTIONS", "HISTORY", "EFFECTIVE_OPTIONS", "AUTO_RULES", "LANGUAGE_MODES",
+            "SOURCE_SETTINGS", "NOTIFICATIONS", "DESTINATION", "GOOD_IMAGE", "TEST_IMAGE",
+        )}
+        files["OPTIONS"].write_text(json.dumps({"esp_url": "http://meter", "ausschnitt": "0,0,500,100",
+                                                "vorkomma_breite": 350, "vergleich_nachkommastellen": 3}))
+        self.enterContext(patch.multiple(run, **files))
+        self.enterContext(patch.dict(os.environ, {"SUPERVISOR_TOKEN": "stub"}))
+        self.enterContext(patch.object(run, "start_panel", return_value=(None, None)))
+        with BytesIO() as stream:
+            synthetic_meter().save(stream, "JPEG")
+            photo = stream.getvalue()
+        capture = self.enterContext(patch.object(run, "capture"))
+        recognize = self.enterContext(patch.object(run, "read_visible_digits"))
+        publish = self.enterContext(patch.object(run, "publish_consumption", side_effect=StopLoop))
+        self.enterContext(patch.object(run, "publish_state"))
+        now = datetime.now(timezone.utc)
+        original = now - timedelta(minutes=10)
+
+        def check(payload, ocr):
+            recognize.return_value = ocr
+            capture.side_effect = lambda *_: (photo, None, dict(payload))
+            if files["HISTORY"].exists():
+                history = json.loads(files["HISTORY"].read_text())
+                files["HISTORY"].write_text(json.dumps({**history, "next_check_at": 0}))
+            with self.assertRaises(StopLoop):
+                run.main()
+            return publish.call_args.args[0]
+
+        initial = check({**sample(original), "raw_value": "12346.0416", "actual_value": "12346.0416"}, "12346.041")
+        fallback_stamp = now - timedelta(minutes=1)
+        fallback = {**sample(fallback_stamp), "slfork_value_status": "E92 Rate Too High (<) | Use Fallback",
+                    "slfork_last_valid_timestamp": fallback_stamp.isoformat(), "slfork_fallback_value": "12346.0416",
+                    "actual_value": "12346.0416", "raw_value": "12340"}
+        pending = check(fallback, "12346.337")
+        self.assertEqual("slfork_unclear", pending["check_status"])
+        self.assertIn(FALLBACK_PLAUSIBLE, pending["check_detail"])
+        self.assertEqual(original.timestamp(), pending["last_reference_time"])
+        self.assertEqual(initial["consumption"], pending["consumption"])
+        self.assertEqual(initial["confirmations"], pending["confirmations"])
+        repeated = check(fallback, "12346.337")
+        self.assertEqual(pending["failure_since"], repeated["failure_since"])
+        self.assertEqual(pending["check_detail"], repeated["check_detail"])
+        recovered = check({**sample(now), "raw_value": "12346.351", "actual_value": "12346.351"}, "12346.351")
+        self.assertEqual("match", recovered["check_status"])
+        self.assertNotIn("failure_since", recovered)
+        self.assertFalse(recovered["last_reference_is_fallback"])
+        self.assertEqual(310, recovered["consumption"]["total_litres"])
+        self.assertEqual(2, len(recovered["confirmations"]))
     def test_standalone_sensor_retains_exact_precision_and_rejects_lower_readings(self):
         data = sample(datetime.now(timezone.utc))
         latest = run.standalone_reading("camera.meter", data, "12345.170", 2, None)
@@ -215,7 +316,7 @@ class StateTests(TestCase):
         self.enterContext(patch.object(run, "publish_state", collect))
         with self.assertRaises(StopLoop):
             run.main()
-        fetch.assert_called_once_with("http://supervisor/core/api/camera_proxy/camera.esp", "stub")
+        fetch.assert_called_once_with("http://supervisor/core/api/camera_proxy/camera.esp", "stub", timeout=8)
         self.assertEqual(2, recognize.call_count)
         self.assertEqual("12345", published[run.OCR_ENTITY]["state"])
         self.assertEqual("ocr_only", published[run.CHECK_ENTITY]["state"])
@@ -257,7 +358,7 @@ class StateTests(TestCase):
         paths = {name: folder / f"{name.lower()}.json" for name in (
             "OPTIONS", "HISTORY", "EFFECTIVE_OPTIONS", "AUTO_RULES", "LANGUAGE_MODES",
             "SOURCE_SETTINGS", "NOTIFICATIONS",
-            "DESTINATION", "GOOD_IMAGE", "TEST_IMAGE",
+            "DESTINATION", "GOOD_IMAGE", "TEST_IMAGE", "TEST_SOURCE_IMAGE",
         )}
         paths["OPTIONS"].write_text(json.dumps({"esp_url": "http://meter", "ausschnitt": "0,0,500,100", "vorkomma_breite": 350}))
         self.enterContext(patch.multiple(run, **paths))
@@ -269,7 +370,7 @@ class StateTests(TestCase):
         published = []
         progress_updates = []
 
-        def fake_panel(history_path, current, good, requested, *_):
+        def fake_panel(history_path, current, good, requested, *_, **__):
             requested.put_nowait({
                 "request_id": 1, "decimals": 2, "attempts": 1, "polarity": "dark",
                 "crop_mode": "manual", "crop": "0,0,480,100", "width": 350,

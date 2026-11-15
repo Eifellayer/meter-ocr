@@ -8,11 +8,13 @@ This Home Assistant app takes the latest available gas meter image from **AI on 
 
 This is an additional plausibility check, **not a certified measurement device**. OCR may be wrong. Read the physical meter for billing and legally relevant measurements. Private hobby project, no warranty or guaranteed support.
 
+**Setup wizard:** The wizard guides you through the image source, meter format, crop, check interval and notifications. You can reopen it with saved values at any time. The maintainer has tested real meters only with AI on the Edge / SLFork; other modes have simulated tests only.
+
 ## Installation
 
-**Meter OCR** is the regular app. **Meter OCR Beta** is the test app in the same repository.
+**Meter OCR (Alpha)** is the regular app and the test channel until version 0.5. From 0.5 onward, Beta builds are reserved for larger changes that need dedicated testing.
 
-Add `https://github.com/Eifellayer/meter-ocr` under **Settings → Apps → Install app → ⋮ → Repositories**, then install **Meter OCR**. Set `esp_url` for SLFork, or configure `kamera_entitaet` and an optional `referenz_entitaet` sensor.
+Add **Add-ons by Eifellayer** under **Settings → Apps → Install app → ⋮ → Repositories** using the [shared link](https://github.com/Eifellayer/meter-ocr), then install **Meter OCR (Alpha)**. Releases below 0.5 use the regular app as their test channel. From 0.5 onward, Beta builds are reserved for larger changes that need dedicated testing. Set `esp_url` for SLFork, or configure `kamera_entitaet` and an optional `referenz_entitaet` sensor.
 
 ## Choose a language
 

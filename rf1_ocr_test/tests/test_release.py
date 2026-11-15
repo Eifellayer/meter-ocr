@@ -4,6 +4,7 @@ import sys
 import unittest
 from pathlib import Path
 from string import Formatter
+import yaml
 
 APP = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(APP))
@@ -18,7 +19,29 @@ from run import draw_test_preview  # noqa: E402
 def formatted_page(language="de"):
     template = translate_page(PAGE) if language == "en" else PAGE
     fields = {name for _, name, _, _ in Formatter().parse(template) if name is not None}
-    return template.format(**{field: "" if field == "profile_script" else "0" for field in fields})
+    values = dict.fromkeys(fields, "0")
+    values.update(profile_script="", app_name="Meter OCR")
+    return template.format(**values)
+
+
+class AppIdentityTests(unittest.TestCase):
+    def test_release_metadata_is_alpha_without_a_separate_beta_stage(self):
+        config = yaml.safe_load((APP / "config.yaml").read_text(encoding="utf-8"))
+        repository = yaml.safe_load((APP.parent / "repository.yaml").read_text(encoding="utf-8"))
+        self.assertEqual("0.2.0", config["version"])
+        self.assertEqual("rf1_ocr_test", config["slug"])
+        self.assertEqual("Meter OCR (Alpha)", config["name"])
+        self.assertNotIn("stage", config)
+        self.assertIn("esp_url", config["options"])
+        self.assertEqual("https://github.com/Eifellayer/meter-ocr", repository["url"])
+
+    def test_app_keeps_existing_home_assistant_entities_and_media_path(self):
+        import run
+        self.assertEqual("sensor.rf1_kontrollbild", run.ENTITY)
+        self.assertEqual("sensor.rf1_pruefstatus", run.CHECK_ENTITY)
+        self.assertEqual("sensor.rf1_ocr_zaehlerstand", run.OCR_ENTITY)
+        self.assertEqual("sensor.rf1_verbrauch_gesamt", run.CONSUMPTION_ENTITY)
+        self.assertEqual("/media/rf1", str(run.DESTINATION.parent))
 
 
 class ComparisonTests(unittest.TestCase):
@@ -92,7 +115,11 @@ class PanelTests(unittest.TestCase):
         page = formatted_page()
         self.assertIn("Meter OCR", page)
         self.assertIn("FG4Q7VKQJ9BW8", page)
-        self.assertIn("Manuellen Test öffnen", page)
+        self.assertIn("Über Meter OCR", page)
+        self.assertIn("Projekt von EifelLayer auf GitHub", page)
+        self.assertIn("Test starten", page)
+        self.assertIn("Testeinstellungen", page)
+        self.assertIn('id="settings"', page)
         self.assertIn("Getesteten Ausschnitt für die Automatik übernehmen", page)
         self.assertIn('id="test-preview"', page)
         self.assertIn('id="ocr-details"', page)
@@ -101,12 +128,13 @@ class PanelTests(unittest.TestCase):
         page = formatted_page("en")
         self.assertIn("Meter OCR", page)
         self.assertIn("Automatic verification", page)
-        self.assertIn("Open manual test", page)
+        self.assertIn("Start test", page)
+        self.assertIn("Test settings", page)
         self.assertIn("Use tested crop for automatic checks", page)
         self.assertIn("More details", page)
         self.assertIn("Check in progress", page)
         self.assertIn('name="lang" value="0"', page)
-        self.assertNotIn("Manuellen Test öffnen", page)
+        self.assertNotIn("Test starten", page)
 
     def test_english_status_and_specific_digit_diagnostics(self):
         self.assertIn("attempt 2 of 5", english_progress("OCR-Versuch 2 von 5 läuft …"))

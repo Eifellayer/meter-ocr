@@ -16,7 +16,7 @@ Mit KI-Unterstützung entwickelt. Für Abrechnungen und Meldungen gilt der direk
 4. Unter **Automatische Prüfung – Einstellungen** stellst du die Vergleichsgenauigkeit, OCR-Versuche, Ziffernfarbe und den Bildbereich dauerhaft ein.
 5. Öffne **Manuellen Test öffnen** für eine Probe mit dem letzten Bild. Dort findest du OCR-Einzelwerte, die farbig umrandeten Ziffern und die Möglichkeit, einen getesteten Bildausschnitt für die Automatik zu übernehmen.
 
-Unter **Benachrichtigungen** lassen sich Hinweis, Companion-Push und E-Mail konfigurieren. Für das Energie-Dashboard stellst du den maximalen Durchfluss nach Qmax ein und wählst `sensor.rf1_verbrauch_gesamt` als Gasverbrauch. [Plausibilitätsprüfung und Energie-Dashboard](../README.md#plausibilitätsprüfung-und-energie-dashboard)
+Der Einrichtungsassistent kann jederzeit erneut geöffnet werden. Unter **Benachrichtigungen** lassen sich Hinweis, Companion-Push und E-Mail konfigurieren. Releases bis 0.5 sind Alpha; es gibt keinen separaten Beta-Kanal. Ab 0.5 ist eine Beta größeren Änderungen mit zusätzlichem Testbedarf vorbehalten. Der Maintainer testet reale Zähler ausschließlich mit AI on the Edge / SLFork. Andere Modi sind simuliert getestet. Für das Energie-Dashboard stellst du den maximalen Durchfluss nach Qmax ein und wählst `sensor.rf1_verbrauch_gesamt` als Gasverbrauch. [Plausibilitätsprüfung und Energie-Dashboard](../README.md#plausibilitätsprüfung-und-energie-dashboard)
 
 Die bestehenden Entitäten `sensor.rf1_kontrollbild` und `sensor.rf1_pruefstatus` bleiben unverändert. Support: [GitHub Issues](https://github.com/Eifellayer/meter-ocr/issues).
 
@@ -32,7 +32,7 @@ Developed with AI assistance. Check the physical meter for billing and official 
 4. Under **Automatic checks – settings**, save the comparison precision, maximum OCR attempts, digit color, and image crop. These settings persist across restarts.
 5. Expand **Open manual test** when you need to troubleshoot an image. The annotated preview shows green boxes for recognized digits and red for uncertain ones; **More details** lists each OCR attempt. A tested custom crop can be saved for automatic checks.
 
-Under **Notifications**, configure Home Assistant notices, Companion push or email. Set maximum flow to the meter's Qmax and select `sensor.rf1_verbrauch_gesamt` as gas consumption in the Energy dashboard. [Plausibility check and Energy dashboard](../README.en.md#plausibility-check-and-energy-dashboard)
+The setup wizard can be reopened at any time. Under **Notifications**, configure Home Assistant notices, Companion push or email. Releases below 0.5 are Alpha with no separate Beta channel. From 0.5 onward, Beta builds are reserved for larger changes that need dedicated testing. The maintainer tests real meters only with AI on the Edge / SLFork; other modes have simulated tests only. Set maximum flow to the meter's Qmax and select `sensor.rf1_verbrauch_gesamt` as gas consumption in the Energy dashboard. [Plausibility check and Energy dashboard](../README.en.md#plausibility-check-and-energy-dashboard)
 
 The entity IDs `sensor.rf1_kontrollbild` and `sensor.rf1_pruefstatus` do not change when switching language.
 

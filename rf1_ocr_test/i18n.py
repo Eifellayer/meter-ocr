@@ -222,6 +222,11 @@ EN_UI = {
     "Betriebsmodus": "Mode",
     "Die Adresse deines SLFork-Geräts im Heimnetz.": "The address of your SLFork device on your local network.",
     "SLFork-Adresse": "SLFork address",
+    "ESP-Adresse": "ESP address",
+    "Die Adresse deines ESP-Geräts im Heimnetz.": "The address of your ESP on your home network.",
+    "ESP nur als Kamera verwenden": "Use the ESP as a camera only",
+    "Wenn der ESP den Zähler nicht zuverlässig liest, kann die App das Bild direkt abrufen und selbst ablesen.":
+        "If the ESP cannot read the meter reliably, the app can fetch the image and read it itself.",
     "Die Entitäts-ID der Kamera in Home Assistant.": "The camera entity ID in Home Assistant.",
     "Kamera in Home Assistant": "Camera in Home Assistant",
     "Optionaler Sensor mit aktuellem Zählerstand in Kubikmetern.":
@@ -299,6 +304,17 @@ EN_UI = {
     "3. Bildausschnitt und Prüfplan": "3. Image area and schedule",
     "4. Hinweise und speichern": "4. Alerts and save",
     "Woher kommt das Zählerbild?": "Where does the meter image come from?",
+    "Erklärung der Bildquellen": "Image source guide",
+    "In Home Assistant gefunden": "Found in Home Assistant",
+    "Gerät auswählen …": "Choose a device …",
+    "ESPHome / Kamera:": "ESPHome / camera:",
+    "Empfohlen für den Einstieg mit einer Kamera. Die App liest den Stand selbst.":
+        "Recommended when starting with a camera. The app reads the meter itself.",
+    "Home-Assistant-Kamera mit Vergleichswert:": "Home Assistant camera with reference reading:",
+    "Die App holt pro Prüfung ein Standbild und kann den Wert mit einem vorhandenen Sensor abgleichen.":
+        "The app takes a snapshot for each check and can compare the reading with an existing sensor.",
+    "Die App prüft den ESP-Messwert. Du kannst den ESP auch nur als Kamera verwenden.":
+        "The app verifies the ESP reading. You can also use the ESP as a camera only.",
     "Home-Assistant-Kamera (Livebild, Standbild je Prüfung)": "Home Assistant camera (live image, one snapshot per check)",
     "Home Assistant camera (snapshot per check)": "Home Assistant camera (live image, one snapshot per check)",
     "ⓘ Welcher Weg passt?": "ⓘ Which source should I choose?",

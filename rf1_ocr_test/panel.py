@@ -24,7 +24,7 @@ from i18n import EN_UI, english_progress, english_result, translate_page
 from language import MODES, SUPPORTED, USER_ID, browser_locale, profile_script
 from layout import ROTATIONS, crop_coordinates
 from notification_settings import notification_rules
-from source_settings import SOURCE_MODES, source_rules
+from source_settings import source_rules
 
 SUPERVISOR_ADDRESS = "172.30.32.2"
 MAX_MANUAL_IMAGE_BYTES = 3_000_000
@@ -121,6 +121,9 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .setup-step legend{{font-weight:700;padding:0 .4rem 0 0;color:inherit}}
 .setup-controls{{display:flex;align-items:center;justify-content:space-between;gap:.6rem;grid-column:1/-1}}
 .setup-help{{grid-column:1/-1}}
+.source-mode-guide{{grid-column:1/-1;display:grid;gap:.75rem;grid-template-columns:repeat(auto-fit,minmax(min(100%,14rem),1fr))}}
+.source-mode-guide ul{{padding-inline-start:1.25rem;margin:0}}
+.source-mode-guide li + li{{margin-top:.35rem}}
 .setup-help summary{{cursor:help;color:var(--muted);font-size:.88rem}}
 .setup-help p{{margin:.4rem 0 0;color:var(--muted);font-size:.88rem}}
 .setup-warning{{padding:.7rem .8rem;border-radius:.6rem;background:light-dark(#fff7e6,#3b321c);color:light-dark(#72540e,#e7d28a);grid-column:1/-1}}
@@ -350,11 +353,23 @@ name: Zählerstand (OCR)</code></pre>
 <input type="hidden" name="lang" value="{language}"><input type="hidden" name="mode" value="{language_mode}">
 <input type="hidden" name="csrf" value="{csrf}">
 <fieldset class="setup-step active" data-step="0"><legend>1. Bildquelle</legend>
-<label>Woher kommt das Zählerbild?<select name="source_mode" id="wizard-source-mode">{wizard_source_options}</select></label>
-<label id="wizard-source-url">SLFork-Adresse<input name="url" value="{source_url}" maxlength="150" placeholder="http://esp-gaszaehler.local"></label>
+<div class="source-mode-guide">
+<label>Woher kommt das Zählerbild?<select name="source_mode" id="wizard-source-mode" required>{wizard_source_options}</select></label>
+<ul class="settings-note" aria-label="Erklärung der Bildquellen">
+<li><strong>ESPHome / Kamera:</strong> Empfohlen für den Einstieg mit einer Kamera. Die App liest den Stand selbst.</li>
+<li><strong>Home-Assistant-Kamera mit Vergleichswert:</strong> Die App holt pro Prüfung ein Standbild und kann den Wert mit einem vorhandenen Sensor abgleichen.</li>
+<li><strong>AI on the Edge / SLFork:</strong> Die App prüft den ESP-Messwert. Du kannst den ESP auch nur als Kamera verwenden.</li>
+</ul>
+</div>
+<label id="wizard-discovered-sources" class="setup-help" hidden>In Home Assistant gefunden
+<select id="wizard-discovered-source"><option value="">Gerät auswählen …</option></select></label>
+<label id="wizard-source-url">ESP-Adresse<input name="url" value="{source_url}" maxlength="150" placeholder="http://esp-gaszaehler.local"></label>
+<div id="wizard-esp-camera-only" class="setup-help" hidden>
+<label class="check-option"><input type="checkbox" name="esp_camera_only" value="1" {esp_camera_only_checked}> ESP nur als Kamera verwenden</label>
+<p>Wenn der ESP den Zähler nicht zuverlässig liest, kann die App das Bild direkt abrufen und selbst ablesen.</p>
+</div>
 <label id="wizard-source-camera">Home-Assistant-Kamera<input name="camera" value="{source_camera}" maxlength="80" placeholder="camera.gaszaehler"></label>
 <label id="wizard-source-reference">Vergleichssensor (optional)<input name="reference" value="{source_reference}" maxlength="80" placeholder="sensor.gaszaehler"></label>
-<details class="setup-help"><summary>ⓘ Welcher Weg passt?</summary><p>SLFork liefert Bild und Messwert. Die Livebild-Quelle ruft bei jeder Prüfung ein aktuelles Standbild deiner Home-Assistant-Kamera ab; ein Video wird nicht dauerhaft ausgewertet. Du kannst dazu einen Zählerstandssensor – etwa von AI on the Edge – als Vergleich eintragen. Ohne Referenzsensor liest AI Meter Reader selbst und prüft die Werte auf Plausibilität.</p></details>
 <details class="setup-help"><summary>ⓘ Hinweis zum Teststand</summary><p>Für reale Tests nutze ich ausschließlich AI on the Edge. Die übrigen Kamera- und Zählermodi sind bisher nur mit simulierten Bildern und automatisierten Tests geprüft.</p></details>
 <div class="setup-controls"><span class="setup-count"></span><button type="button" class="setup-next">Weiter</button></div>
 </fieldset>
@@ -420,9 +435,13 @@ name: Zählerstand (OCR)</code></pre>
 <input type="hidden" name="mode" value="{language_mode}">
 <input type="hidden" name="csrf" value="{csrf}">
 <label title="Wähle, woher das Zählerbild und gegebenenfalls der Vergleichswert kommen.">Betriebsmodus
-<select name="source_mode" id="source-mode">{source_options}</select></label>
-<label id="source-url" title="Die Adresse deines SLFork-Geräts im Heimnetz.">SLFork-Adresse
+<select name="source_mode" id="source-mode" required>{source_options}</select></label>
+<label id="source-url" title="Die Adresse deines ESP-Geräts im Heimnetz.">ESP-Adresse
 <input name="url" value="{source_url}" placeholder="http://esp-gaszaehler.local" maxlength="150"></label>
+<div id="esp-camera-only" hidden>
+<label class="check-option"><input type="checkbox" name="esp_camera_only" value="1" {esp_camera_only_checked}> ESP nur als Kamera verwenden</label>
+<p class="settings-note">Wenn der ESP den Zähler nicht zuverlässig liest, kann die App das Bild direkt abrufen und selbst ablesen.</p>
+</div>
 <label id="source-camera" title="Die Entitäts-ID der Kamera in Home Assistant.">Kamera in Home Assistant
 <input name="camera" value="{source_camera}" placeholder="camera.gaszaehler" maxlength="80"></label>
 <label id="source-reference" title="Optionaler Sensor mit aktuellem Zählerstand in Kubikmetern.">Vergleichssensor (optional)
@@ -577,6 +596,7 @@ document.querySelector('#open-setup').addEventListener('click', () => {{
   activateTab('settings');
   showSetupStep(0);
   if (!setupDialog.open) setupDialog.showModal();
+  loadSourceSuggestions();
 }});
 document.querySelector('#open-interval-settings').addEventListener('click', () => {{
   activateTab('settings');
@@ -641,8 +661,13 @@ const wizardSourceMode = document.querySelector('#wizard-source-mode');
 let previousWizardSource = wizardSourceMode.value;
 function showWizardSource() {{
   const mode = wizardSourceMode.value;
-  document.querySelector('#wizard-source-url').hidden = mode !== 'slfork';
-  document.querySelector('#wizard-source-camera').hidden = mode === 'slfork';
+  const url = document.querySelector('#wizard-source-url');
+  const camera = document.querySelector('#wizard-source-camera');
+  url.hidden = mode !== 'slfork';
+  document.querySelector('#wizard-esp-camera-only').hidden = url.hidden;
+  camera.hidden = mode !== 'esphome' && mode !== 'camera';
+  url.querySelector('input').required = !url.hidden;
+  camera.querySelector('input').required = !camera.hidden;
   document.querySelector('#wizard-source-reference').hidden = mode !== 'camera';
   const attemptChoice = setupForm.querySelector('[name="attempts"]');
   if (mode === 'camera' && previousWizardSource !== 'camera' && attemptChoice.value === '5') {{
@@ -651,6 +676,40 @@ function showWizardSource() {{
   previousWizardSource = mode;
 }}
 wizardSourceMode.addEventListener('change', showWizardSource); showWizardSource();
+const discoveredSource = document.querySelector('#wizard-discovered-source');
+let sourceSuggestions = [];
+let loadingSourceSuggestions = false;
+async function loadSourceSuggestions() {{
+  if (loadingSourceSuggestions || sourceSuggestions.length) return;
+  loadingSourceSuggestions = true;
+  try {{
+    const response = await fetch('bildquellen', {{cache: 'no-store'}});
+    if (!response.ok) return;
+    sourceSuggestions = await response.json();
+    sourceSuggestions.forEach((source, index) => {{
+      const type = source.mode === 'slfork' ? 'AI on the Edge' : (lang === 'en' ? 'Camera' : 'Kamera');
+      discoveredSource.add(new Option(type + ' · ' + source.label, String(index)));
+    }});
+    document.querySelector('#wizard-discovered-sources').hidden = !sourceSuggestions.length;
+  }} catch (_) {{
+    // Manual entry remains available when Home Assistant cannot return suggestions.
+  }} finally {{
+    loadingSourceSuggestions = false;
+  }}
+}}
+discoveredSource.addEventListener('change', () => {{
+  if (discoveredSource.value === '') return;
+  const source = sourceSuggestions[Number(discoveredSource.value)];
+  if (source.mode === 'slfork') {{
+    wizardSourceMode.value = 'slfork';
+    setupForm.elements.url.value = source.url;
+  }} else {{
+    if (wizardSourceMode.value !== 'camera') wizardSourceMode.value = 'esphome';
+    setupForm.elements.camera.value = source.camera;
+  }}
+  showWizardSource();
+}});
+if (setupDialog.open) loadSourceSuggestions();
 const wizardCropMode = setupForm.querySelector('[name="crop_mode"]');
 function showWizardCrop() {{ document.querySelector('#wizard-crop-fields').hidden = wizardCropMode.value !== 'manual'; }}
 wizardCropMode.addEventListener('change', showWizardCrop); showWizardCrop();
@@ -697,8 +756,9 @@ const autoCropFields = document.querySelector('#auto-crop-fields');
 const sourceMode = document.querySelector('#source-mode');
 function showSourceFields() {{
   const mode = sourceMode.value;
+  document.querySelector('#esp-camera-only').hidden = mode !== 'slfork';
   for (const [selector, show] of [['#source-url', mode === 'slfork'],
-      ['#source-camera', mode !== 'slfork'], ['#source-reference', mode === 'camera']]) {{
+      ['#source-camera', mode === 'esphome' || mode === 'camera'], ['#source-reference', mode === 'camera']]) {{
     const field = document.querySelector(selector);
     field.hidden = !show;
     field.querySelector('input').disabled = !show;
@@ -1019,7 +1079,7 @@ def start_panel(
     load_language_modes, save_language_modes, get_delivery, save_delivery, get_source, save_source,
     wake_worker=None, *, address=("0.0.0.0", 8099), test_source_image=None, automatic_preview=None,
     request_factory_reset=None, get_reset_status=None, skip_setup=None, get_activity=None,
-    get_auto_paused=None, save_auto_paused=None,
+    get_auto_paused=None, save_auto_paused=None, discover_sources=None,
 ):
     images = {"/aktuell.jpg": current_image, "/treffer.jpg": good_image,
               "/testvorschau.jpg": test_image}
@@ -1302,6 +1362,10 @@ def start_panel(
                 else:
                     self.reply(content, "image/jpeg")
                 return
+            if path == "/bildquellen":
+                sources = discover_sources() if discover_sources else []
+                self.reply(json.dumps(sources).encode("utf-8"), "application/json; charset=utf-8")
+                return
             if path == "/status":
                 with request_lock:
                     snapshot = dict(progress)
@@ -1346,11 +1410,15 @@ def start_panel(
             summary = automatic_summary(history, language, auto_rules)
             delivery = get_delivery()
             source, setup_pending = get_source()
+            source_selected = source.get("selected", not setup_pending)
+            esp_camera_only = source["mode"] == "slfork_camera"
+            source_option = "slfork" if esp_camera_only else source["mode"]
             source_choices = (
-                {"slfork": "SLFork / AI on the Edge", "camera": "Home Assistant camera (snapshot per check)",
-                 "esphome": "ESPHome or camera with local OCR"} if language == "en" else
-                {"slfork": "SLFork / AI on the Edge", "camera": "Home-Assistant-Kamera (Livebild, Standbild je Prüfung)",
-                 "esphome": "ESPHome oder Kamera mit lokaler OCR"}
+                {"": "Choose an image source", "esphome": "ESPHome / camera",
+                 "camera": "Home Assistant camera with reference reading", "slfork": "AI on the Edge / SLFork"}
+                if language == "en" else
+                {"": "Bildquelle auswählen", "esphome": "ESPHome / Kamera",
+                 "camera": "Home-Assistant-Kamera mit Vergleichswert", "slfork": "AI on the Edge / SLFork"}
             )
             intro = ("Choose a source to start automatic checks." if language == "en" else
                      "Wähle eine Bildquelle, um die automatische Kontrolle zu starten.")
@@ -1437,7 +1505,10 @@ def start_panel(
                 setup_first_run=str(bool(setup_pending or reset_state == "done")).lower(),
                 precision_hidden="" if auto_rules["decimals"] == 3 else "hidden",
                 precision_checked="checked" if auto_rules.get("precision_mode") else "",
-                wizard_source_options=select_options(source_choices, source["mode"]),
+                wizard_source_options=select_options(
+                    source_choices, source_option if source_selected and not setup_pending else ""
+                ),
+                esp_camera_only_checked="checked" if esp_camera_only else "",
                 meter_display_options=select_options({
                     "rollers": "Number rollers" if language == "en" else "Ziffernrollen",
                     "digital": "Digital numeric display" if language == "en" else "Digitales Zifferndisplay",
@@ -1464,8 +1535,8 @@ def start_panel(
                 test_source_visible="" if test_visible else "hidden",
                 notifications_open="open" if saved == "notifications" else "",
                 source_open="open" if setup_pending or saved == "source" else "",
-                source_intro=f'<p class="settings-note">{intro}</p>' if setup_pending else "",
-                source_options=select_options(source_choices, source["mode"]),
+                source_intro=f'<p class="settings-note">{intro}</p>' if not source_selected or setup_pending else "",
+                source_options=select_options(source_choices, source_option if source_selected else ""),
                 source_url=html.escape(source["url"]), source_camera=html.escape(source["camera"]),
                 source_reference=html.escape(source["reference"]),
                 source_saved_notice=auto_saved_notice if saved == "source" else "",
@@ -1486,8 +1557,9 @@ def start_panel(
                 ),
                 auto_attempt_options=select_options(
                     {value: label for value, label in ATTEMPTS.items()
-                     if source["mode"] != "esphome" or value != "1"},
-                    str(max(2, auto_rules["attempts"]) if source["mode"] == "esphome" else auto_rules["attempts"]),
+                     if source["mode"] not in ("esphome", "slfork_camera") or value != "1"},
+                    str(max(2, auto_rules["attempts"]) if source["mode"] in ("esphome", "slfork_camera")
+                        else auto_rules["attempts"]),
                 ),
                 auto_polarity_options=select_options(
                     POLARITIES_EN if language == "en" else POLARITIES, auto_rules["polarity"],
@@ -1681,10 +1753,14 @@ def start_panel(
                 value, = form.get(name, [default])
                 return value
 
+            def selected_source_mode(default=""):
+                selected = field("source_mode", default)
+                return "slfork_camera" if selected == "slfork" and field("esp_camera_only") == "1" else selected
+
             if path == "/einrichtung":
                 try:
                     source_values = source_rules({
-                        "mode": field("source_mode"), "url": field("url"),
+                        "mode": selected_source_mode(), "url": field("url"),
                         "camera": field("camera"), "reference": field("reference"),
                     })
                     old_rules = read_auto_rules()
@@ -1754,7 +1830,7 @@ def start_panel(
                     with source_lock:
                         current, _ = get_source()
                         values = source_rules({
-                            "mode": field("source_mode"),
+                            "mode": selected_source_mode(),
                             **{key: field(key, current[key]) for key in ("url", "camera", "reference")},
                         })
                         save_source(values)

@@ -326,7 +326,7 @@ def main():
             crop_text = saved_rules.get("crop", options["ausschnitt"])
             width = saved_rules.get("width", options["vorkomma_breite"])
             crop_valid = (isinstance(crop_text, str) and
-                          re.fullmatch(r"\\d{1,4}\\s*,\\s*\\d{1,4}\\s*,\\s*\\d{1,4}\\s*,\\s*\\d{1,4}", crop_text)
+                          re.fullmatch(r"\d{1,4}\s*,\s*\d{1,4}\s*,\s*\d{1,4}\s*,\s*\d{1,4}", crop_text)
                           and type(width) is int and 1 <= width <= 1920)
             if crop_mode not in ("auto", "manual") or not crop_valid:
                 crop_mode, crop_text, width = "auto", options["ausschnitt"], options["vorkomma_breite"]
@@ -351,7 +351,7 @@ def main():
                 or values.get("crop_mode") not in ("auto", "manual")
                 or type(values.get("width")) is not int or not 1 <= values["width"] <= 1920
                 or not isinstance(values.get("crop"), str)
-                or not re.fullmatch(r"\\d{1,4}\\s*,\\s*\\d{1,4}\\s*,\\s*\\d{1,4}\\s*,\\s*\\d{1,4}", values["crop"])):
+                or not re.fullmatch(r"\d{1,4}\s*,\s*\d{1,4}\s*,\s*\d{1,4}\s*,\s*\d{1,4}", values["crop"])):
             raise ValueError("Ungültige Einstellungen für die automatische Kontrolle")
         coords = [int(part.strip()) for part in values["crop"].split(",")]
         if not (0 <= coords[0] < coords[2] <= 1920 and 0 <= coords[1] < coords[3] <= 1920

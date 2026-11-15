@@ -6,11 +6,13 @@
 
 Das ist eine **zusätzliche Plausibilitätskontrolle**, kein amtliches Messgerät. OCR-Fehler sind möglich; für eine Abrechnung zählt die direkt am Zähler überprüfte Ablesung. Privates Hobbyprojekt ohne garantierten Support.
 
+Der Einrichtungsassistent führt durch Bildquelle, Zählerformat, Bildausschnitt, Prüfintervall und Benachrichtigungen. Er lässt sich jederzeit erneut öffnen und übernimmt die gespeicherten Werte. Der Maintainer hat reale Zählertests ausschließlich mit AI on the Edge / SLFork durchgeführt; andere Modi wurden simuliert getestet.
+
 Die ausführliche Einführung, Voraussetzungen, Installation und Konfiguration findest du in der [Projektbeschreibung](../README.md).
 
 ## Installation
 
-**Meter OCR** ist die reguläre App. **Meter OCR Beta** ist die separate Testausgabe im selben Repository.
+**Meter OCR (Alpha)** ist bis Version 0.5 die reguläre App und zugleich der Testkanal. Ab 0.5 gibt es Beta-Versionen nur für größere Änderungen mit zusätzlichem Testbedarf.
 
 Über **Einstellungen → Apps → App installieren → ⋮ → Repositories** die Adresse `https://github.com/Eifellayer/meter-ocr` hinzufügen und **Meter OCR** installieren. Im SLFork-Modus die `esp_url` eintragen, starten und die Weboberfläche öffnen.
 

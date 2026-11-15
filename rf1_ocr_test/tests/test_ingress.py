@@ -10,6 +10,7 @@ import re
 import sys
 from tempfile import TemporaryDirectory
 from threading import Thread
+import time
 from urllib.error import HTTPError
 from urllib.parse import urlencode, urlsplit
 from urllib.request import Request
@@ -21,6 +22,8 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import panel
+from checks import FALLBACK_NOTICE
+from consumption import FALLBACK_PLAUSIBLE
 from language import browser_locale, load_preferences
 from run import atomic_write
 from transport import open_core
@@ -170,6 +173,17 @@ class IngressTests(IngressFixture):
                 self.assertIn(message, response.read().decode())
         self.assertTrue(self.requested.empty())
 
+    def test_manual_options_and_fallback_value_persist_for_the_next_click(self):
+        values = {"polarity": "dark", "decimals": 1, "attempts": 4, "crop_mode": "manual",
+                  "crop": "10,10,410,110", "width": 300, "manual_reference": "12345.6"}
+        self.assertEqual((303, "./?test=queued"), self.submit("/pruefen", **values))
+        self.assertTrue((self.root / "manual-test-settings.json").exists())
+        self.assertEqual("12345.6", self.requested.get_nowait()["manual_reference"])
+        page = self.request("/")[0]
+        self.assertIn('name="manual_reference" value="12345.6"', page)
+        self.assertIn('<option value="dark" selected>', page)
+        self.assertIn('<option value="1" selected>1 Nachkommastelle</option>', page)
+
     def test_initial_source_selection_and_later_changes(self):
         self.assertIn('id="source-settings" open', self.request("/")[0])
         self.assertEqual(400, self.submit("/bildquelle", source_mode="esphome", camera="sensor.invalid")[0])
@@ -188,6 +202,44 @@ class IngressTests(IngressFixture):
                          self.submit("/bildquelle", source_mode="slfork", url="http://new-meter"))
         self.assertEqual("http://new-meter", self.source["url"])
 
+    def test_setup_wizard_saves_source_meter_format_crop_schedule_and_notifications(self):
+        page = self.request("/")[0]
+        self.assertIn('id="setup-wizard" open', page)
+        self.assertIn('name="integer_digits"', page)
+        values = {
+            "source_mode": "camera", "camera": "camera.meter", "reference": "sensor.meter",
+            "url": "http://meter", "meter_display": "mixed", "integer_digits": 6,
+            "fraction_digits": 2, "decimals": 1, "attempts": 4, "polarity": "dark",
+            "crop_mode": "manual", "crop": "10,10,410,110", "width": 300, "rotation": 0,
+            "interval_minutes": 30, "max_flow": "6.5", "fallback_value": "123456.7",
+            "fallback_time": time.strftime("%Y-%m-%dT%H:%M", time.localtime()),
+            "notifications_enabled": 1, "review_minutes": 60, "delivery_hours": 0,
+            "push": "notify.mobile_app_phone", "target": "notify.email",
+        }
+        self.assertEqual((303, "./?saved=setup"), self.submit("/einrichtung", **values))
+        self.assertEqual("camera", self.source["mode"])
+        self.assertEqual("sensor.meter", self.source["reference"])
+        self.assertEqual((6, 2, "mixed", 1), (self.rules["integer_digits"], self.rules["fraction_digits"],
+                                               self.rules["meter_display"], self.rules["decimals"]))
+        self.assertEqual((30, 6500, "123456.7"), (self.rules["interval_minutes"],
+                                                   self.rules["max_flow_lph"],
+                                                   self.rules["fallback_value"]))
+        self.assertTrue(self.delivery["enabled"])
+
+    def test_setup_wizard_rejects_fallback_without_timestamp_and_keeps_old_settings(self):
+        before = dict(self.source)
+        values = {
+            "source_mode": "camera", "camera": "camera.meter", "reference": "",
+            "meter_display": "rollers", "integer_digits": 5, "fraction_digits": 3,
+            "decimals": 0, "attempts": 3, "polarity": "auto", "crop_mode": "auto",
+            "crop": "0,0,400,90", "width": 250, "rotation": 0,
+            "interval_minutes": 60, "max_flow": "6", "fallback_value": "12345.6",
+            "fallback_time": "", "review_minutes": 240, "delivery_hours": 24,
+            "push": "", "target": "",
+        }
+        self.assertEqual(400, self.submit("/einrichtung", **values)[0])
+        self.assertEqual(before, self.source)
+
     def test_notification_form_saves_and_can_disable_channels(self):
         settings = dict(review_minutes=15, delivery_hours=0, push="notify.mobile_app_phone",
                         target="notify.email")
@@ -203,11 +255,55 @@ class IngressTests(IngressFixture):
         self.history.write_text(json.dumps({"status": "match", "last_reference": 0,
                                            "check_status": "stale_sample",
                                            "check_detail": "Das Bild ist zu alt oder wurde schon ausgewertet.",
+                                           "failure_since": time.time() - 3600,
                                            "comparison_decimals": 0}))
         status = json.loads(self.request("/automatic?lang=en")[0])
         self.assertEqual("0", status["reference"])
         self.assertIn("too old", status["detail"])
-        self.assertEqual("problem", status["tone"])
+        self.assertEqual("warning", status["tone"])
+
+    def test_fallback_details_appear_after_one_hour_and_keep_the_reference_timestamp(self):
+        now = time.time()
+        saved = {"check_status": "slfork_unclear", "failure_since": now - 3550,
+                 "check_detail": f"{FALLBACK_NOTICE} {FALLBACK_PLAUSIBLE}",
+                 "last_reference": "12346.0416", "last_reference_time": now - 3660,
+                 "last_reference_is_fallback": True}
+        self.history.write_text(json.dumps(saved))
+        status = json.loads(self.request("/automatic?lang=en")[0])
+        self.assertEqual(("warning", "Last check failed", "", ""),
+                         (status["tone"], status["heading"], status["detail"], status["incident"]))
+        self.assertTrue(status["reference_is_fallback"])
+        self.assertEqual(saved["last_reference_time"], status["reference_time"])
+        self.history.write_text(json.dumps({**saved, "failure_since": now - 3600}))
+        status = json.loads(self.request("/automatic?lang=en")[0])
+        self.assertEqual("warning", status["tone"])
+        self.assertIn("fallback reading. OCR increase looks plausible", status["detail"])
+        self.assertTrue(status["incident"])
+        self.history.write_text(json.dumps({**saved, "failure_since": now - 3600, "capture_failure_since": now,
+                                           "check_status": "capture_unavailable"}))
+        self.assertEqual("warning", json.loads(self.request("/automatic")[0])["tone"])
+        self.history.write_text(json.dumps({**saved, "failure_since": now - 3700,
+                                           "capture_failure_since": now - 3600,
+                                           "check_status": "capture_unavailable"}))
+        self.assertEqual("problem", json.loads(self.request("/automatic")[0])["tone"])
+
+    def test_interval_save_updates_a_legacy_schedule(self):
+        now = time.time()
+        self.history.write_text(json.dumps({"check_status": "match", "next_check_at": now + 3600}))
+        form = dict(decimals=0, attempts=3, polarity="auto", crop_mode="auto")
+        self.assertIn('name="interval_minutes" type="number"', self.request("/")[0])
+        self.assertEqual((303, "./?saved=1"), self.submit("/automatik", interval_minutes=15, **form))
+        status = json.loads(self.request("/automatic")[0])
+        self.assertEqual(15, self.rules["interval_minutes"])
+        self.assertEqual(now + 900, status["next_check"])
+        self.assertEqual(now, status["last_check"])
+        self.assertEqual(400, self.submit("/automatik", interval_minutes=0, **form)[0])
+        self.assertEqual(15, self.rules["interval_minutes"])
+        crop = dict(crop_mode="manual", crop="1,2,304,88", width=270)
+        self.assertEqual((303, "./?saved=1"), self.submit("/automatik", **{**form, **crop}))
+        page = self.request("/")[0].split('id="manual-form"', 1)[1].split("</form>", 1)[0]
+        self.assertIn('value="manual" selected', page)
+        self.assertIn('value="1,2,304,88"', page)
 
 
 class RedirectTests(TestCase):
@@ -319,6 +415,7 @@ class BrowserTests(IngressFixture):
             frame.locator("#manual-form select[name=rotation]").select_option("90")
             frame.locator("#start-check").click()
             frame.get_by_text("Request accepted", exact=True).wait_for()
+            frame.locator("#manual-test #test-progress").wait_for(state="visible")
             self.assertEqual("neutral", frame.locator("#test-box").get_attribute("data-result"))
             frame.locator("#language-select").select_option("de")
             expect_language("de")
@@ -344,16 +441,19 @@ class BrowserTests(IngressFixture):
             self.assertEqual(90, self.rules["rotation"])
             frame.locator("#auto-form select[name=decimals]").select_option("2")
             frame.locator("#auto-form input[name=max_flow]").fill("4,5")
+            self.assertEqual("60", frame.locator("#auto-form input[name=interval_minutes]").input_value())
+            frame.locator("#auto-form input[name=interval_minutes]").fill("15")
             frame.locator("#auto-form button").click()
             frame.get_by_text("Automatische Prüfregeln gespeichert.", exact=True).wait_for()
             self.assertEqual(4500, self.rules["max_flow_lph"])
+            self.assertEqual(15, self.rules["interval_minutes"])
             self.assertEqual("de", frame.locator("#language-select").input_value())
             page.reload()
             expect_language("de")
             frame.locator("#language-select").select_option("auto")
             expect_language("en")
             page.set_viewport_size({"width": 1280, "height": 900})
-            frame.locator("#manual-panel summary").first.click()
+            self.assertIsNone(frame.locator("#manual-panel").get_attribute("open"))
             frame.locator("#start-check").click()
             frame.get_by_text("Request accepted", exact=True).wait_for()
             self.assertEqual("neutral", frame.locator("#test-box").get_attribute("data-result"))
@@ -367,6 +467,13 @@ class BrowserTests(IngressFixture):
             page.goto(parent + "/?en")
             frame.get_by_text("Meter reading confirmed", exact=True).wait_for()
             self.assertEqual("ok", frame.locator("#automatic-banner").get_attribute("data-tone"))
+            self.history.write_text(json.dumps({"check_status": "slfork_unclear", "comparison_decimals": 2,
+                                               "failure_since": time.time(), "last_reference": "12346.0416",
+                                               "last_reference_is_fallback": True, "last_reference_time": 1709999000}))
+            page.reload()
+            frame.get_by_text("Last check failed", exact=True).wait_for()
+            self.assertEqual("warning", frame.locator("#automatic-banner").get_attribute("data-tone"))
+            self.assertIn("ESP fallback reading", frame.locator("#automatic-reference-note").inner_text())
             failed = {"check_status": "capture_unavailable", "failure_since": 100, "comparison_decimals": 2}
             self.history.write_text(json.dumps(failed))
             page.reload()

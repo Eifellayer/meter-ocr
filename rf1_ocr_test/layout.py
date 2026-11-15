@@ -35,7 +35,7 @@ def turn_crop(image, rotation):
     return image.transpose(method) if method is not None else image
 
 
-def find_digit_row(overlay):
+def find_digit_row(overlay, whole_digits=5, fraction_digits=None):
     width, height = overlay.size
     # SLFork draws digit frames in green. Alignment markers use a different color.
     mask = bytes(g > 95 and g - r > 42 and g - b > 36 for r, g, b in overlay.convert("RGB").getdata())
@@ -99,7 +99,11 @@ def find_digit_row(overlay):
         chains.append(max(preceding, key=len, default=[]) + [box])
 
     row = max(chains, key=len, default=[])
-    if len(row) not in (7, 8):
+    if fraction_digits is None:
+        if len(row) not in (whole_digits + 2, whole_digits + 3):
+            return None
+        fraction_digits = len(row) - whole_digits
+    if len(row) != whole_digits + fraction_digits:
         return None
     span = median(right - left for left, _, right, _ in row)
     if any(not 0.67 <= (second[0] - first[0]) / span <= 1.63
@@ -107,9 +111,10 @@ def find_digit_row(overlay):
         return None
     # Full register for visual inspection, with a separate boundary before the decimal rolls.
     left = max(0, row[0][0] - round(span * 0.06))
-    right = min(width, max(box[2] for box in row) + round(span * (1.15 if len(row) == 7 else 0.08)))
+    right = min(width, max(box[2] for box in row) + round(span * (1.15 if fraction_digits == 2 else 0.08)))
     top = max(0, min(box[1] for box in row) - 2)
     bottom = min(height, max(box[3] for box in row) + 3)
-    boundary = (row[4][2] + row[5][0]) // 2
+    boundary = ((row[whole_digits - 1][2] + row[whole_digits][0]) // 2
+                if fraction_digits else right - left)
     digit_boxes = [(a - left, b - top, c - left, d - top) for a, b, c, d in row]
     return (left, top, right, bottom), boundary - left, digit_boxes

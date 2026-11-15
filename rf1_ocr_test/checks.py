@@ -90,7 +90,7 @@ def comparison_scope(decimals):
     return f"volle Kubikmeter und {decimals} Nachkommastelle" + ("n" if decimals > 1 else "")
 
 
-def explain_uncertain_positions(readings, decimals):
+def explain_uncertain_positions(readings, decimals, *, show_details=False):
     """Explain differences at digit positions relevant to this comparison."""
     if not readings:
         return ("Zählerstand nicht sicher erkannt. Es liegt keine verwertbare "
@@ -112,10 +112,10 @@ def explain_uncertain_positions(readings, decimals):
     if not unclear:
         return ("Zählerstand nicht sicher erkannt. Die Lesungen stimmen nicht zuverlässig "
                 "überein. Bitte das Zählerbild prüfen.")
-    return ("Zählerstand nicht sicher erkannt. Unklare Stellen: "
-            + "; ".join(unclear) +
-            ". Die betroffenen Stellen im Testbild und die einzelnen OCR-Versuche "
-            "sind unter „Mehr Infos“ zu sehen.")
+    message = "Zählerstand nicht sicher erkannt. Unklare Stellen: " + "; ".join(unclear) + "."
+    if show_details:
+        return message + " Die einzelnen Lesungen findest du unter „Mehr Infos“."
+    return message + " Bitte Bildausschnitt, Beleuchtung und Ziffern prüfen."
 
 
 def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace=None):

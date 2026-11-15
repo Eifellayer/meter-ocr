@@ -1,6 +1,6 @@
 # Changelog
 
-## In Vorbereitung
+## 0.4.9 Alpha
 
 - Optionale Selbsteinrichtung für Ausschnitt und Drehung. Einstellbares Limit von 3 bis 50 unterschiedlichen Bildern, höchstens fünf Minuten und Übernahme nach mindestens drei bestätigten Aufnahmen.
 

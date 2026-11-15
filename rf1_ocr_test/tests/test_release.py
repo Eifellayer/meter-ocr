@@ -130,6 +130,7 @@ class PanelTests(unittest.TestCase):
         self.assertIn("automatikvorschau.jpg", page)
         self.assertIn('id="setup-dialog"', page)
         self.assertIn('id="setup-skip-form"', page)
+        self.assertIn("document.body.appendChild(setupDialog)", page)
         self.assertIn('id="reset-dialog"', page)
         self.assertIn("App-Daten zurücksetzen", page)
         self.assertIn("sensor.rf1_ocr_zaehlerstand", page)

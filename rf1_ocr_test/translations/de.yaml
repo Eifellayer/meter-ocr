@@ -1,0 +1,35 @@
+# Deutsche Namen und Beschreibungen in der Home-Assistant-App-Konfiguration
+configuration:
+  esp_url:
+    name: SLFork-ESP-Adresse
+    description: Basisadresse des ESP mit AI on the Edge / SLFork.
+  ausschnitt:
+    name: Ersatz-Bildausschnitt
+    description: Pixelkoordinaten für den Ziffernbereich als links,oben,rechts,unten.
+  vorkomma_breite:
+    name: Breite der Vorkommastellen
+    description: Breite der vollen Kubikmeterziffern innerhalb des Ausschnitts in Pixeln.
+  helle_ziffern:
+    name: Helle Ziffern (ältere Voreinstellung)
+    description: Standardhinweis zur OCR-Helligkeit, wenn die Erkennung automatisch erfolgt.
+  zeitzone:
+    name: Zeitzone
+    description: Zeitzone für Prüfplanung und Zeitangaben.
+  push_dienst:
+    name: Optionaler Push-Dienst
+    description: Mobiler Home-Assistant-Benachrichtigungsdienst, z. B. notify.mobile_app_handy.
+  vergleich_nachkommastellen:
+    name: Vorgabe für Vergleichs-Nachkommastellen
+    description: Null prüft nur volle Kubikmeter; 1 bis 3 prüfen zusätzlich Nachkommastellen. Web-Einstellungen haben Vorrang.
+  ocr_versuche:
+    name: Vorgabe für maximale OCR-Versuche
+    description: Höchstens 1 bis 10 OCR-Versuche pro Bild. Web-Einstellungen haben Vorrang.
+  kamera_entitaet:
+    name: Kamera-Entität (optional)
+    description: Home-Assistant-Kamera statt SLFork, z. B. camera.gaszaehler.
+  referenz_entitaet:
+    name: Referenzsensor (optional)
+    description: Kumulierter Zählerstand in Kubikmetern, z. B. sensor.gaszaehler_total.
+  intervall_sekunden:
+    name: Veraltetes Prüfintervall
+    description: Alter Konfigurationswert; die App verwaltet ihren Prüfplan selbst.

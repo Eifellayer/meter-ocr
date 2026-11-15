@@ -5,6 +5,7 @@
 - Bei drei Nachkommastellen erklärt die Einrichtung, warum die letzte Stelle Fehlmeldungen verursachen kann.
 - Scheitert die automatische Prüfung bei drei verschiedenen Bildern nur an der dritten Stelle, kann sie mit gelbem Hinweis bestehen. Für den Verbrauch verwendet die App den Vergleichswert, wenn er die Plausibilitätsprüfung besteht.
 - Der optionale Präzisionsmodus verlangt weiterhin, dass alle drei Nachkommastellen stimmen.
+- Bei Fehlprüfungen zeigt der Countdown die tatsächliche Wartezeit. Ein separater manueller Test verschiebt einen laufenden automatischen Wiederholungsversuch nur, wenn er den Fehler auflöst.
 
 ## 0.4.2 Alpha
 

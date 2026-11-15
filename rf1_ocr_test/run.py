@@ -1266,7 +1266,9 @@ def main():
                                  slfork_diagnostics=diagnostics)
             try:
                 next_history = {**history, "manual_result": manual_result}
-                if manual_result.get("status") in SUCCESSFUL_CHECKS:
+                # A manual image that cannot clear an automatic incident must not
+                # postpone its short retry or change its one-hour cooldown.
+                if (manual_result.get("status") in SUCCESSFUL_CHECKS and not history.get("failure_attempts")):
                     next_history["next_check_at"] = updated.get("next_check_at", history.get("next_check_at"))
                 if (sample is not None and updated.get("check_status") == "match"
                         and history.get("check_status") != "match"):

@@ -1199,19 +1199,22 @@ def start_panel(
         except (TypeError, ValueError):
             failure_attempts = 0
         retry_suppressed = bool(history.get("retry_suppressed"))
-        if failure_attempts and retry_suppressed:
+        if failure_attempts and paused:
+            recovery_notice = (f"Previous failed checks: {failure_attempts}. Automatic checks are paused."
+                               if language == "en" else
+                               f"Bisherige Fehlprüfungen: {failure_attempts}. Die Automatik ist pausiert.")
+        elif failure_attempts and retry_suppressed:
             recovery_notice = (
-                f"{failure_attempts} automatic checks failed. Waiting for a higher meter reading or a new image. "
-                "The next check is in about one hour."
+                f"{failure_attempts} automatic checks failed. Waiting for a higher meter reading or a new image."
                 if language == "en" else
                 f"{failure_attempts} automatische Prüfungen fehlgeschlagen. Es wird auf einen höheren Zählerstand "
-                "oder ein neues Bild gewartet. Die nächste Prüfung erfolgt in etwa einer Stunde."
+                "oder ein neues Bild gewartet."
             )
         elif failure_attempts:
             recovery_notice = (
-                f"Failed checks: {failure_attempts} of 3. A new image will be checked in five minutes."
+                f"Failed checks: {failure_attempts} of 3. The app will check again automatically."
                 if language == "en" else
-                f"Fehlprüfungen: {failure_attempts} von 3. In fünf Minuten wird ein neues Bild geprüft."
+                f"Fehlprüfungen: {failure_attempts} von 3. Die App prüft automatisch erneut."
             )
         else:
             recovery_notice = ""

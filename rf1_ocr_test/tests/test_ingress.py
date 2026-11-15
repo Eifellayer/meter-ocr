@@ -175,11 +175,13 @@ class IngressTests(IngressFixture):
     def test_automatic_status_explains_three_retry_attempts_and_one_hour_wait(self):
         self.history.write_text(json.dumps({
             "check_status": "ocr_unclear", "failure_attempts": 2,
-            "next_check_at": time.time() + 300,
+            "next_check_at": time.time() + 3500,
         }))
         status = json.loads(self.request("/automatic")[0])
         self.assertEqual(2, status["failure_attempts"])
         self.assertIn("2 von 3", status["recovery_notice"])
+        self.assertNotIn("fünf Minuten", status["recovery_notice"])
+        self.assertGreater(status["next_check"] - time.time(), 300)
         self.assertFalse(status["retry_suppressed"])
 
         self.history.write_text(json.dumps({
@@ -189,6 +191,7 @@ class IngressTests(IngressFixture):
         status = json.loads(self.request("/automatic")[0])
         self.assertIn("3 automatische Prüfungen fehlgeschlagen", status["recovery_notice"])
         self.assertIn("höheren Zählerstand", status["recovery_notice"])
+        self.assertNotIn("einer Stunde", status["recovery_notice"])
         self.assertTrue(status["retry_suppressed"])
 
     def test_automatic_checks_can_be_paused_and_resumed_without_blocking_manual_tests(self):

@@ -7,12 +7,12 @@ from urllib.request import Request
 
 from websocket import create_connection
 
-from app_channel import CHECK_ENTITY, LABEL_SUFFIX, NAMESPACE
+from app_channel import CHECK_ENTITY, IS_BETA, LABEL_SUFFIX, NAMESPACE
 from transport import open_core
 from notification_settings import PUSH_SERVICE
 
 NOTICE_PREFIX = f"{NAMESPACE}_review_"
-SKIP_PREFIX = "RF1_SKIP_"
+SKIP_PREFIX = "METER_OCR_BETA_SKIP_" if IS_BETA else "RF1_SKIP_"
 
 
 class Reminder:

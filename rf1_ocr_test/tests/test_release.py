@@ -38,6 +38,7 @@ print(json.dumps({
     "entities": [run.ENTITY, run.CHECK_ENTITY, run.OCR_ENTITY, run.CONSUMPTION_ENTITY],
     "media": [str(run.DESTINATION.parent), str(run.GOOD_IMAGE.parent)],
     "notice": reminder.NOTICE_PREFIX,
+    "skip_action": reminder.SKIP_PREFIX,
     "notification_target": reminder.CHECK_ENTITY,
 }))
 """
@@ -56,6 +57,8 @@ print(json.dumps({
                 self.assertEqual(entities, result["entities"])
                 self.assertEqual([f"/media/{namespace}"] * 2, result["media"])
                 self.assertEqual(f"{namespace}_review_", result["notice"])
+                prefix = "METER_OCR_BETA_SKIP_" if channel == "beta" else "RF1_SKIP_"
+                self.assertEqual(prefix, result["skip_action"])
                 self.assertEqual(entities[1], result["notification_target"])
 
 

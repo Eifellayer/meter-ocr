@@ -522,7 +522,7 @@ def start_panel(
                 )
             request_status = (
                 "Test angenommen. Die Bearbeitung wird hier live angezeigt."
-                if url.query == "test=queued" else "Status wird geladen …"
+                if query.get("test", [""])[0] == "queued" else "Status wird geladen …"
             )
             if language == "en":
                 request_status = EN_UI.get(request_status, request_status)

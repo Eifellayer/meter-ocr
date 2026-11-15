@@ -56,8 +56,8 @@ PROFILE_SCRIPT = """
     try {
       if (window.top === window) return;
       let hass = window.top.document.querySelector('home-assistant')?.hass;
-      for (let attempt = 0; !hass?.user && attempt < 4; attempt++) {
-        await new Promise(resolve => setTimeout(resolve, 75));
+      for (let attempt = 0; !hass?.user && attempt < 20; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, 150));
         hass = window.top.document.querySelector('home-assistant')?.hass;
       }
       if (hass?.user?.id !== user || typeof hass.callWS !== 'function') return;
@@ -76,7 +76,7 @@ PROFILE_SCRIPT = """
       // The parent may be cross-origin or the frontend may be unavailable.
     }
   }
-  const deadline = setTimeout(reveal, 1400);
+  const deadline = setTimeout(reveal, 4500);
   resolve().then(redirecting => {
     clearTimeout(deadline);
     if (!redirecting) reveal();

@@ -1,5 +1,5 @@
 name: Meter OCR (Alpha)
-version: "0.2.1"
+version: "0.3.0"
 slug: rf1_ocr_test
 description: "Lokale optische Zählerkontrolle / Local optical meter verification. Alpha release (<0.5)."
 arch:

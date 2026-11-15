@@ -1,76 +1,29 @@
-# RF1 Kontrollmessung
+# Gaszähler OCR-Kontrolle – Home-Assistant-App
 
-> **Privates Hobbyprojekt · Verwendung auf eigene Gefahr**  
-> Der Quellcode ist öffentlich zugänglich. Für dieses Projekt wird kein Support angeboten. Wartung und weitere Updates sind freiwillig.  
-> Die OCR kann Ziffern falsch erkennen. Für Abrechnungen und Meldungen an den Versorger gilt der direkt am Zähler abgelesene Stand.
+**Kontrolliert einen automatisch erkannten Gaszählerstand mit einer zweiten, lokalen OCR-Lesung aus dem Zählerfoto.** Entwickelt für Pipersberg G4 RF1 und AI on the Edge / SLFork; auch eine passende Home-Assistant-Kamera ist möglich.
 
-Dieses Update ersetzt den lokalen **RF1 OCR Probelauf**. Der Ordnername
-`rf1_ocr_test` bleibt für das Update bestehen.
+Das ist eine **zusätzliche Plausibilitätskontrolle**, kein amtliches Messgerät. OCR-Fehler sind möglich; für eine Abrechnung zählt die direkt am Zähler überprüfte Ablesung. Privates Hobbyprojekt ohne garantierten Support.
 
-1. Den Ordner `rf1_ocr_test` aus der ZIP in dieselbe Samba-Freigabe
-   `local_apps` kopieren und die vorhandenen Dateien überschreiben.
-2. In Home Assistant unter **Einstellungen → Apps → App installieren** im
-   Drei-Punkte-Menü **Nach Updates suchen** wählen.
-3. Die vorhandene App auf die neueste Version aktualisieren und bei Bedarf starten.
-   Beim Update bleiben die App-Einstellungen und gespeicherten Treffer erhalten.
+Die ausführliche Einführung, Voraussetzungen, Installation und Konfiguration findest du in der [Projektbeschreibung](../README.md).
 
-## Prüfintervall und Sichtprüfung
+## Installation
 
-Unter **Weboberfläche öffnen** findest du den Countdown, **Jetzt prüfen**
-und den Vergleich mit dem letzten bestätigten Bild. Erkannte Nachkommastellen
-werden angezeigt. Unklare Stellen erscheinen als `?`. Die Einstellung
-`vergleich_nachkommastellen` bestimmt die Genauigkeit des Vergleichs (0–3).
-ESPHome- und andere Home-Assistant-Kameras lassen sich über `kamera_entitaet`
-einbinden. Im Kameramodus ist ein absoluter m³-Zählerstand aus einem Sensor
-als Referenz möglich, auch wenn dieser aus Impulsen berechnet wird.
+Über **Einstellungen → Apps → App installieren → ⋮ → Repositories** die Adresse `https://github.com/Thunder86/rf1-kontrollmessung` hinzufügen und **Gaszähler OCR-Kontrolle** installieren. Im SLFork-Modus die `esp_url` eintragen, starten und die Weboberfläche öffnen.
 
-Nach einem Treffer prüft die App nach einer Stunde erneut. Ergibt die erste
-Lesung eine Abweichung oder ein unklares Ergebnis, wertet die App dasselbe
-Bild insgesamt fünfmal mit unterschiedlicher Aufbereitung aus. Eine passende
-Lesung genügt, sofern Rohwert und übernommener Referenzwert übereinstimmen.
-Bei anhaltender Abweichung, unklarer Lesung oder fehlenden aktuellen Daten
-prüft sie weiterhin alle fünf Minuten.
-Vier Stunden ohne bestätigte Übereinstimmung setzen
-`sensor.rf1_pruefstatus` auf `review_due`. Eine Übereinstimmung beendet die
-engmaschige Prüfung sofort. Die App speichert den Beginn der Störung und
-den nächsten Prüfzeitpunkt über Neustarts hinweg.
+**Ältere lokale Installationen:** Der technische Ordner heißt weiter `rf1_ocr_test`. Beim Update innerhalb derselben App bleiben die Einstellungen normalerweise erhalten. Vor einem Wechsel zwischen lokaler und Repository-App die Einstellungen übernehmen und die alte App stoppen. Beide Varianten dürfen nicht gleichzeitig dieselben Sensoren aktualisieren.
 
-Die App holt das ausgerichtete JPEG und die Werte derselben SLFork-Messung.
-Tesseract liest die fünf Vorkommastellen und versucht, die drei Nachkommastellen
-zu lesen. Ein Treffer zählt, wenn eine OCR-Lesung bei der eingestellten
-Genauigkeit mit **Raw Value** und **Actual Value** übereinstimmt. Weitere
-Nachkommastellen in den Referenzwerten werden für den Vergleich abgeschnitten.
-Jeder Messzeitpunkt zählt einmal und bleibt 24 Stunden lang berücksichtigt,
-auch über Mitternacht und Neustarts hinweg.
+## Was bedeutet „Jetzt prüfen“?
 
-Das Original liegt unter **Medien → Lokale Medien → rf1 → kontrollbild.jpg**.
-In `sensor.rf1_kontrollbild` stehen der kompakte Ziffernausschnitt, sein
-Zeitstempel und `matches_last_24h`. Der Ausschnitt enthält die Nachkommastellen
-für eine mögliche Sichtprüfung. Das Protokoll meldet **Kontrollbild bereit**
-mit OCR-Wert, Zahl der Durchläufe und Prüfergebnis. Die Anzahl steht auch im
-Sensorattribut `ocr_attempts`.
+Der Button startet einen manuellen OCR-Test mit dem **letzten vorhandenen Foto**. Er erzeugt keine neue Kameraaufnahme. Der Status zeigt die Schritte **Anfrage → Bildabruf → OCR-Durchlauf 1–5 → Abschluss**, einen Fortschrittsbalken für tatsächlich absolvierte Aufbereitungen und die verstrichene Zeit.
 
-Die Prüfseite zeigt auch die Meldungen von AI on the Edge (SLFork), den
-Prozessfehlercode und die Zeit des letzten gültigen Stands, soweit die Firmware
-sie liefert. Sie stehen als `slfork_*`-Attribute in `sensor.rf1_pruefstatus`.
-So sind abgebrochene Messzyklen und verworfene Stände auch bei einem fehlenden
-oder älteren Bild sichtbar.
+Bei einer eindeutigen ersten Lesung endet die Prüfung frühzeitig; ansonsten werden bis zu fünf Bildaufbereitungen ausgewertet. Das ist unabhängig von den **fünf automatischen Treffern innerhalb von 24 Stunden**. Manuelle Tests zählen nicht als neue automatische Treffer.
 
-Die App sucht die grünen Ziffernrahmen im SLFork-Bild mit Markierungen und
-liest die fünf Vorkommastellen aus dem ausgerichteten Bild ohne Markierungen.
-Die OCR prüft die normale und die invertierte Darstellung. Im Sensorattribut
-`crop_source` und im Protokoll zeigt `auto` den automatisch gewählten Ausschnitt.
-Bei fehlenden oder nicht erkennbaren Rahmen verwendet die App die Werte
-`ausschnitt` und `vorkomma_breite` aus ihrer Konfiguration und meldet `manual`.
-Die Ziffernrahmen in SLFork müssen auf den Rollen liegen.
+Die manuelle Testansicht zeigt nur Zeitpunkt und Ergebnis; die gemeinsamen Zählerwerte und Bilder stehen übersichtlich in der automatischen Kontrolle. Datum und Zeit sind auf der Oberfläche kompakt dargestellt. Diagnoseangaben wie Prozessfehler bleiben intern und über Home Assistant verfügbar, ohne die normale Ansicht zu überfrachten.
 
-## Optionale Push-Erinnerung
+## Einstellungen und automatische Prüfung
 
-Trage unter `push_dienst` den Benachrichtigungsdienst deiner Home Assistant
-Companion App ein, etwa `notify.mobile_app_mein_handy`. Lass das Feld leer,
-wenn die Erinnerung ausgeschaltet bleiben soll.
+Standardmäßig zählen **nur volle m³** (`vergleich_nachkommastellen: 0`). Nachkommastellen werden angezeigt, aber bei 0 nicht bewertet. `?` bedeutet unklare Ziffer. Auf der Weboberfläche einstellbare Testoptionen gelten für den manuellen Test; die dauerhafte Konfiguration gehört zur App.
 
-Nach vier Stunden ohne bestätigten Stand erscheint ein Hinweis unter
-**Benachrichtigungen**. Bleibt er weitere 24 Stunden offen, folgt einmalig
-ein Push. Schließen des Hinweises oder **Überspringen** im Push quittiert
-diesen Fall. Bei einer neuen Störung beginnt die Frist erneut.
+Nach einem Treffer prüft die App üblicherweise stündlich, bei Unsicherheit etwa alle fünf Minuten. Nach vier Stunden ohne Übereinstimmung entsteht `review_due`. Optional kann eine offene Erinnerung nach weiteren 24 Stunden an die Companion App geschickt werden.
+
+Die Bilddateien liegen unter **Medien → Lokale Medien → rf1**. Die bestehenden Entitäten `sensor.rf1_kontrollbild` und `sensor.rf1_pruefstatus` behalten ihre IDs für vorhandene Dashboards und Automationen.

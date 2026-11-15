@@ -2,6 +2,7 @@
 
 import base64
 from datetime import datetime
+from functools import partial
 import hashlib
 import io
 import json
@@ -19,7 +20,7 @@ from PIL import Image
 from websocket import WebSocketException
 
 from checks import (
-    RETRY_INTERVAL, compare_sample, crop_register, read_register, record_sample,
+    RETRY_INTERVAL, compare_sample, crop_register, read_register, read_with_retries, record_sample,
     rolling_summary, sample_epoch, sample_timestamp, schedule_next_check,
 )
 from layout import find_digit_row
@@ -54,14 +55,27 @@ def sequence_value(data, key):
     return value.get("main") if isinstance(value, dict) else None
 
 
-def capture(base):
+def slfork_diagnostics(data):
+    return {
+        "slfork_value_status": sequence_value(data, "value_status"),
+        "slfork_process_status": data.get("process_status"),
+        "slfork_process_state": data.get("process_state"),
+        "slfork_process_error": data.get("process_error"),
+        "slfork_last_valid_timestamp": sequence_value(data, "timestamp_fallbackvalue"),
+        "slfork_last_processed_timestamp": sequence_value(data, "timestamp_processed"),
+    }
+
+
+def capture(base, diagnostics):
     before = json.loads(get_bytes(base + "/process_data"))
+    diagnostics.update(slfork_diagnostics(before))
     picture = get_bytes(base + "/img_tmp/alg.jpg")
     try:
         overlay = get_bytes(base + "/img_tmp/alg_roi.jpg")
     except (OSError, ValueError):
         overlay = None
     after = json.loads(get_bytes(base + "/process_data"))
+    diagnostics.update(slfork_diagnostics(after))
     timestamp = sequence_value(after, "timestamp_processed")
     if not timestamp:
         raise ValueError("Kein Zeitstempel vom ESP")
@@ -71,6 +85,7 @@ def capture(base):
         "esp_timestamp": timestamp,
         "raw_value": sequence_value(after, "raw_value"),
         "actual_value": sequence_value(after, "actual_value"),
+        **diagnostics,
     }
 
 
@@ -132,12 +147,12 @@ def read_digit(register, box, read, trim_vertical=False):
         return "?"
 
 
-def read_visible_digits(register, integer_width, whole_boxes, fraction_boxes, light_digits, polarity="auto"):
+def read_visible_digits(register, integer_width, whole_boxes, fraction_boxes, light_digits, polarity, *, profile):
     if polarity != "auto":
         light_digits = polarity == "light"
 
     def read(picture, digits=5):
-        return read_register(picture, light_digits, digits, force_polarity=polarity != "auto")
+        return read_register(picture, light_digits, digits, force_polarity=polarity != "auto", profile=profile)
 
     whole = read(register.crop((0, 0, integer_width, register.height)))
     if whole is None:
@@ -199,7 +214,7 @@ def publish_check(history, now, token):
     summary = rolling_summary(history, now)
     payload = {
         "state": "review_due" if summary["review_due"] else history["check_status"],
-        "attributes": {"friendly_name": "RF1 Prüfstatus", **summary},
+        "attributes": {"friendly_name": "RF1 Prüfstatus", **summary, **history.get("slfork_diagnostics", {})},
     }
     publish_state(f"http://supervisor/core/api/states/{CHECK_ENTITY}", payload, token)
 
@@ -297,12 +312,13 @@ def main():
         updated["comparison_decimals"] = decimals
         updated["check_detail"] = "Das Kamerabild oder die Quelldaten konnten nicht geladen werden."
         manual_result = {"detail": updated["check_detail"]}
+        diagnostics = {}
         try:
-            result = capture_camera(camera, reference, token, zone) if camera else capture(base)
+            result = capture_camera(camera, reference, token, zone) if camera else capture(base, diagnostics)
             if result is None:
                 print("SLFork hat während des Abrufs gemessen. Neuer Versuch in 10 Sekunden.")
                 time.sleep(10)
-                result = capture(base)
+                result = capture(base, diagnostics)
             if result is not None:
                 picture, overlay, sample = result
                 now = datetime.now(zone)
@@ -320,20 +336,28 @@ def main():
                         register, integer_width, whole_boxes, fraction_boxes, source = select_register(
                             frame, overlay, crop, options["vorkomma_breite"]
                         )
-                        ocr = read_visible_digits(
+                        read = partial(
+                            read_visible_digits,
                             register, integer_width, whole_boxes, fraction_boxes,
                             options["helle_ziffern"], manual_options["polarity"] if manual else "auto",
+                        )
+                        ocr, ocr_confirmed, ocr_attempts = read_with_retries(
+                            lambda profile: read(profile=profile), sample,
+                            manual_options["decimals"] if manual else decimals,
                         )
                     except (OSError, ValueError, subprocess.SubprocessError) as error:
                         print(f"Lokale OCR nicht verfügbar: {error}")
                         register, ocr, source = frame, None, "unavailable"
+                        ocr_confirmed, ocr_attempts = True, 0
                     if not manual:
                         jpeg, size = transfer_jpeg(register)
                 if manual:
                     image_time = sample_timestamp(sample, zone)
                     already_checked = (image_time == history.get("last_epoch")
                                        or image_time in history.get("confirmations", ()))
-                    _, detail = compare_sample(sample, ocr, manual_options["decimals"])
+                    _, detail = compare_sample(sample, ocr, manual_options["decimals"], ocr_confirmed=ocr_confirmed)
+                    if ocr_attempts:
+                        detail += f" OCR-Durchläufe für dieses Bild: {ocr_attempts}."
                     manual_result = {
                         "ocr": ocr,
                         "reference": sample["actual_value"],
@@ -342,12 +366,13 @@ def main():
                         "already_checked": already_checked,
                         "outside_window": captured is None,
                     }
-                elif record_sample(updated, sample, ocr, zone, datetime.now(zone), decimals):
+                elif record_sample(updated, sample, ocr, zone, datetime.now(zone), decimals,
+                                   ocr_confirmed=ocr_confirmed):
                     atomic_write(DESTINATION, picture, 0o644)
                     outcome = updated["status"]
                     if outcome == "match":
                         atomic_write(GOOD_IMAGE, picture, 0o644)
-                    data = {**sample, "crop_source": source}
+                    data = {**sample, "crop_source": source, "ocr_attempts": ocr_attempts}
                     updated["last_reference"] = sample["actual_value"]
                 else:
                     outcome = "stale_sample"
@@ -356,20 +381,22 @@ def main():
 
         now = datetime.now(zone)
         if manual:
-            manual_result.update(checked_at=now.timestamp(), settings=manual_options)
+            manual_result.update(checked_at=now.timestamp(), settings=manual_options, slfork_diagnostics=diagnostics)
             manual_options = None
             history["manual_result"] = manual_result
             atomic_write(HISTORY, json.dumps(history).encode("utf-8"), 0o600)
             continue
         if keep_schedule and data is None and history.get("next_check_at", 0) > now.timestamp():
             continue
+        updated["slfork_diagnostics"] = diagnostics
         schedule_next_check(updated, outcome, now.timestamp())
         atomic_write(HISTORY, json.dumps(updated).encode("utf-8"), 0o600)
         history = updated
         if data is not None:
             pending_image = (data, jpeg, size)
             print(f"Kontrollbild bereit: {data['esp_timestamp']} | Ausschnitt: {source} | "
-                  f"OCR: {ocr or '?'} | SLFork: {data['actual_value']} | Ergebnis: {outcome}")
+                  f"OCR: {ocr or '?'} ({data['ocr_attempts']} Durchläufe) | "
+                  f"SLFork: {data['actual_value']} | Ergebnis: {outcome}")
         try:
             publish_check(history, now, token)
             if pending_image is not None:

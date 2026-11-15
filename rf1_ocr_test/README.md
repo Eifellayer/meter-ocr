@@ -24,21 +24,22 @@ ESPHome- und andere Home-Assistant-Kameras lassen sich über `kamera_entitaet`
 einbinden. Im Kameramodus ist ein absoluter m³-Zählerstand aus einem Sensor
 als Referenz möglich, auch wenn dieser aus Impulsen berechnet wird.
 
-Nach einem Treffer prüft die App nach einer Stunde erneut. Bei einer Abweichung,
-einem unklaren Bild oder fehlenden aktuellen Daten prüft sie alle fünf Minuten.
+Nach einem Treffer prüft die App nach einer Stunde erneut. Ergibt die erste
+Lesung eine Abweichung oder ein unklares Ergebnis, wertet die App dasselbe
+Bild insgesamt fünfmal mit unterschiedlicher Aufbereitung aus. Eine passende
+Lesung genügt, sofern Rohwert und übernommener Referenzwert übereinstimmen.
+Bei anhaltender Abweichung, unklarer Lesung oder fehlenden aktuellen Daten
+prüft sie weiterhin alle fünf Minuten.
 Vier Stunden ohne bestätigte Übereinstimmung setzen
 `sensor.rf1_pruefstatus` auf `review_due`. Eine Übereinstimmung beendet die
 engmaschige Prüfung sofort. Die App speichert den Beginn der Störung und
 den nächsten Prüfzeitpunkt über Neustarts hinweg.
 
 Die App holt das ausgerichtete JPEG und die Werte derselben SLFork-Messung.
-Tesseract liest die fünf Vorkommastellen.
-Mindestens zwei Bildaufbereitungen müssen denselben Wert ergeben. Eine
-abweichende vollständige Lesung gilt als mehrdeutig. Ein Treffer zählt,
-wenn der OCR-Wert mit den ganzen Kubikmetern aus **Raw Value** und
-**Actual Value** übereinstimmt. Ab Version 0.4.1 werden dabei auch SLFork-Werte
-mit vier oder mehr Nachkommastellen verarbeitet, indem nur der Vorkommateil
-für den Vergleich verwendet wird.
+Tesseract liest die fünf Vorkommastellen und versucht, die drei Nachkommastellen
+zu lesen. Ein Treffer zählt, wenn eine OCR-Lesung bei der eingestellten
+Genauigkeit mit **Raw Value** und **Actual Value** übereinstimmt. Weitere
+Nachkommastellen in den Referenzwerten werden für den Vergleich abgeschnitten.
 Jeder Messzeitpunkt zählt einmal und bleibt 24 Stunden lang berücksichtigt,
 auch über Mitternacht und Neustarts hinweg.
 
@@ -46,7 +47,14 @@ Das Original liegt unter **Medien → Lokale Medien → rf1 → kontrollbild.jpg
 In `sensor.rf1_kontrollbild` stehen der kompakte Ziffernausschnitt, sein
 Zeitstempel und `matches_last_24h`. Der Ausschnitt enthält die Nachkommastellen
 für eine mögliche Sichtprüfung. Das Protokoll meldet **Kontrollbild bereit**
-mit OCR-Wert und Prüfergebnis.
+mit OCR-Wert, Zahl der Durchläufe und Prüfergebnis. Die Anzahl steht auch im
+Sensorattribut `ocr_attempts`.
+
+Die Prüfseite zeigt auch die Meldungen von AI on the Edge (SLFork), den
+Prozessfehlercode und die Zeit des letzten gültigen Stands, soweit die Firmware
+sie liefert. Sie stehen als `slfork_*`-Attribute in `sensor.rf1_pruefstatus`.
+So sind abgebrochene Messzyklen und verworfene Stände auch bei einem fehlenden
+oder älteren Bild sichtbar.
 
 Die App sucht die grünen Ziffernrahmen im SLFork-Bild mit Markierungen und
 liest die fünf Vorkommastellen aus dem ausgerichteten Bild ohne Markierungen.

@@ -1,5 +1,11 @@
 # Änderungen
 
+## 0.6.10
+
+- Bei einer abweichenden oder unklaren OCR liest die App dasselbe Bild insgesamt fünfmal mit unterschiedlicher Aufbereitung. Eine Lesung muss bei der eingestellten Genauigkeit zur gültigen Referenz passen. Pro Messbild zählt höchstens ein Treffer.
+- Die Anzahl der OCR-Durchläufe steht im Prüfprotokoll, in den Details des manuellen Tests und im Attribut `ocr_attempts` des Kontrollbilds.
+- Die Weboberfläche und der Prüfstatus zeigen Firmwaremeldungen von AI on the Edge (SLFork) mit Wertstatus, Prozessfehler und Zeit des letzten gültigen Werts. Ein verworfener Stand zählt nicht als Treffer.
+
 ## 0.6.9
 
 - Mehrfaches Klicken auf „Jetzt prüfen“ zeigt eine Rückmeldung auf der RF1-Seite. Bei einem wartenden Test werden die neuesten Einstellungen verwendet.

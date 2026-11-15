@@ -1,5 +1,5 @@
 name: RF1 Kontrollmessung
-version: "0.6.9"
+version: "0.6.10"
 slug: rf1_ocr_test
 description: "Lokaler OCR-Abgleich für den Gaszähler. Privates Hobbyprojekt, Nutzung auf eigene Gefahr. Kein Support."
 arch:

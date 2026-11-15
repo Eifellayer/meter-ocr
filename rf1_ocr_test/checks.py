@@ -13,6 +13,14 @@ NORMAL_INTERVAL = 60 * 60
 RETRY_INTERVAL = 5 * 60
 REVIEW_AFTER = 4 * 60 * 60
 FRESH_SAMPLE_AGE = 15 * 60
+OCR_PROFILES = (
+    (2, 175, 155),
+    (0, 125, 125),
+    (1, 225, 140),
+    (4, 150, 165),
+    (6, 200, 180),
+)
+OCR_MAJORITY = len(OCR_PROFILES) // 2 + 1
 
 
 def crop_register(picture, crop):
@@ -22,22 +30,23 @@ def crop_register(picture, crop):
     return picture.crop(crop)
 
 
-def read_register(picture, light_digits, digits=5, *, force_polarity=False):
+def read_register(picture, light_digits, digits=5, *, force_polarity=False, profile=OCR_PROFILES[0]):
     image = picture.convert("L")
     polarities = (light_digits,) if force_polarity else (light_digits, not light_digits)
     reads = {
         value for invert in polarities
-        if (value := read_polarity(ImageOps.invert(image) if invert else image, digits)) is not None
+        if (value := read_polarity(ImageOps.invert(image) if invert else image, digits, profile)) is not None
     }
     return next(iter(reads)) if len(reads) == 1 else None
 
 
-def read_polarity(image, digits):
-    gray = ImageOps.autocontrast(image, cutoff=2)
+def read_polarity(image, digits, profile):
+    cutoff, sharpening, threshold = profile
+    gray = ImageOps.autocontrast(image, cutoff=cutoff)
     variants = (
         gray,
-        gray.filter(ImageFilter.UnsharpMask(radius=2, percent=175, threshold=2)),
-        gray.point(lambda value: 255 if value >= 155 else 0),
+        gray.filter(ImageFilter.UnsharpMask(radius=2, percent=sharpening, threshold=2)),
+        gray.point(lambda value: 255 if value >= threshold else 0),
     )
     votes = Counter()
     for variant in variants:
@@ -69,12 +78,52 @@ def meter_prefix(value, decimals):
     return int(match[1] + fractional)
 
 
-def compare_sample(data, ocr, decimals):
+def read_with_retries(read, data, decimals):
+    readings = []
+    matching_read = None
+    for profile in OCR_PROFILES:
+        try:
+            value = read(profile)
+        except subprocess.TimeoutExpired as error:
+            print(f"OCR-Variante hat das Zeitlimit überschritten: {error}")
+            value = "?????.???"
+        status, _ = compare_sample(data, value, decimals)
+        if not readings and status not in ("difference", "ocr_unclear"):
+            return value, True, 1
+        if status == "match" and matching_read is None:
+            matching_read = value
+        readings.append(value)
+    if matching_read is not None:
+        return matching_read, True, len(readings)
+
+    # Without a match, report the majority reading and mark any uncertain digits.
+    prefix_length = 5 + (decimals + 1 if decimals else 0)
+    prefixes = Counter(value[:prefix_length] for value in readings
+                       if meter_prefix(value, decimals) is not None)
+    prefix = next((value for value, count in prefixes.items() if count >= OCR_MAJORITY), None)
+    display = []
+    for column in zip(*readings):
+        digit, count = Counter(column).most_common(1)[0]
+        display.append(digit if count >= OCR_MAJORITY else "?")
+    display = "".join(display)
+    if prefix is not None:
+        display = prefix + display[prefix_length:]
+    return display, prefix is not None, len(readings)
+
+
+def compare_sample(data, ocr, decimals, *, ocr_confirmed=True):
+    if not ocr_confirmed:
+        return "ocr_unclear", "Die fünf OCR-Lesungen ergeben keine Mehrheit für die eingestellten Stellen."
     value = meter_prefix(ocr, decimals)
     if value is None:
         return "ocr_unclear", "OCR konnte die eingestellten Stellen nicht eindeutig lesen."
     if data.get("reference_required") is False:
         return "ocr_only", "OCR ausgewertet. Es ist kein Referenzsensor eingestellt."
+    source_status = data.get("slfork_value_status") or ""
+    if re.match(r"^[EW][0-9]+(?:\s|$)", str(source_status)):
+        return "slfork_unclear", "AI on the Edge meldet eine Warnung oder einen Fehler zum Zählerstand."
+    if data.get("slfork_process_error") in (-1, -2, "-1", "-2"):
+        return "slfork_unclear", "AI on the Edge hat den Messzyklus abgebrochen."
     raw = meter_prefix(data["raw_value"], decimals)
     actual = meter_prefix(data["actual_value"], decimals)
     if raw is None or actual is None:
@@ -116,7 +165,7 @@ def sample_epoch(data, zone, now):
     return captured if epoch - FRESH_SAMPLE_AGE < captured <= epoch + 60 else None
 
 
-def record_sample(history, data, ocr, zone, now, decimals=0):
+def record_sample(history, data, ocr, zone, now, decimals=0, *, ocr_confirmed=True):
     """Count each in-window cycle at most once, even after a restart."""
     captured = sample_epoch(data, zone, now)
     if captured is None or captured <= history.get("last_epoch", 0):
@@ -126,7 +175,7 @@ def record_sample(history, data, ocr, zone, now, decimals=0):
     if "started_at" not in history:
         history.update(started_at=epoch, confirmations=[], status="no_current_sample")
     history["confirmations"] = [old for old in history["confirmations"] if old > epoch - WINDOW_SECONDS]
-    status, detail = compare_sample(data, ocr, decimals)
+    status, detail = compare_sample(data, ocr, decimals, ocr_confirmed=ocr_confirmed)
     if status == "match":
         history["confirmations"].append(captured)
         history["last_match_at"] = captured

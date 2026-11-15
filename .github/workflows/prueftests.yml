@@ -31,3 +31,5 @@ jobs:
         run: |
           python rf1_ocr_test/tests/test_release.py --write-js /tmp/rf1-panel.js
           node --check /tmp/rf1-panel.js
+          python rf1_ocr_test/tests/test_release.py --write-js-en /tmp/rf1-panel-en.js
+          node --check /tmp/rf1-panel-en.js

@@ -178,7 +178,7 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <button type="button" role="tab" id="tab-settings" aria-controls="view-settings" aria-selected="false" tabindex="-1">Einstellungen</button>
 </nav>
 <main>
-<div class="tab-content" id="view-overview" role="tabpanel" aria-labelledby="tab-overview">
+<div class="tab-content" id="view-overview" role="tabpanel" aria-labelledby="tab-overview" {overview_hidden}>
 <div class="panel" id="check-overview">
 <div class="check-card-heading"><h2>Automatische Kontrolle</h2>
 <div class="check-actions">
@@ -291,7 +291,7 @@ name: Zählerstand (OCR)</code></pre>
 </div></details>
 </div>
 </div>
-<div class="tab-content" id="view-settings" role="tabpanel" aria-labelledby="tab-settings" hidden>
+<div class="tab-content" id="view-settings" role="tabpanel" aria-labelledby="tab-settings" {settings_hidden}>
 <div class="panel" id="settings"><h2>Einstellungen</h2>
 <dialog class="setup-dialog" id="setup-dialog" aria-labelledby="setup-title" data-first-run="{setup_first_run}">
 <div class="dialog-heading"><h2 id="setup-title">Einrichtungsassistent</h2>
@@ -1155,6 +1155,11 @@ def start_panel(
             manual_precision = min(int(settings.get("decimals", auto_rules["decimals"])),
                                    auto_rules["fraction_digits"])
             saved = query.get("saved", [""])[0]
+            settings_tab_active = (
+                query.get("ui", [""])[0] == "settings"
+                or saved in ("setup", "1", "crop", "notifications", "source")
+                or setup_pending
+            )
             saved_message = (
                 "Einrichtung gespeichert." if saved == "setup" else
                 "Automatische Prüfregeln gespeichert." if saved == "1" else
@@ -1197,6 +1202,8 @@ def start_panel(
                 anonymous_banner_key=f"{NAMESPACE}-ignored-warning",
                 ignore_hidden="" if summary["incident"] else "hidden",
                 profile_script=scripts,
+                overview_hidden="hidden" if settings_tab_active else "",
+                settings_hidden="" if settings_tab_active else "hidden",
                 language_options=select_options({"auto": automatic, "de": "Deutsch", "en": "English"}, mode),
                 settings_open="open" if saved in ("1", "crop") else "",
                 setup_first_run=str(bool(setup_pending)).lower(),

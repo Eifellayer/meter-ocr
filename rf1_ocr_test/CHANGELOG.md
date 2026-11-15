@@ -1,5 +1,13 @@
 # Änderungen
 
+## 0.7.2
+
+- Die Hauptansicht zeigt zuerst den Zustand der automatischen Kontrolle. Ihre Vergleichsgenauigkeit (volle m³ oder 1–3 Nachkommastellen) und maximale Anzahl der OCR-Versuche (1–10) lassen sich dort dauerhaft speichern.
+- Gespeicherte automatische Prüfregeln bleiben über Neustarts erhalten und gelten für zukünftige Prüfungen; sie haben für diese beiden Einstellungen Vorrang vor der App-Konfiguration.
+- „Manuellen Test öffnen“ ist ein eigener, zunächst geschlossener Diagnosebereich und überlädt die Alltagsansicht nicht.
+- Der manuelle Test bietet zusätzliche Einstellungen für Ziffernfarbe, Vergleichsgenauigkeit, OCR-Versuche sowie optional einen manuellen Bildausschnitt und die Breite der Vorkommastellen. Diese Werte verändern die Automatik nicht.
+- Bestehende Home-Assistant-Entitätsnamen und die gespeicherte Prüfhistorie bleiben erhalten.
+
 ## 0.7.1
 
 - Die maximale Zahl der OCR-Versuche ist in der App und für den manuellen Test von 1 bis 10 wählbar (Standard 5). Beim ersten bestätigten Treffer endet die Auswertung sofort.

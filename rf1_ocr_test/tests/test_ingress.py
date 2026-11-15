@@ -121,6 +121,30 @@ class IngressFixture(TestCase):
 
 
 class IngressTests(IngressFixture):
+    def test_reflection_notice_is_optional_and_only_marks_the_inferred_digit(self):
+        self.history.write_text(json.dumps({
+            "check_status": "ocr_unclear", "reflection_streak": {"count": 3, "position": 7},
+            "reflection_estimate": {"left": "12345.1", "digit": "1", "right": "5", "time": 160},
+        }))
+        status = json.loads(self.request("/automatic")[0])
+        self.assertTrue(status["reflection_suggestion"])
+        self.assertIsNone(status["reflection_estimate"])
+        self.assertEqual((303, "./?ui=overview"), self.submit("/spiegelungs-hinweis-ausblenden"))
+        self.assertTrue(self.rules["reflection_suggestion_hidden"])
+        self.assertFalse(json.loads(self.request("/automatic")[0])["reflection_suggestion"])
+        self.rules["reflection_estimate_enabled"] = True
+        status = json.loads(self.request("/automatic")[0])
+        self.assertEqual("1", status["reflection_estimate"]["digit"])
+        self.assertFalse(status["reflection_estimate"]["confirmed"])
+        candidate_id = status["reflection_estimate"]["id"]
+        self.assertEqual(409, self.submit("/ergaenzte-ziffer-bestaetigen", estimate_id=candidate_id, digit="2")[0])
+        self.assertEqual((303, "./?ui=overview"),
+                         self.submit("/ergaenzte-ziffer-bestaetigen", estimate_id=candidate_id, digit="1"))
+        self.assertTrue(json.loads(self.request("/automatic")[0])["reflection_estimate"]["confirmed"])
+        page = self.request("/")[0]
+        self.assertIn('class="reflection-estimate" >', page)
+        self.assertIn('<mark id="reflection-value-digit" title="Berechnete Ziffer">1</mark>', page)
+
     def test_factory_reset_clears_manual_result_after_pending_response(self):
         self.setup_pending = False
         form = dict(decimals=0, attempts=3, crop_mode="auto", polarity="auto")
@@ -516,12 +540,16 @@ class BrowserTests(IngressFixture):
             page.mouse.move(box["x"] + box["width"] * .75, box["y"] + box["height"] * .50, steps=4)
             page.mouse.up()
             self.assertEqual("manual", page.locator("#crop-mode").input_value())
+            rotation = page.locator("#manual-form input[name=rotation]")
+            rotation.fill("-6")
+            rotation.press("Tab")
             page.locator("#start-check-with-options").click()
             job = self.requested.get(timeout=2)
             self.assertEqual("manual", job["crop_mode"])
             for actual, expected in zip(map(int, job["crop"].split(",")), (160, 120, 480, 240)):
                 self.assertAlmostEqual(expected, actual, delta=2)
-            self.assertAlmostEqual(200, job["width"], delta=2)
+            self.assertEqual(-6, job["rotation"])
+            self.assertAlmostEqual(207, job["width"], delta=2)
             browser.close()
 
     def test_selecting_a_discovered_meter_prefills_the_wizard(self):
@@ -676,7 +704,7 @@ class BrowserTests(IngressFixture):
             frame.locator("#open-manual-settings").click()
             frame.locator("#manual-form select[name=crop_mode]").select_option("manual")
             frame.locator("#manual-form input[name=crop]").fill("0,0,90,400")
-            frame.locator("#manual-form select[name=rotation]").select_option("90")
+            frame.locator("#manual-form input[name=rotation]").fill("90")
             frame.locator("#start-check").click()
             frame.get_by_text("Request accepted", exact=True).wait_for()
             frame.locator("#test-progress").wait_for(state="visible")

@@ -24,16 +24,20 @@ from websocket import WebSocketException
 from app_channel import APP_NAME, CHECK_ENTITY, LABEL_SUFFIX, NAMESPACE
 
 from checks import (
-    DEFAULT_INTERVAL_MINUTES, RETRY_INTERVAL, REVIEW_AFTER, compare_sample, crop_register, read_register, read_with_retries, record_sample,
+    DEFAULT_INTERVAL_MINUTES, FRESH_SAMPLE_AGE, RETRY_INTERVAL, REVIEW_AFTER,
+    STANDALONE_PENDING, STANDALONE_PENDING_NOTICE, STANDALONE_REJECTED_NOTICE, STANDALONE_VERIFIED_NOTICE,
+    compare_sample, crop_register, read_register, read_with_retries, record_sample,
     LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, LAST_DIGIT_RETRIES, SUCCESSFUL_CHECKS,
     differs_only_at_last_digit, last_digit_can_pass, explain_uncertain_positions,
     meter_prefix, common_exact_precision, manual_confirms_failed_auto,
     reschedule_next_check, rolling_summary, sample_epoch, sample_timestamp, schedule_next_check, slfork_reference,
+    timestamp_epoch, track_reflection,
     valid_interval_minutes,
 )
 from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, MAX_FLOW_LPH, ImplausibleReading,
                          accumulate_consumption, fallback_detail, format_cubic_metres)
-from layout import MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, find_digit_row, find_raw_digit_row, turn_crop
+from layout import (MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, find_digit_row,
+                    find_raw_digit_row, rotated_width, turn_crop)
 from reminder import Reminder
 from notification_settings import (DEFAULT_DELIVERY_HOURS, DEFAULT_REVIEW_MINUTES, PUSH_SERVICE,
                                    notification_rules)
@@ -66,6 +70,9 @@ CONSUMPTION_ENTITY = f"sensor.{NAMESPACE}_verbrauch_gesamt"
 MAX_IMAGE_PIXELS = 4_000_000
 LIVE_CAPTURE_WINDOW_SECONDS = 20
 LIVE_CAPTURE_MAX_ATTEMPTS = 10
+INTENSIVE_ROTATIONS = (-6, 6)
+MAX_LEARNED_ROTATION = 18
+INTENSIVE_ROTATION_STATUS = "Intensivtest: Prüfe eine leicht gedrehte Aufnahme."
 SLFORK_RAW_SOURCE = "slfork_raw"
 SLFORK_RAW_NOTICE = "Aufbereitetes ESP-Bild fehlt oder ist zu alt. Die App prüft ein frisches Rohbild."
 SLFORK_RAW_SUCCESS = "Rohbild gelesen. Mögliche Ursache: Bildausrichtung oder Referenzmarken in AI on the Edge."
@@ -272,6 +279,21 @@ def select_register(frame, overlay, manual_crop, manual_width, rotation=0, whole
     return register, manual_width, [], boxes, "manual"
 
 
+def select_tilted_register(frame, crop, whole_width, rotation, adjustment, whole_digits, fraction_digits, detect_raw):
+    if detect_raw:
+        rotated = turn_crop(frame, adjustment, expand=False)
+        layout = find_raw_digit_row(rotated, whole_digits, fraction_digits)
+        if layout:
+            bounds, width, boxes = layout
+            return crop_register(rotated, bounds), width, boxes[:whole_digits], boxes[whole_digits:], "raw_auto"
+    left, top, right, bottom = crop
+    width, height = right - left, bottom - top
+    angle = rotation + adjustment
+    adjusted_whole = max(1, round(whole_width * rotated_width(width, height, angle) /
+                                  rotated_width(width, height, rotation)))
+    return select_register(frame, None, crop, adjusted_whole, angle, whole_digits, fraction_digits)
+
+
 def read_digit(register, box, read, trim_vertical=False):
     left, top, right, bottom = box
     if trim_vertical:
@@ -440,7 +462,7 @@ def publish_standalone(history, camera, token):
     value = "unavailable"
     captured = None
     if last and last["camera"] == camera:
-        if history.get("check_status") == "ocr_only":
+        if history.get("check_status") in ("ocr_only", STANDALONE_PENDING):
             digits = last.get("integer_digits", 5)
             value = last["reading"][:digits + (last["decimals"] + 1 if last["decimals"] else 0)]
         captured = last["image_time"]
@@ -552,6 +574,8 @@ def main():
 
     auto_rules = {"decimals": default_decimals, "attempts": default_attempts, "polarity": "auto",
                   "precision_mode": False,
+                  "reflection_estimate_enabled": False, "reflection_suggestion_hidden": False,
+                  "reflection_confirmed_id": "",
                   "crop_mode": "auto", "crop": options["ausschnitt"],
                   "width": options["vorkomma_breite"], "rotation": 0,
                   "max_flow_lph": DEFAULT_FLOW_LPH, "interval_minutes": DEFAULT_INTERVAL_MINUTES,
@@ -614,6 +638,9 @@ def main():
                           "integer_digits": integer_digits, "fraction_digits": fraction_digits,
                           "meter_display": meter_display, "fallback_value": fallback_value,
                           "precision_mode": saved_rules.get("precision_mode") is True,
+                          "reflection_estimate_enabled": saved_rules.get("reflection_estimate_enabled") is True,
+                          "reflection_suggestion_hidden": saved_rules.get("reflection_suggestion_hidden") is True,
+                          "reflection_confirmed_id": str(saved_rules.get("reflection_confirmed_id", ""))[:80],
                           "fallback_time": fallback_time, "decimals": decimals}
         else:
             print("Ungültige gespeicherte Automatikregeln; verwende die App-Konfiguration.")
@@ -633,6 +660,9 @@ def main():
         fallback_value = values.get("fallback_value", auto_rules["fallback_value"])
         fallback_time = values.get("fallback_time", auto_rules["fallback_time"])
         precision_mode = values.get("precision_mode", auto_rules["precision_mode"])
+        reflection_estimate_enabled = values.get("reflection_estimate_enabled", auto_rules["reflection_estimate_enabled"])
+        reflection_suggestion_hidden = values.get("reflection_suggestion_hidden", auto_rules["reflection_suggestion_hidden"])
+        reflection_confirmed_id = values.get("reflection_confirmed_id", auto_rules["reflection_confirmed_id"])
         if (type(values.get("decimals")) is not int or not 0 <= values["decimals"] <= fraction_digits
                 or type(values.get("attempts")) is not int or not 1 <= values["attempts"] <= 10
                 or values.get("polarity") not in ("auto", "light", "dark")
@@ -641,6 +671,8 @@ def main():
                 or type(fraction_digits) is not int or not 0 <= fraction_digits <= 3
                 or meter_display not in ("rollers", "digital", "mixed")
                 or type(precision_mode) is not bool
+                or type(reflection_estimate_enabled) is not bool or type(reflection_suggestion_hidden) is not bool
+                or not isinstance(reflection_confirmed_id, str) or len(reflection_confirmed_id) > 80
                 or not isinstance(fallback_value, str) or not isinstance(fallback_time, str)):
             raise ValueError("Ungültige Einstellungen für die automatische Kontrolle")
         if fallback_value:
@@ -665,11 +697,19 @@ def main():
                          "interval_minutes": interval_minutes, "integer_digits": integer_digits,
                          "fraction_digits": fraction_digits, "meter_display": meter_display,
                          "precision_mode": precision_mode,
+                         "reflection_estimate_enabled": reflection_estimate_enabled,
+                         "reflection_suggestion_hidden": reflection_suggestion_hidden,
+                         "reflection_confirmed_id": reflection_confirmed_id,
                          "fallback_value": fallback_value, "fallback_time": fallback_time}
         updated_rules["crop"] = ",".join(str(part) for part in coords)
         atomic_write(AUTO_RULES, json.dumps(updated_rules, indent=2).encode("utf-8"), 0o600)
+        view_preferences = ("reflection_suggestion_hidden", "reflection_confirmed_id")
+        needs_check = any(updated_rules[key] != auto_rules.get(key) for key in updated_rules
+                          if key not in view_preferences)
+        view_changed = any(updated_rules[key] != auto_rules.get(key) for key in view_preferences)
         auto_rules = updated_rules
-        request_automatic_check()
+        if needs_check or not view_changed:
+            request_automatic_check()
 
     requested = Queue(maxsize=1)
     try:
@@ -852,7 +892,8 @@ def main():
             wake_worker.wait(timeout=2)
             continue
         if remaining > 0 and not startup and not manual and not source_changed and not run_automatic_now:
-            set_activity("waiting", "App läuft. Wartet auf die nächste automatische Prüfung.")
+            set_activity("waiting", STANDALONE_PENDING_NOTICE if history.get("check_status") == STANDALONE_PENDING
+                         else "App läuft. Wartet auf die nächste automatische Prüfung.")
             # Refresh status after a Home Assistant restart, even between checks.
             if "check_status" in history:
                 try:
@@ -883,6 +924,9 @@ def main():
             for field in ("last_epoch", "last_match_at", "failure_since", "failure_attempts", "retry_suppressed", "capture_failure_since",
                           "source_connection_status", "source_connection_detail",
                           "last_digit_failures",
+                          "standalone_candidate",
+                          "learned_rotation",
+                          "reflection_anchor", "reflection_pending", "reflection_estimate", "reflection_streak",
                           "last_slfork_match", "last_reference", "last_reference_time",
                           "last_reference_is_fallback", "ocr_value", "ocr_readings"):
                 source_history.pop(field, None)
@@ -891,6 +935,7 @@ def main():
         validation_detail = None
         new_consumption = None
         new_standalone = None
+        standalone_reference = None
         # Confirmations obtained with another precision are not valid evidence
         # for the newly chosen automatic comparison rules.
         format_changed = any(history.get(key, default) != value for key, default, value in (
@@ -903,8 +948,12 @@ def main():
             updated["confirmations"] = []
             updated.pop("last_match_at", None)
             updated.pop("last_digit_failures", None)
+            for field in ("reflection_anchor", "reflection_pending", "reflection_estimate", "reflection_streak"):
+                updated.pop(field, None)
             if history.get("comparison_integer_digits", integer_digits) != integer_digits:
                 updated.pop("standalone_reading", None)
+        if format_changed or run_automatic_now:
+            updated.pop("standalone_candidate", None)
         updated["comparison_decimals"] = decimals
         updated["comparison_integer_digits"] = integer_digits
         updated["comparison_fraction_digits"] = fraction_digits
@@ -1014,6 +1063,8 @@ def main():
                     ocr_readings = []
                     ocr_error = None
                     detect_raw = False
+                    rotation_adjustment = 0
+                    rotation_key = None
                     try:
                         crop_rules = manual_options if manual else active_rules
                         manual_crop = crop
@@ -1026,9 +1077,34 @@ def main():
                             manual_width = crop_rules["width"]
                             manual_crop = crop_coordinates(crop_rules["crop"], manual_width, rotation)
                             selected_overlay = None
-                        register, integer_width, whole_boxes, fraction_boxes, source = select_register(
-                            frame, selected_overlay, manual_crop, manual_width, rotation,
-                            integer_digits, fraction_digits, detect_raw=detect_raw,
+                        if not manual and selected_overlay is None:
+                            rotation_key = [
+                                *manual_crop, manual_width, rotation, detect_raw, integer_digits, fraction_digits,
+                                raw_fallback,
+                            ]
+                            learned = updated.get("learned_rotation", {})
+                            if isinstance(learned, dict) and learned.get("crop") == rotation_key:
+                                rotation_adjustment = learned.get("adjustment", 0)
+                            pending = updated.get("standalone_candidate", {})
+                            if standalone and pending.get("crop") == rotation_key:
+                                rotation_adjustment = pending.get("rotation_adjustment", rotation_adjustment)
+                            if type(rotation_adjustment) is not int or abs(rotation_adjustment) > MAX_LEARNED_ROTATION:
+                                rotation_adjustment = 0
+                        base_adjustment = rotation_adjustment
+
+                        def prepare_register(original, current_overlay):
+                            if base_adjustment:
+                                return select_tilted_register(
+                                    original, manual_crop, manual_width, rotation, base_adjustment,
+                                    integer_digits, fraction_digits, detect_raw,
+                                )
+                            return select_register(
+                                original, current_overlay, manual_crop, manual_width, rotation,
+                                integer_digits, fraction_digits, detect_raw=detect_raw,
+                            )
+
+                        register, integer_width, whole_boxes, fraction_boxes, source = prepare_register(
+                            frame, selected_overlay
                         )
                         read_state = {"register": register, "integer_width": integer_width,
                                       "whole_boxes": whole_boxes, "fraction_boxes": fraction_boxes,
@@ -1036,8 +1112,15 @@ def main():
                                       "attempts": 0}
                         live_source = live_deadline is not None
 
+                        def read_layout(layout, profile):
+                            return read_visible_digits(
+                                *layout[:4], options["helle_ziffern"],
+                                manual_options["polarity"] if manual else active_rules["polarity"],
+                                profile=profile, whole_digits=integer_digits, fraction_digits=fraction_digits,
+                            )
+
                         def read(profile):
-                            if live_source and read_state["attempts"]:
+                            if live_source and (manual or not standalone) and read_state["attempts"]:
                                 remaining = live_deadline - time.monotonic()
                                 if remaining <= 0:
                                     return "?"
@@ -1064,9 +1147,8 @@ def main():
                                     latest_frame.load()
                                     if manual:
                                         atomic_write(TEST_SOURCE_IMAGE, latest_picture, 0o600)
-                                    latest_register, latest_integer_width, latest_whole, latest_fraction, latest_source = select_register(
-                                        latest_frame, latest_overlay, manual_crop, manual_width, rotation,
-                                        integer_digits, fraction_digits, detect_raw=detect_raw,
+                                    latest_register, latest_integer_width, latest_whole, latest_fraction, latest_source = prepare_register(
+                                        latest_frame, latest_overlay,
                                     )
                                 sample.clear()
                                 sample.update(latest_sample)
@@ -1076,14 +1158,10 @@ def main():
                                                   source=latest_source, picture=latest_picture,
                                                   captured=latest_time)
                             read_state["attempts"] += 1
-                            return read_visible_digits(
+                            return read_layout((
                                 read_state["register"], read_state["integer_width"],
                                 read_state["whole_boxes"], read_state["fraction_boxes"],
-                                options["helle_ziffern"],
-                                manual_options["polarity"] if manual else active_rules["polarity"],
-                                profile=profile, whole_digits=integer_digits,
-                                fraction_digits=fraction_digits,
-                            )
+                            ), profile)
                         if manual:
                             update_progress(request_id, "ocr", f"OCR-Prüfung gestartet (max. {manual_options['attempts']} Versuche).", 0)
                         def report_ocr(attempts, message):
@@ -1104,20 +1182,66 @@ def main():
                         ocr_limit = min(15, configured_attempts + extra_attempts)
                         if live_source:
                             ocr_limit = min(ocr_limit, LIVE_CAPTURE_MAX_ATTEMPTS)
+                        reserve_for_rotation = 2 * len(INTENSIVE_ROTATIONS) if extra_attempts and source != "auto" else 0
+                        regular_limit = ocr_limit - reserve_for_rotation
+                        regular_attempts = min(configured_attempts, regular_limit)
+                        comparison_decimals = manual_options["decimals"] if manual else decimals
+
+                        def stop_ocr():
+                            return (not manual and get_auto_paused()) or (live_source and time.monotonic() >= live_deadline)
+
                         ocr, ocr_confirmed, ocr_attempts = read_with_retries(
-                            read, sample,
-                            manual_options["decimals"] if manual else decimals,
+                            read, sample, comparison_decimals,
                             progress=report_ocr,
-                            max_attempts=configured_attempts,
+                            max_attempts=regular_attempts,
                             trace=ocr_readings, standalone=require_consensus,
                             integer_digits=integer_digits,
-                            extra_attempts=extra_attempts,
-                            stop_before_attempt=(lambda: (not manual and get_auto_paused()) or live_source and (
-                                time.monotonic() >= live_deadline
-                                or read_state["attempts"] >= LIVE_CAPTURE_MAX_ATTEMPTS
-                            )),
+                            extra_attempts=regular_limit - regular_attempts,
+                            stop_before_attempt=stop_ocr,
                             force_all_attempts=manual,
                         )
+                        regular_status, _ = compare_sample(sample, ocr, comparison_decimals,
+                                                           ocr_confirmed=ocr_confirmed, integer_digits=integer_digits)
+                        if reserve_for_rotation and regular_status in ("difference", "ocr_unclear") and not stop_ocr():
+                            with Image.open(io.BytesIO(read_state["picture"])) as original:
+                                for delta in INTENSIVE_ROTATIONS:
+                                    if stop_ocr():
+                                        break
+                                    adjustment = base_adjustment + delta
+                                    if abs(adjustment) > MAX_LEARNED_ROTATION:
+                                        continue
+                                    try:
+                                        tilted = select_tilted_register(
+                                            original, manual_crop, manual_width, rotation, adjustment,
+                                            integer_digits, fraction_digits, detect_raw,
+                                        )
+                                    except ValueError:
+                                        continue
+                                    tilted_readings = []
+
+                                    def report_rotation(attempts, _):
+                                        set_activity("working", INTENSIVE_ROTATION_STATUS,
+                                                     completed=ocr_attempts + attempts, total=ocr_limit)
+
+                                    value, confirmed, attempts = read_with_retries(
+                                        lambda profile: read_layout(tilted, profile), sample, comparison_decimals,
+                                        max_attempts=2, progress=report_rotation, trace=tilted_readings,
+                                        standalone=require_consensus, integer_digits=integer_digits,
+                                        stop_before_attempt=stop_ocr,
+                                    )
+                                    ocr_attempts += attempts
+                                    rotated_status, _ = compare_sample(
+                                        sample, value, comparison_decimals, ocr_confirmed=confirmed,
+                                        integer_digits=integer_digits,
+                                    )
+                                    if rotated_status in ("match", "ocr_only"):
+                                        ocr, ocr_confirmed = value, confirmed
+                                        ocr_readings = tilted_readings
+                                        reg, width, whole, fractions, kind = tilted
+                                        read_state.update(register=reg, integer_width=width, whole_boxes=whole,
+                                                          fraction_boxes=fractions, source=kind)
+                                        rotation_adjustment = adjustment
+                                        break
                         register = read_state["register"]
                         integer_width = read_state["integer_width"]
                         whole_boxes = read_state["whole_boxes"]
@@ -1170,10 +1294,27 @@ def main():
                                     sample["actual_value"] if accept_reference else ocr, decimals,
                                     active_rules["max_flow_lph"], integer_digits,
                                 )
+                                if standalone:
+                                    candidate = updated.get("standalone_candidate")
+                                    if (candidate and candidate.get("crop") == rotation_key
+                                            and 0 < captured - candidate["counter"]["timestamp"] <= FRESH_SAMPLE_AGE):
+                                        accumulate_consumption(
+                                            candidate["counter"], source_key, captured, ocr, decimals,
+                                            active_rules["max_flow_lph"], integer_digits,
+                                        )
+                                        standalone_reference = candidate
+                                        updated.pop("standalone_candidate", None)
+                                    else:
+                                        updated["standalone_candidate"] = {
+                                            "counter": new_consumption, "reading": ocr, "crop": rotation_key,
+                                            "rotation_adjustment": rotation_adjustment,
+                                        }
+                                        new_standalone = new_consumption = None
                             except ImplausibleReading as error:
                                 ocr_confirmed = False
-                                validation_detail = str(error)
-                                new_standalone = None
+                                rejected = standalone and updated.pop("standalone_candidate", None)
+                                validation_detail = (f"{STANDALONE_REJECTED_NOTICE} {error}" if rejected else str(error))
+                                new_standalone = new_consumption = None
                         jpeg, size = transfer_jpeg(register)
                 if sample.get("reference_is_fallback"):
                     validation_detail = fallback_detail(
@@ -1286,6 +1427,12 @@ def main():
                     if not automatic_preview_ready:
                         AUTOMATIC_PREVIEW.unlink(missing_ok=True)
                     outcome = updated["status"]
+                    if standalone and outcome == "ocr_only":
+                        if standalone_reference is None:
+                            outcome = updated["status"] = STANDALONE_PENDING
+                            updated["check_detail"] = STANDALONE_PENDING_NOTICE
+                        else:
+                            updated["check_detail"] = STANDALONE_VERIFIED_NOTICE
                     if new_consumption is not None and not raw_fallback:
                         updated["consumption"] = new_consumption
                     if raw_fallback and outcome == "ocr_only":
@@ -1305,9 +1452,32 @@ def main():
                         if mode == "slfork":
                             updated["last_slfork_match"] = {"reading": sample["actual_value"], "time": image_time}
                     data = {**sample, "crop_source": source, "ocr_attempts": ocr_attempts}
+                    updated["ocr_rotation_adjustment"] = rotation_adjustment
+                    if (rotation_key is not None and not raw_fallback
+                            and (outcome == "match" or standalone_reference is not None and outcome == "ocr_only")):
+                        updated["learned_rotation"] = {"crop": rotation_key, "adjustment": rotation_adjustment}
+                    if rotation_adjustment:
+                        data["ocr_rotation_adjustment"] = rotation_adjustment
+                    manual_anchor = None
+                    if active_rules["reflection_estimate_enabled"] and active_rules["fallback_value"]:
+                        prefix = meter_prefix(active_rules["fallback_value"], decimals, integer_digits)
+                        if prefix is not None and active_rules["fallback_time"]:
+                            manual_anchor = {
+                                "time": timestamp_epoch(active_rules["fallback_time"], zone),
+                                "value": prefix * 10 ** (3 - decimals),
+                            }
+                    track_reflection(
+                        updated, ocr, ocr_readings, image_time,
+                        verified=outcome == "match" or standalone_reference is not None and outcome == "ocr_only",
+                        unclear=outcome == "ocr_unclear" and not validation_detail and not ocr_error,
+                        decimals=decimals, integer_digits=integer_digits, max_flow_lph=active_rules["max_flow_lph"],
+                        enabled=active_rules["reflection_estimate_enabled"], manual_anchor=manual_anchor,
+                    )
                     updated.update(
-                        last_reference=sample.get("reference", sample["actual_value"]),
-                        last_reference_time=sample.get("reference_time"),
+                        last_reference=(standalone_reference["reading"] if standalone_reference else
+                                        sample.get("reference", sample["actual_value"])),
+                        last_reference_time=(standalone_reference["counter"]["timestamp"] if standalone_reference else
+                                             sample.get("reference_time")),
                         last_reference_is_fallback=sample.get("reference_is_fallback", False),
                     )
                 else:
@@ -1339,7 +1509,8 @@ def main():
                 next_history = {**history, "manual_result": manual_result}
                 # A manual image that cannot clear an automatic incident must not
                 # postpone its short retry or change its one-hour cooldown.
-                if (manual_result.get("status") in SUCCESSFUL_CHECKS and not history.get("failure_attempts")):
+                if (manual_result.get("status") in SUCCESSFUL_CHECKS
+                        and not history.get("failure_attempts") and not history.get("standalone_candidate")):
                     next_history["next_check_at"] = updated.get("next_check_at", history.get("next_check_at"))
                 if (sample is not None and updated.get("check_status") == "match"
                         and history.get("check_status") != "match"):
@@ -1376,7 +1547,8 @@ def main():
             wake_worker.wait(timeout=RETRY_INTERVAL)
             continue
         history = updated
-        set_activity("waiting", "Letzte Prüfung beendet. Nächster Versuch nach kurzer Wartezeit."
+        set_activity("waiting", STANDALONE_PENDING_NOTICE if outcome == STANDALONE_PENDING else
+                     "Letzte Prüfung beendet. Nächster Versuch nach kurzer Wartezeit."
                      if not updated.get("retry_suppressed") and outcome not in SUCCESSFUL_CHECKS else
                      "Letzte Prüfung beendet. Wartet auf das eingestellte Prüfintervall.")
         if data is not None:

@@ -1,6 +1,7 @@
 """Validate crop settings and locate digit frames in the SLFork overlay."""
 
 from itertools import pairwise
+from math import ceil, cos, floor, radians, sin
 import re
 from statistics import median
 
@@ -15,28 +16,44 @@ ROTATIONS = {
 }
 
 
+def rotated_width(width, height, rotation):
+    angle = rotation % 360
+    if angle in ROTATIONS:
+        return height if angle in (90, 270) else width
+    turn = radians(angle)
+    span = width * abs(round(cos(turn), 15)) + height * abs(round(sin(turn), 15))
+    return ceil((width + span) / 2) - floor((width - span) / 2)
+
+
 def crop_coordinates(text, whole_width, rotation=0):
     """Check settings in the original image's coordinates before opening the frame."""
     if not isinstance(text, str) or not CROP_COORDINATES.fullmatch(text):
         raise ValueError("Ungültige Bildkoordinaten")
-    if type(rotation) is not int or rotation not in ROTATIONS:
+    if type(rotation) is not int or not (-180 <= rotation <= 180 or rotation == 270):
         raise ValueError("Ungültige Bilddrehung")
     left, top, right, bottom = (int(part) for part in text.split(","))
     if not (left < right and top < bottom):
         raise ValueError("Der Ausschnitt muss eine positive Größe haben")
-    width = bottom - top if rotation in (90, 270) else right - left
+    width = rotated_width(right - left, bottom - top, rotation)
     if type(whole_width) is not int or not 1 <= whole_width <= width:
         raise ValueError("Die Vorkommabreite muss in den gedrehten Ausschnitt passen")
     return left, top, right, bottom
 
 
-def turn_crop(image, rotation):
-    method = ROTATIONS[rotation]
-    return image.transpose(method) if method is not None else image
+def turn_crop(image, rotation, *, expand=True):
+    angle = rotation % 360
+    if expand and angle in ROTATIONS:
+        method = ROTATIONS[angle]
+        return image.transpose(method) if method is not None else image
+    if not angle:
+        return image
+    rgb = image.convert("RGB")
+    background = tuple(int(value) for value in ImageStat.Stat(rgb.resize((24, 12))).median)
+    return rgb.rotate(-angle, resample=Image.Resampling.BICUBIC, expand=expand, fillcolor=background)
 
 
 RAW_ROW_UNCLEAR = "Ziffernreihe nicht eindeutig gefunden. Bitte den Bildausschnitt im Test einstellen."
-MANUAL_ROW_UNCLEAR = "Ziffern im Ausschnitt schwer lesbar. Bitte Kamerawinkel, Fokus und Beleuchtung prüfen."
+MANUAL_ROW_UNCLEAR = "Ziffern schwer lesbar. Prüfe Bilddrehung, Kamerawinkel, Fokus und Beleuchtung."
 
 
 def digit_components(image, threshold, light_digits):

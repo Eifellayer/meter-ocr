@@ -291,6 +291,7 @@ name: Zählerstand (OCR)</code></pre>
 </div></details>
 </div>
 </div>
+</div>
 <div class="tab-content" id="view-settings" role="tabpanel" aria-labelledby="tab-settings" {settings_hidden}>
 <div class="panel" id="settings"><h2>Einstellungen</h2>
 <dialog class="setup-dialog" id="setup-dialog" aria-labelledby="setup-title" data-first-run="{setup_first_run}">

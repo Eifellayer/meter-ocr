@@ -18,7 +18,7 @@ Im SLFork-Modus gleicht die App den OCR-Wert mit **Raw Value** und **Actual Valu
 
 ## Dauerhafte Einstellungen für die automatische Kontrolle
 
-In der Weboberfläche stehen unter **„Automatische Prüfung – Einstellungen“** zwei dauerhaft gespeicherte Prüfregeln:
+In der Weboberfläche stehen unter **„Automatische Prüfung – Einstellungen“** drei dauerhaft gespeicherte Prüfregeln:
 
 - **Vergleich:** Nur volle m³ (0) oder zusätzlich 1–3 Nachkommastellen. Die nicht ausgewählten Nachkommastellen werden ignoriert, nicht gerundet.
 - **Max. OCR-Versuche:** 1–10 Versuche pro Zählerbild (Standard: 5). Bei einer bestätigten Übereinstimmung endet die Prüfung sofort.

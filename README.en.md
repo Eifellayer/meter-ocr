@@ -1,22 +1,22 @@
-# Meter OCR for Home Assistant
+# AI Meter Reader for Home Assistant
 
 **Read and verify meter values from camera images directly in Home Assistant.**
 
-**Long-term goal:** AI on the Edge / SLFork should no longer be a requirement. Meter OCR aims to get images from Home Assistant and process them locally, with flexible support for different meter types, camera angles, crops, and lighting. This is the project direction, not a claim that every meter is already supported or field-tested.
+**Long-term goal:** AI on the Edge / SLFork should no longer be a requirement. AI Meter Reader aims to get images from Home Assistant and process them locally, with flexible support for different meter types, camera angles, crops, and lighting. This is the project direction, not a claim that every meter is already supported or field-tested.
 
 [Deutsch / German](README.md) · [English](README.en.md)
 
-**Current version: 0.2.1 Alpha.** Before version 0.5, testing uses the regular Meter OCR app. From 0.5 onward, Beta builds are reserved for larger changes that need dedicated testing.
+**Current version: 0.3.1 Alpha.** Before version 0.5, testing uses the regular AI Meter Reader app. From 0.5 onward, Beta builds are reserved for larger changes that need dedicated testing.
 
 ## Beta testers wanted
 
 Do you use Home Assistant with a gas, water, or other meter? We are looking for testers with different cameras, crops, and lighting conditions. Until version 0.5, the regular app is the testing channel. I use AI on the Edge for real-world checks; other sources and meter types have so far been tested with simulations only. To help, report your app version, meter type, and image source through [GitHub Issues](https://github.com/Eifellayer/meter-ocr/issues). Please do not post credentials or unredacted photos containing personal information.
 
-Meter OCR reads camera images with **local Tesseract OCR**. It can provide its own reading from an ESPHome or Home Assistant camera, or double-check an existing reading from AI on the Edge / SLFork or a reference sensor.
+AI Meter Reader reads camera images with **local Tesseract OCR**. It can provide its own reading from an ESPHome or Home Assistant camera, or double-check an existing reading from AI on the Edge / SLFork or a reference sensor.
 
 The current focus is mechanical gas meters with configurable whole and fractional digits. Small pointer dials are not read automatically yet. The Home Assistant reading output currently uses cubic meters; tester feedback will help extend support to more meters and conditions.
 
-Meter OCR is a private hobby project for checking meter readings. [Usage notes](#usage-notes)
+AI Meter Reader is a private hobby project for checking meter readings. [Usage notes](#usage-notes)
 
 ## What does it check?
 
@@ -24,12 +24,12 @@ By default, the app compares the **five digits for whole cubic meters (m³)**. U
 
 The app downloads the latest available meter image and reference reading from SLFork, or uses the configured Home Assistant camera and optionally a cumulative sensor in m³. It detects digit frames automatically when possible; otherwise you can specify a crop.
 
-For each image, OCR can attempt between **1 and 10 different processing profiles** (default 5). As soon as an attempt confirms the configured precision against the valid reference reading, processing stops. A successful OCR read without a reference is shown as **unverified**, not as a confirmed match.
+For an uncertain automatic reading, the app can run up to ten additional image-processing profiles (15 attempts maximum) and combines digits only when a strict majority agrees. After the first failed check, it captures a fresh image after five minutes, including from a Home Assistant camera. If the second run also fails, it returns to the configured interval (one hour by default). On a valid reference reading, processing stops. A successful OCR read without a reference is shown as **unverified**, not as a confirmed match.
 
 ## Install
 
 1. In Home Assistant, open **Settings → Apps → Install app → ⋮ → Repositories** and add **Add-ons by Eifellayer** using the [shared link](https://github.com/Eifellayer/meter-ocr).
-2. Install **Meter OCR (Alpha)**. Releases below 0.5 are Alpha and use the same regular app as their test channel.
+2. Install **AI Meter Reader (Alpha)**. Releases below 0.5 are Alpha and use the same regular app as their test channel.
 3. Configure `esp_url` for the SLFork ESP, for example `http://esp-gaszaehler.local`. Alternatively configure `kamera_entitaet` and optionally `referenz_entitaet`.
 4. Start the app and open its web interface.
 
@@ -43,9 +43,9 @@ On first open, a compact setup wizard guides you through the image source, meter
 | --- | --- |
 | **SLFork / AI on the Edge** | The ESP supplies the image and reference reading. Enter its address. |
 | **Home Assistant camera** | Choose a `camera.*` entity and optionally a current reference sensor in m³. |
-| **ESPHome or camera with local OCR** | The camera supplies the image. Meter OCR reads it locally and publishes `sensor.rf1_ocr_zaehlerstand` in m³. |
+| **ESPHome or camera with local OCR** | The camera supplies the image. AI Meter Reader reads it locally and publishes `sensor.rf1_ocr_zaehlerstand` in m³. |
 
-For ESPHome, configure an [ESP32 camera](https://esphome.io/components/esp32_camera/) with the [native API](https://esphome.io/components/api/) and add the device to Home Assistant. Check the image there, then select its `camera.*` entity in Meter OCR. Use the **manual test** to adjust the crop and apply a working preview to automatic checks. This mode works without SLFork or a reference sensor.
+For ESPHome, configure an [ESP32 camera](https://esphome.io/components/esp32_camera/) with the [native API](https://esphome.io/components/api/) and add the device to Home Assistant. Check the image there, then select its `camera.*` entity in AI Meter Reader. Use the **manual test** to adjust the crop and apply a working preview to automatic checks. This mode works without SLFork or a reference sensor.
 
 The standalone sensor requires a majority of at least two OCR profiles on the same photo. It reports **unavailable** if the reading is uncertain or goes below the last valid reading from that camera. Standalone OCR values are independent readings. The Energy dashboard uses the separate cumulative consumption sensor. Upgrades retain the active source. Changing the source starts a new automatic confirmation count.
 
@@ -61,11 +61,11 @@ The [photo test report (German)](METER-PHOTO-TESTS.md) documents simulated OCR r
 
 ## Plausibility check and Energy dashboard
 
-Meter OCR records consumption from automatic reference matches or agreeing OCR profiles in standalone mode. The first accepted reading establishes the baseline. Later readings are checked against the last accepted value. An out-of-order time, backwards reading or increase above the configured flow limit is rejected. The check accounts for the selected digit precision.
+AI Meter Reader records consumption from automatic reference matches or agreeing OCR profiles in standalone mode. The first accepted reading establishes the baseline. Later readings are checked against the last accepted value. An out-of-order time, backwards reading or increase above the configured flow limit is rejected. The check accounts for the selected digit precision.
 
 Under **Automatic check settings → Maximum flow**, enter the Qmax marked on your meter. The G4 default is 6 m³/h. Rejected readings leave the cumulative counter untouched. The first accepted reading after a source or precision change establishes a baseline for later consumption differences.
 
-In Home Assistant, go to **Energy → Configuration → Gas consumption** and select **Meter OCR Gasverbrauch gesamt** (`sensor.rf1_verbrauch_gesamt`). The sensor appears after the first accepted reading. It supplies cumulative gas consumption in m³. Home Assistant calculates hourly, daily, weekly and monthly views from this sensor.
+In Home Assistant, go to **Energy → Configuration → Gas consumption** and select **AI Meter Reader Gasverbrauch gesamt** (`sensor.rf1_verbrauch_gesamt`). The sensor appears after the first accepted reading. It supplies cumulative gas consumption in m³. Home Assistant calculates hourly, daily, weekly and monthly views from this sensor.
 
 ## Notifications and automatic status
 
@@ -90,13 +90,15 @@ The main screen shows the last recognized value, reference value, verification r
 | Setting | Purpose |
 | --- | --- |
 | Comparison | Whole cubic meters only or 1–3 decimal places |
-| Max. OCR attempts | 1–10 profiles per image, default 5 |
+| Max. OCR attempts | 1–10 base profiles per image, default 5 (uncertain automatic readings may use up to 10 additional profiles) |
 | Digit color | Automatic detection, light digits, or dark digits |
 | Image region | Automatically detect frames, or use a fixed crop and whole-digit width |
 
 Saved automatic rules persist across app restarts. They take precedence over the corresponding Home Assistant configuration fields. When the comparison precision changes, the automatic confirmation count starts over so matches from the old precision are not treated as new evidence.
 
-A successful automatic check is normally repeated after **one hour**. When a check fails or data is uncertain, it retries after **five minutes**. With the default settings, `sensor.rf1_pruefstatus` reports `review_due` after four hours of failed checks.
+A successful check is normally repeated after **one hour**. After the first failure, the app captures a fresh image after **five minutes**; if that run also fails, it returns to the selected interval. With the default settings, `sensor.rf1_pruefstatus` reports `review_due` after four hours of failed checks.
+
+Use **Pause automatic checks** to stop scheduled checks and **Resume automatic checks** to continue. A large yellow notice shows the paused state; manual tests remain available. The pause survives app restarts. The overview also tells you whether the app is waiting, capturing an image, or reading it, and whether the ESP/camera returned a fresh image. If the app is stopped or unavailable, an open page reports the lost connection.
 
 Each SLFork measurement timestamp counts at most once. In Home Assistant camera mode, the app uses the fetch time, so independent confirmations rely on the camera supplying fresh images. A configured reference sensor must report in `m³` and have a timestamp within five minutes of the image request.
 

@@ -60,6 +60,7 @@ class IngressFixture(TestCase):
         self.profiles = {}
         self.source = dict(mode="slfork", url="http://meter", camera="", reference="")
         self.setup_pending = True
+        self.paused = False
         self.delivery = dict(enabled=False, review_minutes=240, delivery_hours=24, push="", target="")
         self.enterContext(patch.object(panel, "SUPERVISOR_ADDRESS", "127.0.0.1"))
         self.start_panel()
@@ -80,6 +81,8 @@ class IngressFixture(TestCase):
             lambda: dict(self.delivery), self.delivery.update,
             lambda: (dict(self.source), self.setup_pending), self.save_source,
             address=("127.0.0.1", 0), skip_setup=self.skip_setup,
+            get_auto_paused=lambda: self.paused,
+            save_auto_paused=lambda value: setattr(self, "paused", value),
         )
         self.server = server
         self.addCleanup(server.server_close)
@@ -105,6 +108,21 @@ class IngressFixture(TestCase):
 
 
 class IngressTests(IngressFixture):
+    def test_automatic_checks_can_be_paused_and_resumed_without_blocking_manual_tests(self):
+        self.assertEqual((303, "./?paused=1"), self.submit("/automatik-pause", paused="1"))
+        page, _ = self.request("/")
+        self.assertTrue(self.paused)
+        self.assertIn('id="paused-notice"', page)
+        self.assertIn("Automatik pausiert", page)
+        self.assertNotIn('id="paused-notice" hidden', page)
+        self.assertIn('id="manual-form"', page)
+        status = json.loads(self.request("/automatic")[0])
+        self.assertTrue(status["paused"])
+        self.assertEqual((303, "./?paused=0"), self.submit("/automatik-pause", paused="0"))
+        self.assertFalse(self.paused)
+        self.assertFalse(json.loads(self.request("/automatic")[0])["paused"])
+        self.assertIn('id="pause-auto-form"', self.request("/")[0])
+
     def test_language_defaults_and_is_user_specific_after_restart(self):
         self.assertEqual("en", browser_locale("fr-FR,de;q=.4,en-US;q=.8"))
         self.assertEqual("de", browser_locale("en;q=0,fr-FR"))
@@ -441,7 +459,7 @@ class BrowserTests(IngressFixture):
             def expect_language(language):
                 heading = frame.locator(f"html[lang='{language}'] h1")
                 heading.wait_for()
-                self.assertEqual("Meter OCR", heading.inner_text())
+                self.assertEqual("AI Meter Reader", heading.inner_text())
                 self.assertTrue(frame.locator("html").evaluate(
                     "element => element.scrollWidth <= element.clientWidth"))
 

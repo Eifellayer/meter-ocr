@@ -1,4 +1,4 @@
-# Meter OCR
+# AI Meter Reader
 
 Deutsch: [Vollständige Anleitung](../README.md) · [Deutsch – App](README.md)
 
@@ -6,7 +6,7 @@ English: [Full documentation](../README.en.md) · [English – App](README.en.md
 
 ## Deutsch
 
-Diese App überprüft den automatisch ausgelesenen mechanischen Gaszähler mit **lokaler OCR** und kann den gelesenen Stand mit einem Referenzwert abgleichen. Sie ist keine geeichte Messung.
+Diese App liest Zählerbilder lokal aus und kann den erkannten Stand mit einem Referenzwert abgleichen. Sie ist keine geeichte Messung.
 
 Mit KI-Unterstützung entwickelt. Für Abrechnungen und Meldungen gilt der direkt am Zähler geprüfte Stand. [Hinweise zur Nutzung und Haftung](https://github.com/Eifellayer/meter-ocr#hinweise-zur-nutzung)
 
@@ -18,11 +18,11 @@ Mit KI-Unterstützung entwickelt. Für Abrechnungen und Meldungen gilt der direk
 
 Der Einrichtungsassistent kann jederzeit erneut geöffnet werden. Unter **Benachrichtigungen** lassen sich Hinweis, Companion-Push und E-Mail konfigurieren. Releases bis 0.5 sind Alpha; es gibt keinen separaten Beta-Kanal. Ab 0.5 ist eine Beta größeren Änderungen mit zusätzlichem Testbedarf vorbehalten. Der Maintainer testet reale Zähler ausschließlich mit AI on the Edge / SLFork. Andere Modi sind simuliert getestet. Für das Energie-Dashboard stellst du den maximalen Durchfluss nach Qmax ein und wählst `sensor.rf1_verbrauch_gesamt` als Gasverbrauch. [Plausibilitätsprüfung und Energie-Dashboard](../README.md#plausibilitätsprüfung-und-energie-dashboard)
 
-Die bestehenden Entitäten `sensor.rf1_kontrollbild` und `sensor.rf1_pruefstatus` bleiben unverändert. Support: [GitHub Issues](https://github.com/Eifellayer/meter-ocr/issues).
+Über **Automatik pausieren** lassen sich automatische Prüfungen anhalten; manuelle Tests bleiben verfügbar. Der Statusbereich erklärt außerdem Wartezeit, Bildverarbeitung, Quellenverbindung und veraltete Bilder. Die Pause bleibt nach Neustarts erhalten. Die bestehenden Entitäten `sensor.rf1_kontrollbild` und `sensor.rf1_pruefstatus` bleiben unverändert. Support: [GitHub Issues](https://github.com/Eifellayer/meter-ocr/issues).
 
 ## English
 
-The app performs an **independent local OCR reading of your most recent gas meter image** and can check it against a reference reading from SLFork or a Home Assistant sensor. It is not a certified meter.
+The app independently reads the latest meter image locally and can check the result against a reference from SLFork or a Home Assistant sensor. It is not a certified meter.
 
 Developed with AI assistance. Check the physical meter for billing and official readings. [Usage and liability notes](https://github.com/Eifellayer/meter-ocr/blob/main/README.en.md#usage-notes)
 
@@ -34,7 +34,7 @@ Developed with AI assistance. Check the physical meter for billing and official 
 
 The setup wizard can be reopened at any time. Under **Notifications**, configure Home Assistant notices, Companion push or email. Releases below 0.5 are Alpha with no separate Beta channel. From 0.5 onward, Beta builds are reserved for larger changes that need dedicated testing. The maintainer tests real meters only with AI on the Edge / SLFork; other modes have simulated tests only. Set maximum flow to the meter's Qmax and select `sensor.rf1_verbrauch_gesamt` as gas consumption in the Energy dashboard. [Plausibility check and Energy dashboard](../README.en.md#plausibility-check-and-energy-dashboard)
 
-The entity IDs `sensor.rf1_kontrollbild` and `sensor.rf1_pruefstatus` do not change when switching language.
+Pause scheduled checks with **Pause automatic checks**; manual tests remain available. The status area explains waiting, image processing, source connectivity, and stale images. The pause survives restarts. Entity IDs `sensor.rf1_kontrollbild` and `sensor.rf1_pruefstatus` remain unchanged.
 
 For full setup, explanation of comparison rules, schedules and troubleshooting, consult the [English guide](../README.en.md). For help or bug reports, open a [GitHub issue](https://github.com/Eifellayer/meter-ocr/issues).
 

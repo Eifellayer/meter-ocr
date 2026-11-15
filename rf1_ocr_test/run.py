@@ -742,7 +742,7 @@ def main():
         live_deadline = (time.monotonic() + LIVE_CAPTURE_WINDOW_SECONDS
                          if active_source["mode"] == "camera" else None)
         try:
-            manual_upload = manual and isinstance(manual_options.get("image"), bytes)
+            manual_upload = manual and bool(manual_options.get("image"))
             if manual_upload:
                 update_progress(request_id, "running", "Testbild geladen – prüfe Ausschnitt und Ziffern …")
                 result = (manual_options["image"], None, {

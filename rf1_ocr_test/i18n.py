@@ -12,6 +12,13 @@ from checks import FALLBACK_NOTICE, uncertain_positions
 EN_UI = {
     "Erkennungsbild": "Recognition image",
     "Letztes Testbild": "Latest test image",
+    "Noch kein Testbild verfügbar.": "No test image available yet.",
+    "Stand aus AI on the Edge oder aus dem gewählten Home-Assistant-Sensor": "Reading from AI on the Edge or the selected Home Assistant sensor",
+    "Vergleichswert": "Reference reading",
+    "Ablesung und Vergleichswert weichen ab": "Image reading and reference differ",
+    "Vergleiche beide Werte mit dem Stand direkt am Zähler.": "Compare both readings with the value on the meter itself.",
+    "Die App prüft automatisch erneut. Bleibt der Unterschied, vergleiche beide Werte mit dem Stand direkt am Zähler.":
+        "The app will check again automatically. If the readings still differ, compare both with the value on the meter itself.",
     "Letzte automatische Erkennung": "Latest automatic reading",
     "Schließen": "Close",
     "Originalbild zum Ablesen": "Original image for reading",

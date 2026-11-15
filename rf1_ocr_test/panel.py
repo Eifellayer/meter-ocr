@@ -232,7 +232,7 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <form method="post" action="automatik-pause" id="pause-auto-form" {pause_button_hidden}><input type="hidden" name="lang" value="{language}"><input type="hidden" name="mode" value="{language_mode}"><input type="hidden" name="csrf" value="{csrf}"><input type="hidden" name="paused" value="1"><button type="submit">Automatik pausieren</button></form>
 <p class="connection-status" id="source-connection" data-state="{source_connection_state}">Quelle: {source_connection}</p>
 <dl><dt>Erkannter Stand</dt><dd id="automatic-ocr">{ocr}</dd>
-<dt>Referenz</dt><dd><span id="automatic-reference">{reference}</span>
+<dt title="Stand aus AI on the Edge oder aus dem gewählten Home-Assistant-Sensor">Vergleichswert</dt><dd><span id="automatic-reference">{reference}</span>
 <small id="automatic-reference-note" class="reference-note" data-epoch="{reference_time}"
  data-fallback="{reference_is_fallback}" hidden></small></dd>
 <dt>Bildzeit</dt><dd id="automatic-image-time" class="stamp" data-epoch="{image_time}">–</dd>
@@ -255,10 +255,11 @@ entity: sensor.rf1_ocr_zaehlerstand
 name: Zählerstand (OCR)</code></pre>
 </details>
 <details class="automatic-images" id="automatic-images"><summary>Letztes Testbild</summary>
-<div class="preview" id="test-preview" data-auto-src="{automatic_preview_src}" data-auto-version="{automatic_preview_version}" data-auto-available="{automatic_preview_available}" {automatic_preview_hidden}>
+<p id="preview-empty" class="legend" {preview_empty_hidden}>Noch kein Testbild verfügbar.</p>
+<div class="preview" id="test-preview" {automatic_preview_hidden}>
 <h2 id="preview-heading">Letztes Testbild</h2>
-<img id="test-preview-image" src="{automatic_preview_src}" alt="Zählerbild mit farbig markierten erkannten und unsicheren Ziffern">
-<p class="legend"><span class="green-key">Grün:</span> Ziffer gelesen · <span class="yellow-key">Gelb:</span> Ziffer schwankte zwischen OCR-Versuchen oder wurde aus mehreren Versuchen zusammengesetzt · <span class="red-key">Rot:</span> Ziffer weiterhin unklar. Die Farben zeigen OCR-Sicherheit, nicht die Übereinstimmung mit dem Referenzstand. Ohne automatisch erkannte Ziffernrahmen sind die Bereiche nur näherungsweise aufgeteilt.</p>
+<img id="test-preview-image"{automatic_preview_src} alt="Letztes Testbild">
+<p class="legend" id="preview-legend" {preview_legend_hidden}><span class="green-key">Grün:</span> Ziffer gelesen · <span class="yellow-key">Gelb:</span> Ziffer schwankte zwischen OCR-Versuchen oder wurde aus mehreren Versuchen zusammengesetzt · <span class="red-key">Rot:</span> Ziffer weiterhin unklar. Die Farben zeigen OCR-Sicherheit, nicht die Übereinstimmung mit dem Referenzstand. Ohne automatisch erkannte Ziffernrahmen sind die Bereiche nur näherungsweise aufgeteilt.</p>
 </div>
 </details>
 <div class="manual-test-area" id="manual-test-area" {manual_area_hidden}>
@@ -728,7 +729,8 @@ async function refreshTestStatus() {{
     const detail = document.querySelector('#test-result');
     const preview = document.querySelector('#test-preview');
     const previewImage = document.querySelector('#test-preview-image');
-    const previewHeading = document.querySelector('#preview-heading');
+    const previewEmpty = document.querySelector('#preview-empty');
+    const previewLegend = document.querySelector('#preview-legend');
     const automaticImages = document.querySelector('#automatic-images');
     const sourcePreview = document.querySelector('#test-source-preview');
     const sourceImage = document.querySelector('#test-source-image');
@@ -786,24 +788,24 @@ async function refreshTestStatus() {{
       detail.hidden = true;
       extra.hidden = true;
     }}
-    if (job.phase === 'done' && job.preview) {{
-      preview.hidden = false;
-      previewHeading.textContent = 'Letztes Testbild';
-      const url = 'testvorschau.jpg?v=' + encodeURIComponent(String(job.checked_at));
-      if (previewImage.getAttribute('src') !== url) previewImage.setAttribute('src', url);
-      automaticImages.open = true;
-    }} else if (!active) {{
-      const version = Number(job.automatic_preview || 0);
-      if (version) {{
-        preview.dataset.autoVersion = String(version);
-        preview.dataset.autoAvailable = 'true';
-        preview.dataset.autoSrc = 'automatikvorschau.jpg?v=' + encodeURIComponent(String(version));
-      }}
-      const available = preview.dataset.autoAvailable === 'true';
-      preview.hidden = !available;
-      previewHeading.textContent = 'Letztes Testbild';
-      if (available && previewImage.getAttribute('src') !== preview.dataset.autoSrc) {{
-        previewImage.setAttribute('src', preview.dataset.autoSrc);
+    const automaticVersion = job.automatic_preview || job.current_image;
+    const showManual = job.phase === 'done' && job.preview &&
+      (!automaticVersion || job.checked_at * 1e9 >= Number(automaticVersion));
+    const marked = showManual || Boolean(job.automatic_preview);
+    const version = showManual ? job.checked_at : automaticVersion;
+    const file = showManual ? 'testvorschau.jpg' : job.automatic_preview ? 'automatikvorschau.jpg' : 'aktuell.jpg';
+    previewLegend.hidden = !marked;
+    if (!version) {{
+      preview.hidden = true;
+      previewEmpty.hidden = false;
+      previewImage.removeAttribute('src');
+    }} else {{
+      const url = file + '?v=' + encodeURIComponent(String(version));
+      previewImage.onload = () => {{ preview.hidden = false; previewEmpty.hidden = true; }};
+      previewImage.onerror = () => {{ preview.hidden = true; previewEmpty.hidden = false; }};
+      if (previewImage.getAttribute('src') !== url) {{
+        previewImage.setAttribute('src', url);
+        if (showManual) automaticImages.open = true;
       }}
     }}
     apply.hidden = !(job.phase === 'done' && job.can_apply_crop);
@@ -955,17 +957,6 @@ async function refreshAutomatic() {{
         ['last-match', sample.last_match]]) {{
       document.querySelector('#automatic-' + id).textContent = value ? formatStamp(value) : '–';
     }}
-    for (const [name, file] of [['current', 'aktuell.jpg'], ['good', 'treffer.jpg']]) {{
-      const timestamp = sample[name];
-      if (!timestamp) continue;
-      const container = document.querySelector('#automatic-' + name);
-      const image = container.querySelector('img') || document.createElement('img');
-      const url = file + '?v=' + timestamp;
-      if (image.getAttribute('src') === url) continue;
-      image.alt = name === 'current' ? 'Aktuelles Kontrollbild' : 'Kontrollbild des letzten Treffers';
-      image.src = url;
-      if (!image.parentNode) container.replaceChildren(image);
-    }}
   }} catch (_) {{
     automaticStatusFailures += 1;
     const status = document.querySelector('.activity-status');
@@ -1114,8 +1105,17 @@ def start_panel(
         except (OSError, ValueError):
             return {}
 
+    def image_version(path):
+        if path is None:
+            return None
+        try:
+            return path.stat().st_mtime_ns
+        except FileNotFoundError:
+            return None
+
     def automatic_summary(history, language, auto_rules):
         reschedule_next_check(history, auto_rules.get("interval_minutes", DEFAULT_INTERVAL_MINUTES))
+        paused = bool(get_auto_paused()) if get_auto_paused else False
         detail = history.get("check_detail")
         precision_pending = any(history.get(key, value) != value for key, value in (
             ("comparison_decimals", auto_rules["decimals"]),
@@ -1160,6 +1160,12 @@ def start_panel(
                           "Warte auf ein aktuelles Zählerbild. Die App versucht es automatisch erneut.")
             else:
                 detail = ""
+            if status == "difference":
+                heading = "Ablesung und Vergleichswert weichen ab" if not prolonged else heading
+                instructions = ("Vergleiche beide Werte mit dem Stand direkt am Zähler."
+                                if prolonged or paused else
+                                "Die App prüft automatisch erneut. Bleibt der Unterschied, vergleiche beide Werte mit dem Stand direkt am Zähler.")
+                detail = instructions if language == "de" else EN_UI[instructions]
         if language == "en":
             heading = EN_UI[heading]
         try:
@@ -1213,14 +1219,13 @@ def start_panel(
             "activity_state": activity.get("state", "waiting"),
             "activity_completed": activity.get("completed"),
             "activity_total": activity.get("total"),
-            "paused": bool(get_auto_paused()) if get_auto_paused else False,
+            "paused": paused,
             "source_connection": source_connection,
             "source_connection_state": history.get("source_connection_status", "unknown"),
             "decimals": history.get("comparison_decimals", default_decimals),
-            "current": current_image.stat().st_mtime_ns if current_image.exists() else None,
-            "good": good_image.stat().st_mtime_ns if good_image.exists() else None,
-            "automatic_preview": automatic_preview.stat().st_mtime_ns if automatic_preview is not None and automatic_preview.exists() else None,
-            "automatic_preview": automatic_preview.stat().st_mtime_ns if automatic_preview is not None and automatic_preview.exists() else None,
+            "current": image_version(current_image),
+            "good": image_version(good_image),
+            "automatic_preview": image_version(automatic_preview),
         }
 
     class Handler(BaseHTTPRequestHandler):
@@ -1274,10 +1279,8 @@ def start_panel(
                 snapshot["preview"] = snapshot["preview"] and test_image.is_file()
                 snapshot["can_apply_crop"] = snapshot["can_apply_crop"] and snapshot["preview"]
                 snapshot["crop_id"] = str(snapshot["checked_at"]) if snapshot["can_apply_crop"] else ""
-                snapshot["automatic_preview"] = (
-                    automatic_preview.stat().st_mtime_ns
-                    if automatic_preview is not None and automatic_preview.exists() else None
-                )
+                snapshot["automatic_preview"] = image_version(automatic_preview)
+                snapshot["current_image"] = image_version(current_image)
                 if language == "en":
                     snapshot["message"] = english_progress(snapshot.get("message"))
                     if snapshot.get("detail"):
@@ -1385,6 +1388,8 @@ def start_panel(
                 '</details>'
             )
             page = translate_page(PAGE) if language == "en" else PAGE
+            preview_file = "automatikvorschau.jpg" if summary["automatic_preview"] else "aktuell.jpg"
+            preview_version = summary["automatic_preview"] or summary["current"]
             self.reply(page.format(**values,
                 language=language,
                 app_name=APP_NAME,
@@ -1469,13 +1474,10 @@ def start_panel(
                 manual_reference=html.escape(str(settings.get("manual_reference", auto_rules["fallback_value"])),
                                              quote=True),
                 test_source_preview=test_source_preview,
-                automatic_preview_src=(
-                    f'automatikvorschau.jpg?v={summary["automatic_preview"]}'
-                    if summary["automatic_preview"] else 'automatikvorschau.jpg?v=0'
-                ),
-                automatic_preview_version=summary["automatic_preview"] or 0,
-                automatic_preview_available=str(bool(summary["automatic_preview"])).lower(),
-                automatic_preview_hidden='' if summary["automatic_preview"] else 'hidden',
+                automatic_preview_src=f' src="{preview_file}?v={preview_version}"' if preview_version else "",
+                automatic_preview_hidden="" if preview_version else "hidden",
+                preview_empty_hidden="hidden" if preview_version else "",
+                preview_legend_hidden="" if summary["automatic_preview"] else "hidden",
                 reset_notice=(
                     '<p class="failure-recovery" role="status">' + html.escape(reset_message) + '</p>'
                     if reset_message else ""
@@ -1502,18 +1504,6 @@ def start_panel(
                 last_match=summary["last_match"] or 0,
                 next_check=json.dumps(summary["next_check"]),
                 recovery_hidden="hidden" if not summary["failure_attempts"] else "",
-                current=(
-                    '<img src="aktuell.jpg?v={}" alt="'.format(summary["current"]) +
-                    ("Latest check image" if language == "en" else "Aktuelles Kontrollbild") + '">'
-                    if current_image.exists() else
-                    ("No check image available yet." if language == "en" else "Noch kein Kontrollbild.")
-                ),
-                good=(
-                    '<img src="treffer.jpg?v={}" alt="'.format(summary["good"]) +
-                    ("Image from last match" if language == "en" else "Kontrollbild des letzten Treffers") + '">'
-                    if good_image.exists() else
-                    ("No confirmed image available yet." if language == "en" else "Noch kein bestätigtes Bild.")
-                ),
             ).encode("utf-8"), "text/html; charset=utf-8")
 
         def do_POST(self):

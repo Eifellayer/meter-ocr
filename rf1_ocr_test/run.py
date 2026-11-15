@@ -843,6 +843,7 @@ def main():
         diagnostics = {}
         sample = None
         raw_fallback = False
+        automatic_preview_ready = False
         live_deadline = (time.monotonic() + LIVE_CAPTURE_WINDOW_SECONDS
                          if active_source["mode"] == "camera" else None)
         try:
@@ -1104,6 +1105,7 @@ def main():
                         with io.BytesIO() as buffer:
                             preview.save(buffer, "JPEG", quality=88, optimize=True)
                             atomic_write(AUTOMATIC_PREVIEW, buffer.getvalue(), 0o600)
+                            automatic_preview_ready = True
                     except (OSError, ValueError) as error:
                         print(f"Automatische OCR-Vorschau konnte nicht erstellt werden: {error}")
                 if manual:
@@ -1184,6 +1186,8 @@ def main():
                 elif record_sample(updated, sample, ocr, zone, datetime.now(zone), decimals,
                                    ocr_confirmed=ocr_confirmed, integer_digits=integer_digits):
                     atomic_write(DESTINATION, picture, 0o644)
+                    if not automatic_preview_ready:
+                        AUTOMATIC_PREVIEW.unlink(missing_ok=True)
                     outcome = updated["status"]
                     if new_consumption is not None and not raw_fallback:
                         updated["consumption"] = new_consumption

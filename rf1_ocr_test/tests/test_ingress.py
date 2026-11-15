@@ -53,6 +53,7 @@ class IngressFixture(TestCase):
         self.root = Path(folder.name)
         self.history = self.root / "history.json"
         self.preview = self.root / "preview.jpg"
+        self.automatic_preview = self.root / "automatic-preview.jpg"
         self.preferences = self.root / "language.json"
         self.requested = Queue(maxsize=1)
         self.rules = dict(decimals=0, attempts=3, crop_mode="auto", polarity="auto",
@@ -61,6 +62,7 @@ class IngressFixture(TestCase):
         self.source = dict(mode="slfork", url="http://meter", camera="", reference="")
         self.setup_pending = True
         self.reset_state = "idle"
+        self.activity = {"state": "waiting", "detail": "Wartet auf die nächste automatische Prüfung."}
         self.paused = False
         self.delivery = dict(enabled=False, review_minutes=240, delivery_hours=24, push="", target="")
         self.enterContext(patch.object(panel, "SUPERVISOR_ADDRESS", "127.0.0.1"))
@@ -87,6 +89,7 @@ class IngressFixture(TestCase):
             lambda: (dict(self.source), self.setup_pending), self.save_source,
             address=("127.0.0.1", 0), skip_setup=self.skip_setup,
             request_factory_reset=request_reset, get_reset_status=lambda: self.reset_state,
+            automatic_preview=self.automatic_preview, get_activity=lambda: dict(self.activity),
             get_auto_paused=lambda: self.paused,
             save_auto_paused=lambda value: setattr(self, "paused", value),
         )
@@ -140,6 +143,16 @@ class IngressTests(IngressFixture):
         status = json.loads(self.request("/automatic")[0])
         self.assertEqual(("warning", "Noch kein aktuelles Zählerbild"), (status["tone"], status["heading"]))
         self.assertIn("versucht es automatisch erneut", status["detail"])
+
+    def test_mismatch_immediately_explains_what_to_do(self):
+        self.history.write_text(json.dumps({"check_status": "difference", "failure_since": time.time()}))
+        status = json.loads(self.request("/automatic")[0])
+        self.assertEqual(("warning", "Ablesung und Vergleichswert weichen ab"),
+                         (status["tone"], status["heading"]))
+        self.assertIn("prüft automatisch erneut", status["detail"])
+        self.assertIn("direkt am Zähler", status["detail"])
+        status_en = json.loads(self.request("/automatic?lang=en")[0])
+        self.assertIn("value on the meter itself", status_en["detail"])
 
     def test_automatic_status_explains_three_retry_attempts_and_one_hour_wait(self):
         self.history.write_text(json.dumps({
@@ -439,6 +452,34 @@ class RedirectTests(TestCase):
 
 
 class BrowserTests(IngressFixture):
+    def test_automatic_status_and_image_update_when_a_check_runs(self):
+        from playwright.sync_api import sync_playwright
+
+        self.setup_pending = False
+        self.activity = {"state": "working", "detail": "Warte auf Bild und Messwerte vom ESP …"}
+        current = self.root / "current.jpg"
+        Image.new("RGB", (240, 60), "white").save(current, "JPEG")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(executable_path=os.getenv("RF1_CHROMIUM"))
+            page = browser.new_page(locale="de-DE")
+            page.set_default_timeout(7000)
+            page.goto(self.base)
+            page.locator("#automatic-progress").wait_for(state="visible")
+            page.locator("#automatic-images summary").click()
+            preview = page.locator("#test-preview-image")
+            self.assertEqual(240, preview.evaluate("async image => { await image.decode(); return image.naturalWidth; }"))
+            self.assertFalse(page.locator("#preview-legend").is_visible())
+            page.wait_for_function("document.querySelector('.activity-status').dataset.offline === 'false'")
+            Image.new("RGB", (200, 45), "white").save(self.automatic_preview, "JPEG")
+            self.activity = {"state": "working", "detail": "Bild wird vorbereitet.", "completed": 2, "total": 5}
+            page.wait_for_function("document.querySelector('#automatic-progress').value === 2")
+            page.wait_for_function("document.querySelector('#test-preview-image').naturalWidth === 200")
+            self.assertTrue(page.locator("#preview-legend").is_visible())
+            self.activity = {"state": "waiting", "detail": "Wartet auf die nächste automatische Prüfung."}
+            page.locator("#automatic-progress").wait_for(state="hidden")
+            self.assertEqual("false", page.locator(".activity-status").get_attribute("data-offline"))
+            browser.close()
+
     def test_profile_and_manual_override_on_a_narrow_screen(self):
         from playwright.sync_api import sync_playwright
 

@@ -444,19 +444,6 @@ class BrowserTests(IngressFixture):
                 "async image => { await image.decode(); return image.naturalWidth; }"))
             frame.locator("#apply-crop-form button").click()
             frame.locator("#tab-settings").click()
-            print("DEBUG_SETTINGS_VIEW", frame.locator("#tab-settings").get_attribute("aria-selected"),
-                  frame.locator("#view-settings").get_attribute("hidden"),
-                  frame.locator("html").get_attribute("lang"),
-                  page.frames[-1].evaluate("() => location.href"))
-            print("DEBUG_VISIBILITY", page.frames[-1].evaluate("""() => {
-              let node = document.querySelector('#view-settings'), path = [];
-              while (node) { const style = getComputedStyle(node);
-                path.push([node.tagName, node.id, node.hidden, style.display, style.visibility,
-                  node.getBoundingClientRect().width]);
-                node = node.parentElement;
-              }
-              return JSON.stringify({setupOpen: document.querySelector('#setup-dialog').open, path});
-            }"""))
             automatic_settings = frame.locator("#automatic-settings")
             if not automatic_settings.evaluate("section => section.open"):
                 automatic_settings.locator("summary").click()

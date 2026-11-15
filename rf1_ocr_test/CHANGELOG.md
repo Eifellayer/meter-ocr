@@ -1,5 +1,14 @@
 # Änderungen
 
+## 0.8.1
+
+- **Deutsch / English** als Sprachauswahl oben in der App. Die ausgewählte Sprache wird im Browser gespeichert und nach erneuter Öffnung wiederhergestellt.
+- Die komplette Ingress-Oberfläche ist auf Englisch verfügbar: Automatik, dauerhafte Einstellungen, manueller OCR-Test, Bildvorschau, Fortschrittsanzeige, Ergebnisse, unklare Ziffernpositionen und aufklappbare Einzelversuche.
+- Englische Fehlermeldungen werden aus den Ergebnisdaten und OCR-Versuchen abgeleitet; die Home-Assistant-Sensor-IDs und gespeicherten Messwerte bleiben unverändert.
+- Zusätzliche englische Projektbeschreibung und App-Anleitung (`README.en.md`), zweisprachige Dokumentation für die App sowie deutsch/englische Feldbeschriftungen in der Home-Assistant-Konfiguration (`translations/de.yaml`, `translations/en.yaml`).
+- Der App-Store-Beschreibungstext nennt den Zweck nun auf Deutsch und Englisch; das Docker-Image enthält das neue Übersetzungsmodul.
+- Regressionstests für die englische Oberfläche, Ergebnisübersetzungen und OCR-Fortschrittsmeldungen ergänzt.
+
 ## 0.8.0
 
 - **Automatik und Test getrennt:** Die automatische Kontrolle steht im Vordergrund, der erweiterte manuelle Test bleibt eingeklappt.

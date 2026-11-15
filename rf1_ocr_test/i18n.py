@@ -81,6 +81,7 @@ EN_UI = {
     "Das Prüfintervall gilt auch für die bereits geplante nächste Prüfung. Bei geänderter Vergleichsgenauigkeit beginnt die Trefferzählung neu.":
         "The interval also applies to the next scheduled check. Changing comparison precision resets the match count.",
     "Manueller Test": "Manual test",
+    "Test einstellen": "Test settings",
     "Test starten": "Start test",
     "Testeinstellungen": "Test settings",
     "Zusätzliche Bild- und OCR-Einstellungen": "Advanced image and OCR settings",

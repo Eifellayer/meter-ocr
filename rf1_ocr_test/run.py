@@ -314,7 +314,7 @@ def main():
         outcome = "capture_unavailable"
         updated = dict(history)
         updated["comparison_decimals"] = decimals
-        updated["check_detail"] = "Das Kamerabild oder die Quelldaten konnten nicht geladen werden."
+        updated["check_detail"] = "Das Zählerbild oder die Messwerte sind nicht verfügbar. Bitte die ESP- bzw. Kameraverbindung prüfen."
         manual_result = {"detail": updated["check_detail"]}
         diagnostics = {}
         try:

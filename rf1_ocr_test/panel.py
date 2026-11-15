@@ -205,7 +205,7 @@ def start_panel(history_path, current_image, good_image, requested, default_deci
     try:
         saved_history = json.loads(history_path.read_text(encoding="utf-8"))
         previous = saved_history.get("manual_result", {})
-        if previous.get("checked_at"):
+        if previous.get("checked_at") and previous.get("status"):
             progress.update(
                 phase="done", message="Letzter manueller Test",
                 attempts=previous.get("ocr_attempts", 0),

@@ -2,9 +2,9 @@
 
 **Sprache / Language:** [Deutsch](README.md) · [English](README.en.md)
 
-**Versionsstatus: Beta.** Unter 0.5.0 gilt Alpha, ab 0.5.0 bis vor 1.0.0 Beta und ab 1.0.0 stabil.
+**Teststand: 0.1.0.** Installiere **Meter OCR Beta** über das [gemeinsame Home-Assistant-Repository](https://github.com/Eifellayer/rf1-kontrollmessung).
 
-Der geprüfte GitHub-Stand liegt auf [stable](https://github.com/Thunder86/rf1-kontrollmessung/tree/stable). Neue Änderungen werden auf [beta](https://github.com/Thunder86/rf1-kontrollmessung/tree/beta) getestet. Das Home-Assistant-Repository behält seine bisherige Adresse und verwendet `main` für veröffentlichte Versionen.
+Der geprüfte GitHub-Stand liegt auf [stable](https://github.com/Eifellayer/rf1-kontrollmessung/tree/stable). Neue Änderungen werden auf [beta](https://github.com/Eifellayer/rf1-kontrollmessung/tree/beta) getestet. Das Home-Assistant-Repository behält seine bisherige Adresse und verwendet `main` für veröffentlichte Versionen.
 
 **Zählerstände lokal aus Kamerabildern lesen und mit Home Assistant abgleichen.**
 
@@ -50,7 +50,7 @@ Beim ersten Öffnen einer frischen Installation wählst du unter **Einstellungen
 
 Für ESPHome richte eine [ESP32-Kamera](https://esphome.io/components/esp32_camera/) mit [nativer API](https://esphome.io/components/api/) ein und füge das Gerät in Home Assistant hinzu. Prüfe das Kamerabild dort und trage anschließend die `camera.*`-Entität in RF1 ein. Öffne **Manuellen Test**, passe den Bildausschnitt an und übernimm die Vorschau in die Automatik. Die App benötigt für diese Betriebsart weder SLFork noch einen Referenzsensor.
 
-Der OCR-Sensor benötigt eine Mehrheit von mindestens zwei OCR-Profilen desselben Bildes. Bei einer unsicheren Lesung oder einem Rückgang gegenüber dem letzten gültigen Stand derselben Kamera wird er als **nicht verfügbar** gemeldet. Ein OCR-Stand ohne Referenz ist eine eigenständige Ablesung. Für das Energie-Dashboard gibt es einen kumulativen Verbrauchssensor. Bestehende Installationen übernehmen zuerst ihre bisherige Bildquelle. Ein späterer Wechsel startet die automatische Bestätigungszählung für die neue Quelle neu.
+Der OCR-Sensor benötigt eine Mehrheit von mindestens zwei OCR-Profilen desselben Bildes. Bei einer unsicheren Lesung oder einem Rückgang gegenüber dem letzten gültigen Stand derselben Kamera wird er als **nicht verfügbar** gemeldet. Ein OCR-Stand ohne Referenz ist eine eigenständige Ablesung. Für das Energie-Dashboard gibt es einen kumulativen Verbrauchssensor. Ein späterer Wechsel startet die automatische Bestätigungszählung für die neue Quelle neu.
 
 ## Kamerabild und Ausschnitt einrichten
 
@@ -83,8 +83,6 @@ Je Ziel wird pro Vorfall höchstens eine erfolgreiche Nachricht erfasst. Wenn du
 ## Sprache der Weboberfläche
 
 **Automatisch (Home Assistant)** verwendet die im angemeldeten Home-Assistant-Profil gewählte Sprache, wenn die App über Ingress darauf zugreifen kann. Unterstützt werden Deutsch und Englisch einschließlich Varianten wie `de-AT` und `en-US`. Fehlt eine unterstützte Profilsprache, gilt die erste passende Browsersprache, sonst Deutsch. Eine ausdrückliche Auswahl von **Deutsch** oder **English** wird pro angemeldetem Ingress-Nutzer gespeichert. Die Auswahl **Automatisch** übernimmt beim nächsten Öffnen oder Neuladen wieder das Profil. Ohne eindeutige Ingress-Identität gilt die manuelle Wahl innerhalb der aktuellen Navigation.
-
-Die frühere Sprachauswahl von 0.8.1 war browserweit. Wähle eine gewünschte dauerhafte Sprache nach dem Update einmal im jeweiligen Konto. Die App übernimmt die Sprache aus der bereits angemeldeten Frontend-Verbindung. In den App-Einstellungen wird nur die manuelle Auswahl je Nutzer gespeichert.
 
 ## Manueller Test
 
@@ -119,7 +117,7 @@ Ein SLFork-Messzeitpunkt wird automatisch nur einmal gezählt. Alte Bilder lasse
 
 ## Installation
 
-1. In Home Assistant unter **Einstellungen → Apps → App installieren → ⋮ → Repositories** die Adresse `https://github.com/Thunder86/rf1-kontrollmessung` hinzufügen.
+1. In Home Assistant unter **Einstellungen → Apps → App installieren → ⋮ → Repositories** die Adresse `https://github.com/Eifellayer/rf1-kontrollmessung` hinzufügen.
 2. **Meter OCR** installieren.
 3. Für SLFork `esp_url` auf die Adresse des ESP setzen (z. B. `http://esp-gaszaehler.local`). Alternativ `kamera_entitaet`, `ausschnitt` und optional `referenz_entitaet` konfigurieren.
 4. App starten, **Weboberfläche öffnen** und mit **Jetzt prüfen** eine Testlesung durchführen.
@@ -153,4 +151,4 @@ Eine Meldung `match` bedeutet Übereinstimmung **bei der eingestellten Genauigke
 
 Meter OCR ist ein kostenloses Hobbyprojekt. Wenn sie dir hilft, freue ich mich über eine [freiwillige PayPal-Spende](https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8).
 
-[Änderungsprotokoll](rf1_ocr_test/CHANGELOG.md) · [Installationshinweise für lokale Altversionen](rf1_ocr_test/README.md) · [English documentation](README.en.md)
+[Änderungsprotokoll](rf1_ocr_test/CHANGELOG.md) · [Home-Assistant-App](rf1_ocr_test/README.md) · [English documentation](README.en.md)

@@ -9,6 +9,7 @@ from secrets import compare_digest, token_urlsafe
 from threading import Lock, Thread
 from urllib.parse import parse_qs, urlsplit
 
+from app_channel import APP_NAME, NAMESPACE
 from checks import (DEFAULT_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, WARNING_DETAIL_AFTER,
                     last_check_at, reschedule_next_check, valid_interval_minutes)
 from consumption import DEFAULT_FLOW_LPH, format_cubic_metres, parse_flow_limit
@@ -22,7 +23,7 @@ SUPERVISOR_ADDRESS = "172.30.32.2"
 
 PAGE = """<!doctype html>
 <html lang="{language}"><meta charset="utf-8"><meta name="viewport" content="width=device-width">
-<title>Meter OCR</title>
+<title>{app_name}</title>
 <style>.resolving-language body{{visibility:hidden}}</style>
 {profile_script}
 <style>
@@ -130,7 +131,7 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 @media(max-width:500px){{body{{padding:.8rem .7rem 2rem}}.panel{{padding:.9rem}}dl{{grid-template-columns:minmax(5.5rem,1fr) minmax(0,1.7fr);gap:.5rem .85rem}}form:not(.language-bar) button{{width:100%;min-height:2.75rem}}}}
 </style>
 <header>
-<h1>Meter OCR</h1>
+<h1>{app_name}</h1>
 <form method="post" action="sprache" class="language-bar" id="language-form">
 <input type="hidden" name="csrf" value="{csrf}">
 <label for="language-select">Sprache / Language</label>
@@ -526,9 +527,10 @@ tick(); setInterval(tick, 1000);
 const automaticBanner = document.querySelector('#automatic-banner');
 const ignoreWarning = document.querySelector('#ignore-automatic-warning');
 const preferenceKey = automaticBanner.dataset.preferenceKey;
+const anonymousPreferenceKey = '{anonymous_banner_key}';
 let ignoredIncident = '';
 try {{
-  ignoredIncident = (preferenceKey ? localStorage : sessionStorage).getItem(preferenceKey || 'rf1-ignored-warning') || '';
+  ignoredIncident = (preferenceKey ? localStorage : sessionStorage).getItem(preferenceKey || anonymousPreferenceKey) || '';
 }} catch (_) {{ /* Storage is optional. */ }}
 function updateBannerVisibility() {{
   automaticBanner.hidden = Boolean(automaticBanner.dataset.incident) &&
@@ -537,7 +539,7 @@ function updateBannerVisibility() {{
 ignoreWarning.addEventListener('click', () => {{
   ignoredIncident = automaticBanner.dataset.incident;
   try {{
-    (preferenceKey ? localStorage : sessionStorage).setItem(preferenceKey || 'rf1-ignored-warning', ignoredIncident);
+    (preferenceKey ? localStorage : sessionStorage).setItem(preferenceKey || anonymousPreferenceKey, ignoredIncident);
   }} catch (_) {{ /* Keep the choice for the current view. */ }}
   updateBannerVisibility();
 }});
@@ -850,10 +852,12 @@ def start_panel(
             page = translate_page(PAGE) if language == "en" else PAGE
             self.reply(page.format(**values,
                 language=language,
+                app_name=APP_NAME,
                 language_mode=mode,
                 automatic_tone=summary["tone"], automatic_heading=summary["heading"],
                 automatic_icon=summary["icon"], automatic_incident=html.escape(summary["incident"]),
-                banner_preference_key=f"rf1-ignored-warning-{user}" if user else "",
+                banner_preference_key=f"{NAMESPACE}-ignored-warning-{user}" if user else "",
+                anonymous_banner_key=f"{NAMESPACE}-ignored-warning",
                 ignore_hidden="" if summary["incident"] else "hidden",
                 profile_script=scripts,
                 language_options=select_options({"auto": automatic, "de": "Deutsch", "en": "English"}, mode),

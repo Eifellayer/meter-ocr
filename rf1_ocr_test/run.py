@@ -19,6 +19,8 @@ from zoneinfo import ZoneInfo
 from PIL import Image, ImageDraw
 from websocket import WebSocketException
 
+from app_channel import APP_NAME, CHECK_ENTITY, LABEL_SUFFIX, NAMESPACE
+
 from checks import (
     DEFAULT_INTERVAL_MINUTES, RETRY_INTERVAL, REVIEW_AFTER, compare_sample, crop_register, read_register, read_with_retries, record_sample,
     explain_uncertain_positions, meter_prefix,
@@ -39,8 +41,8 @@ from transport import open_core
 
 MAX_RESPONSE_BYTES = 3_000_000
 MAX_TRANSFER_BYTES = 11_000
-DESTINATION = Path("/media/rf1/kontrollbild.jpg")
-GOOD_IMAGE = Path("/media/rf1/letzter_treffer.jpg")
+DESTINATION = Path(f"/media/{NAMESPACE}/kontrollbild.jpg")
+GOOD_IMAGE = Path(f"/media/{NAMESPACE}/letzter_treffer.jpg")
 TEST_IMAGE = Path("/data/ocr-testvorschau.jpg")
 HISTORY = Path("/data/kontrollmessung.json")
 OPTIONS = Path("/data/options.json")
@@ -49,11 +51,10 @@ AUTO_RULES = Path("/data/auto-pruefregeln.json")
 LANGUAGE_MODES = Path("/data/rf1-language.json")
 NOTIFICATIONS = Path("/data/benachrichtigungen.json")
 SOURCE_SETTINGS = Path("/data/bildquelle.json")
-ENTITY = "sensor.rf1_kontrollbild"
+ENTITY = f"sensor.{NAMESPACE}_kontrollbild"
 CORE_URL = f"http://supervisor/core/api/states/{ENTITY}"
-CHECK_ENTITY = "sensor.rf1_pruefstatus"
-OCR_ENTITY = "sensor.rf1_ocr_zaehlerstand"
-CONSUMPTION_ENTITY = "sensor.rf1_verbrauch_gesamt"
+OCR_ENTITY = f"sensor.{NAMESPACE}_ocr_zaehlerstand"
+CONSUMPTION_ENTITY = f"sensor.{NAMESPACE}_verbrauch_gesamt"
 MAX_IMAGE_PIXELS = 4_000_000
 Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
 
@@ -268,7 +269,7 @@ def publish(data, jpeg, size, history, now, token, review_after=REVIEW_AFTER):
     payload = {
         "state": data["esp_timestamp"],
         "attributes": {
-            "friendly_name": "RF1 Kontrollbild",
+            "friendly_name": "Meter OCR Kontrollbild" + LABEL_SUFFIX,
             **data,
             **rolling_summary(history, now, review_after),
             "decimal_places": history.get("comparison_decimals", 0),
@@ -288,7 +289,8 @@ def publish_check(history, now, token, review_after=REVIEW_AFTER):
     summary = rolling_summary(history, now, review_after)
     payload = {
         "state": "review_due" if summary["review_due"] else history["check_status"],
-        "attributes": {"friendly_name": "RF1 Prüfstatus", **summary, **history.get("slfork_diagnostics", {})},
+        "attributes": {"friendly_name": "Meter OCR Prüfstatus" + LABEL_SUFFIX,
+                       **summary, **history.get("slfork_diagnostics", {})},
     }
     publish_state(f"http://supervisor/core/api/states/{CHECK_ENTITY}", payload, token)
 
@@ -313,7 +315,7 @@ def publish_standalone(history, camera, token):
         captured = last["image_time"]
     payload = {
         "state": value,
-        "attributes": {"friendly_name": "RF1 OCR-Zählerstand", "unit_of_measurement": "m³",
+        "attributes": {"friendly_name": "Meter OCR Zählerstand" + LABEL_SUFFIX, "unit_of_measurement": "m³",
                        "device_class": "gas", "source_camera": camera, "last_successful_image": captured},
     }
     publish_state(f"http://supervisor/core/api/states/{OCR_ENTITY}", payload, token)
@@ -325,7 +327,7 @@ def publish_consumption(history, token):
         payload = {
             "state": format_cubic_metres(consumption["total_litres"]),
             "attributes": {
-                "friendly_name": "Meter OCR Gasverbrauch gesamt",
+                "friendly_name": "Meter OCR Gasverbrauch gesamt" + LABEL_SUFFIX,
                 "unit_of_measurement": "m³",
                 "device_class": "gas",
                 "state_class": "total_increasing",
@@ -349,13 +351,13 @@ def check_reminder(reminder, history, now, review_after=REVIEW_AFTER):
     try:
         reminder.sync(history, rolling_summary(history, now, review_after), now.timestamp())
     except (OSError, ValueError, WebSocketException) as error:
-        print(f"RF1-Erinnerung konnte nicht aktualisiert werden: {type(error).__name__}")
+        print(f"Meter-OCR-Erinnerung konnte nicht aktualisiert werden: {type(error).__name__}")
     after = json.dumps(history)
     if after != before:
         try:
             atomic_write(HISTORY, after.encode("utf-8"), 0o600)
         except OSError as error:
-            print(f"RF1-Erinnerung konnte nicht gespeichert werden: {type(error).__name__}")
+            print(f"Meter-OCR-Erinnerung konnte nicht gespeichert werden: {type(error).__name__}")
 
 
 def main():
@@ -508,7 +510,7 @@ def main():
     pending_image = None
     startup = True
     published_standalone = bool(history.get("standalone_reading"))
-    print("RF1 Kontrollmessung gestartet")
+    print(f"{APP_NAME} gestartet")
     while True:
         wake_worker.clear()
         active_rules = get_auto_rules()

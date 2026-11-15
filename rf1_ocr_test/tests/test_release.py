@@ -1,5 +1,8 @@
 """Smoke and regression checks for OCR result logic and ingress page."""
 
+import json
+import os
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -18,7 +21,42 @@ from run import draw_test_preview  # noqa: E402
 def formatted_page(language="de"):
     template = translate_page(PAGE) if language == "en" else PAGE
     fields = {name for _, name, _, _ in Formatter().parse(template) if name is not None}
-    return template.format(**{field: "" if field == "profile_script" else "0" for field in fields})
+    values = dict.fromkeys(fields, "0")
+    values.update(profile_script="", app_name="Meter OCR")
+    return template.format(**values)
+
+
+class AppChannelTests(unittest.TestCase):
+    def test_catalog_versions_use_separate_entities_media_and_notices(self):
+        script = """
+import json
+from app_channel import APP_NAME
+import reminder
+import run
+print(json.dumps({
+    "name": APP_NAME,
+    "entities": [run.ENTITY, run.CHECK_ENTITY, run.OCR_ENTITY, run.CONSUMPTION_ENTITY],
+    "media": [str(run.DESTINATION.parent), str(run.GOOD_IMAGE.parent)],
+    "notice": reminder.NOTICE_PREFIX,
+    "notification_target": reminder.CHECK_ENTITY,
+}))
+"""
+        for channel, name, namespace in (
+            ("stable", "Meter OCR", "rf1"), ("beta", "Meter OCR Beta", "meter_ocr_beta"),
+        ):
+            with self.subTest(channel=channel):
+                result = json.loads(subprocess.check_output(
+                    [sys.executable, "-c", script], cwd=APP,
+                    env={**os.environ, "METER_OCR_CHANNEL": channel},
+                ))
+                entities = [f"sensor.{namespace}_{suffix}" for suffix in (
+                    "kontrollbild", "pruefstatus", "ocr_zaehlerstand", "verbrauch_gesamt",
+                )]
+                self.assertEqual(name, result["name"])
+                self.assertEqual(entities, result["entities"])
+                self.assertEqual([f"/media/{namespace}"] * 2, result["media"])
+                self.assertEqual(f"{namespace}_review_", result["notice"])
+                self.assertEqual(entities[1], result["notification_target"])
 
 
 class ComparisonTests(unittest.TestCase):

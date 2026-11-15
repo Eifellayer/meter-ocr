@@ -16,7 +16,7 @@ Diese App überprüft den automatisch ausgelesenen mechanischen Gaszähler mit *
 
 Unter **Benachrichtigungen** lassen sich Hinweis, Companion-Push und E-Mail konfigurieren. Für das Energie-Dashboard stellst du den maximalen Durchfluss nach Qmax ein und wählst `sensor.rf1_verbrauch_gesamt` als Gasverbrauch. [Plausibilitätsprüfung und Energie-Dashboard](../README.md#plausibilitätsprüfung-und-energie-dashboard)
 
-Die bestehenden Entitäten `sensor.rf1_kontrollbild` und `sensor.rf1_pruefstatus` bleiben unverändert. Support: [GitHub Issues](https://github.com/Thunder86/rf1-kontrollmessung/issues).
+Die bestehenden Entitäten `sensor.rf1_kontrollbild` und `sensor.rf1_pruefstatus` bleiben unverändert. Support: [GitHub Issues](https://github.com/Eifellayer/rf1-kontrollmessung/issues).
 
 ## English
 
@@ -32,7 +32,7 @@ Under **Notifications**, configure Home Assistant notices, Companion push or ema
 
 The entity IDs `sensor.rf1_kontrollbild` and `sensor.rf1_pruefstatus` do not change when switching language.
 
-For full setup, explanation of comparison rules, schedules and troubleshooting, consult the [English guide](../README.en.md). For help or bug reports, open a [GitHub issue](https://github.com/Thunder86/rf1-kontrollmessung/issues).
+For full setup, explanation of comparison rules, schedules and troubleshooting, consult the [English guide](../README.en.md). For help or bug reports, open a [GitHub issue](https://github.com/Eifellayer/rf1-kontrollmessung/issues).
 
 ---
 

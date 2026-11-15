@@ -1,4 +1,4 @@
-"""Track a Home Assistant notice and send at most one reminder per RF1 incident."""
+"""Track a Home Assistant notice and send at most one reminder per incident."""
 
 import json
 from threading import Thread
@@ -7,8 +7,13 @@ from urllib.request import Request
 
 from websocket import create_connection
 
+from app_channel import CHECK_ENTITY, LABEL_SUFFIX, NAMESPACE
 from transport import open_core
 from notification_settings import PUSH_SERVICE
+
+NOTICE_PREFIX = f"{NAMESPACE}_review_"
+SKIP_PREFIX = "RF1_SKIP_"
+
 
 class Reminder:
     def __init__(self, token):
@@ -38,8 +43,8 @@ class Reminder:
                         if not line.startswith(b"data:"):
                             continue
                         action = json.loads(line[5:]).get("data", {}).get("action")
-                        if isinstance(action, str) and action.startswith("RF1_SKIP_"):
-                            self.skipped_id = action.removeprefix("RF1_SKIP_")
+                        if isinstance(action, str) and action.startswith(SKIP_PREFIX + NOTICE_PREFIX):
+                            self.skipped_id = action.removeprefix(SKIP_PREFIX)
             except (OSError, ValueError):
                 sleep(10)
 
@@ -97,14 +102,13 @@ class Reminder:
             "Die automatische Kontrolle konnte den Zählerstand wiederholt nicht bestätigen."
         )
         if reminder is None:
-            notification_id = f"rf1_review_{round(incident * 1_000_000)}"
+            notification_id = f"{NOTICE_PREFIX}{round(incident * 1_000_000)}"
             if notification_id not in notices:
                 self.call_service("persistent_notification.create", {
                     "notification_id": notification_id,
-                    "title": "Gaszähler bitte prüfen",
-                    "message": message + " "
-                               "Das Kontrollbild findest du unter Medien → Lokale Medien → rf1. "
-                               "Wenn du den Stand geprüft hast, kannst du diesen Hinweis schließen.",
+                    "title": "Zählerstand bitte prüfen" + LABEL_SUFFIX,
+                    "message": (f"{message} Das Kontrollbild findest du unter Medien → Lokale Medien → {NAMESPACE}. "
+                                "Wenn du den Stand geprüft hast, kannst du diesen Hinweis schließen."),
                 })
                 notices.add(notification_id)
             reminder = {"id": notification_id, "incident": incident, "shown_at": now}
@@ -120,7 +124,7 @@ class Reminder:
             return
 
         payload = {
-            "title": "Gaszähler bitte prüfen",
+            "title": "Zählerstand bitte prüfen" + LABEL_SUFFIX,
             "message": message + (
                 "" if uses_fallback else " Bitte prüfe den Stand am Zähler oder öffne das Kontrollbild in Home Assistant."
             ),
@@ -128,18 +132,18 @@ class Reminder:
         if self.push and not reminder.get("pushed"):
             try:
                 self.call_service(self.push, {**payload, "data": {"tag": reminder["id"], "actions": [
-                    {"action": "URI", "title": "Prüfstatus öffnen", "uri": "entityId:sensor.rf1_pruefstatus"},
-                    {"action": f"RF1_SKIP_{reminder['id']}", "title": "Überspringen"},
+                    {"action": "URI", "title": "Prüfstatus öffnen", "uri": f"entityId:{CHECK_ENTITY}"},
+                    {"action": f"{SKIP_PREFIX}{reminder['id']}", "title": "Überspringen"},
                 ]}})
             except OSError as error:
-                print(f"RF1-Handy-Push konnte nicht gesendet werden: {type(error).__name__}")
+                print(f"Meter-OCR-Handy-Push konnte nicht gesendet werden: {type(error).__name__}")
             else:
                 reminder.update(pushed=True, push_service=self.push)
         if self.target and not reminder.get("target_sent"):
             try:
                 self.call_service("notify.send_message", {**payload, "entity_id": self.target})
             except OSError as error:
-                print(f"RF1-Benachrichtigung konnte nicht gesendet werden: {type(error).__name__}")
+                print(f"Meter-OCR-Benachrichtigung konnte nicht gesendet werden: {type(error).__name__}")
             else:
                 reminder["target_sent"] = True
 

@@ -89,7 +89,7 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <select name="attempts">{auto_attempt_options}</select></label>
 <button type="submit">Speichern</button>
 </form>
-<p class="settings-note">Gilt dauerhaft ab der nächsten automatischen Prüfung – auch nach Neustart. Bereits erfasste Prüfungen bleiben unverändert.</p>
+<p class="settings-note">Gilt dauerhaft ab der nächsten automatischen Prüfung. Bei geänderter Vergleichsgenauigkeit beginnt die Trefferzählung neu.</p>
 {auto_saved_notice}
 </div>
 <details class="panel manual-panel" id="manual-panel">

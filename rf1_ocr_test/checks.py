@@ -83,7 +83,42 @@ def meter_prefix(value, decimals):
     return int(match[1] + fractional)
 
 
-def read_with_retries(read, data, decimals, progress=None, max_attempts=5):
+def comparison_scope(decimals):
+    """Explain precisely which digits participate in a comparison."""
+    if decimals == 0:
+        return "volle Kubikmeter; Nachkommastellen werden nicht verglichen"
+    return f"volle Kubikmeter und {decimals} Nachkommastelle" + ("n" if decimals > 1 else "")
+
+
+def explain_uncertain_positions(readings, decimals):
+    """Explain differences at digit positions relevant to this comparison."""
+    if not readings:
+        return ("Zählerstand nicht sicher erkannt. Es liegt keine verwertbare "
+                "OCR-Lesung vor. Bitte Bildausschnitt und Beleuchtung prüfen.")
+    positions = list(range(5)) + list(range(6, 6 + decimals))
+    unclear = []
+    for position in positions:
+        candidates = {str(reading)[position] if len(str(reading)) > position else "?"
+                      for reading in readings}
+        if len(candidates) <= 1 and all(character.isdigit() for character in candidates):
+            continue
+        place = (f"{position + 1}. Vorkommastelle von links" if position < 5
+                 else f"{position - 5}. Nachkommastelle")
+        options = sorted(character for character in candidates if character.isdigit())
+        if len(options) >= 2:
+            unclear.append(f"{place} (gelesen als {' oder '.join(options)})")
+        else:
+            unclear.append(place)
+    if not unclear:
+        return ("Zählerstand nicht sicher erkannt. Die Lesungen stimmen nicht zuverlässig "
+                "überein. Bitte das Zählerbild prüfen.")
+    return ("Zählerstand nicht sicher erkannt. Unklare Stellen: "
+            + "; ".join(unclear) +
+            ". Die betroffenen Stellen im Testbild und die einzelnen OCR-Versuche "
+            "sind unter „Mehr Infos“ zu sehen.")
+
+
+def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace=None):
     """Read one image up to max_attempts times; stop on the first valid agreement."""
     if type(max_attempts) is not int or not 1 <= max_attempts <= MAX_OCR_ATTEMPTS:
         raise ValueError("OCR-Versuche müssen zwischen 1 und 10 liegen")
@@ -98,6 +133,8 @@ def read_with_retries(read, data, decimals, progress=None, max_attempts=5):
             value = "?????.???"
         status, _ = compare_sample(data, value, decimals)
         readings.append(value)
+        if trace is not None:
+            trace.append(str(value))
         if progress:
             progress(index, f"OCR-Versuch {index} von {max_attempts} abgeschlossen.")
         # Stop immediately on a verified match.
@@ -123,12 +160,12 @@ def read_with_retries(read, data, decimals, progress=None, max_attempts=5):
 
 def compare_sample(data, ocr, decimals, *, ocr_confirmed=True):
     if not ocr_confirmed:
-        return "ocr_unclear", "Zählerstand nicht sicher erkannt. Die Versuche lieferten unterschiedliche Ziffern. Bitte Bildausschnitt, Beleuchtung und Ziffern prüfen."
+        return "ocr_unclear", "Zählerstand nicht sicher erkannt. Bitte die unklaren Stellen im Kamerabild prüfen."
     value = meter_prefix(ocr, decimals)
     if value is None:
         return "ocr_unclear", "Zählerstand nicht lesbar. Mindestens eine benötigte Ziffer konnte nicht erkannt werden. Bitte das Kamerabild prüfen."
     if data.get("reference_required") is False:
-        return "ocr_only", "Zählerstand aus dem Bild gelesen. Eine Gegenprüfung ist ohne Referenzwert nicht möglich."
+        return "ocr_only", "Zählerstand gelesen, aber ohne Referenzwert nicht bestätigt. Vergleichseinstellung: " + comparison_scope(decimals) + "."
     source_status = data.get("slfork_value_status") or ""
     if re.match(r"^[EW][0-9]+(?:\s|$)", str(source_status)):
         return "slfork_unclear", "Der ESP meldet ein Problem mit der Zählerablesung. Bitte den Wert direkt am ESP prüfen."
@@ -141,8 +178,15 @@ def compare_sample(data, ocr, decimals, *, ocr_confirmed=True):
     if raw != actual:
         return "slfork_unclear", "Der ESP liefert widersprüchliche Zählerwerte. Bitte den angezeigten Stand am ESP prüfen."
     if value != actual:
-        return "difference", "Der erkannte Zählerstand stimmt nicht mit dem Vergleichswert überein. Bitte das Zählerbild überprüfen."
-    return "match", "Zählerstand bestätigt: Bildauswertung und Vergleichswert stimmen überein."
+        if decimals == 0:
+            return "difference", "Abweichung: Die vollen Kubikmeter stimmen nicht überein. Bitte das Zählerbild prüfen."
+        return ("difference",
+                f"Abweichung: Die Werte stimmen bei {decimals} Nachkommastelle" +
+                ("n" if decimals > 1 else "") + " nicht überein. Bitte das Zählerbild prüfen.")
+    if decimals == 0:
+        return "match", "Bestätigt: Die vollen Kubikmeter stimmen überein. Nachkommastellen wurden nicht berücksichtigt."
+    return ("match", f"Bestätigt: Zählerstand und Referenzwert stimmen bis auf {decimals} Nachkommastelle" +
+            ("n" if decimals > 1 else "") + " überein.")
 
 
 def rolling_summary(history, now):

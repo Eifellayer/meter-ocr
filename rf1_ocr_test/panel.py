@@ -9,7 +9,7 @@ import re
 from datetime import datetime
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from queue import Full
+from queue import Empty, Full
 from secrets import compare_digest, token_urlsafe
 from threading import Lock, Thread
 from tempfile import NamedTemporaryFile
@@ -79,6 +79,13 @@ header{{display:flex;align-items:baseline;justify-content:space-between;gap:.5re
 .failure-recovery[hidden]{{display:none}}
 .failure-recovery[data-state="waiting"]{{font-weight:650}}
 .activity-status{{margin:.15rem 0 0;color:var(--muted);font-size:.9rem;overflow-wrap:anywhere}}
+.activity-status[data-state="queued"], .activity-status[data-state="working"]{{margin:0 0 .75rem;padding:.7rem .85rem;border:1px solid var(--edge);border-radius:.75rem;color:inherit;font-size:1rem}}
+.activity-status p{{margin:0}}
+#setup-image-test{{margin:.4rem 0 .8rem}}
+.setup-progress{{display:block;width:100%;height:.8rem;margin:.45rem 0;border:0;border-radius:99px;overflow:hidden;accent-color:#c28a25}}
+.setup-progress[value]::-webkit-progress-bar{{background:light-dark(#eee6d1,#473d29)}}
+.setup-progress[value]::-webkit-progress-value{{background:#c28a25;border-radius:99px}}
+.setup-progress[hidden]{{display:none}}
 .activity-status[data-offline="pending"]{{color:light-dark(#704c08,#ffdf8a)}}
 .activity-status[data-offline="true"]{{color:light-dark(#8d282e,#ffc0c1);font-weight:650}}
 .connection-status{{margin:.35rem 0;color:var(--muted);font-size:.9rem}}
@@ -205,6 +212,11 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <button type="button" id="open-manual-settings">Test einstellen</button>
 <button id="start-check" type="submit" form="manual-form">Test starten</button>
 </div></div>
+<div class="activity-status" data-state="{automatic_activity_state}">
+<p role="status" aria-live="polite"><strong>Automatik:</strong> <span id="automatic-activity">{automatic_activity}</span></p>
+<progress id="automatic-progress" class="setup-progress" aria-label="Fortschritt der automatischen Prüfung" {automatic_progress_hidden}></progress>
+</div>
+{wizard_saved_notice}
 <div class="paused-notice" id="paused-notice" {paused_notice_hidden} role="status" aria-live="polite"><strong>Automatik pausiert</strong><p>Es starten keine neuen automatischen Prüfungen. Ein bereits laufender Durchlauf darf noch enden. Manuelle Tests bleiben verfügbar.</p><form method="post" action="automatik-pause" id="resume-auto-form"><input type="hidden" name="lang" value="{language}"><input type="hidden" name="mode" value="{language_mode}"><input type="hidden" name="csrf" value="{csrf}"><input type="hidden" name="paused" value="0"><button type="submit">Automatik fortsetzen</button></form></div>
 <div class="automatic-banner" id="automatic-banner" data-tone="{automatic_tone}"
  data-incident="{automatic_incident}" data-preference-key="{banner_preference_key}">
@@ -220,7 +232,7 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <form method="post" action="automatik-pause" id="pause-auto-form" {pause_button_hidden}><input type="hidden" name="lang" value="{language}"><input type="hidden" name="mode" value="{language_mode}"><input type="hidden" name="csrf" value="{csrf}"><input type="hidden" name="paused" value="1"><button type="submit">Automatik pausieren</button></form>
 <p class="connection-status" id="source-connection" data-state="{source_connection_state}">Quelle: {source_connection}</p>
 <dl><dt>Erkannter Stand</dt><dd id="automatic-ocr">{ocr}</dd>
-<dt>Referenz</dt><dd><span id="automatic-reference">{reference}</span>
+<dt title="Stand aus AI on the Edge oder aus dem gewählten Home-Assistant-Sensor">Vergleichswert</dt><dd><span id="automatic-reference">{reference}</span>
 <small id="automatic-reference-note" class="reference-note" data-epoch="{reference_time}"
  data-fallback="{reference_is_fallback}" hidden></small></dd>
 <dt>Bildzeit</dt><dd id="automatic-image-time" class="stamp" data-epoch="{image_time}">–</dd>
@@ -228,7 +240,6 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <dt>Letzter bestätigter Abgleich</dt><dd id="automatic-last-match" class="stamp" data-epoch="{last_match}">–</dd>
 <dt>Nächste Prüfung</dt><dd id="countdown">–</dd></dl>
 <p class="failure-recovery" id="automatic-recovery" data-state="retrying" {recovery_hidden}>{recovery_notice}</p>
-<p class="activity-status"><strong>Automatik:</strong> <span id="automatic-activity">{automatic_activity}</span></p>
 <details class="ocr-details" id="automatic-ocr-details" hidden>
 <summary>Mehr Infos: Was wurde bei den OCR-Versuchen gelesen?</summary>
 <p class="ocr-scope"></p>
@@ -244,10 +255,11 @@ entity: sensor.rf1_ocr_zaehlerstand
 name: Zählerstand (OCR)</code></pre>
 </details>
 <details class="automatic-images" id="automatic-images"><summary>Letztes Testbild</summary>
-<div class="preview" id="test-preview" data-auto-src="{automatic_preview_src}" data-auto-version="{automatic_preview_version}" data-auto-available="{automatic_preview_available}" {automatic_preview_hidden}>
+<p id="preview-empty" class="legend" {preview_empty_hidden}>Noch kein Testbild verfügbar.</p>
+<div class="preview" id="test-preview" {automatic_preview_hidden}>
 <h2 id="preview-heading">Letztes Testbild</h2>
-<img id="test-preview-image" src="{automatic_preview_src}" alt="Zählerbild mit farbig markierten erkannten und unsicheren Ziffern">
-<p class="legend"><span class="green-key">Grün:</span> Ziffer gelesen · <span class="yellow-key">Gelb:</span> Ziffer schwankte zwischen OCR-Versuchen oder wurde aus mehreren Versuchen zusammengesetzt · <span class="red-key">Rot:</span> Ziffer weiterhin unklar. Die Farben zeigen OCR-Sicherheit, nicht die Übereinstimmung mit dem Referenzstand. Ohne automatisch erkannte Ziffernrahmen sind die Bereiche nur näherungsweise aufgeteilt.</p>
+<img id="test-preview-image"{automatic_preview_src} alt="Letztes Testbild">
+<p class="legend" id="preview-legend" {preview_legend_hidden}><span class="green-key">Grün:</span> Ziffer gelesen · <span class="yellow-key">Gelb:</span> Ziffer schwankte zwischen OCR-Versuchen oder wurde aus mehreren Versuchen zusammengesetzt · <span class="red-key">Rot:</span> Ziffer weiterhin unklar. Die Farben zeigen OCR-Sicherheit, nicht die Übereinstimmung mit dem Referenzstand. Ohne automatisch erkannte Ziffernrahmen sind die Bereiche nur näherungsweise aufgeteilt.</p>
 </div>
 </details>
 <div class="manual-test-area" id="manual-test-area" {manual_area_hidden}>
@@ -322,6 +334,7 @@ name: Zählerstand (OCR)</code></pre>
 </div>
 </div>
 <div class="tab-content" id="view-settings" role="tabpanel" aria-labelledby="tab-settings" {settings_hidden}>
+{reset_notice}
 <div class="panel" id="settings"><h2>Einstellungen</h2>
 <dialog class="setup-dialog" id="setup-dialog" aria-labelledby="setup-title" data-first-run="{setup_first_run}">
 <div class="dialog-heading"><h2 id="setup-title">Einrichtungsassistent</h2>
@@ -385,14 +398,14 @@ name: Zählerstand (OCR)</code></pre>
 entity: sensor.rf1_ocr_zaehlerstand
 name: Zählerstand (OCR)</code></pre>
 </details>
-<div class="setup-controls"><button type="button" class="setup-back">Zurück</button><span class="setup-count"></span><button type="submit">Speichern und Test öffnen</button></div>
+<div class="setup-controls"><button type="button" class="setup-back">Zurück</button><span class="setup-count"></span><button type="submit">Speichern und prüfen</button></div>
 </fieldset>
 <div id="setup-error" class="setup-warning" hidden></div>
+<div id="setup-saving" hidden><p role="status">Einstellungen werden gespeichert …</p><progress class="setup-progress" aria-label="Einstellungen werden gespeichert …"></progress></div>
 </form>
 
 </div>
 </dialog>
-{wizard_saved_notice}
 <details class="manual-panel settings-item" id="source-settings" {source_open}>
 <summary><strong>Bildquelle</strong></summary>
 <div class="manual-content">
@@ -487,7 +500,6 @@ Bei anhaltenden Problemen benachrichtigen
 <p class="settings-note">Setzt die AI-Meter-Reader-Einstellungen und Prüfhistorie auf Standardwerte zurück und entfernt gespeicherte Testbilder. Die Home-Assistant-App-Konfiguration und vorhandenen Entitäten bleiben erhalten.</p>
 <button type="button" id="open-reset">Auf Werkseinstellungen zurücksetzen</button>
 </div></details>
-{reset_notice}
 </div>
 <dialog class="setup-dialog" id="reset-dialog" aria-labelledby="reset-title">
 <h2 id="reset-title">Werkseinstellungen wiederherstellen?</h2>
@@ -498,6 +510,7 @@ Bei anhaltenden Problemen benachrichtigen
 <button type="button" id="cancel-reset">Abbrechen</button>
 <button type="submit">Jetzt zurücksetzen</button>
 </form>
+<p id="reset-progress" class="settings-note" role="status" hidden>Werkreset angefordert. Eine laufende Prüfung kann den Reset verzögern. Bitte warte, bis sich die Einrichtung öffnet.</p>
 </dialog>
 </div>
 </main>
@@ -537,7 +550,9 @@ tabs.forEach((tab, index) => {{
   }});
 }});
 const settingsSections = ['#source-settings', '#automatic-settings', '#notification-settings'];
-const settingsOpen = searchPrefs.get('ui') === 'settings' || ['setup', 'crop'].includes(searchPrefs.get('saved')) || settingsSections.some(selector => document.querySelector(selector).open);
+const selectedTab = searchPrefs.get('ui');
+const settingsOpen = selectedTab ? selectedTab === 'settings' :
+  searchPrefs.get('saved') === 'crop' || settingsSections.some(selector => document.querySelector(selector).open);
 activateTab(settingsOpen ? 'settings' : 'overview', false);
 const setupDialog = document.querySelector('#setup-dialog');
 // Keep the first-run modal outside the tab panel so its hidden ancestor cannot hide it.
@@ -559,20 +574,44 @@ document.querySelector('#open-interval-settings').addEventListener('click', () =
   document.querySelector('#automatic-settings').open = true;
   document.querySelector('#automatic-settings').scrollIntoView({{behavior: 'smooth', block: 'start'}});
 }});
-if (searchPrefs.get('reset') === 'done') localStorage.removeItem(setupDismissKey);
-if (searchPrefs.get('reset') === 'pending') {{
+const resetState = '{reset_state}';
+if (resetState === 'done') localStorage.removeItem(setupDismissKey);
+if (resetState === 'pending') {{
+  setTimeout(() => location.reload(), 2000);
+}} else if (searchPrefs.has('reset')) {{
   searchPrefs.delete('reset');
   history.replaceState(null, '', location.pathname + (searchPrefs.size ? '?' + searchPrefs : ''));
-  setTimeout(() => location.reload(), 5000);
 }}
 if (setupDialog.dataset.firstRun === 'true' && localStorage.getItem(setupDismissKey) !== '1') {{
   activateTab('settings', false);
   setupDialog.showModal();
 }}
 const resetDialog = document.querySelector('#reset-dialog');
+const resetForm = document.querySelector('#reset-form');
+const resetProgress = document.querySelector('#reset-progress');
 document.querySelector('#open-reset').addEventListener('click', () => resetDialog.showModal());
 document.querySelector('#cancel-reset').addEventListener('click', () => resetDialog.close());
+resetDialog.addEventListener('cancel', event => {{
+  if (!resetProgress.hidden) event.preventDefault();
+}});
+resetForm.addEventListener('submit', event => {{
+  if (!resetProgress.hidden) {{
+    event.preventDefault();
+    return;
+  }}
+  resetProgress.hidden = false;
+  resetForm.querySelectorAll('button').forEach(button => button.disabled = true);
+}});
 const setupForm = document.querySelector('#setup-form');
+setupForm.addEventListener('submit', event => {{
+  const saving = document.querySelector('#setup-saving');
+  if (!saving.hidden) {{
+    event.preventDefault();
+    return;
+  }}
+  saving.hidden = false;
+  setupForm.querySelector('button[type="submit"]').disabled = true;
+}});
 const setupSteps = [...setupForm.querySelectorAll('.setup-step')];
 let setupStep = 0;
 function showSetupStep(index) {{
@@ -690,7 +729,8 @@ async function refreshTestStatus() {{
     const detail = document.querySelector('#test-result');
     const preview = document.querySelector('#test-preview');
     const previewImage = document.querySelector('#test-preview-image');
-    const previewHeading = document.querySelector('#preview-heading');
+    const previewEmpty = document.querySelector('#preview-empty');
+    const previewLegend = document.querySelector('#preview-legend');
     const automaticImages = document.querySelector('#automatic-images');
     const sourcePreview = document.querySelector('#test-source-preview');
     const sourceImage = document.querySelector('#test-source-image');
@@ -748,24 +788,24 @@ async function refreshTestStatus() {{
       detail.hidden = true;
       extra.hidden = true;
     }}
-    if (job.phase === 'done' && job.preview) {{
-      preview.hidden = false;
-      previewHeading.textContent = 'Letztes Testbild';
-      const url = 'testvorschau.jpg?v=' + encodeURIComponent(String(job.checked_at));
-      if (previewImage.getAttribute('src') !== url) previewImage.setAttribute('src', url);
-      automaticImages.open = true;
-    }} else if (!active) {{
-      const version = Number(job.automatic_preview || 0);
-      if (version) {{
-        preview.dataset.autoVersion = String(version);
-        preview.dataset.autoAvailable = 'true';
-        preview.dataset.autoSrc = 'automatikvorschau.jpg?v=' + encodeURIComponent(String(version));
-      }}
-      const available = preview.dataset.autoAvailable === 'true';
-      preview.hidden = !available;
-      previewHeading.textContent = 'Letztes Testbild';
-      if (available && previewImage.getAttribute('src') !== preview.dataset.autoSrc) {{
-        previewImage.setAttribute('src', preview.dataset.autoSrc);
+    const automaticVersion = job.automatic_preview || job.current_image;
+    const showManual = job.phase === 'done' && job.preview &&
+      (!automaticVersion || job.checked_at * 1e9 >= Number(automaticVersion));
+    const marked = showManual || Boolean(job.automatic_preview);
+    const version = showManual ? job.checked_at : automaticVersion;
+    const file = showManual ? 'testvorschau.jpg' : job.automatic_preview ? 'automatikvorschau.jpg' : 'aktuell.jpg';
+    previewLegend.hidden = !marked;
+    if (!version) {{
+      preview.hidden = true;
+      previewEmpty.hidden = false;
+      previewImage.removeAttribute('src');
+    }} else {{
+      const url = file + '?v=' + encodeURIComponent(String(version));
+      previewImage.onload = () => {{ preview.hidden = false; previewEmpty.hidden = true; }};
+      previewImage.onerror = () => {{ preview.hidden = true; previewEmpty.hidden = false; }};
+      if (previewImage.getAttribute('src') !== url) {{
+        previewImage.setAttribute('src', url);
+        if (showManual) automaticImages.open = true;
       }}
     }}
     apply.hidden = !(job.phase === 'done' && job.can_apply_crop);
@@ -808,16 +848,16 @@ document.querySelector('#open-manual-settings').addEventListener('click', () => 
   manualPanel.open = true;
   manualPanel.scrollIntoView({{block: 'nearest'}});
 }});
+document.querySelector('#setup-image-test')?.addEventListener('click', () => {{
+  document.querySelector('#open-manual-settings').click();
+  manualForm.querySelector('[name="image"]').focus();
+}});
 manualTestArea.hidden = testBox.hidden;
 const testRequest = searchPrefs.get('test');
-if (['queued', 'open', 'busy', 'ready'].includes(testRequest)) {{
+if (['queued', 'open', 'busy'].includes(testRequest)) {{
   manualTestArea.hidden = false;
-  if (testRequest === 'open' || testRequest === 'ready') manualPanel.open = true;
+  if (testRequest === 'open') manualPanel.open = true;
   else if (!testBox.hidden) testBox.focus();
-  if (testRequest === 'ready') {{
-    document.querySelector('#manual-test').scrollIntoView({{block: 'start'}});
-    manualForm.querySelector('[name="image"]').focus({{preventScroll: true}});
-  }}
   searchPrefs.delete('test');
   history.replaceState(null, '', location.pathname + (searchPrefs.size ? '?' + searchPrefs : ''));
 }}
@@ -865,6 +905,7 @@ ignoreWarning.addEventListener('click', () => {{
 updateBannerVisibility();
 
 async function refreshAutomatic() {{
+  let refreshDelay = 15000;
   try {{
     const response = await fetch('automatic?lang=' + lang, {{cache: 'no-store'}});
     if (!response.ok) throw new Error();
@@ -885,8 +926,24 @@ async function refreshAutomatic() {{
     if (detail.textContent !== sample.detail) detail.textContent = sample.detail;
     updateBannerVisibility();
     document.querySelector('#automatic-ocr').textContent = sample.ocr;
-    document.querySelector('.activity-status').dataset.offline = 'false';
-    document.querySelector('#automatic-activity').textContent = sample.activity;
+    const activityStatus = document.querySelector('.activity-status');
+    activityStatus.dataset.offline = 'false';
+    activityStatus.dataset.state = sample.activity_state;
+    const activityText = document.querySelector('#automatic-activity');
+    if (activityText.textContent !== sample.activity) activityText.textContent = sample.activity;
+    const progress = document.querySelector('#automatic-progress');
+    progress.hidden = !['queued', 'working'].includes(sample.activity_state);
+    if (!progress.hidden) {{
+      refreshDelay = 2000;
+      if (sample.activity_total > 0 && sample.activity_completed != null) {{
+        progress.max = sample.activity_total;
+        progress.value = sample.activity_completed;
+      }} else {{
+        progress.removeAttribute('value');
+      }}
+    }} else if (!sample.paused && next) {{
+      refreshDelay = Math.min(15000, Math.max(1000, next * 1000 - Date.now()));
+    }}
     const recovery = document.querySelector('#automatic-recovery');
     recovery.hidden = !sample.failure_attempts;
     recovery.dataset.state = sample.retry_suppressed ? 'waiting' : 'retrying';
@@ -900,20 +957,11 @@ async function refreshAutomatic() {{
         ['last-match', sample.last_match]]) {{
       document.querySelector('#automatic-' + id).textContent = value ? formatStamp(value) : '–';
     }}
-    for (const [name, file] of [['current', 'aktuell.jpg'], ['good', 'treffer.jpg']]) {{
-      const timestamp = sample[name];
-      if (!timestamp) continue;
-      const container = document.querySelector('#automatic-' + name);
-      const image = container.querySelector('img') || document.createElement('img');
-      const url = file + '?v=' + timestamp;
-      if (image.getAttribute('src') === url) continue;
-      image.alt = name === 'current' ? 'Aktuelles Kontrollbild' : 'Kontrollbild des letzten Treffers';
-      image.src = url;
-      if (!image.parentNode) container.replaceChildren(image);
-    }}
   }} catch (_) {{
     automaticStatusFailures += 1;
     const status = document.querySelector('.activity-status');
+    document.querySelector('#automatic-progress').hidden = true;
+    status.dataset.state = 'unknown';
     const unavailable = automaticStatusFailures >= 3;
     status.dataset.offline = unavailable ? 'true' : 'pending';
     document.querySelector('#automatic-activity').textContent = lang === 'en'
@@ -924,7 +972,7 @@ async function refreshAutomatic() {{
         ? 'Der App-Status antwortet seit etwa 45 Sekunden nicht. Neuer Versuch läuft …'
         : 'Statusaktualisierung kurz fehlgeschlagen. Neuer Versuch läuft …';
   }}
-  setTimeout(refreshAutomatic, 15000);
+  setTimeout(refreshAutomatic, refreshDelay);
 }}
 refreshAutomatic();
 </script></html>"""
@@ -953,7 +1001,8 @@ def start_panel(
     get_auto_rules, save_auto_rules, default_crop, default_width, test_image,
     load_language_modes, save_language_modes, get_delivery, save_delivery, get_source, save_source,
     wake_worker=None, *, address=("0.0.0.0", 8099), test_source_image=None, automatic_preview=None,
-    request_factory_reset=None, skip_setup=None, get_activity=None, get_auto_paused=None, save_auto_paused=None,
+    request_factory_reset=None, get_reset_status=None, skip_setup=None, get_activity=None,
+    get_auto_paused=None, save_auto_paused=None,
 ):
     images = {"/aktuell.jpg": current_image, "/treffer.jpg": good_image,
               "/testvorschau.jpg": test_image}
@@ -1037,10 +1086,14 @@ def start_panel(
 
     def reset_progress_state():
         with request_lock:
+            try:
+                requested.get_nowait()
+            except Empty:
+                pass
             progress.update(
                 request_id=progress["request_id"] + 1, phase="idle",
                 message="Noch kein manueller Test gestartet.", attempts=0,
-                checked_at=0, outcome=None, detail="", preview=False,
+                started_at=0, checked_at=0, outcome=None, detail="", preview=False,
                 can_apply_crop=False, readings=[], ocr=None, reference=None,
                 reference_time=None, reference_is_fallback=False, image_time=None,
             )
@@ -1052,8 +1105,17 @@ def start_panel(
         except (OSError, ValueError):
             return {}
 
+    def image_version(path):
+        if path is None:
+            return None
+        try:
+            return path.stat().st_mtime_ns
+        except FileNotFoundError:
+            return None
+
     def automatic_summary(history, language, auto_rules):
         reschedule_next_check(history, auto_rules.get("interval_minutes", DEFAULT_INTERVAL_MINUTES))
+        paused = bool(get_auto_paused()) if get_auto_paused else False
         detail = history.get("check_detail")
         precision_pending = any(history.get(key, value) != value for key, value in (
             ("comparison_decimals", auto_rules["decimals"]),
@@ -1091,8 +1153,19 @@ def start_panel(
                     tone = "problem"
                 incident = str(failure_since) if tone == "warning" else f"critical-{failure_since}"
                 show_attempts = status == "ocr_unclear"
+            elif status in ("stale_sample", "capture_unavailable") and not history.get("last_epoch"):
+                heading = "Noch kein aktuelles Zählerbild"
+                detail = ("Waiting for a current meter image. The app will retry automatically."
+                          if language == "en" else
+                          "Warte auf ein aktuelles Zählerbild. Die App versucht es automatisch erneut.")
             else:
                 detail = ""
+            if status == "difference":
+                heading = "Ablesung und Vergleichswert weichen ab" if not prolonged else heading
+                instructions = ("Vergleiche beide Werte mit dem Stand direkt am Zähler."
+                                if prolonged or paused else
+                                "Die App prüft automatisch erneut. Bleibt der Unterschied, vergleiche beide Werte mit dem Stand direkt am Zähler.")
+                detail = instructions if language == "de" else EN_UI[instructions]
         if language == "en":
             heading = EN_UI[heading]
         try:
@@ -1143,14 +1216,16 @@ def start_panel(
             "retry_suppressed": retry_suppressed,
             "recovery_notice": recovery_notice,
             "activity": activity.get("detail", "Wartet auf die nächste automatische Prüfung."),
-            "paused": bool(get_auto_paused()) if get_auto_paused else False,
+            "activity_state": activity.get("state", "waiting"),
+            "activity_completed": activity.get("completed"),
+            "activity_total": activity.get("total"),
+            "paused": paused,
             "source_connection": source_connection,
             "source_connection_state": history.get("source_connection_status", "unknown"),
             "decimals": history.get("comparison_decimals", default_decimals),
-            "current": current_image.stat().st_mtime_ns if current_image.exists() else None,
-            "good": good_image.stat().st_mtime_ns if good_image.exists() else None,
-            "automatic_preview": automatic_preview.stat().st_mtime_ns if automatic_preview is not None and automatic_preview.exists() else None,
-            "automatic_preview": automatic_preview.stat().st_mtime_ns if automatic_preview is not None and automatic_preview.exists() else None,
+            "current": image_version(current_image),
+            "good": image_version(good_image),
+            "automatic_preview": image_version(automatic_preview),
         }
 
     class Handler(BaseHTTPRequestHandler):
@@ -1201,11 +1276,11 @@ def start_panel(
             if path == "/status":
                 with request_lock:
                     snapshot = dict(progress)
+                snapshot["preview"] = snapshot["preview"] and test_image.is_file()
+                snapshot["can_apply_crop"] = snapshot["can_apply_crop"] and snapshot["preview"]
                 snapshot["crop_id"] = str(snapshot["checked_at"]) if snapshot["can_apply_crop"] else ""
-                snapshot["automatic_preview"] = (
-                    automatic_preview.stat().st_mtime_ns
-                    if automatic_preview is not None and automatic_preview.exists() else None
-                )
+                snapshot["automatic_preview"] = image_version(automatic_preview)
+                snapshot["current_image"] = image_version(current_image)
                 if language == "en":
                     snapshot["message"] = english_progress(snapshot.get("message"))
                     if snapshot.get("detail"):
@@ -1252,6 +1327,7 @@ def start_panel(
                      "Wähle eine Bildquelle, um die automatische Kontrolle zu starten.")
             values = {name: html.escape(summary[name]) for name in ("ocr", "reference", "detail")}
             values["automatic_activity"] = html.escape(summary["activity"])
+            values["automatic_activity_state"] = html.escape(summary["activity_state"])
             values["recovery_notice"] = html.escape(summary["recovery_notice"])
             values["source_connection"] = html.escape(summary["source_connection"])
             values["source_connection_state"] = html.escape(summary["source_connection_state"])
@@ -1263,11 +1339,23 @@ def start_panel(
             manual_precision = min(int(settings.get("decimals", auto_rules["decimals"])),
                                    auto_rules["fraction_digits"])
             saved = query.get("saved", [""])[0]
-            settings_tab_active = (
-                query.get("ui", [""])[0] == "settings"
-                or saved in ("setup", "1", "crop", "notifications", "source")
-                or setup_pending
-            )
+            reset_state = query.get("reset", [""])[0]
+            if reset_state == "pending" and get_reset_status is not None:
+                reset_state = get_reset_status()
+                if reset_state not in ("pending", "done", "failed"):
+                    reset_state = "failed"
+            if reset_state not in ("pending", "done", "failed"):
+                reset_state = ""
+            reset_message = {
+                "done": "Werkseinstellungen wiederhergestellt. Die Einrichtung öffnet sich erneut.",
+                "pending": "Werkreset läuft noch. Die Einrichtung öffnet sich, sobald er fertig ist.",
+                "failed": "Werkreset konnte nicht vollständig ausgeführt werden.",
+            }.get(reset_state, "")
+            if language == "en" and reset_message:
+                reset_message = EN_UI[reset_message]
+            selected_tab = query.get("ui", [""])[0]
+            settings_tab_active = (selected_tab == "settings" if selected_tab in ("settings", "overview") else
+                                   saved in ("1", "crop", "notifications", "source") or setup_pending)
             saved_message = (
                 "Einrichtung gespeichert." if saved == "setup" else
                 "Automatische Prüfregeln gespeichert." if saved == "1" else
@@ -1300,10 +1388,13 @@ def start_panel(
                 '</details>'
             )
             page = translate_page(PAGE) if language == "en" else PAGE
+            preview_file = "automatikvorschau.jpg" if summary["automatic_preview"] else "aktuell.jpg"
+            preview_version = summary["automatic_preview"] or summary["current"]
             self.reply(page.format(**values,
                 language=language,
                 app_name=APP_NAME,
                 language_mode=mode,
+                automatic_progress_hidden="" if summary["activity_state"] in ("queued", "working") else "hidden",
                 automatic_tone=summary["tone"], automatic_heading=summary["heading"],
                 automatic_icon=summary["icon"], automatic_incident=html.escape(summary["incident"]),
                 banner_preference_key=f"{NAMESPACE}-ignored-warning-{user}" if user else "",
@@ -1314,7 +1405,7 @@ def start_panel(
                 settings_hidden="" if settings_tab_active else "hidden",
                 language_options=select_options({"auto": automatic, "de": "Deutsch", "en": "English"}, mode),
                 settings_open="open" if saved in ("1", "crop") else "",
-                setup_first_run=str(bool(setup_pending)).lower(),
+                setup_first_run=str(bool(setup_pending or reset_state == "done")).lower(),
                 wizard_source_options=select_options(source_choices, source["mode"]),
                 meter_display_options=select_options({
                     "rollers": "Number rollers" if language == "en" else "Ziffernrollen",
@@ -1332,7 +1423,11 @@ def start_panel(
                     CROP_MODES_EN if language == "en" else CROP_MODES, auto_rules["crop_mode"]),
                 fallback_value=html.escape(auto_rules["fallback_value"], quote=True),
                 fallback_time=html.escape(auto_rules["fallback_time"], quote=True),
-                wizard_saved_notice=auto_saved_notice if saved == "setup" else "",
+                wizard_saved_notice=(
+                    auto_saved_notice + '<button type="button" id="setup-image-test">' +
+                    ("Test your own image" if language == "en" else "Eigenes Bild testen") + '</button>'
+                    if saved == "setup" else ""
+                ),
                 manual_open="open" if test == "open" else "",
                 test_hidden="" if test_visible or test in ("queued", "busy") else "hidden",
                 test_source_visible="" if test_visible else "hidden",
@@ -1379,21 +1474,15 @@ def start_panel(
                 manual_reference=html.escape(str(settings.get("manual_reference", auto_rules["fallback_value"])),
                                              quote=True),
                 test_source_preview=test_source_preview,
-                automatic_preview_src=(
-                    f'automatikvorschau.jpg?v={summary["automatic_preview"]}'
-                    if summary["automatic_preview"] else 'automatikvorschau.jpg?v=0'
-                ),
-                automatic_preview_version=summary["automatic_preview"] or 0,
-                automatic_preview_available=str(bool(summary["automatic_preview"])).lower(),
-                automatic_preview_hidden='' if summary["automatic_preview"] else 'hidden',
+                automatic_preview_src=f' src="{preview_file}?v={preview_version}"' if preview_version else "",
+                automatic_preview_hidden="" if preview_version else "hidden",
+                preview_empty_hidden="hidden" if preview_version else "",
+                preview_legend_hidden="" if summary["automatic_preview"] else "hidden",
                 reset_notice=(
-                    '<p class="save-notice" role="status">' + html.escape({
-                        "done": "Werkseinstellungen wiederhergestellt. Die Einrichtung öffnet sich erneut.",
-                        "pending": "Werkreset läuft noch. Bitte die Seite in Kürze neu laden.",
-                        "failed": "Werkreset konnte nicht vollständig ausgeführt werden.",
-                    }.get(query.get("reset", [""])[0], "")) + '</p>'
-                    if query.get("reset", [""])[0] in ("done", "pending", "failed") else ""
+                    '<p class="failure-recovery" role="status">' + html.escape(reset_message) + '</p>'
+                    if reset_message else ""
                 ),
+                reset_state=reset_state,
                 manual_area_hidden='' if test in ("queued", "busy", "open") else 'hidden',
                 crop_mode_options=select_options(
                     CROP_MODES_EN if language == "en" else CROP_MODES,
@@ -1415,18 +1504,6 @@ def start_panel(
                 last_match=summary["last_match"] or 0,
                 next_check=json.dumps(summary["next_check"]),
                 recovery_hidden="hidden" if not summary["failure_attempts"] else "",
-                current=(
-                    '<img src="aktuell.jpg?v={}" alt="'.format(summary["current"]) +
-                    ("Latest check image" if language == "en" else "Aktuelles Kontrollbild") + '">'
-                    if current_image.exists() else
-                    ("No check image available yet." if language == "en" else "Noch kein Kontrollbild.")
-                ),
-                good=(
-                    '<img src="treffer.jpg?v={}" alt="'.format(summary["good"]) +
-                    ("Image from last match" if language == "en" else "Kontrollbild des letzten Treffers") + '">'
-                    if good_image.exists() else
-                    ("No confirmed image available yet." if language == "en" else "Noch kein bestätigtes Bild.")
-                ),
             ).encode("utf-8"), "text/html; charset=utf-8")
 
         def do_POST(self):
@@ -1544,8 +1621,6 @@ def start_panel(
                 return
             if path == "/werkreset":
                 result = request_factory_reset() if request_factory_reset is not None else "failed"
-                if result == "done":
-                    reset_progress_state()
                 if result not in ("done", "pending", "failed"):
                     result = "failed"
                 self.redirect("?reset=" + result + "&ui=settings" + keep_mode)
@@ -1628,10 +1703,10 @@ def start_panel(
                     }
                     with source_lock:
                         save_source(source_values)
-                    with rules_lock:
-                        save_auto_rules(rules_values)
                     with delivery_lock:
                         save_delivery(delivery_values)
+                    with rules_lock:
+                        save_auto_rules(rules_values)
                 except (ValueError, TypeError):
                     problem(400, "Bitte prüfe Bildquelle, Ziffernaufteilung und Fallback-Wert.",
                             "Check the image source, digit layout and fallback reading.")
@@ -1639,7 +1714,7 @@ def start_panel(
                 except OSError:
                     problem(503)
                     return
-                self.redirect("?saved=setup&test=ready&ui=overview" + keep_mode)
+                self.redirect("?saved=setup&ui=overview" + keep_mode)
                 return
 
             if path == "/bildquelle":
@@ -1827,4 +1902,4 @@ def start_panel(
 
     server = ThreadingHTTPServer(address, Handler)
     Thread(target=server.serve_forever, daemon=True).start()
-    return server, update_progress
+    return server, update_progress, reset_progress_state

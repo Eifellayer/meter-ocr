@@ -12,7 +12,7 @@ import re
 import subprocess
 from queue import Empty, Queue
 from tempfile import NamedTemporaryFile
-from threading import Event
+from threading import Event, Lock
 import time
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -486,6 +486,13 @@ def main():
     default_decimals = options["vergleich_nachkommastellen"]
     default_attempts = options["ocr_versuche"]
     wake_worker = Event()
+    automatic_request = handled_automatic_request = None
+
+    def request_automatic_check():
+        nonlocal automatic_request
+        automatic_request = object()
+        wake_worker.set()
+
     auto_rules = {"decimals": default_decimals, "attempts": default_attempts, "polarity": "auto",
                   "crop_mode": "auto", "crop": options["ausschnitt"],
                   "width": options["vorkomma_breite"], "rotation": 0,
@@ -593,7 +600,6 @@ def main():
         interval_minutes = values.get("interval_minutes", auto_rules["interval_minutes"])
         if not valid_interval_minutes(interval_minutes):
             raise ValueError("Ungültiges Prüfintervall")
-        interval_changed = interval_minutes != auto_rules["interval_minutes"]
         updated_rules = {**auto_rules, **values, "rotation": rotation, "max_flow_lph": max_flow,
                          "interval_minutes": interval_minutes, "integer_digits": integer_digits,
                          "fraction_digits": fraction_digits, "meter_display": meter_display,
@@ -601,10 +607,7 @@ def main():
         updated_rules["crop"] = ",".join(str(part) for part in coords)
         atomic_write(AUTO_RULES, json.dumps(updated_rules, indent=2).encode("utf-8"), 0o600)
         auto_rules = updated_rules
-        # Saving automatic settings schedules a fresh run immediately.
-        history["next_check_at"] = time.time()
-        atomic_write(HISTORY, json.dumps(history).encode("utf-8"), 0o600)
-        wake_worker.set()
+        request_automatic_check()
 
     requested = Queue(maxsize=1)
     try:
@@ -619,12 +622,12 @@ def main():
     def save_auto_paused(value):
         if type(value) is not bool:
             raise ValueError("Pausenzustand muss wahr oder falsch sein")
-        if not value:
-            history["next_check_at"] = time.time()
-            atomic_write(HISTORY, json.dumps(history).encode("utf-8"), 0o600)
         atomic_write(AUTO_PAUSED, json.dumps({"paused": value}).encode("utf-8"), 0o600)
         auto_paused["value"] = value
-        wake_worker.set()
+        if value:
+            wake_worker.set()
+        else:
+            request_automatic_check()
     def save_language_modes(modes):
         atomic_write(LANGUAGE_MODES, json.dumps(modes).encode("utf-8"), 0o600)
 
@@ -652,18 +655,15 @@ def main():
         delivery = validated
 
     reset_requested = Event()
-    reset_finished = Event()
-    reset_result = {"value": "pending"}
+    reset_lock = Lock()
+    reset_result = {"value": "idle"}
 
     def request_factory_reset():
-        if reset_requested.is_set():
-            return "pending"
-        reset_finished.clear()
-        reset_result["value"] = "pending"
-        reset_requested.set()
-        wake_worker.set()
-        if reset_finished.wait(timeout=60):
-            return reset_result["value"]
+        with reset_lock:
+            if reset_result["value"] != "pending":
+                reset_result["value"] = "pending"
+                reset_requested.set()
+                wake_worker.set()
         return "pending"
 
     def skip_setup():
@@ -678,16 +678,22 @@ def main():
                            "Einrichtung erforderlich. Bitte Bildquelle festlegen." if setup_pending else
                            "App läuft. Wartet auf die nächste automatische Prüfung.")}
 
-    def set_activity(state, detail):
-        activity.update(state=state, detail=detail, updated_at=time.time())
+    def set_activity(state, detail, *, completed=None, total=None):
+        activity.update(state=state, detail=detail, updated_at=time.time(), completed=completed, total=total)
 
-    _, update_progress = start_panel(
+    def get_automatic_activity():
+        if not get_auto_paused() and automatic_request is not handled_automatic_request:
+            return {"state": "queued", "detail": "Einstellungen gespeichert. Prüfung startet gleich."}
+        return dict(activity)
+
+    _, update_progress, reset_manual_progress = start_panel(
         HISTORY, DESTINATION, GOOD_IMAGE, requested, default_decimals, default_attempts,
         get_auto_rules, save_auto_rules, options["ausschnitt"], options["vorkomma_breite"], TEST_IMAGE,
         partial(load_preferences, LANGUAGE_MODES), save_language_modes, get_delivery, save_delivery, get_source, save_source,
         wake_worker.set, test_source_image=TEST_SOURCE_IMAGE, automatic_preview=AUTOMATIC_PREVIEW,
-        request_factory_reset=request_factory_reset, skip_setup=skip_setup,
-        get_activity=lambda: dict(activity),
+        request_factory_reset=request_factory_reset, get_reset_status=lambda: reset_result["value"],
+        skip_setup=skip_setup,
+        get_activity=get_automatic_activity,
         get_auto_paused=get_auto_paused, save_auto_paused=save_auto_paused,
     )
     reminder = Reminder(token)
@@ -699,6 +705,7 @@ def main():
     def perform_factory_reset():
         nonlocal history, configured_source, setup_pending, auto_rules, delivery
         nonlocal pending_image, startup, published_standalone, snapshot
+        nonlocal handled_automatic_request
         try:
             reminder.clear_for_reset(history)
             paths = (
@@ -719,6 +726,8 @@ def main():
             published_standalone = False
             snapshot = {**snapshot, "setup_pending": True}
             atomic_write(EFFECTIVE_OPTIONS, json.dumps(snapshot, indent=2).encode("utf-8"), 0o600)
+            handled_automatic_request = automatic_request
+            reset_manual_progress()
             reset_result["value"] = "done"
         except (OSError, ValueError, TypeError) as error:
             print(f"Werkreset konnte nicht abgeschlossen werden: {type(error).__name__}")
@@ -729,11 +738,12 @@ def main():
         if reset_requested.is_set():
             reset_requested.clear()
             perform_factory_reset()
-            reset_finished.set()
             continue
+        requested_automatic_check = automatic_request
+        run_automatic_now = requested_automatic_check is not handled_automatic_request
         active_rules = get_auto_rules()
         interval_minutes = active_rules["interval_minutes"]
-        if reschedule_next_check(history, interval_minutes):
+        if not run_automatic_now and reschedule_next_check(history, interval_minutes):
             try:
                 atomic_write(HISTORY, json.dumps(history).encode("utf-8"), 0o600)
             except OSError as error:
@@ -774,7 +784,7 @@ def main():
             set_activity("waiting", "Einrichtung erforderlich. Bitte Bildquelle festlegen.")
             wake_worker.wait(timeout=2)
             continue
-        if remaining > 0 and not startup and not manual and not source_changed:
+        if remaining > 0 and not startup and not manual and not source_changed and not run_automatic_now:
             set_activity("waiting", "App läuft. Wartet auf die nächste automatische Prüfung.")
             # Refresh status after a Home Assistant restart, even between checks.
             if "check_status" in history:
@@ -793,8 +803,11 @@ def main():
             wake_worker.wait(timeout=min(remaining, RETRY_INTERVAL))
             continue
 
-        keep_schedule = startup and remaining > 0 and not source_changed
+        keep_schedule = startup and remaining > 0 and not source_changed and not run_automatic_now
         startup = startup and manual
+        if not manual:
+            set_activity("working", "Automatische Prüfung startet …")
+            handled_automatic_request = requested_automatic_check
         data = None
         outcome = "capture_unavailable"
         source_history = dict(history)
@@ -830,6 +843,7 @@ def main():
         diagnostics = {}
         sample = None
         raw_fallback = False
+        automatic_preview_ready = False
         live_deadline = (time.monotonic() + LIVE_CAPTURE_WINDOW_SECONDS
                          if active_source["mode"] == "camera" else None)
         try:
@@ -845,14 +859,16 @@ def main():
                 })
             else:
                 if not manual:
-                    set_activity("working", "Kamerabild wird aufgenommen." if camera else
-                                 "Bild und Messwerte werden vom ESP abgerufen.")
+                    set_activity("working", "Warte auf ein Kamerabild …" if camera else
+                                 "Warte auf Bild und Messwerte vom ESP …")
                 result = capture_camera(
                     camera, reference, token, zone,
                     timeout=min(8, max(0.2, live_deadline - time.monotonic())) if live_deadline else 8,
                 ) if camera else capture(base, diagnostics)
             if result is None and not slfork_cycle_failed(diagnostics):
                 print("Noch kein ausgerichtetes SLFork-Bild verfügbar. Neuer Versuch in 10 Sekunden.")
+                if not manual:
+                    set_activity("working", "Warte auf ein aktuelles Bild vom ESP …")
                 time.sleep(10)
                 result = capture(base, diagnostics)
             if not camera and not manual_upload and (
@@ -999,7 +1015,8 @@ def main():
                                 running = "läuft" in message
                                 current_attempt = attempts + 1 if running else attempts
                                 state = "läuft." if running else "abgeschlossen."
-                                set_activity("working", f"Lese Zählerbild: OCR-Versuch {current_attempt} von {ocr_limit} {state}")
+                                set_activity("working", f"Lese Zählerbild: OCR-Versuch {current_attempt} von {ocr_limit} {state}",
+                                             completed=attempts, total=ocr_limit)
                         require_consensus = (raw_fallback and not manual_reference) or (standalone and not manual)
                         configured_attempts = manual_options["attempts"] if manual else max_attempts
                         if require_consensus:
@@ -1012,7 +1029,7 @@ def main():
                         ocr, ocr_confirmed, ocr_attempts = read_with_retries(
                             read, sample,
                             manual_options["decimals"] if manual else decimals,
-                            progress=report_ocr if manual else None,
+                            progress=report_ocr,
                             max_attempts=configured_attempts,
                             trace=ocr_readings, standalone=require_consensus,
                             integer_digits=integer_digits,
@@ -1088,6 +1105,7 @@ def main():
                         with io.BytesIO() as buffer:
                             preview.save(buffer, "JPEG", quality=88, optimize=True)
                             atomic_write(AUTOMATIC_PREVIEW, buffer.getvalue(), 0o600)
+                            automatic_preview_ready = True
                     except (OSError, ValueError) as error:
                         print(f"Automatische OCR-Vorschau konnte nicht erstellt werden: {error}")
                 if manual:
@@ -1168,6 +1186,8 @@ def main():
                 elif record_sample(updated, sample, ocr, zone, datetime.now(zone), decimals,
                                    ocr_confirmed=ocr_confirmed, integer_digits=integer_digits):
                     atomic_write(DESTINATION, picture, 0o644)
+                    if not automatic_preview_ready:
+                        AUTOMATIC_PREVIEW.unlink(missing_ok=True)
                     outcome = updated["status"]
                     if new_consumption is not None and not raw_fallback:
                         updated["consumption"] = new_consumption
@@ -1248,9 +1268,6 @@ def main():
             continue
         updated["slfork_diagnostics"] = diagnostics
         schedule_next_check(updated, outcome, now.timestamp(), interval_minutes)
-        set_activity("waiting", "Letzte Prüfung beendet. Nächster Versuch nach kurzer Wartezeit."
-                     if not updated.get("retry_suppressed") and outcome not in ("match", "ocr_only") else
-                     "Letzte Prüfung beendet. Wartet auf das eingestellte Prüfintervall.")
         try:
             atomic_write(HISTORY, json.dumps(updated).encode("utf-8"), 0o600)
         except OSError as error:
@@ -1259,6 +1276,9 @@ def main():
             wake_worker.wait(timeout=RETRY_INTERVAL)
             continue
         history = updated
+        set_activity("waiting", "Letzte Prüfung beendet. Nächster Versuch nach kurzer Wartezeit."
+                     if not updated.get("retry_suppressed") and outcome not in ("match", "ocr_only") else
+                     "Letzte Prüfung beendet. Wartet auf das eingestellte Prüfintervall.")
         if data is not None:
             pending_image = (data, jpeg, size)
             print(f"Kontrollbild bereit: {data['esp_timestamp']} | Ausschnitt: {source} | "

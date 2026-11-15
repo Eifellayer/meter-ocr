@@ -47,4 +47,4 @@ The app publishes `sensor.rf1_kontrollbild` and `sensor.rf1_pruefstatus`, and st
 
 Full options and troubleshooting: [Project documentation](../README.en.md).
 
-Support: [GitHub Issues](https://github.com/Eifellayer/meter-ocr/issues). Optional voluntary donation: [PayPal](https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8).
+Support: [GitHub Issues](https://github.com/Eifellayer/meter-ocr/issues). Optional donations are linked in the app under **About Meter OCR**.

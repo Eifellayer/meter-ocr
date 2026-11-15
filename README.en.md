@@ -6,7 +6,7 @@
 
 [Deutsch / German](README.md) · [English](README.en.md)
 
-**Current version: 0.2.0 Alpha.** Before version 0.5, testing uses the regular Meter OCR app. From 0.5 onward, Beta builds are reserved for larger changes that need dedicated testing.
+**Current version: 0.2.1 Alpha.** Before version 0.5, testing uses the regular Meter OCR app. From 0.5 onward, Beta builds are reserved for larger changes that need dedicated testing.
 
 ## Beta testers wanted
 

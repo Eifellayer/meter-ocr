@@ -44,6 +44,12 @@ EN_UI = {
     "Am markierten Bild ablesen und hier eintragen. Der Wert wird nur mit dem manuellen Test verglichen und nicht als automatische Referenz gespeichert.":
         "Read the marked image and enter the value here. It is compared only with the manual test and is not saved as the automatic reference.",
     "Über Meter OCR": "About Meter OCR",
+    "Stand und Verbrauch im Dashboard anzeigen": "Show the reading and usage on a dashboard",
+    "Für den erkannten Zählerstand im ESPHome- oder Kameramodus: ": "For the recognized meter reading in ESPHome or camera mode: ",
+    "Für den Home-Assistant-Energieverbrauch: ": "For Home Assistant energy usage: ",
+    "Diese Entität erscheint nach dem ersten gültigen Messwert und kann im Energie-Dashboard als Gasverbrauch ausgewählt werden.": "This entity appears after the first valid reading and can be selected as gas consumption in the Energy dashboard.",
+    "So fügst du den Zählerstand einer einfachen Dashboard-Karte hinzu:": "To add the meter reading to a simple dashboard card:",
+    "Freiwillig mit PayPal unterstützen": "Support the project voluntarily with PayPal",
     "EifelLayer-Projektlogo": "EifelLayer project logo",
     "Ein privates Hobbyprojekt von EifelLayer. KI-unterstützt entwickelt. Keine geeichte Messung oder Gewähr für OCR-Ergebnisse. Bitte Zählerstände bei Bedarf direkt am Gerät prüfen.": "A private hobby project by EifelLayer, developed with AI assistance. Not a certified measurement and no guarantee of OCR results. Check readings on the physical meter when needed.",
     "Unabhängiger Bildabgleich deines Gaszählerstands mit der vorhandenen Messung. Die OCR liest die Ziffern erneut direkt aus dem Kamerabild – ohne den vom ESP erkannten Wert einfach zu übernehmen.":

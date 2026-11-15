@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1 Alpha
+
+- Added quick Home Assistant dashboard and Energy dashboard guidance to the setup wizard.
+- Moved the voluntary PayPal link into the collapsible About section.
+- Kept existing entity IDs, stored settings, and the Alpha release channel.
+
+## 0.2.0 Alpha
+
 ## 0.2.0 Alpha
 
 **Meter OCR – Alpha release.** Releases below 0.5 are Alpha and use the regular Home Assistant app as their test channel. There is no separate Beta app before version 0.5. From 0.5 onward, a Beta build is created only for larger changes that need dedicated testing.

@@ -44,4 +44,4 @@ Die Bilddateien liegen unter **Medien → Lokale Medien → rf1**. Die bestehend
 
 ## Projekt freiwillig unterstützen
 
-Der unaufdringliche PayPal-Link steht am unteren Rand der Weboberfläche und in der [GitHub-README](../README.md). Spenden sind freiwillig und keine Voraussetzung für die Nutzung.
+Der PayPal-Link steht in der Weboberfläche unter **Über Meter OCR**. Spenden sind freiwillig und keine Voraussetzung für die Nutzung.

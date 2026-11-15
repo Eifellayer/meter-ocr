@@ -347,6 +347,14 @@ name: Zählerstand (OCR)</code></pre>
 <label>Handy-Push (optional)<input name="push" value="{notification_push}" maxlength="80" placeholder="notify.mobile_app_mein_handy"></label>
 <label>E-Mail oder anderes Ziel (optional)<input name="target" value="{notification_target}" maxlength="80" placeholder="notify.meine_email"></label>
 <details class="setup-help"><summary>ⓘ Keine Benachrichtigung nötig?</summary><p>Entferne das Häkchen. Das Statusfeld in der Übersicht bleibt sichtbar; ein manueller Test löst keinen Push oder keine E-Mail aus.</p></details>
+<details class="setup-help setup-dashboard-help"><summary>ⓘ Stand und Verbrauch im Dashboard anzeigen</summary>
+<p>Für den erkannten Zählerstand im ESPHome- oder Kameramodus: <code>sensor.rf1_ocr_zaehlerstand</code>.</p>
+<p>Für den Home-Assistant-Energieverbrauch: <code>sensor.rf1_verbrauch_gesamt</code>. Diese Entität erscheint nach dem ersten gültigen Messwert und kann im Energie-Dashboard als Gasverbrauch ausgewählt werden.</p>
+<p>So fügst du den Zählerstand einer einfachen Dashboard-Karte hinzu:</p>
+<pre><code>type: entity
+entity: sensor.rf1_ocr_zaehlerstand
+name: Zählerstand (OCR)</code></pre>
+</details>
 <div class="setup-controls"><button type="button" class="setup-back">Zurück</button><span class="setup-count"></span><button type="submit">Einrichtung speichern</button></div>
 </fieldset>
 <div id="setup-error" class="setup-warning" hidden></div>
@@ -464,8 +472,8 @@ Bei anhaltenden Problemen benachrichtigen
 </div>
 </main>
 
-<footer class="page-footer">Kostenloses Hobbyprojekt · <a href="https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8" target="_blank" rel="noopener noreferrer">Freiwillig unterstützen (PayPal)</a>
-<details class="about-project"><summary>Über Meter OCR</summary><p><a href="https://github.com/Eifellayer" target="_blank" rel="noopener noreferrer">Projekt von EifelLayer auf GitHub</a></p><p>KI-unterstützt entwickelt. Keine geeichte Messung oder Gewähr für OCR-Ergebnisse. Bitte Zählerstände bei Bedarf direkt am Gerät prüfen.</p></details></footer>
+<footer class="page-footer">Kostenloses Hobbyprojekt
+<details class="about-project"><summary>Über Meter OCR</summary><p><a href="https://github.com/Eifellayer" target="_blank" rel="noopener noreferrer">Projekt von EifelLayer auf GitHub</a></p><p>KI-unterstützt entwickelt. Keine geeichte Messung oder Gewähr für OCR-Ergebnisse. Bitte Zählerstände bei Bedarf direkt am Gerät prüfen.</p><p><a href="https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8" target="_blank" rel="noopener noreferrer">Freiwillig mit PayPal unterstützen</a></p></details></footer>
 <script>
 let next = {next_check};
 const lang = '{language}';

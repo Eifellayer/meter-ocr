@@ -411,8 +411,8 @@ name: Zählerstand (OCR)</code></pre>
 <button type="submit">Speichern</button>
 </form>
 <p class="settings-note">Das Prüfintervall gilt auch für die bereits geplante nächste Prüfung. Bei geänderter Vergleichsgenauigkeit beginnt die Trefferzählung neu.</p>
-{auto_saved_notice}
 </div></details>
+{auto_saved_notice}
 <details class="manual-panel settings-item" id="notification-settings" {notifications_open}>
 <summary><strong>Benachrichtigungen</strong></summary>
 <div class="manual-content">
@@ -1536,7 +1536,7 @@ def start_panel(
                     problem(503, "Der Ausschnitt konnte nicht gespeichert werden.",
                             "Could not save the image crop.")
                     return
-                self.redirect("?saved=crop" + keep_mode)
+                self.redirect("?saved=crop&ui=settings" + keep_mode)
                 return
             if path == "/automatik":
                 decimals = form.get("decimals", [])

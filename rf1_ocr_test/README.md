@@ -14,15 +14,15 @@ Die ausführliche Einführung, Voraussetzungen, Installation und Konfiguration f
 
 ## Was bedeutet „Jetzt prüfen“?
 
-Der Button startet einen manuellen OCR-Test mit dem **letzten vorhandenen Foto**. Er erzeugt keine neue Kameraaufnahme. Der Status zeigt die Schritte **Anfrage → Bildabruf → OCR-Durchlauf 1–5 → Abschluss**, einen Fortschrittsbalken für tatsächlich absolvierte Aufbereitungen und die verstrichene Zeit.
+Der Button startet einen manuellen OCR-Test mit dem **letzten vorhandenen Foto**. Er erzeugt keine neue Kameraaufnahme. Die Statusanzeige zeigt **Anfrage → Bildabruf → OCR-Versuche → Ergebnis**. Im Infobereich neben dem Button steht die kurze Erklärung. Während der Prüfung ist der dezent hervorgehobene Button gesperrt und heißt **„Prüfung läuft …“**.
 
-Bei einer eindeutigen ersten Lesung endet die Prüfung frühzeitig; ansonsten werden bis zu fünf Bildaufbereitungen ausgewertet. Das ist unabhängig von den **fünf automatischen Treffern innerhalb von 24 Stunden**. Manuelle Tests zählen nicht als neue automatische Treffer.
+Die Zahl der OCR-Versuche lässt sich **von 1 bis maximal 10** einstellen (Standard: 5). **Sobald ein Versuch den Vergleichswert bestätigt, endet die Prüfung sofort.** Der Balken zeigt die abgeschlossenen Versuche; eine Enddauer wird nicht geschätzt. Die maximal zehn Versuche sind unabhängig von den **fünf automatischen Treffern innerhalb von 24 Stunden**. Manuelle Tests zählen nicht als automatische Treffer.
 
-Die manuelle Testansicht zeigt nur Zeitpunkt und Ergebnis; die gemeinsamen Zählerwerte und Bilder stehen übersichtlich in der automatischen Kontrolle. Datum und Zeit sind auf der Oberfläche kompakt dargestellt. Diagnoseangaben wie Prozessfehler bleiben intern und über Home Assistant verfügbar, ohne die normale Ansicht zu überfrachten.
+Die manuelle Testansicht zeigt **sofort das Ergebnis im Statusfeld**: sanftes Grün bei bestätigter Übereinstimmung, dezentes Rot bei Abweichung oder nicht lesbaren Ziffern, neutral ohne Referenzwert. Fehlerhinweise erklären verständlich, was zu prüfen ist. Doppelte Werte sind entfernt; die gemeinsamen Zählerwerte und Bilder stehen übersichtlich in der automatischen Kontrolle. Datum und Zeit sind kompakt. Technische Meldungen bleiben über Home Assistant verfügbar.
 
 ## Einstellungen und automatische Prüfung
 
-Standardmäßig zählen **nur volle m³** (`vergleich_nachkommastellen: 0`). Nachkommastellen werden angezeigt, aber bei 0 nicht bewertet. `?` bedeutet unklare Ziffer. Auf der Weboberfläche einstellbare Testoptionen gelten für den manuellen Test; die dauerhafte Konfiguration gehört zur App.
+Standardmäßig zählen **nur volle m³** (`vergleich_nachkommastellen: 0`). Nachkommastellen werden angezeigt, aber bei 0 nicht bewertet. `?` bedeutet unklare Ziffer. Auf der Weboberfläche einstellbare Testoptionen gelten für den manuellen Test; die dauerhafte Konfiguration, einschließlich `ocr_versuche`, gehört zur App.
 
 Nach einem Treffer prüft die App üblicherweise stündlich, bei Unsicherheit etwa alle fünf Minuten. Nach vier Stunden ohne Übereinstimmung entsteht `review_due`. Optional kann eine offene Erinnerung nach weiteren 24 Stunden an die Companion App geschickt werden.
 

@@ -9,10 +9,12 @@ English: [Full documentation](../README.en.md) · [English – App](README.en.md
 Diese App überprüft den automatisch ausgelesenen mechanischen Gaszähler mit einer **zweiten lokalen OCR-Auswertung des vorhandenen Kamerabilds**. Sie ist keine geeichte Messung.
 
 1. Richte die `esp_url` für den SLFork-ESP ein oder wähle eine Home-Assistant-Kamera (`kamera_entitaet`) und optional einen Referenzsensor (`referenz_entitaet`).
-2. Starte die App und öffne ihre Weboberfläche.
+2. Starte die App, öffne ihre Weboberfläche und wähle unter **Bildquelle** den Betriebsmodus. ESPHome-Kameras können Bilder für die lokale OCR ohne SLFork liefern.
 3. Unter **Sprache / Language** kannst du die Home-Assistant-Profilsprache übernehmen oder Deutsch bzw. Englisch wählen.
 4. Unter **Automatische Prüfung – Einstellungen** stellst du die Vergleichsgenauigkeit, OCR-Versuche, Ziffernfarbe und den Bildbereich dauerhaft ein.
 5. Öffne **Manuellen Test öffnen** für eine Probe mit dem letzten Bild. Dort findest du OCR-Einzelwerte, die farbig umrandeten Ziffern und die Möglichkeit, einen getesteten Bildausschnitt für die Automatik zu übernehmen.
+
+Unter **Benachrichtigungen** lassen sich Hinweis, Companion-Push und E-Mail konfigurieren.
 
 Die bestehenden Entitäten `sensor.rf1_kontrollbild` und `sensor.rf1_pruefstatus` bleiben unverändert. Support: [GitHub Issues](https://github.com/Thunder86/rf1-kontrollmessung/issues).
 
@@ -21,10 +23,12 @@ Die bestehenden Entitäten `sensor.rf1_kontrollbild` und `sensor.rf1_pruefstatus
 The app performs an **independent local OCR reading of your most recent gas meter image** and checks it against the reference reading from SLFork or a Home Assistant sensor. It is not a certified meter.
 
 1. Enter the SLFork ESP URL in `esp_url`, or configure a Home Assistant camera (`kamera_entitaet`) and optional reference sensor (`referenz_entitaet`).
-2. Start the app and open its web interface.
+2. Start the app and choose a mode under **Image source**. An ESPHome camera can provide images for local OCR without SLFork.
 3. Use **Sprache / Language** to follow your Home Assistant profile or select German or English.
 4. Under **Automatic checks – settings**, save the comparison precision, maximum OCR attempts, digit color, and image crop. These settings persist across restarts.
 5. Expand **Open manual test** when you need to troubleshoot an image. The annotated preview shows green boxes for recognized digits and red for uncertain ones; **More details** lists each OCR attempt. A tested custom crop can be saved for automatic checks.
+
+Under **Notifications**, configure Home Assistant notices, Companion push or email.
 
 The entity IDs `sensor.rf1_kontrollbild` and `sensor.rf1_pruefstatus` do not change when switching language.
 

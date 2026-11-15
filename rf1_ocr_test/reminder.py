@@ -1,7 +1,6 @@
 """Track a Home Assistant notice and send at most one reminder per RF1 incident."""
 
 import json
-import re
 from threading import Thread
 from time import sleep
 from urllib.request import Request
@@ -9,18 +8,23 @@ from urllib.request import Request
 from websocket import create_connection
 
 from transport import open_core
-
-REMINDER_DELAY = 24 * 60 * 60
-
+from notification_settings import PUSH_SERVICE
 
 class Reminder:
-    def __init__(self, service, token):
-        if not re.fullmatch(r"notify\.mobile_app_[a-z0-9_]+", service):
-            raise ValueError("push_dienst muss notify.mobile_app_… sein")
-        self.service = service
+    def __init__(self, token):
         self.token = token
+        self.enabled = False
+        self.push = ""
+        self.target = ""
+        self.delay = 0
         self.skipped_id = None
-        Thread(target=self.listen_for_skip, daemon=True).start()
+        self.listening = False
+
+    def configure(self, *, enabled, push, target, delay):
+        self.enabled, self.push, self.target, self.delay = enabled, push, target, delay
+        if enabled and push and not self.listening:
+            self.listening = True
+            Thread(target=self.listen_for_skip, daemon=True).start()
 
     def listen_for_skip(self):
         request = Request(
@@ -72,49 +76,68 @@ class Reminder:
     def sync(self, history, summary, now):
         incident = summary["failure_since_epoch"] if summary["review_due"] else None
         reminder = history.get("reminder")
-        if reminder is None and incident is None:
+        if reminder is None and (incident is None or not self.enabled):
+            return
+        if reminder is not None and reminder["incident"] == incident and not self.enabled:
             return
         notices = {notice["notification_id"] for notice in self.notifications()}
         if reminder is not None and reminder["incident"] != incident:
             if reminder["id"] in notices:
                 self.call_service("persistent_notification.dismiss", {"notification_id": reminder["id"]})
-            if reminder.get("pushed"):
-                self.clear_push(reminder)
+            self.clear_push(reminder)
             history.pop("reminder", None)
             reminder = None
 
-        if reminder is None and incident is not None:
+        if incident is None or not self.enabled:
+            return
+        if reminder is None:
             notification_id = f"rf1_review_{round(incident * 1_000_000)}"
             if notification_id not in notices:
                 self.call_service("persistent_notification.create", {
                     "notification_id": notification_id,
-                    "title": "RF1 braucht eine Sichtprüfung",
-                    "message": "Die Gaszählerkontrolle konnte den Stand seit vier Stunden nicht bestätigen. "
-                               "Prüfe das Kontrollbild unter Medien → Lokale Medien → rf1. "
-                               "Schließe diesen Hinweis, wenn du ihn gesehen hast oder überspringen möchtest.",
+                    "title": "Gaszähler bitte prüfen",
+                    "message": "Die automatische Kontrolle konnte den Zählerstand wiederholt nicht bestätigen. "
+                               "Das Kontrollbild findest du unter Medien → Lokale Medien → rf1. "
+                               "Wenn du den Stand geprüft hast, kannst du diesen Hinweis schließen.",
                 })
-            history["reminder"] = {"id": notification_id, "incident": incident, "shown_at": now}
-            return
+                notices.add(notification_id)
+            reminder = {"id": notification_id, "incident": incident, "shown_at": now}
+            history["reminder"] = reminder
 
-        if reminder is None:
-            return
         if reminder.get("skipped") or reminder["id"] == self.skipped_id or reminder["id"] not in notices:
             if reminder["id"] in notices:
                 self.call_service("persistent_notification.dismiss", {"notification_id": reminder["id"]})
-            if reminder.get("pushed") and not reminder.get("push_cleared"):
-                self.clear_push(reminder)
-                reminder["push_cleared"] = True
+            self.clear_push(reminder)
             reminder["skipped"] = True
-        elif not reminder.get("pushed") and now - reminder["shown_at"] >= REMINDER_DELAY:
-            self.call_service(self.service, {
-                "title": "RF1-Hinweis noch offen",
-                "message": "Die Gaszählerkontrolle wartet seit 24 Stunden auf eine Sichtprüfung.",
-                "data": {"tag": reminder["id"], "actions": [
+            return
+        if now - reminder["shown_at"] < self.delay:
+            return
+
+        payload = {
+            "title": "Gaszähler bitte prüfen",
+            "message": "Die automatische Kontrolle konnte den Zählerstand wiederholt nicht bestätigen. "
+                       "Bitte prüfe den Stand am Zähler oder öffne das Kontrollbild in Home Assistant.",
+        }
+        if self.push and not reminder.get("pushed"):
+            try:
+                self.call_service(self.push, {**payload, "data": {"tag": reminder["id"], "actions": [
                     {"action": "URI", "title": "Prüfstatus öffnen", "uri": "entityId:sensor.rf1_pruefstatus"},
                     {"action": f"RF1_SKIP_{reminder['id']}", "title": "Überspringen"},
-                ]},
-            })
-            reminder["pushed"] = True
+                ]}})
+            except OSError as error:
+                print(f"RF1-Handy-Push konnte nicht gesendet werden: {type(error).__name__}")
+            else:
+                reminder.update(pushed=True, push_service=self.push)
+        if self.target and not reminder.get("target_sent"):
+            try:
+                self.call_service("notify.send_message", {**payload, "entity_id": self.target})
+            except OSError as error:
+                print(f"RF1-Benachrichtigung konnte nicht gesendet werden: {type(error).__name__}")
+            else:
+                reminder["target_sent"] = True
 
     def clear_push(self, reminder):
-        self.call_service(self.service, {"message": "clear_notification", "data": {"tag": reminder["id"]}})
+        push = reminder.get("push_service") or self.push
+        if reminder.get("pushed") and not reminder.get("push_cleared") and PUSH_SERVICE.fullmatch(push):
+            self.call_service(push, {"message": "clear_notification", "data": {"tag": reminder["id"]}})
+            reminder["push_cleared"] = True

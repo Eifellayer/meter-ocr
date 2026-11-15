@@ -31,6 +31,32 @@ Auf **„Speichern“** klicken. Die Einstellungen gelten für die **folgenden a
 
 Technisch werden die Web-Einstellungen separat im App-Datenverzeichnis (`/data/auto-pruefregeln.json`) abgelegt. Solange diese Datei existiert, haben ihre Werte für Vergleich, Versuche, Ziffernfarbe und Bildbereich **Vorrang vor den entsprechenden Feldern der Home-Assistant-App-Konfiguration**. Ohne gespeicherte Web-Einstellungen verwendet die App die Werte ihrer Konfiguration.
 
+## Bildquelle und Ersteinrichtung
+
+Beim ersten Öffnen einer frischen Installation wählst du unter **Bildquelle** den Betriebsmodus. Dieselbe Auswahl steht später in der Weboberfläche zur Verfügung.
+
+| Modus | Wann passt er? |
+| --- | --- |
+| **SLFork / AI on the Edge** | Dein vorhandener ESP liefert das Foto und den Vergleichswert. Gib seine Adresse ein. |
+| **Home-Assistant-Kamera** | Wähle eine `camera.*`-Entität und bei Bedarf einen aktuellen Referenzsensor in m³. |
+| **ESPHome oder Kamera mit lokaler OCR** | Die Kamera liefert nur das Bild. RF1 liest den Stand lokal und stellt ihn als `sensor.rf1_ocr_zaehlerstand` in m³ bereit. |
+
+Für ESPHome richte eine [ESP32-Kamera](https://esphome.io/components/esp32_camera/) mit [nativer API](https://esphome.io/components/api/) ein und füge das Gerät in Home Assistant hinzu. Prüfe das Kamerabild dort und trage anschließend die `camera.*`-Entität in RF1 ein. Öffne **Manuellen Test**, passe den Bildausschnitt an und übernimm die Vorschau in die Automatik. Die App benötigt für diese Betriebsart weder SLFork noch einen Referenzsensor.
+
+Der OCR-Sensor benötigt eine Mehrheit von mindestens zwei OCR-Profilen desselben Bildes. Bei einer unsicheren Lesung oder einem Rückgang gegenüber dem letzten gültigen Stand derselben Kamera wird er als **nicht verfügbar** gemeldet. Ein OCR-Stand ohne Referenz ist keine bestätigte Messung und wird nicht für Langzeitstatistiken eingerichtet. Bestehende Installationen übernehmen zuerst ihre bisherige Bildquelle. Ein späterer Wechsel startet die automatische Bestätigungszählung für die neue Quelle neu.
+
+## Benachrichtigungen und Prüfstatus
+
+Oben zeigt ein grüner Haken einen bestätigten Vergleich. Bei einem aktuellen Problem erscheint ein roter Hinweis. **Ignorieren** blendet diesen Vorfall in der Oberfläche aus. Ein neuer Vorfall erscheint wieder, und die Benachrichtigungsregeln gelten weiterhin.
+
+Öffne **Benachrichtigungen** und aktiviere **Bei anhaltenden Problemen benachrichtigen**. **Hinweis nach** bestimmt, wie viele Minuten ohne erfolgreiche automatische Prüfung bis zum Home-Assistant-Hinweis vergehen. Mit der zweiten Wartezeit legst du fest, wann ein noch offener Hinweis per Handy-Push oder E-Mail weitergeleitet wird. **0 Stunden** versendet die Nachricht zusammen mit dem Hinweis.
+
+- **Nur in Home Assistant:** Beide optionalen Ziele leer lassen.
+- **Handy-Push:** Den Companion-Dienst eintragen, zum Beispiel `notify.mobile_app_mein_handy`.
+- **E-Mail:** Die [SMTP-Integration](https://www.home-assistant.io/integrations/smtp/) samt Empfänger in Home Assistant einrichten. Unter **E-Mail oder anderes Ziel** dessen `notify.*`-Entität eintragen, zum Beispiel `notify.meine_email`. Andere Benachrichtigungs-Entitäten funktionieren ebenfalls.
+
+Je Ziel wird pro Vorfall höchstens eine erfolgreiche Nachricht erfasst. Wenn du den Hinweis in Home Assistant schließt oder die automatische Prüfung wieder gelingt, entfallen ausstehende Nachrichten. Manuelle Tests senden keine Nachrichten. Ein bestehender `push_dienst` wird übernommen, bis du die Benachrichtigungen in der Oberfläche speicherst.
+
 ## Sprache der Weboberfläche
 
 **Automatisch (Home Assistant)** verwendet die im angemeldeten Home-Assistant-Profil gewählte Sprache, wenn die App über Ingress darauf zugreifen kann. Unterstützt werden Deutsch und Englisch einschließlich Varianten wie `de-AT` und `en-US`. Fehlt eine unterstützte Profilsprache, gilt die erste passende Browsersprache, sonst Deutsch. Eine ausdrückliche Auswahl von **Deutsch** oder **English** wird pro angemeldetem Ingress-Nutzer gespeichert. Die Auswahl **Automatisch** übernimmt beim nächsten Öffnen oder Neuladen wieder das Profil. Ohne eindeutige Ingress-Identität gilt die manuelle Wahl innerhalb der aktuellen Navigation.
@@ -58,7 +84,7 @@ Die kompakte Weboberfläche zeigt die wichtigsten Angaben in getrennten Bereiche
 
 ## Automatische Kontrolle
 
-Nach erfolgreichem Abgleich prüft die App normalerweise nach einer Stunde erneut. Bei Abweichungen, unklarer Erkennung oder fehlenden Daten versucht sie es alle fünf Minuten. Nach vier Stunden ohne bestätigte Übereinstimmung meldet `sensor.rf1_pruefstatus` den Zustand `review_due`. Ein optionaler Hinweis kann nach weiteren 24 Stunden einmalig als Push gesendet werden.
+Nach erfolgreichem Abgleich prüft die App normalerweise nach einer Stunde erneut. Bei Abweichungen, unklarer Erkennung oder fehlenden Daten versucht sie es alle fünf Minuten. Standardmäßig nach vier Stunden ohne erfolgreiche Prüfung meldet `sensor.rf1_pruefstatus` den Zustand `review_due`. Die Wartezeiten und zusätzliche Benachrichtigungsziele lassen sich in der Weboberfläche einstellen.
 
 Ein SLFork-Messzeitpunkt wird automatisch nur einmal gezählt. Alte Bilder lassen sich weiterhin manuell prüfen. Bei einer allgemeinen Home-Assistant-Kamera verwendet die App den Abrufzeitpunkt. Für unabhängige Bestätigungen muss die Kamera aktuelle Bilder liefern. Ein konfigurierter Referenzsensor muss den Stand in `m³` melden und innerhalb von fünf Minuten zum Bildabruf aktualisiert worden sein.
 
@@ -87,7 +113,7 @@ Wer von einer alten lokalen RF1-App auf die Repository-Version wechselt, sollte 
 | `kamera_entitaet` | Optionales Kamerabild aus Home Assistant |
 | `referenz_entitaet` | Optionaler kumulierter m³-Sensor im Kameramodus |
 | `ausschnitt`, `vorkomma_breite` | Manueller Ziffernbereich, falls nötig |
-| `push_dienst` | Optionaler Benachrichtigungsdienst |
+| `push_dienst` | Ältere Voreinstellung für den Companion-Push |
 
 **Automatik:** Vergleichsgenauigkeit, maximale OCR-Versuche, Ziffernfarbe und Bildbereich im eigenen Einstellungsbereich speichern. **Manuell:** Die erweiterten Testoptionen gelten nur für den geöffneten Einzeltest. Die kurze Erklärung von „Jetzt prüfen“ lässt sich über das Infosymbol aufklappen.
 

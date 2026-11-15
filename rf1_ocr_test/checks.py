@@ -93,7 +93,7 @@ def comparison_scope(decimals):
 
 
 def uncertain_positions(readings, decimals):
-    """Return 1-based digit positions and candidates, or None when all were unreadable."""
+    """Return 1-based digit positions, or None when all were unreadable."""
     positions = list(range(5)) + list(range(6, 6 + decimals))
     evidence = [
         {value[position] if len(value) > position else "?" for value in readings}
@@ -102,36 +102,28 @@ def uncertain_positions(readings, decimals):
     if not any(any(char in "0123456789" for char in chars) for chars in evidence):
         return None
     return [
-        (position >= 6, position - 5 if position >= 6 else position + 1,
-         sorted(char for char in chars if char in "0123456789"))
+        (position >= 6, position - 5 if position >= 6 else position + 1)
         for position, chars in zip(positions, evidence)
         if len(chars) != 1 or not all(char in "0123456789" for char in chars)
     ]
 
 
-def explain_uncertain_positions(readings, decimals, *, show_details=False):
+def explain_uncertain_positions(readings, decimals):
     """Explain differences at digit positions relevant to this comparison."""
     positions = uncertain_positions(readings, decimals)
     if positions is None:
-        return ("Zählerstand nicht sicher erkannt. Es liegt keine verwertbare "
-                "OCR-Lesung vor. Bitte Bildausschnitt und Beleuchtung prüfen.")
-    unclear = []
-    for fractional, index, options in positions:
-        place = f"{index}. Nachkommastelle" if fractional else f"{index}. Vorkommastelle von links"
-        if len(options) >= 2:
-            unclear.append(f"{place} (gelesen als {' oder '.join(options)})")
-        else:
-            unclear.append(place)
-    if not unclear:
-        return ("Zählerstand nicht sicher erkannt. Die Lesungen stimmen nicht zuverlässig "
-                "überein. Bitte das Zählerbild prüfen.")
-    message = "Zählerstand nicht sicher erkannt. Unklare Stellen: " + "; ".join(unclear) + "."
-    if show_details:
-        return message + " Die einzelnen Lesungen findest du unter „Mehr Infos“."
-    return message + " Bitte Bildausschnitt, Beleuchtung und Ziffern prüfen."
+        return "Keine Ziffern lesbar. Ausschnitt und Licht prüfen."
+    if not positions:
+        return "OCR unsicher. Bild prüfen."
+    groups = []
+    for fractional, title in ((False, "Vor dem Komma"), (True, "Nach dem Komma")):
+        digits = [str(index) for is_fractional, index in positions if is_fractional == fractional]
+        if digits:
+            groups.append(title + ": " + ", ".join(digits) + ".")
+    return "OCR unsicher. " + " ".join(groups)
 
 
-def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace=None):
+def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace=None, *, standalone=False):
     """Read one image up to max_attempts times; stop on the first valid agreement."""
     if type(max_attempts) is not int or not 1 <= max_attempts <= MAX_OCR_ATTEMPTS:
         raise ValueError("OCR-Versuche müssen zwischen 1 und 10 liegen")
@@ -152,15 +144,16 @@ def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace
             progress(index, f"OCR-Versuch {index} von {max_attempts} abgeschlossen.")
         # Stop immediately on a verified match.
         # Without a reference, a valid OCR result ends the read.
-        if status in ("match", "ocr_only"):
+        if status == "match" or (status == "ocr_only" and not standalone):
             return value, True, index
 
     # No match: show a majority reading for diagnostics if possible.
     majority = len(readings) // 2 + 1
+    minimum_votes = max(2, majority) if standalone else majority
     prefix_length = 5 + (decimals + 1 if decimals else 0)
     prefixes = Counter(value[:prefix_length] for value in readings
                        if meter_prefix(value, decimals) is not None)
-    prefix = next((value for value, count in prefixes.items() if count >= majority), None)
+    prefix = next((value for value, count in prefixes.items() if count >= minimum_votes), None)
     display = []
     for column in zip(*readings):
         digit, count = Counter(column).most_common(1)[0]
@@ -187,7 +180,7 @@ def compare_sample(data, ocr, decimals, *, ocr_confirmed=True):
     raw = meter_prefix(data["raw_value"], decimals)
     actual = meter_prefix(data["actual_value"], decimals)
     if raw is None or actual is None:
-        return "slfork_unclear", "Kein gültiger Vergleichswert verfügbar. Bitte den Referenzsensor prüfen oder eine neue Messung abwarten."
+        return "slfork_unclear", "Referenzwert fehlt oder ist ungültig."
     if raw != actual:
         return "slfork_unclear", "Der ESP liefert widersprüchliche Zählerwerte. Bitte den angezeigten Stand am ESP prüfen."
     if value != actual:
@@ -203,7 +196,7 @@ def compare_sample(data, ocr, decimals, *, ocr_confirmed=True):
     return "match", f"Bestätigt: Zählerstand und Referenzwert stimmen bis einschließlich der {decimals}. Nachkommastelle überein."
 
 
-def rolling_summary(history, now):
+def rolling_summary(history, now, review_after=REVIEW_AFTER):
     epoch = now.timestamp()
     count = sum(epoch - WINDOW_SECONDS < stamp <= epoch for stamp in history.get("confirmations", ()))
     failure = history.get("failure_since")
@@ -212,7 +205,7 @@ def rolling_summary(history, now):
         "required_matches": REQUIRED_MATCHES,
         "window_started_at_epoch": history.get("started_at"),
         "failure_since_epoch": failure,
-        "review_due": failure is not None and epoch - failure >= REVIEW_AFTER,
+        "review_due": failure is not None and epoch - failure >= review_after,
         "check_status": history.get("check_status"),
         "next_check_at_epoch": history.get("next_check_at"),
         "last_match_at_epoch": history.get("last_match_at"),

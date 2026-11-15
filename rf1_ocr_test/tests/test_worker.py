@@ -96,8 +96,8 @@ class OCRTests(TestCase):
         self.assertEqual("12345", read_register(image, False))
 
     def test_no_reads_do_not_invent_digit_positions(self):
-        detail = explain_uncertain_positions(["?????.???"] * 5, 2, show_details=True)
-        self.assertIn("keine verwertbare", detail)
+        detail = explain_uncertain_positions(["?????.???"] * 5, 2)
+        self.assertIn("Keine Ziffern lesbar", detail)
         self.assertNotIn("Vorkommastelle", detail)
 
 
@@ -127,6 +127,62 @@ class StateTests(TestCase):
         self.assertNotIn("failure_since", history)
         self.assertEqual(now.timestamp() + NORMAL_INTERVAL, history["next_check_at"])
 
+    def test_standalone_sensor_retains_exact_precision_and_rejects_lower_readings(self):
+        data = sample(datetime.now(timezone.utc))
+        latest = run.standalone_reading("camera.meter", data, "12345.170", 2, None)
+        self.assertIsNone(run.standalone_reading("camera.meter", data, "12344.990", 2, latest))
+        self.assertIsNotNone(run.standalone_reading("camera.meter", data, "12345.???", 0, latest))
+        with patch.object(run, "publish_state") as publish:
+            run.publish_standalone({"standalone_reading": latest, "check_status": "ocr_only"}, "camera.meter", "stub")
+            url, body, _ = publish.call_args.args
+        self.assertTrue(url.endswith("sensor.rf1_ocr_zaehlerstand"))
+        self.assertEqual("12345.17", body["state"])
+        self.assertEqual("m³", body["attributes"]["unit_of_measurement"])
+        self.assertNotIn("state_class", body["attributes"])
+        with patch.object(run, "publish_state") as publish:
+            run.publish_standalone({"standalone_reading": latest, "check_status": "ocr_unclear"}, "camera.meter", "stub")
+            self.assertEqual("unavailable", publish.call_args.args[1]["state"])
+
+    def test_main_reads_esphome_camera_and_publishes_standalone_sensor(self):
+        class StopLoop(Exception):
+            pass
+
+        folder = Path(self.enterContext(TemporaryDirectory()))
+        files = {name: folder / name for name in (
+            "OPTIONS", "HISTORY", "EFFECTIVE_OPTIONS", "AUTO_RULES", "LANGUAGE_MODES",
+            "SOURCE_SETTINGS", "NOTIFICATIONS", "DESTINATION", "GOOD_IMAGE", "TEST_IMAGE",
+        )}
+        files["OPTIONS"].write_text(json.dumps({"ausschnitt": "0,0,500,100", "vorkomma_breite": 350,
+                                                "ocr_versuche": 1}))
+        files["SOURCE_SETTINGS"].write_text(json.dumps({"mode": "esphome", "url": "", "camera": "camera.esp",
+                                                        "reference": "sensor.ignored"}))
+        self.enterContext(patch.multiple(run, **files))
+        self.enterContext(patch.dict(os.environ, {"SUPERVISOR_TOKEN": "stub"}))
+        with BytesIO() as stream:
+            synthetic_meter().save(stream, "PNG")
+            photo = stream.getvalue()
+        self.enterContext(patch.object(run, "start_panel", return_value=(None, None)))
+        fetch = self.enterContext(patch.object(run, "get_bytes", return_value=photo))
+        recognize = self.enterContext(patch.object(run, "read_visible_digits", return_value="12345.???"))
+        published = {}
+
+        def collect(url, payload, _):
+            entity = url.rsplit("/", 1)[1]
+            published[entity] = payload
+            if entity == run.OCR_ENTITY:
+                raise StopLoop
+
+        self.enterContext(patch.object(run, "publish_state", collect))
+        with self.assertRaises(StopLoop):
+            run.main()
+        fetch.assert_called_once_with("http://supervisor/core/api/camera_proxy/camera.esp", "stub")
+        self.assertEqual(2, recognize.call_count)
+        self.assertEqual("12345", published[run.OCR_ENTITY]["state"])
+        self.assertEqual("ocr_only", published[run.CHECK_ENTITY]["state"])
+        self.assertEqual([], json.loads(files["HISTORY"].read_text())["confirmations"])
+        with Image.open(files["DESTINATION"]) as current:
+            self.assertEqual("JPEG", current.format)
+
     def test_main_keeps_manual_run_separate_from_automated_entities_and_history(self):
         class StopLoop(Exception):
             pass
@@ -134,9 +190,10 @@ class StateTests(TestCase):
         folder = Path(self.enterContext(TemporaryDirectory()))
         paths = {name: folder / f"{name.lower()}.json" for name in (
             "OPTIONS", "HISTORY", "EFFECTIVE_OPTIONS", "AUTO_RULES", "LANGUAGE_MODES",
+            "SOURCE_SETTINGS", "NOTIFICATIONS",
             "DESTINATION", "GOOD_IMAGE", "TEST_IMAGE",
         )}
-        paths["OPTIONS"].write_text(json.dumps({"ausschnitt": "0,0,500,100", "vorkomma_breite": 350}))
+        paths["OPTIONS"].write_text(json.dumps({"esp_url": "http://meter", "ausschnitt": "0,0,500,100", "vorkomma_breite": 350}))
         self.enterContext(patch.multiple(run, **paths))
         self.enterContext(patch.dict(os.environ, {"SUPERVISOR_TOKEN": "stub"}))
         with BytesIO() as stream:

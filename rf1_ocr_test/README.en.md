@@ -39,7 +39,7 @@ Expand **More details** to see the individual attempt readings. When a custom cr
 
 ## Schedules and files
 
-Successful automatic checks normally run hourly; errors and uncertain readings cause five-minute retries. The `review_due` state is reported after four hours without a valid confirmation. Optionally, mobile reminders can be configured.
+Successful automatic checks normally run hourly; errors and uncertain readings cause five-minute retries. The default delay for `review_due` is four hours. The **Notifications** panel controls Home Assistant notices, mobile push and email. See the [project guide](../README.en.md#notifications-and-automatic-status).
 
 The app publishes `sensor.rf1_kontrollbild` and `sensor.rf1_pruefstatus`, and stores the latest/last-confirmed images in **Media → Local Media → rf1**. Neither entity name is translated because dashboards and automations depend on it.
 

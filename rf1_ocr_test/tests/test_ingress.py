@@ -54,8 +54,15 @@ class IngressFixture(TestCase):
         self.rules = dict(decimals=0, attempts=3, crop_mode="auto", polarity="auto",
                           crop="0,0,400,90", width=250)
         self.profiles = {}
+        self.source = dict(mode="slfork", url="http://meter", camera="", reference="")
+        self.setup_pending = True
+        self.delivery = dict(enabled=False, review_minutes=240, delivery_hours=24, push="", target="")
         self.enterContext(patch.object(panel, "SUPERVISOR_ADDRESS", "127.0.0.1"))
         self.start_panel()
+
+    def save_source(self, values):
+        self.source = values
+        self.setup_pending = False
 
     def start_panel(self):
         server, self.update = panel.start_panel(
@@ -63,6 +70,8 @@ class IngressFixture(TestCase):
             self.requested, 0, 3, lambda: dict(self.rules), self.rules.update,
             "0,0,400,90", 250, self.preview, lambda: load_preferences(self.preferences),
             lambda modes: atomic_write(self.preferences, json.dumps(modes).encode(), 0o600),
+            lambda: dict(self.delivery), self.delivery.update,
+            lambda: (dict(self.source), self.setup_pending), self.save_source,
             address=("127.0.0.1", 0),
         )
         self.server = server
@@ -151,6 +160,45 @@ class IngressTests(IngressFixture):
                          (self.rules["crop_mode"], self.rules["crop"],
                           self.rules["width"], self.rules["decimals"]))
 
+    def test_invalid_manual_crop_returns_localized_form_error(self):
+        for language, message in (("en", "Check the form values"), ("de", "Bitte die Formulareingaben prüfen")):
+            with self.subTest(language=language), self.assertRaises(HTTPError) as caught:
+                self.request("/pruefen", data={"csrf": self.csrf, "lang": language, "crop_mode": "manual",
+                                               "crop": "20,10,5,100", "width": 20})
+            with caught.exception as response:
+                self.assertEqual(400, response.code)
+                self.assertIn(message, response.read().decode())
+        self.assertTrue(self.requested.empty())
+
+    def test_initial_source_selection_and_later_changes(self):
+        self.assertIn('id="source-settings" open', self.request("/")[0])
+        self.assertEqual(400, self.submit("/bildquelle", source_mode="esphome", camera="sensor.invalid")[0])
+        self.assertEqual((303, "./?saved=source"),
+                         self.submit("/bildquelle", source_mode="esphome", camera="camera.esp"))
+        self.assertFalse(self.setup_pending)
+        self.assertEqual("esphome", self.source["mode"])
+        self.assertNotIn('id="source-settings" open', self.request("/")[0])
+        self.assertEqual((303, "./?saved=source"),
+                         self.submit("/bildquelle", source_mode="camera",
+                                     camera="camera.esp", reference="sensor.meter"))
+        self.assertEqual("sensor.meter", self.source["reference"])
+        self.submit("/bildquelle", source_mode="camera", reference="")
+        self.assertEqual("", self.source["reference"])
+        self.assertEqual((303, "./?saved=source"),
+                         self.submit("/bildquelle", source_mode="slfork", url="http://new-meter"))
+        self.assertEqual("http://new-meter", self.source["url"])
+
+    def test_notification_form_saves_and_can_disable_channels(self):
+        settings = dict(review_minutes=15, delivery_hours=0, push="notify.mobile_app_phone",
+                        target="notify.email")
+        self.assertEqual((303, "./?saved=notifications"),
+                         self.submit("/benachrichtigungen", enabled=1, **settings))
+        self.assertEqual(dict(enabled=True, **settings), self.delivery)
+        self.assertEqual(400, self.submit("/benachrichtigungen", review_minutes=0, delivery_hours=0)[0])
+        self.assertEqual((303, "./?saved=notifications"),
+                         self.submit("/benachrichtigungen", **settings))
+        self.assertFalse(self.delivery["enabled"])
+
     def test_current_automatic_failure_takes_precedence_over_previous_match(self):
         self.history.write_text(json.dumps({"status": "match", "last_reference": 0,
                                            "check_status": "stale_sample",
@@ -159,6 +207,7 @@ class IngressTests(IngressFixture):
         status = json.loads(self.request("/automatic?lang=en")[0])
         self.assertEqual("0", status["reference"])
         self.assertIn("too old", status["detail"])
+        self.assertEqual("problem", status["tone"])
 
 
 class RedirectTests(TestCase):
@@ -306,5 +355,24 @@ class BrowserTests(IngressFixture):
                 expect_heading("Gas Meter OCR Verification")
                 self.assertIn("Automatic (Home Assistant)", frame.locator("#language-select").inner_text())
             self.assertEqual(0, page.evaluate("window.calls"))
+            self.history.write_text(json.dumps({"status": "match", "check_status": "match",
+                                               "check_detail": "Bestätigt", "comparison_decimals": 2}))
+            page.goto(parent + "/?en")
+            frame.get_by_text("Meter reading confirmed", exact=True).wait_for()
+            self.assertEqual("ok", frame.locator("#automatic-banner").get_attribute("data-tone"))
+            failed = {"check_status": "capture_unavailable", "failure_since": 100, "comparison_decimals": 2}
+            self.history.write_text(json.dumps(failed))
+            page.reload()
+            frame.get_by_text("Check the meter reading", exact=True).wait_for()
+            frame.get_by_role("button", name="Ignore").click()
+            frame.locator("#automatic-banner").wait_for(state="hidden")
+            page.reload()
+            frame.locator("#automatic-banner").wait_for(state="hidden")
+            self.history.write_text(json.dumps({**failed, "failure_since": 200}))
+            page.reload()
+            frame.get_by_text("Check the meter reading", exact=True).wait_for()
+            frame.locator("#notification-settings summary").first.click()
+            frame.get_by_text("How are notifications sent?", exact=False).click()
+            frame.get_by_text("Leave both optional fields blank", exact=False).wait_for()
             self.assertEqual([], errors)
             browser.close()

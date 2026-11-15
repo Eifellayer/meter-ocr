@@ -75,6 +75,60 @@ EN_UI = {
     "Zählerbild mit grün markierten erkannten Ziffern und rot markierten unklaren Stellen":
         "Meter image with green boxes for recognized digits and red boxes for uncertain digits",
     "Getesteten Ausschnitt für die Automatik übernehmen": "Use tested crop for automatic checks",
+    "Bildquelle gespeichert.": "Image source saved.",
+    "Bildquelle": "Image source",
+    "Wähle, woher das Zählerbild und gegebenenfalls der Vergleichswert kommen.":
+        "Choose where the meter image and optional reference reading come from.",
+    "Betriebsmodus": "Mode",
+    "Die Adresse deines SLFork-Geräts im Heimnetz.": "The address of your SLFork device on your local network.",
+    "SLFork-Adresse": "SLFork address",
+    "Die Entitäts-ID der Kamera in Home Assistant.": "The camera entity ID in Home Assistant.",
+    "Kamera in Home Assistant": "Camera in Home Assistant",
+    "Optionaler Sensor mit aktuellem Zählerstand in Kubikmetern.":
+        "Optional sensor that provides the current meter reading in cubic meters.",
+    "Vergleichssensor (optional)": "Reference sensor (optional)",
+    "Erklärung zu den verfügbaren Modi": "Explanation of the available modes",
+    "ⓘ Welcher Modus passt?": "ⓘ Which mode should I choose?",
+    "Das Gerät liefert Foto und Vergleichswert.": "The device supplies both the image and the reference reading.",
+    "Home-Assistant-Kamera:": "Home Assistant camera:",
+    "Die App liest das Bild und vergleicht es mit einem Sensor, falls einer eingetragen ist.":
+        "The app reads the image and compares it with a sensor if you specify one.",
+    "ESPHome oder Kamera mit lokaler OCR:": "ESPHome or camera with local OCR:",
+    "Die Kamera liefert das Foto, die App liest den Stand und stellt ihn als eigenen Sensor bereit.":
+        "The camera supplies the image. The app reads it and publishes the reading as a separate sensor.",
+    "Automatischer Prüfstatus": "Automatic check status",
+    "Zählerstand bestätigt": "Meter reading confirmed",
+    "Zählerstand bitte prüfen": "Check the meter reading",
+    "Blendet diesen Hinweis hier aus. Prüfungen und Benachrichtigungen laufen weiter.":
+        "Hide this warning here. Checks and notifications will continue.",
+    "Ignorieren": "Ignore",
+    "Benachrichtigungen gespeichert.": "Notifications saved.",
+    "Beispiele und Erklärung zu den Benachrichtigungen": "Notification examples and help",
+    "Benachrichtigungen": "Notifications",
+    "Gilt für die automatische Kontrolle. Ein manueller Test löst keinen Versand aus.":
+        "Applies to automatic checks. Manual tests do not send notifications.",
+    "Bei anhaltenden Problemen benachrichtigen": "Notify me if checks keep failing",
+    "So lange muss die automatische Kontrolle ohne Erfolg bleiben, bevor Home Assistant einen Hinweis anzeigt.":
+        "Wait this long without a successful automatic check before showing a notice in Home Assistant.",
+    "Hinweis nach (Minuten)": "Show notice after (minutes)",
+    "Wartezeit für Handy-Push und E-Mail, nachdem der Hinweis erschienen ist. Bei 0 werden beide sofort gesendet.":
+        "Wait this long after the notice before sending push or email. Use 0 to send immediately.",
+    "Push und E-Mail nach weiteren Stunden": "Send push or email after (additional hours)",
+    "Optionaler Dienst deiner Home Assistant Companion App, zum Beispiel notify.mobile_app_mein_handy.":
+        "Optional Home Assistant Companion App service, for example notify.mobile_app_my_phone.",
+    "Handy-Push (optional)": "Mobile push (optional)",
+    "Optionales Benachrichtigungsziel in Home Assistant, zum Beispiel eine SMTP-Empfänger-Entität.":
+        "Optional destination in Home Assistant, for example an SMTP recipient entity.",
+    "E-Mail oder anderes Ziel (optional)": "Email or other destination (optional)",
+    'placeholder="notify.mobile_app_mein_handy"': 'placeholder="notify.mobile_app_my_phone"',
+    'placeholder="notify.meine_email"': 'placeholder="notify.my_email"',
+    "ⓘ Wie funktioniert der Versand?": "ⓘ How are notifications sent?",
+    "Nur einen Hinweis in Home Assistant erhalten? Lass beide optionalen Felder leer.":
+        "Leave both optional fields blank to receive a notice in Home Assistant only.",
+    "Für E-Mail richte zuerst die SMTP-Integration in Home Assistant ein und trage hier die Entitäts-ID des Empfängers ein. Andere Benachrichtigungs-Entitäten funktionieren ebenfalls.":
+        "For email, set up the SMTP integration in Home Assistant and enter the recipient entity ID here. Other notification entities also work.",
+    "Wenn die Prüfung wieder gelingt oder du den Hinweis schließt, entfallen noch ausstehende Nachrichten. Je Ziel wird pro Störung eine Nachricht gesendet.":
+        "A successful check or dismissing the notice cancels pending messages. Each destination receives one message per incident.",
     "Kontrollbilder": "Check images",
     "? steht für eine unklare Ziffer.": "? indicates an uncertain digit.",
     "Aktuelles Bild": "Current image",
@@ -98,6 +152,14 @@ EN_UI = {
 }
 
 EN_DETAILS = {
+    "Der gelesene Stand liegt unter dem letzten OCR-Stand. Bitte das Kamerabild prüfen.":
+        "Reading lower than the previous OCR value. Check the image.",
+    "Bild oder Messwert fehlt. Verbindung prüfen.": "Image or reading unavailable. Check the connection.",
+    "Bild zu alt oder schon geprüft.": "This image is too old or has already been checked.",
+    "Referenzwert fehlt oder ist ungültig.": "Reference reading missing or invalid.",
+    "Ausschnitt ungültig. Koordinaten prüfen.": "Invalid crop. Check the coordinates.",
+    "OCR fehlgeschlagen. Ziffernbereich prüfen.": "OCR failed. Check the digit area.",
+
     "Das Prüfergebnis konnte nicht gespeichert werden.": "Could not save the check result.",
     "Das Zählerbild oder die Messwerte sind nicht verfügbar. Bitte die ESP- bzw. Kameraverbindung prüfen.":
         "The meter image or reference data is unavailable. Check the ESP or camera connection.",
@@ -133,27 +195,22 @@ def translate_page(source):
     return source
 
 
-def english_uncertain_positions(readings, decimals, *, manual=False):
+def english_uncertain_positions(readings, decimals):
     """Describe each unreliable digit relevant to the configured precision."""
     positions = uncertain_positions(readings, decimals)
     if positions is None:
-        return EN_DETAILS[
-            "Zählerstand nicht sicher erkannt. Es liegt keine verwertbare OCR-Lesung vor. Bitte Bildausschnitt und Beleuchtung prüfen."
-        ]
-    uncertain = []
-    for fractional, index, candidates in positions:
-        place = f"decimal digit {index}" if fractional else f"whole-number digit {index} from the left"
-        if len(candidates) > 1:
-            place += " (read as " + " or ".join(candidates) + ")"
-        uncertain.append(place)
-    if not uncertain:
-        return "Meter reading uncertain. The OCR attempts did not consistently agree. Check the image."
-    return ("Meter reading uncertain. Unclear positions: " + "; ".join(uncertain) +
-            (". See individual attempts under 'More details'." if manual
-             else ". Check the image crop, lighting, and digits."))
+        return "No digits read. Check the crop and lighting."
+    if not positions:
+        return "OCR uncertain. Check the image."
+    groups = []
+    for fractional, title in ((False, "Whole-number digits"), (True, "Decimal digits")):
+        digits = [str(index) for is_fractional, index in positions if is_fractional == fractional]
+        if digits:
+            groups.append(title + ": " + ", ".join(digits) + ".")
+    return "OCR uncertain. " + " ".join(groups)
 
 
-def english_result(detail, status=None, decimals=0, readings=None, *, manual=False):
+def english_result(detail, status=None, decimals=0, readings=None):
     """Translate a saved result without changing the Home Assistant sensor state."""
     if not isinstance(detail, str):
         return "No result available."
@@ -164,7 +221,7 @@ def english_result(detail, status=None, decimals=0, readings=None, *, manual=Fal
             "Neue Vergleichsgenauigkeit gespeichert. Die nächste automatische Prüfung zeigt das erste Ergebnis mit dieser Einstellung."
         ]
     if status == "ocr_unclear":
-        return english_uncertain_positions(readings or [], decimals, manual=manual)
+        return english_uncertain_positions(readings or [], decimals)
     if status == "match":
         if decimals == 0:
             return "Confirmed: Whole cubic meters match. Decimal digits were ignored."

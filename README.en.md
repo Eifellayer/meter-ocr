@@ -28,6 +28,32 @@ For each image, OCR can attempt between **1 and 10 different processing profiles
 
 A Home Assistant installation with Supervisor is required; supported platforms are **AMD64 and ARM64**. Only one installed variant should publish the same sensor IDs at a time.
 
+## First setup and image source
+
+On a fresh installation, open the web interface and choose a mode under **Image source**. You can change it in the same place later.
+
+| Mode | What it uses |
+| --- | --- |
+| **SLFork / AI on the Edge** | The ESP supplies the image and reference reading. Enter its address. |
+| **Home Assistant camera** | Choose a `camera.*` entity and optionally a current reference sensor in m³. |
+| **ESPHome or camera with local OCR** | The camera supplies the image. RF1 reads it locally and publishes `sensor.rf1_ocr_zaehlerstand` in m³. |
+
+For ESPHome, configure an [ESP32 camera](https://esphome.io/components/esp32_camera/) with the [native API](https://esphome.io/components/api/) and add the device to Home Assistant. Check the image there, then select its `camera.*` entity in RF1. Use the **manual test** to adjust the crop and apply a working preview to automatic checks. This mode works without SLFork or a reference sensor.
+
+The standalone sensor requires a majority of at least two OCR profiles on the same photo. It reports **unavailable** if the reading is uncertain or goes below the last valid reading from that camera. Standalone OCR values have no reference confirmation or long-term statistics configuration. Upgrades retain the active source. Changing the source starts a new automatic confirmation count.
+
+## Notifications and automatic status
+
+A green check marks a confirmed comparison. A red warning highlights a current problem at the top of the page. **Ignore** hides the current warning in the web interface. New incidents are shown again, and notification rules still apply.
+
+Open **Notifications** and enable **Notify me if checks keep failing**. Set how many minutes of unsuccessful automatic checks should pass before Home Assistant shows a notice. Set the additional delay for push and email. **0 hours** sends them when the notice appears.
+
+- **Home Assistant only:** Leave both optional destinations blank.
+- **Mobile push:** Enter a Companion action such as `notify.mobile_app_my_phone`.
+- **Email:** Configure the [SMTP integration](https://www.home-assistant.io/integrations/smtp/) and a recipient in Home Assistant. Enter its `notify.*` entity, such as `notify.my_email`. Other notification entities also work.
+
+Each destination records at most one successful send per incident. Dismissing the Home Assistant notice or a successful automatic check cancels any pending deliveries. Manual tests never send notifications. The legacy `push_dienst` is used until the notification settings are first saved in the web interface.
+
 ## Language selection
 
 **Automatic (Home Assistant)** uses the signed-in Home Assistant user's profile language when available through Ingress. German and English include regional variants such as `de-AT` and `en-US`. If the profile language is unavailable or unsupported, the app uses the first supported browser language, then German. Explicit **Deutsch** and **English** choices persist per identified Ingress user. Selecting **Automatic** uses the current profile again on the next open or reload. Without an Ingress user identity, a manual choice lasts for the current navigation.
@@ -47,7 +73,7 @@ The main screen shows the last recognized value, reference value, verification r
 
 Saved automatic rules persist across app restarts. They take precedence over the corresponding Home Assistant configuration fields. When the comparison precision changes, the automatic confirmation count starts over so matches from the old precision are not treated as new evidence.
 
-A successful automatic check is normally repeated after **one hour**. When a check fails or data is uncertain, it retries after **five minutes**. After four hours without a successful confirmation, `sensor.rf1_pruefstatus` can report `review_due`; an optional mobile notification is available later.
+A successful automatic check is normally repeated after **one hour**. When a check fails or data is uncertain, it retries after **five minutes**. With the default settings, `sensor.rf1_pruefstatus` reports `review_due` after four hours of failed checks.
 
 Each SLFork measurement timestamp counts at most once. In Home Assistant camera mode, the app uses the fetch time, so independent confirmations rely on the camera supplying fresh images. A configured reference sensor must report in `m³` and have a timestamp within five minutes of the image request.
 
@@ -76,7 +102,7 @@ When a custom crop produces a preview, use **Use tested crop for automatic check
 | `vergleich_nachkommastellen` | Default comparison precision, 0–3 places |
 | `ocr_versuche` | Default OCR attempts, 1–10 |
 | `zeitzone` | Time zone, normally `Europe/Berlin` |
-| `push_dienst` | Optional `notify.mobile_app_…` service |
+| `push_dienst` | Legacy default for the optional `notify.mobile_app_…` action |
 
 Existing entity IDs remain **`sensor.rf1_kontrollbild`** and **`sensor.rf1_pruefstatus`**. Check images are stored in **Media → Local Media → rf1**.
 

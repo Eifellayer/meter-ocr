@@ -52,11 +52,27 @@ class ComparisonTests(unittest.TestCase):
     def test_uncertain_position_mentions_digit_not_fraction(self):
         msg = explain_uncertain_positions(
             ["12345.???", "12945.???", "12345.???"], 0)
-        self.assertIn("3. Vorkommastelle", msg)
-        self.assertNotIn("Nachkommastelle", msg)
+        self.assertEqual("OCR unsicher. Vor dem Komma: 3.", msg)
+        self.assertNotIn("Nach dem Komma", msg)
         msg_fraction = explain_uncertain_positions(
             ["12345.100", "12345.900"], 1)
-        self.assertIn("1. Nachkommastelle", msg_fraction)
+        self.assertEqual("OCR unsicher. Nach dem Komma: 1.", msg_fraction)
+
+    def test_uncertain_result_groups_multiple_positions(self):
+        message = explain_uncertain_positions(["12345.143", "98746.243"], 1)
+        self.assertEqual("OCR unsicher. Vor dem Komma: 1, 2, 3, 5. Nach dem Komma: 1.", message)
+
+    def test_standalone_requires_repeatable_reading(self):
+        data = {"reference_required": False}
+        for readings, expected in (
+            (["12345.???", "12345.???"], ("12345.???", True, 2)),
+            (["12345.???", "12395.???"], ("123?5.???", False, 2)),
+            (["12345.???"], ("12345.???", False, 1)),
+        ):
+            with self.subTest(readings=readings):
+                values = iter(readings)
+                self.assertEqual(expected, read_with_retries(
+                    lambda _: next(values), data, 0, max_attempts=len(readings), standalone=True))
 
     def test_conflicting_reads_do_not_become_a_confirmed_match(self):
         values = iter(["12345.100", "12395.100", "12365.100"])
@@ -97,9 +113,9 @@ class PanelTests(unittest.TestCase):
         self.assertIn("decimal place 2", english_result(
             "Bestätigt: Zählerstand und Referenzwert stimmen überein.",
             "match", 2))
-        self.assertIn("whole-number digit 3", english_uncertain_positions(
-            ["12345.???", "12945.???"], 0, manual=True))
-        self.assertNotIn("decimal digit", english_uncertain_positions(
+        self.assertIn("Whole-number digits: 3", english_uncertain_positions(
+            ["12345.???", "12945.???"], 0))
+        self.assertNotIn("Decimal digits", english_uncertain_positions(
             ["12345.???", "12945.???"], 0))
         self.assertIn("ESP", english_result(
             "Der ESP meldet ein Problem mit der Zählerablesung. Bitte den Wert direkt am ESP prüfen.",

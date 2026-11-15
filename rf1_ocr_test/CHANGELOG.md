@@ -2,6 +2,10 @@
 
 ## In Entwicklung
 
+- Wahl der Bildquelle bei der Ersteinrichtung und später in der Oberfläche. Der ESPHome-Modus liest Kamerabilder lokal und veröffentlicht den optionalen OCR-Sensor.
+- Grüner Haken bei bestätigtem Vergleich, roter ausblendbarer Hinweis bei Problemen und kurze OCR-Meldungen mit gruppierten Ziffernpositionen.
+- Einstellbare Wartezeiten und Ziele für Home-Assistant-Hinweis, Companion-Push und E-Mail über eine Benachrichtigungs-Entität. Aufklappbare Hilfe und Kurzerklärungen an den Feldern.
+
 - Automatische Übernahme der Home-Assistant-Profilsprache mit Deutsch und Englisch als dauerhafter Auswahl pro Ingress-Nutzer.
 - Kompakte Übersicht mit Hintergrundaktualisierung. Automatikregeln, Kontrollbilder und manueller Test lassen sich getrennt aufklappen.
 - Laufende manuelle Tests behalten ihren Auftrag. Die Ausschnittübernahme ist an die angezeigte Vorschau gebunden. Bei vollständig fehlender OCR-Lesung nennt das Ergebnis keine vermeintlich betroffenen Ziffern.

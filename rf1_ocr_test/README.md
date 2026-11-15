@@ -36,7 +36,7 @@ Die manuelle Testansicht zeigt **sofort das Ergebnis im Statusfeld**: sanftes Gr
 
 Standardmäßig zählen **nur volle m³** (`vergleich_nachkommastellen: 0`). Nachkommastellen werden angezeigt, aber bei 0 nicht bewertet. `?` bedeutet unklare Ziffer. Die **automatischen** Prüfregeln lassen sich im eigenen Webbereich dauerhaft speichern. Die erweiterten **manuellen** Testoptionen gelten nur für diesen einen Test. Die übrige App-Konfiguration wird weiterhin in Home Assistant gepflegt.
 
-Nach einem Treffer prüft die App üblicherweise stündlich, bei Unsicherheit etwa alle fünf Minuten. Nach vier Stunden ohne Übereinstimmung entsteht `review_due`. Optional kann eine offene Erinnerung nach weiteren 24 Stunden an die Companion App geschickt werden.
+Nach einem Treffer prüft die App üblicherweise stündlich, bei Unsicherheit etwa alle fünf Minuten. Standardmäßig meldet der Sensor nach vier Stunden ohne erfolgreiche Prüfung `review_due`. Unter **Benachrichtigungen** lassen sich Wartezeiten und Ziele ändern. Details stehen in der [Projektbeschreibung](../README.md#benachrichtigungen-und-prüfstatus).
 
 Die Bilddateien liegen unter **Medien → Lokale Medien → rf1**. Die bestehenden Entitäten `sensor.rf1_kontrollbild` und `sensor.rf1_pruefstatus` behalten ihre IDs für vorhandene Dashboards und Automationen.
 

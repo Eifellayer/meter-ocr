@@ -12,6 +12,8 @@ from urllib.parse import parse_qs, urlsplit
 
 from i18n import EN_UI, english_progress, english_result, translate_page
 from language import MODES, SUPPORTED, USER_ID, browser_locale, profile_script
+from notification_settings import notification_rules
+from source_settings import SOURCE_MODES, source_rules
 
 SUPERVISOR_ADDRESS = "172.30.32.2"
 
@@ -38,6 +40,18 @@ header{{display:flex;align-items:baseline;justify-content:space-between;gap:.5re
 .language-bar{{display:flex;flex-wrap:wrap}}
 .language-bar select,.language-bar button{{min-height:2.75rem}}
 .automatic-images{{margin:1rem 0}}
+.check-option{{display:flex;align-items:center;gap:.5rem;grid-column:1/-1}}
+.check-option input{{min-height:1.15rem;width:1.15rem;margin:0}}
+.notification-form input{{width:100%}}
+.notification-form .check-option input{{width:1.15rem}}
+.automatic-banner{{display:flex;align-items:flex-start;gap:.6rem;margin:0 0 1rem;padding:.8rem .9rem;border:1px solid var(--edge);border-radius:.75rem}}
+.automatic-banner[data-tone="ok"]{{border-color:#65a986;background:light-dark(#edf8f0,#183a2a);color:light-dark(#155d39,#a2e5bc)}}
+.automatic-banner[data-tone="problem"]{{border-color:#c67a7a;background:light-dark(#fff2f1,#46282c);color:light-dark(#8d282e,#ffc0c1)}}
+.automatic-banner-icon{{font-weight:750;font-size:1.15rem;line-height:1.2}}
+.automatic-banner p{{margin:.2rem 0 0;overflow-wrap:anywhere}}
+.automatic-banner button{{margin-left:auto;padding:.35rem .7rem;min-height:2.75rem}}
+@media(max-width:500px){{.automatic-banner{{flex-wrap:wrap}}.automatic-banner-text{{flex:1;min-width:0}}}}
+.notification-help li + li{{margin-top:.35rem}}
 .automatic-images > summary{{cursor:pointer;color:var(--muted)}}
 .test-box :where(p,small){{overflow-wrap:anywhere}}
 label{{display:grid;gap:.3rem;font-weight:600;font-size:.85rem;color:var(--muted)}}
@@ -112,8 +126,17 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 </form>
 </header>
 <div class="panel"><h2>Automatische Kontrolle</h2>
-<dl><dt>Prüfergebnis</dt><dd id="automatic-result">{detail}</dd>
-<dt>Erkannter Stand</dt><dd id="automatic-ocr">{ocr}</dd>
+<div class="automatic-banner" id="automatic-banner" data-tone="{automatic_tone}"
+ data-incident="{automatic_incident}" data-preference-key="{banner_preference_key}">
+<span class="automatic-banner-icon" aria-hidden="true">{automatic_icon}</span>
+<div class="automatic-banner-text" role="status" aria-live="polite">
+<strong id="automatic-status-heading">{automatic_heading}</strong>
+<p id="automatic-result">{detail}</p>
+</div>
+<button id="ignore-automatic-warning" type="button" {ignore_hidden}
+ title="Blendet diesen Hinweis hier aus. Prüfungen und Benachrichtigungen laufen weiter.">Ignorieren</button>
+</div>
+<dl><dt>Erkannter Stand</dt><dd id="automatic-ocr">{ocr}</dd>
 <dt>Referenz</dt><dd id="automatic-reference">{reference}</dd>
 <dt>Bildzeit</dt><dd id="automatic-image-time" class="stamp" data-epoch="{image_time}">–</dd>
 <dt>Nächste Prüfung</dt><dd id="countdown">–</dd></dl>
@@ -128,6 +151,32 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <div><h2>Letzter Treffer</h2><div id="automatic-good">{good}</div></div></section>
 </details>
 </div>
+<details class="panel manual-panel" id="source-settings" {source_open}>
+<summary><strong>Bildquelle</strong></summary>
+<div class="manual-content">
+{source_intro}
+<form method="post" action="bildquelle" id="source-form">
+<input type="hidden" name="lang" value="{language}">
+<input type="hidden" name="mode" value="{language_mode}">
+<input type="hidden" name="csrf" value="{csrf}">
+<label title="Wähle, woher das Zählerbild und gegebenenfalls der Vergleichswert kommen.">Betriebsmodus
+<select name="source_mode" id="source-mode">{source_options}</select></label>
+<label id="source-url" title="Die Adresse deines SLFork-Geräts im Heimnetz.">SLFork-Adresse
+<input name="url" value="{source_url}" placeholder="http://esp-gaszaehler.local" maxlength="150"></label>
+<label id="source-camera" title="Die Entitäts-ID der Kamera in Home Assistant.">Kamera in Home Assistant
+<input name="camera" value="{source_camera}" placeholder="camera.gaszaehler" maxlength="80"></label>
+<label id="source-reference" title="Optionaler Sensor mit aktuellem Zählerstand in Kubikmetern.">Vergleichssensor (optional)
+<input name="reference" value="{source_reference}" placeholder="sensor.gaszaehler" maxlength="80"></label>
+<button type="submit">Speichern</button>
+</form>
+<details class="help"><summary title="Erklärung zu den verfügbaren Modi">ⓘ Welcher Modus passt?</summary>
+<ul>
+<li><strong>SLFork:</strong> Das Gerät liefert Foto und Vergleichswert.</li>
+<li><strong>Home-Assistant-Kamera:</strong> Die App liest das Bild und vergleicht es mit einem Sensor, falls einer eingetragen ist.</li>
+<li><strong>ESPHome oder Kamera mit lokaler OCR:</strong> Die Kamera liefert das Foto, die App liest den Stand und stellt ihn als eigenen Sensor bereit.</li>
+</ul></details>
+{source_saved_notice}
+</div></details>
 <details class="panel manual-panel" id="automatic-settings" {settings_open}>
 <summary><strong>Automatische Prüfung – Einstellungen</strong></summary>
 <div class="manual-content">
@@ -153,6 +202,35 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 </form>
 <p class="settings-note">Gilt dauerhaft ab der nächsten automatischen Prüfung. Bei geänderter Vergleichsgenauigkeit beginnt die Trefferzählung neu.</p>
 {auto_saved_notice}
+</div></details>
+<details class="panel manual-panel" id="notification-settings" {notifications_open}>
+<summary><strong>Benachrichtigungen</strong></summary>
+<div class="manual-content">
+<form class="notification-form" method="post" action="benachrichtigungen">
+<input type="hidden" name="lang" value="{language}">
+<input type="hidden" name="mode" value="{language_mode}">
+<input type="hidden" name="csrf" value="{csrf}">
+<label class="check-option" title="Gilt für die automatische Kontrolle. Ein manueller Test löst keinen Versand aus.">
+<input type="checkbox" name="enabled" value="1" {notifications_enabled}>
+Bei anhaltenden Problemen benachrichtigen
+</label>
+<label title="So lange muss die automatische Kontrolle ohne Erfolg bleiben, bevor Home Assistant einen Hinweis anzeigt.">Hinweis nach (Minuten)
+<input type="number" name="review_minutes" min="1" max="2880" value="{notification_review}" required></label>
+<label title="Wartezeit für Handy-Push und E-Mail, nachdem der Hinweis erschienen ist. Bei 0 werden beide sofort gesendet.">Push und E-Mail nach weiteren Stunden
+<input type="number" name="delivery_hours" min="0" max="168" value="{notification_delay}" required></label>
+<label title="Optionaler Dienst deiner Home Assistant Companion App, zum Beispiel notify.mobile_app_mein_handy.">Handy-Push (optional)
+<input name="push" value="{notification_push}" maxlength="80" placeholder="notify.mobile_app_mein_handy" autocapitalize="off" spellcheck="false"></label>
+<label title="Optionales Benachrichtigungsziel in Home Assistant, zum Beispiel eine SMTP-Empfänger-Entität.">E-Mail oder anderes Ziel (optional)
+<input name="target" value="{notification_target}" maxlength="80" placeholder="notify.meine_email" autocapitalize="off" spellcheck="false"></label>
+<button type="submit">Speichern</button>
+</form>
+<details class="help notification-help"><summary title="Beispiele und Erklärung zu den Benachrichtigungen">ⓘ Wie funktioniert der Versand?</summary>
+<ul>
+<li>Nur einen Hinweis in Home Assistant erhalten? Lass beide optionalen Felder leer.</li>
+<li>Für E-Mail richte zuerst die SMTP-Integration in Home Assistant ein und trage hier die Entitäts-ID des Empfängers ein. Andere Benachrichtigungs-Entitäten funktionieren ebenfalls.</li>
+<li>Wenn die Prüfung wieder gelingt oder du den Hinweis schließt, entfallen noch ausstehende Nachrichten. Je Ziel wird pro Störung eine Nachricht gesendet.</li>
+</ul></details>
+{notification_saved_notice}
 </div></details>
 <details class="panel manual-panel" id="manual-panel" {manual_open}>
 <summary><strong>Manuellen Test öffnen</strong></summary>
@@ -234,6 +312,18 @@ const cropMode = document.querySelector('#crop-mode');
 const cropFields = document.querySelector('#crop-fields');
 const autoCropMode = document.querySelector('#auto-crop-mode');
 const autoCropFields = document.querySelector('#auto-crop-fields');
+const sourceMode = document.querySelector('#source-mode');
+function showSourceFields() {{
+  const mode = sourceMode.value;
+  for (const [selector, show] of [['#source-url', mode === 'slfork'],
+      ['#source-camera', mode !== 'slfork'], ['#source-reference', mode === 'camera']]) {{
+    const field = document.querySelector(selector);
+    field.hidden = !show;
+    field.querySelector('input').disabled = !show;
+  }}
+}}
+sourceMode.addEventListener('change', showSourceFields);
+showSourceFields();
 function showAutoCropFields() {{
   autoCropFields.hidden = autoCropMode.value !== 'manual';
 }}
@@ -373,13 +463,42 @@ manualForm.addEventListener('submit', event => {{
   button.textContent = 'Prüfung läuft …';
 }});
 tick(); setInterval(tick, 1000);
+const automaticBanner = document.querySelector('#automatic-banner');
+const ignoreWarning = document.querySelector('#ignore-automatic-warning');
+const preferenceKey = automaticBanner.dataset.preferenceKey;
+let ignoredIncident = '';
+try {{
+  ignoredIncident = (preferenceKey ? localStorage : sessionStorage).getItem(preferenceKey || 'rf1-ignored-warning') || '';
+}} catch (_) {{ /* Storage is optional. */ }}
+function updateBannerVisibility() {{
+  automaticBanner.hidden = automaticBanner.dataset.tone === 'problem' &&
+    automaticBanner.dataset.incident === ignoredIncident;
+}}
+ignoreWarning.addEventListener('click', () => {{
+  ignoredIncident = automaticBanner.dataset.incident;
+  try {{
+    (preferenceKey ? localStorage : sessionStorage).setItem(preferenceKey || 'rf1-ignored-warning', ignoredIncident);
+  }} catch (_) {{ /* Keep the choice for the current view. */ }}
+  updateBannerVisibility();
+}});
+updateBannerVisibility();
+
 async function refreshAutomatic() {{
   try {{
     const response = await fetch('automatic?lang=' + lang, {{cache: 'no-store'}});
     if (!response.ok) throw new Error();
     const sample = await response.json();
     next = sample.next_check;
-    document.querySelector('#automatic-result').textContent = sample.detail;
+    automaticBanner.dataset.tone = sample.tone;
+    automaticBanner.dataset.incident = sample.incident;
+    ignoreWarning.hidden = sample.tone !== 'problem';
+    const heading = document.querySelector('#automatic-status-heading');
+    const icon = automaticBanner.querySelector('.automatic-banner-icon');
+    const detail = document.querySelector('#automatic-result');
+    if (heading.textContent !== sample.heading) heading.textContent = sample.heading;
+    if (icon.textContent !== sample.icon) icon.textContent = sample.icon;
+    if (detail.textContent !== sample.detail) detail.textContent = sample.detail;
+    updateBannerVisibility();
     document.querySelector('#automatic-ocr').textContent = sample.ocr;
     document.querySelector('#automatic-reference').textContent = sample.reference;
     renderAttempts(document.querySelector('#automatic-ocr-details'), sample.readings, sample.decimals);
@@ -423,7 +542,8 @@ def select_options(choices, chosen):
 def start_panel(
     history_path, current_image, good_image, requested, default_decimals, default_attempts,
     get_auto_rules, save_auto_rules, default_crop, default_width, test_image,
-    load_language_modes, save_language_modes, *, address=("0.0.0.0", 8099),
+    load_language_modes, save_language_modes, get_delivery, save_delivery, get_source, save_source,
+    *, address=("0.0.0.0", 8099),
 ):
     images = {"/aktuell.jpg": current_image, "/treffer.jpg": good_image,
               "/testvorschau.jpg": test_image}
@@ -431,6 +551,8 @@ def start_panel(
     request_lock = Lock()
     preferences_lock = Lock()
     rules_lock = Lock()
+    delivery_lock = Lock()
+    source_lock = Lock()
     progress = {
         "request_id": 0, "phase": "idle", "message": "Noch kein manueller Test gestartet.",
         "attempts": 0, "max_attempts": default_attempts,
@@ -489,8 +611,23 @@ def start_panel(
                 detail, history.get("check_status") or history.get("status"),
                 history.get("comparison_decimals", default_decimals), history.get("ocr_readings"),
             )
+        status = history.get("check_status") or history.get("status")
+        tone = "neutral"
+        heading = "Automatischer Prüfstatus"
+        icon = ""
+        if not precision_pending and status == "match":
+            tone, heading, icon = "ok", "Zählerstand bestätigt", "✓"
+        elif not precision_pending and status in (
+            "difference", "ocr_unclear", "slfork_unclear", "stale_sample", "capture_unavailable",
+        ):
+            tone, heading, icon = "problem", "Zählerstand bitte prüfen", "!"
+        if language == "en":
+            heading = EN_UI[heading]
         return {
-            "detail": detail or "–",
+            "detail": detail or ("No automatic result yet." if language == "en"
+                                 else "Noch kein automatisches Prüfergebnis."),
+            "tone": tone, "heading": heading, "icon": icon,
+            "incident": str(history.get("failure_since") or status) if tone == "problem" else "",
             "ocr": str(history["ocr_value"]) if history.get("ocr_value") is not None else "–",
             "reference": str(history["last_reference"]) if history.get("last_reference") is not None else "–",
             "image_time": history.get("last_epoch") or 0,
@@ -520,8 +657,8 @@ def start_panel(
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
 
-        def reply(self, content, media_type):
-            self.send_response(200)
+        def reply(self, content, media_type, status=200):
+            self.send_response(status)
             self.send_header("Content-Type", media_type)
             self.send_header("Content-Length", str(len(content)))
             self.send_header("Cache-Control", "no-store")
@@ -557,7 +694,7 @@ def start_panel(
                         snapshot["detail"] = english_result(
                             snapshot["detail"], snapshot.get("outcome"),
                             snapshot.get("comparison_decimals", default_decimals),
-                            snapshot.get("readings"), manual=True,
+                            snapshot.get("readings"),
                         )
                 self.reply(json.dumps(snapshot).encode("utf-8"), "application/json; charset=utf-8")
                 return
@@ -586,12 +723,24 @@ def start_panel(
             scripts = (f"<script>{profile_script(user)}</script>"
                        if user and mode == "auto" and not source_name else "")
             summary = automatic_summary(history, language, auto_rules)
+            delivery = get_delivery()
+            source, setup_pending = get_source()
+            source_choices = (
+                {"slfork": "SLFork / AI on the Edge", "camera": "Home Assistant camera",
+                 "esphome": "ESPHome or camera with local OCR"} if language == "en" else
+                {"slfork": "SLFork / AI on the Edge", "camera": "Home-Assistant-Kamera",
+                 "esphome": "ESPHome oder Kamera mit lokaler OCR"}
+            )
+            intro = ("Choose a source to start automatic checks." if language == "en" else
+                     "Wähle eine Bildquelle, um die automatische Kontrolle zu starten.")
             values = {name: html.escape(summary[name]) for name in ("ocr", "reference", "detail")}
             settings = history.get("manual_result", {}).get("settings", {})
             saved = query.get("saved", [""])[0]
             saved_message = (
                 "Automatische Prüfregeln gespeichert." if saved == "1" else
-                "Getesteten Bildausschnitt für die Automatik übernommen." if saved == "crop" else ""
+                "Getesteten Bildausschnitt für die Automatik übernommen." if saved == "crop" else
+                "Benachrichtigungen gespeichert." if saved == "notifications" else
+                "Bildquelle gespeichert." if saved == "source" else ""
             )
             if language == "en" and saved_message:
                 saved_message = EN_UI[saved_message]
@@ -612,10 +761,25 @@ def start_panel(
             self.reply(page.format(**values,
                 language=language,
                 language_mode=mode,
+                automatic_tone=summary["tone"], automatic_heading=summary["heading"],
+                automatic_icon=summary["icon"], automatic_incident=html.escape(summary["incident"]),
+                banner_preference_key=f"rf1-ignored-warning-{user}" if user else "",
+                ignore_hidden="" if summary["tone"] == "problem" else "hidden",
                 profile_script=scripts,
                 language_options=select_options({"auto": automatic, "de": "Deutsch", "en": "English"}, mode),
-                settings_open="open" if saved else "",
+                settings_open="open" if saved in ("1", "crop") else "",
                 manual_open="open" if manual_open or test in ("queued", "busy", "open") else "",
+                notifications_open="open" if saved == "notifications" else "",
+                source_open="open" if setup_pending or saved == "source" else "",
+                source_intro=f'<p class="settings-note">{intro}</p>' if setup_pending else "",
+                source_options=select_options(source_choices, source["mode"]),
+                source_url=html.escape(source["url"]), source_camera=html.escape(source["camera"]),
+                source_reference=html.escape(source["reference"]),
+                source_saved_notice=auto_saved_notice if saved == "source" else "",
+                notifications_enabled="checked" if delivery["enabled"] else "",
+                notification_review=delivery["review_minutes"], notification_delay=delivery["delivery_hours"],
+                notification_push=html.escape(delivery["push"]), notification_target=html.escape(delivery["target"]),
+                notification_saved_notice=auto_saved_notice if saved == "notifications" else "",
                 request_status=request_status,
                 polarity_options=select_options(
                     POLARITIES_EN if language == "en" else POLARITIES,
@@ -628,7 +792,11 @@ def start_panel(
                 auto_decimal_options=select_options(
                     DECIMALS_EN if language == "en" else DECIMALS, str(auto_rules["decimals"]),
                 ),
-                auto_attempt_options=select_options(ATTEMPTS, str(auto_rules["attempts"])),
+                auto_attempt_options=select_options(
+                    {value: label for value, label in ATTEMPTS.items()
+                     if source["mode"] != "esphome" or value != "1"},
+                    str(max(2, auto_rules["attempts"]) if source["mode"] == "esphome" else auto_rules["attempts"]),
+                ),
                 auto_polarity_options=select_options(
                     POLARITIES_EN if language == "en" else POLARITIES, auto_rules["polarity"],
                 ),
@@ -637,7 +805,7 @@ def start_panel(
                 ),
                 auto_crop_value=html.escape(auto_rules["crop"], quote=True),
                 auto_width_value=auto_rules["width"],
-                auto_saved_notice=auto_saved_notice,
+                auto_saved_notice=auto_saved_notice if saved in ("1", "crop") else "",
                 crop_mode_options=select_options(
                     CROP_MODES_EN if language == "en" else CROP_MODES,
                     settings.get("crop_mode", "auto"),
@@ -668,34 +836,58 @@ def start_panel(
             if not self.authorized():
                 return
             path = urlsplit(self.path).path
-            if path not in ("/pruefen", "/automatik", "/ausschnitt-uebernehmen", "/sprache"):
+            if path not in ("/pruefen", "/automatik", "/ausschnitt-uebernehmen", "/sprache", "/benachrichtigungen", "/bildquelle"):
                 self.send_error(404)
                 return
+            fallback = browser_locale(self.headers.get("Accept-Language", ""))
+            language = fallback
+            keep_mode = ""
+
+            def problem(code, german=None, english=None):
+                if german is None:
+                    german, english = {
+                        400: ("Bitte die Formulareingaben prüfen.", "Check the form values."),
+                        403: ("Bitte die App erneut öffnen und das Formular nochmals absenden.",
+                              "Reopen the app and submit the form again."),
+                        503: ("Die Einstellungen konnten nicht gespeichert werden.",
+                              "Could not save the settings."),
+                    }[code]
+                message, back = ((english, "Back to the checks") if language == "en"
+                                 else (german, "Zurück zur Kontrolle"))
+                again = "./" + ("?" + keep_mode[1:] if keep_mode else "")
+                content = (f'<!doctype html><html lang="{language}"><meta charset="utf-8">'
+                           '<meta name="viewport" content="width=device-width">'
+                           f'<title>{html.escape(message)}</title>'
+                           '<style>body{font:1rem system-ui;max-width:40rem;margin:2rem auto;'
+                           'padding:0 1rem}a{display:inline-block;padding:.5rem 0}</style>'
+                           f'<main><p>{html.escape(message)}</p><a href="{again}">{back}</a></main></html>')
+                self.reply(content.encode("utf-8"), "text/html; charset=utf-8", code)
+
             # Ingress and companion webviews need not forward Fetch Metadata headers.
             if self.headers.get_content_type() != "application/x-www-form-urlencoded":
-                self.send_error(403)
+                problem(403)
                 return
             try:
                 length = int(self.headers.get("Content-Length", "0"))
-                if not 0 < length <= 512:
+                if not 0 < length <= 768:
                     raise ValueError("Invalid form length")
-                form = parse_qs(self.rfile.read(length).decode("ascii"), max_num_fields=10)
+                form = parse_qs(self.rfile.read(length).decode("ascii"), keep_blank_values=True, max_num_fields=10)
             except ValueError:
-                self.send_error(400)
-                return
-            supplied = form.get("csrf", [])
-            if len(supplied) != 1 or not compare_digest(supplied[0].encode(), csrf_token.encode()):
-                self.send_error(403)
+                problem(400)
                 return
             user = self.user_id()
             mode = form.get("mode", ["auto"])
-            language = form.get("lang", [browser_locale(self.headers.get("Accept-Language", ""))])
-            if len(mode) != 1 or mode[0] not in MODES or len(language) != 1 or language[0] not in SUPPORTED:
-                self.send_error(400)
+            form_language = form.get("lang", [fallback])
+            if len(mode) != 1 or mode[0] not in MODES or len(form_language) != 1 or form_language[0] not in SUPPORTED:
+                problem(400)
                 return
-            language = language[0]
+            language = form_language[0]
             mode = mode[0]
             keep_mode = "&mode=" + mode if not user and mode != "auto" else ""
+            supplied = form.get("csrf", [])
+            if len(supplied) != 1 or not compare_digest(supplied[0].encode(), csrf_token.encode()):
+                problem(403)
+                return
             if path == "/sprache":
                 if user:
                     try:
@@ -707,13 +899,57 @@ def start_panel(
                                 preferences[user] = mode
                             save_language_modes(preferences)
                     except (OSError, ValueError):
-                        self.send_error(503, ("Could not save the language setting." if mode == "en"
-                                              else "Die Spracheinstellung konnte nicht gespeichert werden."))
+                        if mode in SUPPORTED:
+                            language = mode
+                        problem(503, "Die Spracheinstellung konnte nicht gespeichert werden.",
+                                "Could not save the language setting.")
                         return
                 test_open = parse_qs(urlsplit(self.path).query).get("test") == ["open"]
                 params = (["test=open"] if test_open else []) + (
                     ["mode=" + mode] if keep_mode else [])
                 self.redirect("?" + "&".join(params) if params else "")
+                return
+            def field(name, default=""):
+                value, = form.get(name, [default])
+                return value
+
+            if path == "/bildquelle":
+                try:
+                    with source_lock:
+                        current, _ = get_source()
+                        values = source_rules({
+                            "mode": field("source_mode"),
+                            **{key: field(key, current[key]) for key in ("url", "camera", "reference")},
+                        })
+                        save_source(values)
+                except ValueError:
+                    problem(400, "Bitte prüfe die Adresse oder die Entitäts-ID der Bildquelle.",
+                            "Check the address or entity ID of the image source.")
+                    return
+                except OSError:
+                    problem(503)
+                    return
+                self.redirect("?saved=source" + keep_mode)
+                return
+            if path == "/benachrichtigungen":
+                try:
+                    values = notification_rules({
+                        "enabled": field("enabled") == "1",
+                        "review_minutes": int(field("review_minutes")),
+                        "delivery_hours": int(field("delivery_hours")),
+                        "push": field("push"),
+                        "target": field("target"),
+                    })
+                    with delivery_lock:
+                        save_delivery(values)
+                except ValueError:
+                    problem(400, "Bitte Wartezeiten und Benachrichtigungsziele prüfen.",
+                            "Check the notification delays and destinations.")
+                    return
+                except OSError:
+                    problem(503)
+                    return
+                self.redirect("?saved=notifications" + keep_mode)
                 return
             if path == "/ausschnitt-uebernehmen":
                 try:
@@ -724,15 +960,14 @@ def start_panel(
                                 or form.get("checked_at") != [str(previous.get("checked_at"))]
                                 or not previous.get("can_apply_crop") or not test_image.exists()
                                 or settings.get("crop_mode") != "manual"):
-                            self.send_error(409, ("Run the crop test again." if language == "en"
-                                                  else "Bitte den Ausschnitt erneut testen."))
+                            problem(409, "Bitte den Ausschnitt erneut testen.", "Run the crop test again.")
                             return
                         current = get_auto_rules()
                         current.update(crop_mode="manual", crop=settings["crop"], width=settings["width"])
                         save_auto_rules(current)
                 except (OSError, ValueError, KeyError, TypeError):
-                    self.send_error(503, ("Could not save the image crop." if language == "en"
-                                          else "Ausschnitt konnte nicht gespeichert werden"))
+                    problem(503, "Der Ausschnitt konnte nicht gespeichert werden.",
+                            "Could not save the image crop.")
                     return
                 self.redirect("?saved=crop" + keep_mode)
                 return
@@ -748,12 +983,12 @@ def start_panel(
                         or len(polarity) != 1 or polarity[0] not in POLARITIES
                         or len(crop_mode) != 1 or crop_mode[0] not in CROP_MODES
                         or len(crop_text) != 1 or len(width_text) != 1):
-                    self.send_error(400)
+                    problem(400)
                     return
                 if (crop_mode[0] == "manual" and
                         (not re.fullmatch(r"\d{1,4}\s*,\s*\d{1,4}\s*,\s*\d{1,4}\s*,\s*\d{1,4}", crop_text[0])
                          or not re.fullmatch(r"\d{1,4}", width_text[0]))):
-                    self.send_error(400)
+                    problem(400)
                     return
                 try:
                     with rules_lock:
@@ -764,11 +999,11 @@ def start_panel(
                                          "polarity": polarity[0], "crop_mode": crop_mode[0],
                                          "crop": crop, "width": width})
                 except ValueError:
-                    self.send_error(400, ("Check the image region and whole-digit width." if language == "en"
-                                          else "Bitte Bildbereich und Vorkommabreite prüfen."))
+                    problem(400, "Bitte Bildbereich und Vorkommabreite prüfen.",
+                            "Check the image region and whole-digit width.")
                     return
                 except OSError:
-                    self.send_error(503)
+                    problem(503)
                     return
                 self.redirect("?saved=1" + keep_mode)
                 return
@@ -781,26 +1016,26 @@ def start_panel(
             whole_width = form.get("width", [str(default_width)])
             if (len(polarity) != 1 or polarity[0] not in POLARITIES or len(decimals) != 1
                     or decimals[0] not in DECIMALS or len(attempts) != 1 or attempts[0] not in ATTEMPTS):
-                self.send_error(400)
+                problem(400)
                 return
             if len(crop_mode) != 1 or crop_mode[0] not in CROP_MODES:
-                self.send_error(400)
+                problem(400)
                 return
             if len(crop_text) != 1 or len(whole_width) != 1:
-                self.send_error(400)
+                problem(400)
                 return
             crop_value = default_crop
             width_value = default_width
             if crop_mode[0] == "manual":
                 if not re.fullmatch(r"\d{1,4}\s*,\s*\d{1,4}\s*,\s*\d{1,4}\s*,\s*\d{1,4}", crop_text[0]):
-                    self.send_error(400)
+                    problem(400)
                     return
                 boundaries = [int(number.strip()) for number in crop_text[0].split(",")]
                 if not (0 <= boundaries[0] < boundaries[2] <= 1920
                         and 0 <= boundaries[1] < boundaries[3] <= 1920
                         and re.fullmatch(r"[0-9]{1,4}", whole_width[0])
                         and 1 <= int(whole_width[0]) <= boundaries[2] - boundaries[0]):
-                    self.send_error(400)
+                    problem(400)
                     return
                 crop_value = ",".join(map(str, boundaries))
                 width_value = int(whole_width[0])

@@ -501,7 +501,7 @@ def main():
                     if ocr_error:
                         detail = ocr_error
                     elif status == "ocr_unclear":
-                        detail = explain_uncertain_positions(ocr_readings, manual_options["decimals"])
+                        detail = explain_uncertain_positions(ocr_readings, manual_options["decimals"], show_details=True)
                     preview_available = False
                     if ocr_attempts and source != "unavailable":
                         try:

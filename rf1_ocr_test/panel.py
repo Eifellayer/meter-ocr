@@ -37,7 +37,7 @@ img{{width:100%;height:auto}} h2{{font-size:1.08rem;margin:.25rem 0 .75rem}} h1{
 <select name="decimals">{decimal_options}</select></label>
 <button>Jetzt prüfen</button>
 </form>
-<p class="hint"><strong>Was passiert bei „Jetzt prüfen“?</strong> Die App lädt das letzte verfügbare Zählerbild (sie löst am ESP keine neue Aufnahme aus), liest die Ziffern lokal mit Tesseract und vergleicht sie mit dem Referenzstand. Falls die erste Lesung unklar ist oder abweicht, folgen bis zu vier weitere OCR-Aufbereitungen desselben Bilds. Das kann einen Moment dauern. Der manuelle Test verändert weder den automatischen Prüfplan noch den Zählerstand oder die 24-Stunden-Trefferzahl.</p>
+<p class="hint"><strong>Was passiert bei „Jetzt prüfen“?</strong> Die App lädt das letzte verfügbare Zählerbild (sie löst am ESP keine neue Aufnahme aus), liest die Ziffern lokal mit Tesseract und vergleicht sie mit dem Referenzstand. Falls die erste Lesung unklar ist oder abweicht, folgen bis zu vier weitere OCR-Aufbereitungen desselben Bilds. Das kann einen Moment dauern. Der manuelle Test zählt nicht zu den automatischen Treffern.</p>
 <div class="test-box" id="test-box" data-phase="idle" role="status" aria-live="polite">
 <strong id="test-head">Aktueller Schritt: Bereit</strong>
 <p id="test-status">{request_status}</p>
@@ -45,19 +45,15 @@ img{{width:100%;height:auto}} h2{{font-size:1.08rem;margin:.25rem 0 .75rem}} h1{
 <small id="test-meta">Der aktuelle Bearbeitungsstand wird automatisch aktualisiert.</small>
 </div></div>
 <div class="panel"><h2>Letzter manueller Test</h2>
-<dl><dt>Getestet um</dt><dd class="stamp" data-epoch="{manual_checked_at}">–</dd>
-<dt>Bildzeit</dt><dd class="stamp" data-epoch="{manual_image_time}">–</dd>
-<dt>Erkannter Stand</dt><dd>{manual_ocr}</dd>
-<dt>Referenz</dt><dd>{manual_reference}</dd>
-<dt>Ergebnis</dt><dd>{manual_detail}</dd>{manual_slfork}</dl></div>
+<dl><dt>Zeit</dt><dd class="stamp" data-epoch="{manual_checked_at}">–</dd>
+<dt>Ergebnis</dt><dd>{manual_detail}</dd></dl></div>
 <div class="panel"><h2>Automatische Kontrolle</h2>
 <dl><dt>Nächste Prüfung</dt><dd id="countdown">–</dd>
 <dt>Erkannter Stand</dt><dd>{ocr}</dd>
 <dt>Referenz</dt><dd>{reference}</dd>
 <dt>Prüfergebnis</dt><dd>{detail}</dd>
 {slfork}
-<dt>Bildzeit</dt><dd class="stamp" data-epoch="{image_time}">–</dd>
-<dt>Letzter Treffer</dt><dd class="stamp" data-epoch="{last_good}">–</dd></dl></div>
+<dt>Bildzeit</dt><dd class="stamp" data-epoch="{image_time}">–</dd></dl></div>
 <section><div><h2>Aktuelles Bild</h2>{current}</div>
 <div><h2>Letzter Treffer</h2>{good}</div></section>
 <script>
@@ -86,7 +82,7 @@ async function refreshTestStatus() {{
     const seconds = job.started_at ? Math.floor(Math.max(0, (job.phase === 'done' ? job.checked_at : Date.now()/1000) - job.started_at)) : 0;
     let meta = active ? 'Verstrichen: ' + seconds + ' s · keine verlässliche Restzeit möglich' : '';
     if (job.phase === 'ocr') meta = 'Fortschritt: ' + done + '/5 OCR-Durchläufen · ' + meta;
-    if (job.phase === 'done') meta = 'Fertig · ' + done + ' OCR-Durchlauf/Durchläufe · ' + seconds + ' s · Ergebnis unten';
+    if (job.phase === 'done') meta = 'Fertig · ' + done + ' OCR-Durchläufe · ' + seconds + ' s';
     if (job.phase === 'idle') meta = 'Bereit für einen manuellen Test.';
     document.querySelector('#test-meta').textContent = meta;
     if (job.phase === 'done' && Number(job.checked_at) > lastRenderedManual + .001) {{

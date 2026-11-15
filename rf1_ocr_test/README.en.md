@@ -10,6 +10,8 @@ This is an additional plausibility check, **not a certified measurement device**
 
 ## Installation
 
+This app is in beta.
+
 Add `https://github.com/Thunder86/rf1-kontrollmessung` under **Settings → Apps → Install app → ⋮ → Repositories**, then install **Gaszähler OCR-Kontrolle**. Set `esp_url` for SLFork, or configure `kamera_entitaet` and an optional `referenz_entitaet` sensor.
 
 For an upgrade from a separate local installation, copy the settings and stop the old app before starting the new one. Both use the same Home Assistant sensor entity IDs, so they should not run together.

@@ -2,6 +2,8 @@
 
 Ausgangspunkt ist `main` bei `ee3294c` mit App-Version 0.8.1. Die offenen Issues [#1](https://github.com/Thunder86/rf1-kontrollmessung/issues/1), [#2](https://github.com/Thunder86/rf1-kontrollmessung/issues/2) und [#3](https://github.com/Thunder86/rf1-kontrollmessung/issues/3) sind teilweise umgesetzt. [#4](https://github.com/Thunder86/rf1-kontrollmessung/issues/4) ersetzt den bisherigen browserweiten Sprachmodus.
 
+Die Beta 0.8.2 folgt auf die Beta 0.8.1 im bestehenden Home-Assistant-Repository. Die Beta-Reihe beginnt bei 0.5.0. Die unten aufgeführten Live-Prüfungen gehören zur Freigabe von 1.0.
+
 | Priorität | Arbeit | Abnahme |
 | --- | --- | --- |
 | P0 | Kompatibilität und sichere Zugriffe | App-Slug, Sensor-IDs, persistente Regeln und Historie erhalten. Supervisor als einziger Ingress-Absender. Core-Anmeldedaten bei Weiterleitungen schützen. |

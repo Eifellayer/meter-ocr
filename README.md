@@ -2,6 +2,8 @@
 
 **Sprache / Language:** [Deutsch](README.md) · [English](README.en.md)
 
+**Versionsstatus: Beta.** Unter 0.5.0 gilt Alpha, ab 0.5.0 bis vor 1.0.0 Beta und ab 1.0.0 stabil.
+
 **Unabhängige optische Zweitprüfung für automatisch ausgelesene mechanische Gaszähler.**
 
 Du liest deinen Gaszähler bereits mit Kamera und ESP aus, möchtest aber prüfen, ob die erkannten Ziffern wirklich zum Zählerbild passen? Diese App liest das vorhandene Foto **ein zweites Mal lokal mit Tesseract OCR** und vergleicht die Ziffern mit dem vorhandenen Messwert. Damit ist sie eine zusätzliche Plausibilitätskontrolle, kein zweiter Gaszähler.

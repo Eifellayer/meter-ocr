@@ -4,6 +4,8 @@
 
 [Deutsch / German](README.md) · [English](README.en.md)
 
+**Release status: Beta.** Versions below 0.5.0 are alpha. The beta phase starts at 0.5.0, and the first stable version is 1.0.0.
+
 This community project checks whether a reading produced by an ESP or Home Assistant sensor really matches the visible digits on the gas meter. Instead of trusting the first reading, it analyzes the latest camera image again with **local Tesseract OCR**. It is a plausibility check, not a separate certified meter.
 
 Designed for the **Pipersberg G4 RF1** with **AI on the Edge / SLFork**. A compatible Home Assistant camera can also supply the image. The `rf1_ocr_test` directory, app slug, and existing Home Assistant entity IDs are retained for compatibility.

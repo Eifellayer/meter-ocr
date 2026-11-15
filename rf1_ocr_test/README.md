@@ -10,6 +10,8 @@ Die ausführliche Einführung, Voraussetzungen, Installation und Konfiguration f
 
 ## Installation
 
+Diese App befindet sich in der Beta-Phase.
+
 Über **Einstellungen → Apps → App installieren → ⋮ → Repositories** die Adresse `https://github.com/Thunder86/rf1-kontrollmessung` hinzufügen und **Gaszähler OCR-Kontrolle** installieren. Im SLFork-Modus die `esp_url` eintragen, starten und die Weboberfläche öffnen.
 
 **Ältere lokale Installationen:** Der technische Ordner heißt weiter `rf1_ocr_test`. Beim Update innerhalb derselben App bleiben die Einstellungen normalerweise erhalten. Vor einem Wechsel zwischen lokaler und Repository-App die Einstellungen übernehmen und die alte App stoppen. Beide Varianten dürfen nicht gleichzeitig dieselben Sensoren aktualisieren.

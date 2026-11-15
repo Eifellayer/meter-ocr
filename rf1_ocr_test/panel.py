@@ -215,6 +215,13 @@ let edited = false;
 manualForm.addEventListener('change', () => {{ edited = true; }});
 document.querySelector('#auto-form').addEventListener('change', () => {{ edited = true; }});
 manualForm.addEventListener('submit', () => {{
+  currentPhase = 'queued';
+  const box = document.querySelector('#test-box');
+  box.dataset.phase = 'queued';
+  box.dataset.result = 'neutral';
+  document.querySelector('#test-head').textContent = 'Anfrage wird gesendet';
+  document.querySelector('#test-status').textContent = 'Prüfung läuft …';
+  document.querySelector('#test-result').hidden = true;
   const button = document.querySelector('#start-check');
   button.disabled = true;
   button.textContent = 'Prüfung läuft …';

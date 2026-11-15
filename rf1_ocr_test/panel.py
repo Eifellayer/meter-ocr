@@ -498,6 +498,7 @@ Bei anhaltenden Problemen benachrichtigen
 <button type="button" id="cancel-reset">Abbrechen</button>
 <button type="submit">Jetzt zurücksetzen</button>
 </form>
+<p id="reset-progress" class="settings-note" role="status" hidden>Werkreset angefordert. Eine laufende Prüfung kann den Reset verzögern. Bitte warte, bis sich die Einrichtung öffnet.</p>
 </dialog>
 </div>
 </main>
@@ -570,8 +571,21 @@ if (setupDialog.dataset.firstRun === 'true' && localStorage.getItem(setupDismiss
   setupDialog.showModal();
 }}
 const resetDialog = document.querySelector('#reset-dialog');
+const resetForm = document.querySelector('#reset-form');
+const resetProgress = document.querySelector('#reset-progress');
 document.querySelector('#open-reset').addEventListener('click', () => resetDialog.showModal());
 document.querySelector('#cancel-reset').addEventListener('click', () => resetDialog.close());
+resetDialog.addEventListener('cancel', event => {{
+  if (!resetProgress.hidden) event.preventDefault();
+}});
+resetForm.addEventListener('submit', event => {{
+  if (!resetProgress.hidden) {{
+    event.preventDefault();
+    return;
+  }}
+  resetProgress.hidden = false;
+  resetForm.querySelectorAll('button').forEach(button => button.disabled = true);
+}});
 const setupForm = document.querySelector('#setup-form');
 const setupSteps = [...setupForm.querySelectorAll('.setup-step')];
 let setupStep = 0;

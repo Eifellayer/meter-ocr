@@ -1,5 +1,9 @@
 # Changelog
 
+## In Vorbereitung
+
+- Der Bestätigungsdialog meldet sofort, dass der Werkreset angefordert wurde. Läuft noch eine Prüfung, zeigt er an, warum es dauern kann, und sperrt die Schaltflächen vorübergehend.
+
 ## 0.4.1 Alpha
 
 - Bei einem abgebrochenen SLFork-Messzyklus oder einem fehlenden oder zu alten Bild prüft die App ein frisches Rohbild vom ESP.

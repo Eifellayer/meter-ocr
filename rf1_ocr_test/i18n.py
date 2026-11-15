@@ -32,6 +32,8 @@ EN_UI = {
         "Saved image source, OCR and notification settings, check history, and test images will be reset. Home Assistant app configuration and entity IDs will be kept.",
     "Abbrechen": "Cancel",
     "Jetzt zurücksetzen": "Reset now",
+    "Werkreset angefordert. Eine laufende Prüfung kann den Reset verzögern. Bitte warte, bis sich die Einrichtung öffnet.":
+        "Factory reset requested. A check in progress may delay the reset. Please wait for setup to open.",
     "Werkseinstellungen wiederhergestellt. Die Einrichtung öffnet sich erneut.":
         "Factory settings restored. Setup will open again.",
     "Werkreset läuft noch. Bitte die Seite in Kürze neu laden.":

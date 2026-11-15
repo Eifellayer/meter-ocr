@@ -331,7 +331,10 @@ def start_panel(
                                  if url.query == "saved=1" else "")
             rule_label = ("Volle m³" if auto_rules["decimals"] == 0
                           else f'{auto_rules["decimals"]} Nachkommastelle(n)')
-            auto_rule_description = f'{rule_label} · max. {auto_rules["attempts"]} OCR-Versuche'
+            polarity_label = {"auto": "Farbe automatisch", "light": "helle Ziffern",
+                              "dark": "dunkle Ziffern"}[auto_rules["polarity"]]
+            auto_rule_description = (f'{rule_label} · max. {auto_rules["attempts"]} OCR-Versuche '
+                                     f'· {polarity_label}')
             if (history.get("comparison_decimals") is not None
                     and history["comparison_decimals"] != auto_rules["decimals"]):
                 values["detail"] = ("Neue Vergleichsgenauigkeit gespeichert. Die nächste automatische "

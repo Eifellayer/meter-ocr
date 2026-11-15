@@ -2,6 +2,7 @@
 
 import html
 import json
+import re
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from queue import Empty, Full
@@ -29,7 +30,19 @@ select{{background:var(--surface);border:1px solid var(--edge);color:inherit}}
 button{{border:1px solid light-dark(#b2c4d1,#667988);background:light-dark(#dce6ed,#354b5a);color:light-dark(#28445a,#e9f4fc);font-weight:650;padding:.62rem 1.1rem;cursor:pointer;transition:background .15s}}
 button:not(:disabled):hover{{background:light-dark(#ccdce6,#445e70)}}
 button:disabled{{opacity:.65;cursor:wait}}
-button:focus-visible,select:focus-visible{{outline:3px solid #65bcaf;outline-offset:2px}}
+button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible{{outline:3px solid #65bcaf;outline-offset:2px}}
+input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem;max-width:100%;background:var(--surface);border:1px solid var(--edge);color:inherit}}
+.manual-panel summary{{display:flex;align-items:center;justify-content:space-between;gap:1rem;cursor:pointer;list-style:none}}
+.manual-panel summary::-webkit-details-marker{{display:none}}
+.manual-panel summary::after{{content:"▾";font-size:1.2rem;color:var(--muted)}}
+.manual-panel[open] summary::after{{content:"▴"}}
+.manual-content{{margin-top:1.2rem;padding-top:1rem;border-top:1px solid var(--edge)}}
+.manual-panel summary small{{font-weight:400;color:var(--muted)}}
+.settings-note{{font-size:.85rem;color:var(--muted);margin:.7rem 0 0}}
+.save-notice{{font-size:.88rem;color:light-dark(#1e7650,#8ad4a9);margin:.7rem 0 0}}
+.crop-fields{{display:flex;gap:.8rem;flex-wrap:wrap;margin-top:.7rem}}
+.crop-fields label:first-child{{flex:2 1 17rem}}.crop-fields label:last-child{{flex:1 1 10rem}}
+.crop-fields[hidden]{{display:none}}
 .hint{{font-size:.85rem;color:var(--muted);margin:1rem 0 0;line-height:1.55}}
 .test-box{{border:1px solid var(--edge);background:light-dark(#f6faf9,#192e2c);border-radius:.8rem;padding:.95rem 1rem;margin:1rem 0 0;display:grid;gap:.35rem}}
 .test-box strong{{font-size:.94rem;color:inherit}}
@@ -60,7 +73,23 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 </style>
 <h1>Gaszähler OCR-Kontrolle</h1>
 <p class="intro">Unabhängiger Bildabgleich deines Gaszählerstands mit der vorhandenen Messung. Die OCR liest die Ziffern erneut direkt aus dem Kamerabild – ohne den vom ESP erkannten Wert einfach zu übernehmen.</p>
-<div class="panel"><h2>Manueller Bildtest</h2><form method="post" action="pruefen">
+<div class="panel"><h2>Automatische Prüfung – Einstellungen</h2>
+<form method="post" action="automatik" id="auto-form">
+<input type="hidden" name="csrf" value="{csrf}">
+<label>Vergleich
+<select name="decimals">{auto_decimal_options}</select></label>
+<label>Max. OCR-Versuche
+<select name="attempts">{auto_attempt_options}</select></label>
+<button type="submit">Speichern</button>
+</form>
+<p class="settings-note">Diese Einstellungen gelten dauerhaft für alle zukünftigen automatischen Prüfungen. Bereits gespeicherte Prüfungen werden nicht rückwirkend geändert.</p>
+{auto_saved_notice}
+</div>
+<details class="panel manual-panel" id="manual-panel">
+<summary><strong>Manuellen Test öffnen</strong><small>Zusätzliche Bild- und OCR-Einstellungen</small></summary>
+<div class="manual-content">
+<h2>Manueller Bildtest</h2>
+<form method="post" action="pruefen" id="manual-form">
 <input type="hidden" name="csrf" value="{csrf}">
 <label>Ziffernfarbe
 <select name="polarity">{polarity_options}</select></label>
@@ -68,6 +97,14 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <select name="decimals">{decimal_options}</select></label>
 <label>Max. OCR-Versuche
 <select name="attempts">{attempt_options}</select></label>
+<label>Bildbereich
+<select name="crop_mode" id="crop-mode">{crop_mode_options}</select></label>
+<div class="crop-fields" id="crop-fields" hidden>
+<label>Manueller Ausschnitt (links, oben, rechts, unten)
+<input name="crop" type="text" value="{crop_value}" maxlength="30" placeholder="52,56,564,132"></label>
+<label>Breite der Vorkommastellen
+<input name="width" type="number" min="1" max="1920" value="{width_value}"></label>
+</div>
 <button id="start-check">Jetzt prüfen</button>
 </form>
 <details class="help"><summary title="Informationen zum manuellen Bildtest">ⓘ Was passiert bei „Jetzt prüfen“?</summary>
@@ -81,9 +118,10 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <p id="test-result-detail"></p>
 <small id="test-result-stamp"></small>
 </div>
-</div></div>
+</div></div></details>
 <div class="panel"><h2>Automatische Kontrolle</h2>
 <dl><dt>Nächste Prüfung</dt><dd id="countdown">–</dd>
+<dt>Vergleich</dt><dd>{auto_rule_description}</dd>
 <dt>Erkannter Stand</dt><dd>{ocr}</dd>
 <dt>Referenz</dt><dd>{reference}</dd>
 <dt>Prüfergebnis</dt><dd>{detail}</dd>
@@ -94,6 +132,15 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 const next = {next_check};
 
 let currentPhase = 'idle';
+const manualPanel = document.querySelector('#manual-panel');
+const manualForm = document.querySelector('#manual-form');
+const cropMode = document.querySelector('#crop-mode');
+const cropFields = document.querySelector('#crop-fields');
+function showCropFields() {{
+  cropFields.hidden = cropMode.value !== 'manual';
+}}
+cropMode.addEventListener('change', showCropFields);
+showCropFields();
 async function refreshTestStatus() {{
   try {{
     const response = await fetch('status', {{cache: 'no-store'}});
@@ -157,10 +204,14 @@ for (const el of document.querySelectorAll('.stamp')) {{
   const epoch = Number(el.dataset.epoch);
   if (epoch) el.textContent = new Intl.DateTimeFormat('de-DE', {{day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'}}).format(new Date(epoch * 1000));
 }}
-if (location.search === '?test=queued') history.replaceState(null, '', location.pathname);
+if (location.search === '?test=queued') {{
+  manualPanel.open = true;
+  history.replaceState(null, '', location.pathname);
+}}
 let edited = false;
-document.querySelector('form').addEventListener('change', () => {{ edited = true; }});
-document.querySelector('form').addEventListener('submit', () => {{
+manualForm.addEventListener('change', () => {{ edited = true; }});
+document.querySelector('#auto-form').addEventListener('change', () => {{ edited = true; }});
+manualForm.addEventListener('submit', () => {{
   const button = document.querySelector('#start-check');
   button.disabled = true;
   button.textContent = 'Prüfung läuft …';
@@ -168,7 +219,7 @@ document.querySelector('form').addEventListener('submit', () => {{
 tick(); setInterval(tick, 1000);
 setInterval(() => {{
   if (!edited && !['queued','running','ocr'].includes(currentPhase) &&
-      !document.querySelector('form').contains(document.activeElement)) location.reload();
+      !manualPanel.open && !document.querySelector('#auto-form').contains(document.activeElement)) location.reload();
 }}, 15000);
 </script></html>"""
 
@@ -176,6 +227,7 @@ setInterval(() => {{
 POLARITIES = {"auto": "Automatisch", "light": "Hell", "dark": "Dunkel"}
 DECIMALS = {"0": "Volle Kubikmeter", "1": "1 Nachkommastelle", "2": "2 Nachkommastellen", "3": "3 Nachkommastellen"}
 ATTEMPTS = {str(value): str(value) for value in range(1, 11)}
+CROP_MODES = {"auto": "Automatisch erkennen", "manual": "Ausschnitt selbst festlegen"}
 
 
 def select_options(choices, chosen):
@@ -185,7 +237,10 @@ def select_options(choices, chosen):
     )
 
 
-def start_panel(history_path, current_image, good_image, requested, default_decimals, default_attempts):
+def start_panel(
+    history_path, current_image, good_image, requested, default_decimals, default_attempts,
+    get_auto_rules, save_auto_rules, default_crop, default_width,
+):
     images = {"/aktuell.jpg": current_image, "/treffer.jpg": good_image}
     csrf_token = token_urlsafe(32)
     request_lock = Lock()
@@ -268,6 +323,12 @@ def start_panel(history_path, current_image, good_image, requested, default_deci
             if manual.get("outside_window"):
                 manual_detail += " Das Bild ist für eine neue automatische Bestätigung zu alt."
             settings = manual.get("settings", {})
+            auto_rules = get_auto_rules()
+            auto_saved_notice = ('<p class="save-notice" role="status">Automatische Prüfregeln gespeichert.</p>'
+                                 if url.query == "saved=1" else "")
+            rule_label = ("Volle m³" if auto_rules["decimals"] == 0
+                          else f'{auto_rules["decimals"]} Nachkommastelle(n)')
+            auto_rule_description = f'{rule_label} · max. {auto_rules["attempts"]} OCR-Versuche'
             request_status = (
                 "Test angenommen. Die Bearbeitung wird hier live angezeigt."
                 if url.query == "test=queued" else "Status wird geladen …"
@@ -275,8 +336,16 @@ def start_panel(history_path, current_image, good_image, requested, default_deci
             self.reply(PAGE.format(**values,
                 request_status=request_status,
                 polarity_options=select_options(POLARITIES, settings.get("polarity", "auto")),
-                decimal_options=select_options(DECIMALS, str(settings.get("decimals", default_decimals))),
-                attempt_options=select_options(ATTEMPTS, str(settings.get("attempts", default_attempts))),
+                decimal_options=select_options(DECIMALS, str(settings.get("decimals", auto_rules["decimals"]))),
+                auto_decimal_options=select_options(DECIMALS, str(auto_rules["decimals"])),
+                auto_attempt_options=select_options(ATTEMPTS, str(auto_rules["attempts"])),
+                auto_saved_notice=auto_saved_notice,
+                auto_rule_description=html.escape(auto_rule_description),
+                crop_mode_options=select_options(CROP_MODES, settings.get("crop_mode", "auto")),
+                crop_value=html.escape(str(settings.get("crop", default_crop)), quote=True),
+                width_value=int(settings.get("width", default_width)),
+
+                attempt_options=select_options(ATTEMPTS, str(settings.get("attempts", auto_rules["attempts"]))),
                 default_attempts=default_attempts,
                 manual_checked_at=manual.get("checked_at", 0),
                 manual_image_time=manual.get("image_time", 0),
@@ -294,7 +363,8 @@ def start_panel(history_path, current_image, good_image, requested, default_deci
         def do_POST(self):
             if not self.authorized():
                 return
-            if urlsplit(self.path).path != "/pruefen":
+            path = urlsplit(self.path).path
+            if path not in ("/pruefen", "/automatik"):
                 self.send_error(404)
                 return
             # Ingress and companion webviews need not forward Fetch Metadata headers.
@@ -303,9 +373,9 @@ def start_panel(history_path, current_image, good_image, requested, default_deci
                 return
             try:
                 length = int(self.headers.get("Content-Length", "0"))
-                if not 0 < length <= 256:
+                if not 0 < length <= 512:
                     raise ValueError("Invalid form length")
-                form = parse_qs(self.rfile.read(length).decode("ascii"), max_num_fields=5)
+                form = parse_qs(self.rfile.read(length).decode("ascii"), max_num_fields=8)
             except ValueError:
                 self.send_error(400)
                 return
@@ -313,14 +383,57 @@ def start_panel(history_path, current_image, good_image, requested, default_deci
             if len(supplied) != 1 or not compare_digest(supplied[0].encode(), csrf_token.encode()):
                 self.send_error(403)
                 return
+            if path == "/automatik":
+                decimals = form.get("decimals", [])
+                attempts = form.get("attempts", [])
+                if (len(decimals) != 1 or decimals[0] not in DECIMALS
+                        or len(attempts) != 1 or attempts[0] not in ATTEMPTS):
+                    self.send_error(400)
+                    return
+                try:
+                    save_auto_rules({"decimals": int(decimals[0]), "attempts": int(attempts[0])})
+                except (OSError, ValueError):
+                    self.send_error(503)
+                    return
+                self.send_response(303)
+                self.send_header("Location", "./?saved=1")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            auto_rules = get_auto_rules()
             polarity = form.get("polarity", ["auto"])
-            decimals = form.get("decimals", [str(default_decimals)])
-            attempts = form.get("attempts", [str(default_attempts)])
+            decimals = form.get("decimals", [str(auto_rules["decimals"])])
+            attempts = form.get("attempts", [str(auto_rules["attempts"])])
+            crop_mode = form.get("crop_mode", ["auto"])
+            crop_text = form.get("crop", [default_crop])
+            whole_width = form.get("width", [str(default_width)])
             if (len(polarity) != 1 or polarity[0] not in POLARITIES or len(decimals) != 1
                     or decimals[0] not in DECIMALS or len(attempts) != 1 or attempts[0] not in ATTEMPTS):
                 self.send_error(400)
                 return
-            settings = {"polarity": polarity[0], "decimals": int(decimals[0]), "attempts": int(attempts[0])}
+            if len(crop_mode) != 1 or crop_mode[0] not in CROP_MODES:
+                self.send_error(400)
+                return
+            if len(crop_text) != 1 or len(whole_width) != 1:
+                self.send_error(400)
+                return
+            crop_value = default_crop
+            width_value = default_width
+            if crop_mode[0] == "manual":
+                if not re.fullmatch(r"\d{1,4}\s*,\s*\d{1,4}\s*,\s*\d{1,4}\s*,\s*\d{1,4}", crop_text[0]):
+                    self.send_error(400)
+                    return
+                boundaries = [int(number.strip()) for number in crop_text[0].split(",")]
+                if not (0 <= boundaries[0] < boundaries[2] <= 1920
+                        and 0 <= boundaries[1] < boundaries[3] <= 1920
+                        and whole_width[0].isdigit() and 1 <= int(whole_width[0]) <= 1920):
+                    self.send_error(400)
+                    return
+                crop_value = ",".join(map(str, boundaries))
+                width_value = int(whole_width[0])
+            settings = {"polarity": polarity[0], "decimals": int(decimals[0]),
+                        "attempts": int(attempts[0]), "crop_mode": crop_mode[0],
+                        "crop": crop_value, "width": width_value}
             with request_lock:
                 request_id = progress["request_id"] + 1
                 settings["request_id"] = request_id

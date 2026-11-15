@@ -180,7 +180,7 @@ class IngressTests(IngressFixture):
         self.assertTrue((self.root / "manual-test-settings.json").exists())
         self.assertEqual("12345.6", self.requested.get_nowait()["manual_reference"])
         page = self.request("/")[0]
-        self.assertIn('name="manual_reference" value="12345.6"', page)
+        self.assertIn('name="manual_reference" form="manual-form" value="12345.6"', page)
         self.assertIn('<option value="dark" selected>', page)
         self.assertIn('<option value="1" selected>1 Nachkommastelle</option>', page)
 
@@ -204,7 +204,9 @@ class IngressTests(IngressFixture):
 
     def test_setup_wizard_saves_source_meter_format_crop_schedule_and_notifications(self):
         page = self.request("/")[0]
-        self.assertIn('id="setup-wizard" open', page)
+        self.assertIn('id="setup-dialog"', page)
+        self.assertIn('data-first-run="true"', page)
+        self.assertIn('setupDialog.showModal()', page)
         self.assertIn('name="integer_digits"', page)
         values = {
             "source_mode": "camera", "camera": "camera.meter", "reference": "sensor.meter",
@@ -409,13 +411,14 @@ class BrowserTests(IngressFixture):
             self.assertIn("Home Assistant: Deutsch", frame.locator("#language-select").inner_text())
             page.goto(parent + "/?en")
             expect_language("en")
-            frame.locator("#manual-panel summary").first.click()
+            frame.locator("#setup-skip").click()
+            frame.locator("#open-manual-settings").click()
             frame.locator("#manual-form select[name=crop_mode]").select_option("manual")
             frame.locator("#manual-form input[name=crop]").fill("0,0,90,400")
             frame.locator("#manual-form select[name=rotation]").select_option("90")
             frame.locator("#start-check").click()
             frame.get_by_text("Request accepted", exact=True).wait_for()
-            frame.locator("#manual-test #test-progress").wait_for(state="visible")
+            frame.locator("#test-progress").wait_for(state="visible")
             self.assertEqual("neutral", frame.locator("#test-box").get_attribute("data-result"))
             frame.locator("#language-select").select_option("de")
             expect_language("de")

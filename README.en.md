@@ -1,14 +1,20 @@
 # Meter OCR for Home Assistant
 
-**Local camera OCR for Home Assistant with ESPHome and AI on the Edge / SLFork.**
+**Read and verify meter values from camera images directly in Home Assistant.**
+
+**Long-term goal:** AI on the Edge / SLFork should no longer be a requirement. Meter OCR aims to get images from Home Assistant and process them locally, with flexible support for different meter types, camera angles, crops, and lighting. This is the project direction, not a claim that every meter is already supported or field-tested.
 
 [Deutsch / German](README.md) · [English](README.en.md)
 
 **Current version: 0.2.0 Alpha.** Before version 0.5, testing uses the regular Meter OCR app. From 0.5 onward, Beta builds are reserved for larger changes that need dedicated testing.
 
+## Beta testers wanted
+
+Do you use Home Assistant with a gas, water, or other meter? We are looking for testers with different cameras, crops, and lighting conditions. Until version 0.5, the regular app is the testing channel. I use AI on the Edge for real-world checks; other sources and meter types have so far been tested with simulations only. To help, report your app version, meter type, and image source through [GitHub Issues](https://github.com/Eifellayer/meter-ocr/issues). Please do not post credentials or unredacted photos containing personal information.
+
 Meter OCR reads camera images with **local Tesseract OCR**. It can provide its own reading from an ESPHome or Home Assistant camera, or double-check an existing reading from AI on the Edge / SLFork or a reference sensor.
 
-Supports mechanical meters with configurable whole and fractional digits. The Home Assistant reading output is currently designed around cubic meters.
+The current focus is mechanical gas meters with configurable whole and fractional digits. Small pointer dials are not read automatically yet. The Home Assistant reading output currently uses cubic meters; tester feedback will help extend support to more meters and conditions.
 
 Meter OCR is a private hobby project for checking meter readings. [Usage notes](#usage-notes)
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.1 Alpha
+
+- Bei einem abgebrochenen SLFork-Messzyklus oder einem fehlenden oder zu alten Bild prüft die App ein frisches Rohbild vom ESP.
+- Gelingt die Ablesung, weist die App auf die Bildausrichtung als mögliche Ursache hin. Der Rohbildstand wird ohne ESP-Abgleich angezeigt und verändert die Verbrauchssumme nicht.
+
 ## 0.4.0 Alpha
 
 - Retry automatic failures using up to three image checks: the first retry after five minutes, the second after another five minutes, then a one-hour wait for a higher meter reading or a new image.

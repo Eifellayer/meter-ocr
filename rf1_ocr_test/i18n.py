@@ -87,6 +87,10 @@ EN_UI = {
     "Quelle: ": "Source: ",
     "Noch kein Bildabruf erfolgt.": "No image has been fetched yet.",
     "ESP erreichbar. Bild und Messwerte empfangen.": "ESP reachable. Image and reading received.",
+    "Aufbereitetes ESP-Bild fehlt oder ist zu alt. Die App prüft ein frisches Rohbild.": "The processed ESP image is missing or too old. Checking a fresh raw image.",
+    "Aufbereitetes ESP-Bild nicht nutzbar. Rohbild ohne ESP-Referenz geprüft.": "The processed ESP image is unusable. A raw image was checked without an ESP reference.",
+    "Aufbereitetes ESP-Bild nicht nutzbar. Es konnte kein frisches Rohbild geladen werden.": "The processed ESP image is unusable and a fresh raw image could not be loaded.",
+    "Rohbild gelesen. Mögliche Ursache: Bildausrichtung oder Referenzmarken in AI on the Edge.": "Raw image read. Possible cause: image alignment or reference markers in AI on the Edge.",
     "Kamera erreichbar. Frisches Bild empfangen.": "Camera reachable. Fresh image received.",
     "ESP erreichbar, aber Bild ist älter als 15 Minuten oder hat einen ungültigen Zeitstempel.": "ESP reachable, but the image is older than 15 minutes or has an invalid timestamp.",
     "Kamera erreichbar, aber das Bild hat einen ungültigen Zeitstempel.": "Camera reachable, but the image has an invalid timestamp.",
@@ -399,6 +403,14 @@ def english_result(detail, status=None, decimals=0, readings=None):
         return "No result available."
     if detail in EN_DETAILS:
         return EN_DETAILS[detail]
+    for prefix in (
+        "Rohbild gelesen. Mögliche Ursache: Bildausrichtung oder Referenzmarken in AI on the Edge.",
+        "Aufbereitetes ESP-Bild nicht nutzbar. Es konnte kein frisches Rohbild geladen werden.",
+    ):
+        if detail == prefix:
+            return EN_UI[prefix]
+        if detail.startswith(prefix + " "):
+            return EN_UI[prefix] + " " + english_result(detail[len(prefix) + 1:], status, decimals, readings)
     if detail.startswith(FALLBACK_NOTICE + " "):
         reason = detail[len(FALLBACK_NOTICE) + 1:]
         translated = EN_DETAILS.get(reason.removeprefix("OCR: "), "")
@@ -439,6 +451,8 @@ def english_progress(message):
     """Localize progress updates including parameterized OCR attempt counts."""
     translations = {
         "Lade Zählerbild und Referenzdaten …": "Loading meter image and reference data …",
+        "Aufbereitetes ESP-Bild fehlt oder ist zu alt. Die App prüft ein frisches Rohbild.":
+            EN_UI["Aufbereitetes ESP-Bild fehlt oder ist zu alt. Die App prüft ein frisches Rohbild."],
         "Bild geladen – überprüfe Zeitstempel und Ziffernbereich …":
             "Image loaded – checking timestamp and digit area …",
         "Ergebnis wird gespeichert …": "Saving result …",

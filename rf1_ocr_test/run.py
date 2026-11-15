@@ -14,6 +14,7 @@ from queue import Empty, Queue
 from tempfile import NamedTemporaryFile
 from threading import Event
 import time
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
@@ -62,6 +63,10 @@ CONSUMPTION_ENTITY = f"sensor.{NAMESPACE}_verbrauch_gesamt"
 MAX_IMAGE_PIXELS = 4_000_000
 LIVE_CAPTURE_WINDOW_SECONDS = 20
 LIVE_CAPTURE_MAX_ATTEMPTS = 10
+SLFORK_RAW_SOURCE = "slfork_raw"
+SLFORK_RAW_NOTICE = "Aufbereitetes ESP-Bild fehlt oder ist zu alt. Die App prüft ein frisches Rohbild."
+SLFORK_RAW_SUCCESS = "Rohbild gelesen. Mögliche Ursache: Bildausrichtung oder Referenzmarken in AI on the Edge."
+SLFORK_RAW_FAILED = "Aufbereitetes ESP-Bild nicht nutzbar. Es konnte kein frisches Rohbild geladen werden."
 Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
 
 
@@ -93,6 +98,22 @@ def slfork_diagnostics(data):
     }
 
 
+def slfork_cycle_failed(diagnostics):
+    return diagnostics.get("slfork_process_error") in (-1, -2, "-1", "-2")
+
+
+def capture_slfork_raw(base, zone):
+    # The buffered raw JPEG has no independent capture timestamp.
+    picture = get_bytes(base + "/camera?task=capture")
+    return picture, None, {
+        "esp_timestamp": datetime.now(zone).isoformat(),
+        "image_source": SLFORK_RAW_SOURCE,
+        "reference_required": False,
+        "raw_value": None,
+        "actual_value": None,
+    }
+
+
 def capture(base, diagnostics):
     def process_data():
         payload = json.loads(get_bytes(base + "/process_data"))
@@ -102,17 +123,28 @@ def capture(base, diagnostics):
 
     before = process_data()
     diagnostics.update(slfork_diagnostics(before))
-    picture = get_bytes(base + "/img_tmp/alg.jpg")
+    if slfork_cycle_failed(diagnostics):
+        return None
+    try:
+        picture = get_bytes(base + "/img_tmp/alg.jpg")
+    except HTTPError as error:
+        if error.code not in (404, 410):
+            raise
+        return None
     try:
         overlay = get_bytes(base + "/img_tmp/alg_roi.jpg")
     except (OSError, ValueError):
         overlay = None
     after = process_data()
     diagnostics.update(slfork_diagnostics(after))
+    if slfork_cycle_failed(diagnostics):
+        return None
     timestamp = sequence_value(after, "timestamp_processed")
-    if not isinstance(timestamp, str) or not timestamp:
-        raise ValueError("Kein Zeitstempel vom ESP")
     if sequence_value(before, "timestamp_processed") != timestamp:
+        return None
+    try:
+        datetime.fromisoformat(timestamp)
+    except (TypeError, ValueError):
         return None
     return picture, overlay, {
         "esp_timestamp": timestamp,
@@ -797,6 +829,7 @@ def main():
         manual_result = {"status": "capture_unavailable", "detail": updated["check_detail"]}
         diagnostics = {}
         sample = None
+        raw_fallback = False
         live_deadline = (time.monotonic() + LIVE_CAPTURE_WINDOW_SECONDS
                          if active_source["mode"] == "camera" else None)
         try:
@@ -818,20 +851,26 @@ def main():
                     camera, reference, token, zone,
                     timeout=min(8, max(0.2, live_deadline - time.monotonic())) if live_deadline else 8,
                 ) if camera else capture(base, diagnostics)
-            if result is None:
-                print("SLFork hat während des Abrufs gemessen. Neuer Versuch in 10 Sekunden.")
+            if result is None and not slfork_cycle_failed(diagnostics):
+                print("Noch kein ausgerichtetes SLFork-Bild verfügbar. Neuer Versuch in 10 Sekunden.")
                 time.sleep(10)
                 result = capture(base, diagnostics)
-            if result is None and not manual:
-                updated["source_connection_status"] = "stale"
-                updated["source_connection_detail"] = (
-                    "ESP erreichbar. Seit der letzten Prüfung kam kein neues Bild; das vorhandene Bild ist noch nicht veraltet."
-                )
+            if not camera and not manual_upload and (
+                result is None or slfork_cycle_failed(diagnostics)
+                or sample_epoch(result[2], zone, datetime.now(zone)) is None
+            ):
+                raw_fallback = True
+                if manual:
+                    update_progress(request_id, "running", SLFORK_RAW_NOTICE)
+                else:
+                    set_activity("working", SLFORK_RAW_NOTICE)
+                result = capture_slfork_raw(base, zone)
             if result is not None:
                 if not manual:
                     set_activity("working", "Bild wird vorbereitet.")
-                    updated["source_connection_status"] = "connected"
+                    updated["source_connection_status"] = "stale" if raw_fallback else "connected"
                     updated["source_connection_detail"] = (
+                        "Aufbereitetes ESP-Bild nicht nutzbar. Rohbild ohne ESP-Referenz geprüft." if raw_fallback else
                         "Kamera erreichbar. Frisches Bild empfangen." if camera else
                         "ESP erreichbar. Bild und Messwerte empfangen."
                     )
@@ -862,7 +901,7 @@ def main():
                     result = None
             if result is not None:
                 image_time = captured if captured is not None else sample_timestamp(sample, zone)
-                if not camera and not (manual and manual_options.get("image")):
+                if not camera and not manual_upload and not raw_fallback:
                     sample.update(slfork_reference(sample, image_time, zone, updated.get("last_slfork_match", {})))
                 manual_reference = manual_options.get("manual_reference", "") if manual else ""
                 apply_manual_reference(sample, manual_reference,
@@ -961,8 +1000,10 @@ def main():
                                 current_attempt = attempts + 1 if running else attempts
                                 state = "läuft." if running else "abgeschlossen."
                                 set_activity("working", f"Lese Zählerbild: OCR-Versuch {current_attempt} von {ocr_limit} {state}")
-                        configured_attempts = (manual_options["attempts"] if manual else
-                                               max(2, max_attempts) if standalone else max_attempts)
+                        require_consensus = (raw_fallback and not manual_reference) or (standalone and not manual)
+                        configured_attempts = manual_options["attempts"] if manual else max_attempts
+                        if require_consensus:
+                            configured_attempts = max(2, configured_attempts)
                         extra_attempts = (10 if not manual and history.get("failure_attempts", 0) == 0
                                           and not history.get("retry_suppressed") else 0)
                         ocr_limit = min(15, configured_attempts + extra_attempts)
@@ -972,9 +1013,8 @@ def main():
                             read, sample,
                             manual_options["decimals"] if manual else decimals,
                             progress=report_ocr if manual else None,
-                            max_attempts=(manual_options["attempts"] if manual else
-                                          max(2, max_attempts) if standalone else max_attempts),
-                            trace=ocr_readings, standalone=standalone and not manual,
+                            max_attempts=configured_attempts,
+                            trace=ocr_readings, standalone=require_consensus,
                             integer_digits=integer_digits,
                             extra_attempts=extra_attempts,
                             stop_before_attempt=(lambda: (not manual and get_auto_paused()) or live_source and (
@@ -1000,7 +1040,7 @@ def main():
                     if not manual:
                         reading_status, _ = compare_sample(sample, ocr, decimals, ocr_confirmed=ocr_confirmed,
                                                            integer_digits=integer_digits)
-                        if reading_status == "match" or (standalone and reading_status == "ocr_only"):
+                        if reading_status == "match" or ((standalone or raw_fallback) and reading_status == "ocr_only"):
                             try:
                                 if standalone:
                                     new_standalone = standalone_reading(
@@ -1074,11 +1114,13 @@ def main():
                     if (ocr_attempts == len(ocr_readings) and ocr not in ocr_readings
                             and status in ("match", "ocr_only")):
                         detail = "Ziffern aus mehreren OCR-Versuchen zusammengesetzt. " + detail
+                    if raw_fallback and status in ("match", "ocr_only"):
+                        detail = SLFORK_RAW_SUCCESS + " " + detail
                     if status in ("match", "ocr_only") and not ocr_error and not validation_detail:
                         updated["next_check_at"] = datetime.now(zone).timestamp() + (
                             active_rules["interval_minutes"] * 60
                         )
-                    if sample is not None and manual_confirms_failed_auto(
+                    if not raw_fallback and manual_confirms_failed_auto(
                             history, sample, ocr, status=status, uploaded_image=manual_upload,
                             image_time=image_time,
                             reference_time=sample.get("reference_time"), source_key=source_key,
@@ -1127,8 +1169,10 @@ def main():
                                    ocr_confirmed=ocr_confirmed, integer_digits=integer_digits):
                     atomic_write(DESTINATION, picture, 0o644)
                     outcome = updated["status"]
-                    if new_consumption is not None:
+                    if new_consumption is not None and not raw_fallback:
                         updated["consumption"] = new_consumption
+                    if raw_fallback and outcome == "ocr_only":
+                        updated["source_connection_detail"] = SLFORK_RAW_SUCCESS
                     if new_standalone is not None:
                         updated["standalone_reading"] = new_standalone
                     updated["ocr_readings"] = ocr_readings if outcome == "ocr_unclear" else []
@@ -1153,11 +1197,14 @@ def main():
                     updated["check_detail"] = "Bild zu alt oder schon geprüft."
         except (OSError, ValueError, Image.DecompressionBombError) as error:
             print(f"Bildabruf fehlgeschlagen: {type(error).__name__}")
+            if raw_fallback:
+                manual_result["detail"] = SLFORK_RAW_FAILED
             if not manual and data is None:
                 detail = manual_result["detail"]
                 updated = {**source_history, "check_detail": detail}
                 updated["source_connection_status"] = "error"
                 updated["source_connection_detail"] = (
+                    SLFORK_RAW_FAILED if raw_fallback else
                     "Home-Assistant-Kamera nicht erreichbar oder Bild unlesbar. Kamera und Zugriff prüfen."
                     if camera else "ESP nicht erreichbar oder Antwort unvollständig. Adresse und Verbindung prüfen."
                 )

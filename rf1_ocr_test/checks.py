@@ -317,6 +317,10 @@ LAST_DIGIT_NOTICE = "Nur die dritte Nachkommastelle ist unklar oder weicht ab."
 LAST_DIGIT_PASS = "Die ersten zwei Nachkommastellen stimmen überein. Die dritte Stelle bleibt unbestätigt."
 LAST_DIGIT_RETRIES = 3
 SUCCESSFUL_CHECKS = ("match", "match_with_warning", "ocr_only")
+STANDALONE_PENDING = "standalone_pending"
+STANDALONE_PENDING_NOTICE = "Erstes Bild gelesen. Warte auf die zweite Aufnahme zur Gegenprüfung."
+STANDALONE_VERIFIED_NOTICE = "Zählerstand mit einer zweiten Aufnahme gegengeprüft."
+STANDALONE_REJECTED_NOTICE = "Die zweite Aufnahme passt nicht zum ersten Zählerstand."
 
 
 def last_digit_can_pass(history, precision_mode):
@@ -443,6 +447,8 @@ def valid_interval_minutes(value):
 
 def _check_delay(outcome, interval_minutes, retry_suppressed=False):
     interval = interval_minutes * 60
+    if outcome == STANDALONE_PENDING:
+        return RETRY_INTERVAL
     if outcome in SUCCESSFUL_CHECKS:
         return interval
     return FAILURE_COOLDOWN_INTERVAL if retry_suppressed else min(interval, RETRY_INTERVAL)
@@ -450,7 +456,7 @@ def _check_delay(outcome, interval_minutes, retry_suppressed=False):
 
 def schedule_next_check(history, outcome, checked_at, interval_minutes=DEFAULT_INTERVAL_MINUTES):
     history["check_status"] = outcome
-    if outcome in SUCCESSFUL_CHECKS:
+    if outcome in (*SUCCESSFUL_CHECKS, STANDALONE_PENDING):
         history.pop("failure_since", None)
         history.pop("failure_attempts", None)
         history.pop("retry_suppressed", None)

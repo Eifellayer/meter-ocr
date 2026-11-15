@@ -20,7 +20,7 @@ from checks import (FRESH_SAMPLE_AGE, NORMAL_INTERVAL, OCR_PROFILES, RETRY_INTER
                     last_check_at, read_register, record_sample,
                     reschedule_next_check, rolling_summary, schedule_next_check, slfork_reference)
 from consumption import EXCESSIVE_INCREASE, FALLBACK_PLAUSIBLE, FALLBACK_UNKNOWN_TIME, LOWER_READING, fallback_detail
-from layout import crop_coordinates, find_digit_row
+from layout import crop_coordinates, find_digit_row, rotated_width, turn_crop
 from settings import load_options
 from source_settings import discovered_sources
 import run
@@ -38,6 +38,17 @@ def synthetic_meter():
 
 
 class SourceTests(TestCase):
+    def test_small_signed_rotation_restores_ocr_alignment(self):
+        upright = synthetic_meter()
+        tilted = turn_crop(upright, 6)
+        self.assertEqual(rotated_width(*upright.size, 6), tilted.width)
+        recovered = turn_crop(tilted, -6)
+        self.assertEqual(rotated_width(*tilted.size, -6), recovered.width)
+        self.assertEqual((0, 0, tilted.width, tilted.height), crop_coordinates(
+            f"0,0,{tilted.width},{tilted.height}", recovered.width, -6
+        ))
+        self.assertEqual("12345", read_register(recovered, False, profile=OCR_PROFILES[2]))
+
     def test_camera_finds_digit_strip_when_default_crop_cuts_off_digits(self):
         frame = Image.new("RGB", (640, 480), "#467b88")
         draw = ImageDraw.Draw(frame)
@@ -265,12 +276,37 @@ class StateTests(TestCase):
         fetch.assert_called_once_with("http://meter/camera?task=capture")
         self.assertEqual(2, recognize.call_count)
         sensor = published.call_args.args[1]
-        self.assertEqual("12345", sensor["state"])
+        self.assertEqual("unavailable", sensor["state"])
         self.assertEqual("http://meter", sensor["attributes"]["source_camera"])
         history = json.loads(files["HISTORY"].read_text())
-        self.assertEqual("ocr_only", history["check_status"])
+        self.assertEqual("standalone_pending", history["check_status"])
         self.assertIsNone(history["last_reference"])
+        self.assertNotIn("consumption", history)
+        self.assertAlmostEqual(300, history["next_check_at"] - history["last_epoch"], delta=5)
 
+        history["next_check_at"] = 0
+        files["HISTORY"].write_text(json.dumps(history))
+        recognize.reset_mock()
+        recognize.side_effect = lambda frame, *_, **__: "12345.???" if frame.width > 500 else "?????.???"
+        with self.assertRaises(StopLoop):
+            run.main()
+        history = json.loads(files["HISTORY"].read_text())
+        self.assertEqual("ocr_only", history["check_status"])
+        self.assertEqual("12345.???", history["last_reference"])
+        self.assertEqual(-6, history["ocr_rotation_adjustment"])
+        self.assertEqual(10, recognize.call_count)
+        self.assertEqual("12345", published.call_args.args[1]["state"])
+        self.assertEqual(-6, history["learned_rotation"]["adjustment"])
+
+        history["next_check_at"] = 0
+        files["HISTORY"].write_text(json.dumps(history))
+        recognize.reset_mock()
+        with self.assertRaises(StopLoop):
+            run.main()
+        history = json.loads(files["HISTORY"].read_text())
+        self.assertEqual("standalone_pending", history["check_status"])
+        self.assertEqual(-6, history["standalone_candidate"]["rotation_adjustment"])
+        self.assertEqual(2, recognize.call_count)
     def test_skipping_setup_does_not_fetch_the_placeholder_slfork_url(self):
         class WaitingForSource(Exception):
             pass
@@ -572,17 +608,35 @@ class StateTests(TestCase):
         def collect(url, payload, _):
             entity = url.rsplit("/", 1)[1]
             published[entity] = payload
-            if entity == run.CONSUMPTION_ENTITY:
-                raise StopLoop
 
         self.enterContext(patch.object(run, "publish_state", collect))
-        with self.assertRaises(StopLoop):
-            run.main()
+        publish_consumption = run.publish_consumption
+
+        def finish_run(history, token):
+            publish_consumption(history, token)
+            raise StopLoop
+
+        self.enterContext(patch.object(run, "publish_consumption", finish_run))
+
+        def check(ocr):
+            recognize.return_value = ocr
+            if files["HISTORY"].exists():
+                history = json.loads(files["HISTORY"].read_text())
+                history["next_check_at"] = 0
+                files["HISTORY"].write_text(json.dumps(history))
+            with self.assertRaises(StopLoop):
+                run.main()
+            return json.loads(files["HISTORY"].read_text())
+
+        pending = check("12345.???")
         fetch.assert_called_once_with("http://supervisor/core/api/camera_proxy/camera.esp", "stub", timeout=8)
         self.assertEqual(2, recognize.call_count)
+        self.assertEqual("standalone_pending", pending["check_status"])
+        self.assertEqual("unavailable", published[run.OCR_ENTITY]["state"])
+        self.assertNotIn(run.CONSUMPTION_ENTITY, published)
+        initial = check("12345.???")
         self.assertEqual("12345", published[run.OCR_ENTITY]["state"])
         self.assertEqual("ocr_only", published[run.CHECK_ENTITY]["state"])
-        initial = json.loads(files["HISTORY"].read_text())
         self.assertEqual([], initial["confirmations"])
         self.assertEqual("0", published[run.CONSUMPTION_ENTITY]["state"])
         attributes = published[run.CONSUMPTION_ENTITY]["attributes"]
@@ -594,25 +648,19 @@ class StateTests(TestCase):
             self.assertEqual("JPEG", overlay.format)
             self.assertGreater(overlay.width, 0)
 
-        initial["next_check_at"] = 0
         initial["consumption"]["timestamp"] -= 3600
         files["HISTORY"].write_text(json.dumps(initial))
-        recognize.return_value = "12347.???"
-        with self.assertRaises(StopLoop):
-            run.main()
+        self.assertEqual("standalone_pending", check("12347.???")["check_status"])
+        self.assertEqual("12345", published[run.OCR_ENTITY]["state"])
+        second = check("12347.???")
         self.assertEqual("2", published[run.CONSUMPTION_ENTITY]["state"])
-        second = json.loads(files["HISTORY"].read_text())
-
-        second["next_check_at"] = 0
-        files["HISTORY"].write_text(json.dumps(second))
-        recognize.return_value = "13347.???"
-        with self.assertRaises(StopLoop):
-            run.main()
-        rejected = json.loads(files["HISTORY"].read_text())
+        self.assertEqual("standalone_pending", check("12347.???")["check_status"])
+        rejected = check("13347.???")
         self.assertEqual("2", published[run.CONSUMPTION_ENTITY]["state"])
         self.assertEqual("unavailable", published[run.OCR_ENTITY]["state"])
         self.assertEqual("ocr_unclear", published[run.CHECK_ENTITY]["state"])
-        self.assertEqual(EXCESSIVE_INCREASE, rejected["check_detail"])
+        self.assertIn(EXCESSIVE_INCREASE, rejected["check_detail"])
+        self.assertIn("zweite Aufnahme", rejected["check_detail"])
         self.assertEqual(second["consumption"], rejected["consumption"])
 
     def test_main_keeps_manual_run_separate_from_automated_entities_and_history(self):

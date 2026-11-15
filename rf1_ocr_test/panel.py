@@ -17,12 +17,13 @@ from urllib.parse import parse_qs, urlsplit
 
 from app_channel import APP_NAME, NAMESPACE
 from checks import (DEFAULT_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, WARNING_DETAIL_AFTER, meter_prefix,
-                    LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, last_check_at, reschedule_next_check,
+                    LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, STANDALONE_PENDING, STANDALONE_REJECTED_NOTICE,
+                    STANDALONE_VERIFIED_NOTICE, last_check_at, reschedule_next_check,
                     valid_interval_minutes)
 from consumption import DEFAULT_FLOW_LPH, format_cubic_metres, parse_flow_limit
 from i18n import EN_UI, english_progress, english_result, translate_page
 from language import MODES, SUPPORTED, USER_ID, browser_locale, profile_script
-from layout import MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, ROTATIONS, crop_coordinates
+from layout import MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates
 from notification_settings import notification_rules
 from source_settings import source_rules
 
@@ -241,7 +242,7 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <form method="post" action="automatik-pause" id="pause-auto-form" {pause_button_hidden}><input type="hidden" name="lang" value="{language}"><input type="hidden" name="mode" value="{language_mode}"><input type="hidden" name="csrf" value="{csrf}"><input type="hidden" name="paused" value="1"><button type="submit">Automatik pausieren</button></form>
 <p class="connection-status" id="source-connection" data-state="{source_connection_state}">Quelle: {source_connection}</p>
 <dl><dt>Erkannter Stand</dt><dd id="automatic-ocr">{ocr}</dd>
-<dt title="Stand aus AI on the Edge oder aus dem gewählten Home-Assistant-Sensor">Vergleichswert</dt><dd><span id="automatic-reference">{reference}</span>
+<dt title="Stand aus der ersten Aufnahme oder aus einer externen Quelle">Vergleichswert</dt><dd><span id="automatic-reference">{reference}</span>
 <small id="automatic-reference-note" class="reference-note" data-epoch="{reference_time}"
  data-fallback="{reference_is_fallback}" hidden></small></dd>
 <dt>Bildzeit</dt><dd id="automatic-image-time" class="stamp" data-epoch="{image_time}">–</dd>
@@ -325,11 +326,11 @@ name: Zählerstand (OCR)</code></pre>
 <div class="crop-fields" id="crop-fields" hidden>
 <label>Manueller Ausschnitt (links, oben, rechts, unten)
 <input name="crop" type="text" value="{crop_value}" maxlength="30" placeholder="52,56,564,132"></label>
-<label>Bilddrehung im Uhrzeigersinn
-<select name="rotation">{rotation_options}</select></label>
+<label>Bilddrehung (°)
+<input name="rotation" type="number" min="-180" max="180" step="1" value="{rotation_value}"></label>
 <label>Breite der Vorkommastellen
 <input name="width" type="number" min="1" max="9999" value="{width_value}"></label>
-<p class="settings-note">Wähle den Ausschnitt im Originalbild. Die Vorkommabreite gilt nach der Drehung.</p>
+<p class="settings-note">Wähle den Ausschnitt im Originalbild. Positive Winkel drehen nach rechts, negative nach links. Die Vorkommabreite gilt nach der Drehung.</p>
 </div>
 <label>Eigenes Testbild (optional, JPG oder PNG)
 <input type="file" name="image" accept="image/jpeg,image/png"></label>
@@ -411,7 +412,7 @@ name: Zählerstand (OCR)</code></pre>
 <label>Maximaler Durchfluss (m³/h)<input name="max_flow" type="text" inputmode="decimal" maxlength="10" value="{max_flow}" required></label>
 <div class="crop-fields setup-help" id="wizard-crop-fields">
 <label>Bildbereich (links, oben, rechts, unten)<input name="crop" value="{auto_crop_value}" maxlength="30" placeholder="52,56,564,132"></label>
-<label>Bilddrehung im Uhrzeigersinn<select name="rotation">{auto_rotation_options}</select></label>
+<label>Bilddrehung (°)<input name="rotation" type="number" min="-180" max="180" step="1" value="{auto_rotation_value}"></label>
 <label>Breite des Vorkomma-Bereichs in Pixeln<input name="width" type="number" min="1" max="9999" value="{auto_width_value}"></label>
 </div>
 <details class="setup-help"><summary>ⓘ Bild einrichten</summary><p>Die automatische Erkennung versucht, den Ziffernrahmen zu finden. Bei einer unsicheren Ablesung folgen bis zu zehn zusätzliche Bildauswertungen; die App setzt einzelne Ziffern nur bei einer strikten Mehrheit zusammen. Nach drei fehlgeschlagenen automatischen Prüfungen mit unterschiedlichen Bildabrufen wartet sie eine Stunde auf ein neues Bild oder einen höheren Zählerstand. Prüfe bei wiederholten Fehlern auch Beleuchtung, Abstand und Fokus. Beim Livebild kann AI Meter Reader bis zu 10 frische Standbilder innerhalb von höchstens 20 Sekunden prüfen.</p></details>
@@ -496,8 +497,8 @@ name: Zählerstand (OCR)</code></pre>
 <div class="crop-fields" id="auto-crop-fields" hidden>
 <label>Bildbereich (links, oben, rechts, unten)
 <input name="crop" type="text" value="{auto_crop_value}" maxlength="30" placeholder="52,56,564,132"></label>
-<label>Bilddrehung im Uhrzeigersinn
-<select name="rotation">{auto_rotation_options}</select></label>
+<label>Bilddrehung (°)
+<input name="rotation" type="number" min="-180" max="180" step="1" value="{auto_rotation_value}"></label>
 <label>Breite der Vorkommastellen
 <input name="width" type="number" min="1" max="9999" value="{auto_width_value}"></label>
 <p class="settings-note">Wähle den Ausschnitt im Originalbild. Die Vorkommabreite gilt nach der Drehung.</p>
@@ -773,7 +774,23 @@ const drawEmpty = document.querySelector('#crop-draw-empty');
 const uploadInput = manualForm.elements.image;
 let drawUploadUrl = '';
 let drawStart = null;
+let drawnCrop = null;
 let lastManualImageTime = 0;
+
+function updateDrawnWidth(box) {{
+  const [left, top, right, bottom] = box;
+  const width = right - left;
+  const height = bottom - top;
+  const angle = Math.abs(Number(manualForm.elements.rotation.value)) % 180;
+  const radians = angle * Math.PI / 180;
+  const span = width * Math.abs(Math.cos(radians)) + height * Math.abs(Math.sin(radians));
+  const rotatedWidth = angle === 0 ? width : angle === 90 ? height :
+    Math.ceil((width + span) / 2) - Math.floor((width - span) / 2);
+  manualForm.elements.width.value = Math.min(9999, Math.max(1, Math.round(rotatedWidth * {crop_whole_ratio})));
+}}
+manualForm.elements.rotation.addEventListener('change', () => {{
+  if (drawnCrop && manualForm.elements.crop.value === drawnCrop.join(',')) updateDrawnWidth(drawnCrop);
+}});
 
 function drawCropOutline(box) {{
   const [left, top, right, bottom] = box;
@@ -844,9 +861,9 @@ drawArea.addEventListener('pointerup', event => {{
     drawOutline.hidden = true;
     return;
   }}
-  const width = ['90', '270'].includes(manualForm.elements.rotation.value) ? bottom - top : right - left;
+  drawnCrop = box;
   manualForm.elements.crop.value = box.join(',');
-  manualForm.elements.width.value = Math.max(1, Math.round(width * {crop_whole_ratio}));
+  updateDrawnWidth(box);
   cropMode.value = 'manual';
   showCropFields();
   drawCropOutline(box);
@@ -1157,7 +1174,11 @@ refreshAutomatic();
 </script></html>"""
 
 
-ROTATION_OPTIONS = {str(angle): f"{angle}°" for angle in ROTATIONS}
+def editable_rotation(values):
+    angle = values.get("rotation", 0)
+    if type(angle) is not int:
+        return 0
+    return -90 if angle == 270 else angle if -180 <= angle <= 180 else 0
 POLARITIES = {"auto": "Automatisch", "light": "Hell", "dark": "Dunkel"}
 DECIMALS = {"0": "Volle Kubikmeter", "1": "1 Nachkommastelle", "2": "2 Nachkommastellen", "3": "3 Nachkommastellen"}
 ATTEMPTS = {str(value): str(value) for value in range(1, 11)}
@@ -1318,6 +1339,11 @@ def start_panel(
         show_attempts = False
         if not precision_pending and status == "match":
             tone, heading, icon = "ok", "Zählerstand bestätigt", "✓"
+        elif not precision_pending and status == STANDALONE_PENDING:
+            heading = "Zweite Aufnahme steht aus"
+        elif (not precision_pending and status == "ocr_only"
+              and history.get("check_detail") == STANDALONE_VERIFIED_NOTICE):
+            tone, heading, icon = "ok", "Zählerstand gegengeprüft", "✓"
         elif not precision_pending and status == "match_with_warning":
             tone, heading, icon = "warning", "Prüfung bestanden mit Hinweis", "!"
             if history.get("check_detail") == LAST_DIGIT_PASS:
@@ -1345,7 +1371,11 @@ def start_panel(
                           "Warte auf ein aktuelles Zählerbild. Die App versucht es automatisch erneut.")
             else:
                 detail = ""
-            if history.get("check_detail") in (RAW_ROW_UNCLEAR, MANUAL_ROW_UNCLEAR):
+            if str(history.get("check_detail", "")).startswith(STANDALONE_REJECTED_NOTICE):
+                heading = "Aufnahmen stimmen nicht plausibel überein"
+                detail = (history["check_detail"] if language == "de" else
+                          english_result(history["check_detail"], status))
+            elif history.get("check_detail") in (RAW_ROW_UNCLEAR, MANUAL_ROW_UNCLEAR):
                 detail = history["check_detail"] if language == "de" else EN_UI[history["check_detail"]]
             elif history.get("check_detail") == LAST_DIGIT_NOTICE:
                 heading = "Letzte Nachkommastelle unsicher"
@@ -1358,6 +1388,11 @@ def start_panel(
                 detail = instructions if language == "de" else EN_UI[instructions]
         if language == "en":
             heading = EN_UI[heading]
+        adjustment = history.get("ocr_rotation_adjustment", 0)
+        if not precision_pending and status in ("match", "ocr_only") and type(adjustment) is int and adjustment:
+            rotation_note = (f"Read with an image rotation of {adjustment:+d}°."
+                             if language == "en" else f"Mit Bilddrehung von {adjustment:+d}° gelesen.")
+            detail = " ".join(part for part in (detail, rotation_note) if part)
         try:
             failure_attempts = max(0, int(history.get("failure_attempts", 0) or 0))
         except (TypeError, ValueError):
@@ -1676,7 +1711,7 @@ def start_panel(
                 max_flow=format_cubic_metres(auto_rules.get("max_flow_lph", DEFAULT_FLOW_LPH)),
                 max_interval_minutes=MAX_INTERVAL_MINUTES,
                 interval_minutes=auto_rules.get("interval_minutes", DEFAULT_INTERVAL_MINUTES),
-                auto_rotation_options=select_options(ROTATION_OPTIONS, str(auto_rules.get("rotation", 0))),
+                auto_rotation_value=editable_rotation(auto_rules),
                 auto_saved_notice=auto_saved_notice if saved in ("1", "crop") else "",
                 manual_reference=html.escape(str(settings.get("manual_reference", auto_rules["fallback_value"])),
                                              quote=True),
@@ -1699,7 +1734,7 @@ def start_panel(
                 crop_whole_ratio=auto_rules["integer_digits"] /
                     (auto_rules["integer_digits"] + auto_rules["fraction_digits"]),
                 width_value=int(settings.get("width", default_width)),
-                rotation_options=select_options(ROTATION_OPTIONS, str(settings.get("rotation", 0))),
+                rotation_value=editable_rotation(settings),
 
                 attempt_options=select_options(ATTEMPTS, str(settings.get("attempts", auto_rules["attempts"]))),
                 default_attempts=default_attempts,

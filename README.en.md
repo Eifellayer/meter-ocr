@@ -61,6 +61,8 @@ The standalone sensor requires a majority of at least two OCR profiles on the sa
 
 ## Set up the camera crop
 
+Set **Image rotation (°)** in the manual crop settings to correct the angle one degree at a time. Recovery checks try slightly different angles and reuse the angle from a confirmed result for the same camera and crop. In standalone mode, the first image gives a provisional reading. A second image five minutes later must confirm the same value or a plausible increase before it is published.
+
 In camera mode, the app looks for the digit row in the original image. If it cannot find the right area, open the manual test settings and choose **Draw a crop on the image**. Draw around the full digit row and run the test. If the preview looks right, apply the tested crop to automatic checks. If the digits are still hard to read, check the camera angle, focus and lighting.
 
 In the **manual test**, select a manual image region and enter pixel coordinates from the original frame. Use **Clockwise rotation** for sideways or upside-down photos. Measure the width of the whole digits after rotation. Run the test to inspect the result, then apply the tested crop and rotation to automatic checks.

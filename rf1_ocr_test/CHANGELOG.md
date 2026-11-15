@@ -1,5 +1,11 @@
 # Changelog
 
+## In Vorbereitung
+
+- Die Bilddrehung ist im manuellen Test gradweise einstellbar und kann mit dem Ausschnitt für die Automatik übernommen werden. Bei schwer lesbaren Ziffern weist die App auf diese Einstellung hin.
+- Im automatischen Intensivtest prüft die App bei einer unsicheren Ablesung auch eine leichte Drehung nach links und rechts. Ein bestätigter Winkel wird für diese Kamera und diesen Ausschnitt als neuer Startwinkel übernommen. Die bisherigen Versuchslimits bleiben in Kraft.
+- Im eigenständigen Modus dient die erste Aufnahme als vorläufiger Vergleichswert. Nach fünf Minuten prüft die App den Stand anhand einer zweiten Aufnahme und gibt ihn bei plausibler Entwicklung frei.
+
 ## 0.4.5 Alpha
 
 - Das letzte Testbild ist beim Öffnen der Übersicht bereits ausgeklappt.

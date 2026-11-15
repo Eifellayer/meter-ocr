@@ -516,12 +516,16 @@ class BrowserTests(IngressFixture):
             page.mouse.move(box["x"] + box["width"] * .75, box["y"] + box["height"] * .50, steps=4)
             page.mouse.up()
             self.assertEqual("manual", page.locator("#crop-mode").input_value())
+            rotation = page.locator("#manual-form input[name=rotation]")
+            rotation.fill("-6")
+            rotation.press("Tab")
             page.locator("#start-check-with-options").click()
             job = self.requested.get(timeout=2)
             self.assertEqual("manual", job["crop_mode"])
             for actual, expected in zip(map(int, job["crop"].split(",")), (160, 120, 480, 240)):
                 self.assertAlmostEqual(expected, actual, delta=2)
-            self.assertAlmostEqual(200, job["width"], delta=2)
+            self.assertEqual(-6, job["rotation"])
+            self.assertAlmostEqual(207, job["width"], delta=2)
             browser.close()
 
     def test_selecting_a_discovered_meter_prefills_the_wizard(self):
@@ -676,7 +680,7 @@ class BrowserTests(IngressFixture):
             frame.locator("#open-manual-settings").click()
             frame.locator("#manual-form select[name=crop_mode]").select_option("manual")
             frame.locator("#manual-form input[name=crop]").fill("0,0,90,400")
-            frame.locator("#manual-form select[name=rotation]").select_option("90")
+            frame.locator("#manual-form input[name=rotation]").fill("90")
             frame.locator("#start-check").click()
             frame.get_by_text("Request accepted", exact=True).wait_for()
             frame.locator("#test-progress").wait_for(state="visible")

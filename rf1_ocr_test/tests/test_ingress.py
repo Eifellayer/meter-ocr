@@ -61,6 +61,8 @@ class IngressFixture(TestCase):
         self.profiles = {}
         self.source = dict(mode="slfork", url="http://meter", camera="", reference="")
         self.setup_pending = True
+        self.source_selected = False
+        self.suggestions = []
         self.reset_state = "idle"
         self.activity = {"state": "waiting", "detail": "Wartet auf die nächste automatische Prüfung."}
         self.paused = False
@@ -71,6 +73,7 @@ class IngressFixture(TestCase):
     def save_source(self, values):
         self.source = values
         self.setup_pending = False
+        self.source_selected = True
 
     def skip_setup(self):
         self.setup_pending = False
@@ -86,10 +89,11 @@ class IngressFixture(TestCase):
             "0,0,400,90", 250, self.preview, lambda: load_preferences(self.preferences),
             lambda modes: atomic_write(self.preferences, json.dumps(modes).encode(), 0o600),
             lambda: dict(self.delivery), self.delivery.update,
-            lambda: (dict(self.source), self.setup_pending), self.save_source,
+            lambda: ({**self.source, "selected": self.source_selected}, self.setup_pending), self.save_source,
             address=("127.0.0.1", 0), skip_setup=self.skip_setup,
             request_factory_reset=request_reset, get_reset_status=lambda: self.reset_state,
             automatic_preview=self.automatic_preview, get_activity=lambda: dict(self.activity),
+            discover_sources=lambda: self.suggestions,
             get_auto_paused=lambda: self.paused,
             save_auto_paused=lambda value: setattr(self, "paused", value),
         )
@@ -324,12 +328,20 @@ class IngressTests(IngressFixture):
         self.assertIn('<option value="1" selected>1 Nachkommastelle</option>', page)
 
     def test_initial_source_selection_and_later_changes(self):
-        self.assertIn('id="source-settings" open', self.request("/")[0])
+        page = self.request("/")[0]
+        self.assertIn('id="source-settings" open', page)
+        self.assertIn('id="wizard-source-mode" required><option value="" selected>', page)
+        self.assertIn('class="source-mode-guide"', page)
+        self.assertEqual(400, self.submit("/einrichtung", camera="camera.esp")[0])
+        self.assertEqual(400, self.submit("/bildquelle", source_mode="", camera="camera.esp")[0])
+        self.skip_setup()
+        self.assertIn('id="wizard-source-mode" required><option value="" selected>', self.request("/")[0])
         self.assertEqual(400, self.submit("/bildquelle", source_mode="esphome", camera="sensor.invalid")[0])
         self.assertEqual((303, "./?saved=source"),
                          self.submit("/bildquelle", source_mode="esphome", camera="camera.esp"))
         self.assertFalse(self.setup_pending)
         self.assertEqual("esphome", self.source["mode"])
+        self.assertIn('<option value="esphome" selected>ESPHome / Kamera</option>', self.request("/")[0])
         self.assertNotIn('id="source-settings" open', self.request("/")[0])
         self.assertEqual((303, "./?saved=source"),
                          self.submit("/bildquelle", source_mode="camera",
@@ -339,6 +351,13 @@ class IngressTests(IngressFixture):
         self.assertEqual("", self.source["reference"])
         self.assertEqual((303, "./?saved=source"),
                          self.submit("/bildquelle", source_mode="slfork", url="http://new-meter"))
+        self.assertEqual("http://new-meter", self.source["url"])
+        self.assertEqual((303, "./?saved=source"),
+                         self.submit("/bildquelle", source_mode="slfork", esp_camera_only=1))
+        self.assertEqual("slfork_camera", self.source["mode"])
+        self.assertIn('name="esp_camera_only" value="1" checked', self.request("/")[0])
+        self.assertEqual((303, "./?saved=source"), self.submit("/bildquelle", source_mode="slfork"))
+        self.assertEqual("slfork", self.source["mode"])
         self.assertEqual("http://new-meter", self.source["url"])
 
     def test_setup_wizard_saves_source_meter_format_crop_schedule_and_notifications(self):
@@ -370,6 +389,10 @@ class IngressTests(IngressFixture):
                                                    self.rules["max_flow_lph"],
                                                    self.rules["fallback_value"]))
         self.assertTrue(self.delivery["enabled"])
+        values.update(source_mode="slfork", esp_camera_only=1, camera="")
+        self.assertEqual((303, "./?saved=setup&ui=overview"), self.submit("/einrichtung", **values))
+        self.assertEqual("slfork_camera", self.source["mode"])
+        self.assertEqual("http://meter", self.source["url"])
 
     def test_setup_wizard_rejects_fallback_without_timestamp_and_keeps_old_settings(self):
         before = dict(self.source)
@@ -473,6 +496,31 @@ class RedirectTests(TestCase):
 
 
 class BrowserTests(IngressFixture):
+    def test_selecting_a_discovered_meter_prefills_the_wizard(self):
+        from playwright.sync_api import sync_playwright
+
+        self.suggestions = [
+            {"mode": "slfork", "url": "http://esp-meter", "label": "Gas meter"},
+            {"mode": "esphome", "camera": "camera.water_meter", "label": "Water meter"},
+        ]
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(executable_path=os.getenv("RF1_CHROMIUM"))
+            page = browser.new_page(locale="de-DE")
+            page.set_default_timeout(7000)
+            page.goto(self.base)
+            mode = page.locator("#wizard-source-mode")
+            self.assertEqual("", mode.input_value())
+            discovered = page.locator("#wizard-discovered-source")
+            discovered.select_option(label="AI on the Edge · Gas meter")
+            self.assertEqual("slfork", mode.input_value())
+            self.assertEqual("http://esp-meter", page.locator("#wizard-source-url input").input_value())
+            page.locator("#wizard-esp-camera-only input").check()
+            discovered.select_option(label="Kamera · Water meter")
+            self.assertEqual("esphome", mode.input_value())
+            self.assertEqual("camera.water_meter", page.locator("#wizard-source-camera input").input_value())
+            self.assertFalse(page.locator("#wizard-esp-camera-only").is_visible())
+            browser.close()
+
     def test_automatic_status_and_image_update_when_a_check_runs(self):
         from playwright.sync_api import sync_playwright
 

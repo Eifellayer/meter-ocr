@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.4 Alpha
+
+- Beim ersten Einrichten wählst du die Bildquelle selbst. Der Assistent erklärt die drei Modi direkt neben der Auswahl und empfiehlt ESPHome für den Einstieg mit einer Kamera.
+
+- Der Assistent bietet vorhandene Kamera-Entitäten und erkannte AI-on-the-Edge-Adressen aus Home Assistant an. Die Auswahl füllt das passende Feld aus.
+- Ein vorhandener AI-on-the-Edge-ESP kann nur als Kamera dienen. Die App fordert ein frisches Bild an, liest den Stand selbst und prüft ihn auf Plausibilität.
+
 ## 0.4.3 Alpha
 
 - Bei drei Nachkommastellen erklärt die Einrichtung, warum die letzte Stelle Fehlmeldungen verursachen kann.

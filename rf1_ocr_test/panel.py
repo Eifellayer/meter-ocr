@@ -47,6 +47,10 @@ form label,form select,form input{{min-width:0}}
 header{{display:flex;align-items:baseline;justify-content:space-between;gap:.5rem 1rem;flex-wrap:wrap;margin-bottom:1rem}}
 .language-bar{{display:flex;flex-wrap:wrap}}
 .language-bar select,.language-bar button{{min-height:2.75rem}}
+.main-tabs{{display:flex;gap:.45rem;padding:.35rem;margin:0 0 1rem;border:1px solid var(--edge);border-radius:.85rem;background:var(--surface)}}
+.main-tabs button{{flex:1;min-height:2.8rem;background:transparent;border-color:transparent;color:var(--muted)}}
+.main-tabs button[aria-selected="true"]{{background:light-dark(#e7f0f5,#293b48);border-color:var(--edge);color:inherit}}
+.tab-content[hidden]{{display:none}}
 .automatic-images{{margin:1rem 0}}
 .check-option{{display:flex;align-items:center;gap:.5rem;grid-column:1/-1}}
 .check-option input{{min-height:1.15rem;width:1.15rem;margin:0}}
@@ -90,6 +94,9 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .settings-item .manual-content{{margin:0;padding:0 0 1rem;border-top:0}}
 .manual-test-heading{{display:flex;align-items:center;justify-content:space-between;gap:.65rem;flex-wrap:wrap}}
 .manual-test-heading h2{{margin:0}}
+.manual-reference-entry{{display:flex;align-items:end;gap:.75rem;flex-wrap:wrap;margin-top:1rem;padding-top:1rem;border-top:1px solid var(--edge)}}
+.manual-reference-entry label{{flex:1 1 15rem}}
+.manual-reference-entry p{{flex:2 1 18rem;margin:0 0 .55rem;color:var(--muted);font-size:.85rem}}
 #manual-panel{{margin-top:.8rem}}
 .settings-note{{font-size:.85rem;color:var(--muted);margin:.7rem 0 0}}
 .save-notice{{font-size:.88rem;color:light-dark(#1e7650,#8ad4a9);margin:.7rem 0 0}}
@@ -155,6 +162,12 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <noscript><button type="submit">Speichern</button></noscript>
 </form>
 </header>
+<nav class="main-tabs" role="tablist" aria-label="Hauptmenü">
+<button type="button" role="tab" id="tab-overview" aria-controls="view-overview" aria-selected="true">Übersicht</button>
+<button type="button" role="tab" id="tab-settings" aria-controls="view-settings" aria-selected="false" tabindex="-1">Einstellungen</button>
+</nav>
+<main>
+<div class="tab-content" id="view-overview" role="tabpanel" aria-labelledby="tab-overview">
 <div class="panel"><h2>Automatische Kontrolle</h2>
 <div class="automatic-banner" id="automatic-banner" data-tone="{automatic_tone}"
  data-incident="{automatic_incident}" data-preference-key="{banner_preference_key}">
@@ -215,6 +228,11 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <p class="legend"><span class="green-key">Grün:</span> Ziffer wurde gelesen · <span class="red-key">Rot:</span> Ziffer unklar. Die Farbrahmen zeigen die OCR-Erkennung, nicht die Übereinstimmung mit dem Referenzstand. Ohne automatisch erkannte Ziffernrahmen sind die Bereiche nur näherungsweise aufgeteilt.</p>
 </div>
 {test_source_preview}
+<div class="manual-reference-entry">
+<label for="manual-reference-entry">Fallback-Wert für diesen Test (optional)
+<input id="manual-reference-entry" name="manual_reference" form="manual-form" value="{manual_reference}" inputmode="decimal" maxlength="16" placeholder="z. B. 10446,337"></label>
+<p>Am markierten Bild ablesen und hier eintragen. Der Wert wird nur mit dem manuellen Test verglichen und nicht als automatische Referenz gespeichert.</p>
+</div>
 <form method="post" action="ausschnitt-uebernehmen" id="apply-crop-form" class="apply-crop" hidden>
 <input type="hidden" name="checked_at" id="tested-crop-id">
 <input type="hidden" name="lang" value="{language}">
@@ -236,9 +254,6 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <select name="decimals">{decimal_options}</select></label>
 <label>Max. OCR-Versuche
 <select name="attempts">{attempt_options}</select></label>
-<label>Fallback-Wert für diesen Test (optional)
-<input name="manual_reference" value="{manual_reference}" inputmode="decimal" maxlength="16" placeholder="z. B. 10446,337"></label>
-<p class="settings-note">Lass den Test zuerst das aktuelle Kamerabild laden. Lies den Stand am Bild ab und trage ihn hier ein, wenn du diesen einzelnen OCR-Test damit vergleichen möchtest. Der Wert wird nicht dauerhaft als automatische Referenz gespeichert.</p>
 <label>Bildbereich
 <select name="crop_mode" id="crop-mode">{crop_mode_options}</select></label>
 <div class="crop-fields" id="crop-fields" hidden>
@@ -256,6 +271,8 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <p>Die App verwendet das letzte vorhandene Zählerbild, ohne eine neue Aufnahme zu starten. Sie liest die Zahlen aus dem Bild und vergleicht sie mit dem Referenzwert. Sobald die Werte übereinstimmen, stoppt die Prüfung. Andernfalls werden höchstens so viele OCR-Versuche durchgeführt wie eingestellt (1–10). Der Test verändert die automatische Trefferzahl nicht.</p></details>
 </div></details>
 </div>
+</div>
+<div class="tab-content" id="view-settings" role="tabpanel" aria-labelledby="tab-settings" hidden>
 <div class="panel" id="settings"><h2>Einstellungen</h2>
 <details class="manual-panel settings-item" id="setup-wizard" {wizard_open}>
 <summary><strong>Einrichtungsassistent</strong></summary>
@@ -401,6 +418,7 @@ Bei anhaltenden Problemen benachrichtigen
 {notification_saved_notice}
 </div></details>
 </div>
+</main>
 
 <footer class="page-footer">Kostenloses Hobbyprojekt · <a href="https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8" target="_blank" rel="noopener noreferrer">Freiwillig unterstützen (PayPal)</a>
 <details class="about-project"><summary>Über Meter OCR</summary><p><a href="https://github.com/Eifellayer" target="_blank" rel="noopener noreferrer">Projekt von EifelLayer auf GitHub</a></p><p>KI-unterstützt entwickelt. Keine geeichte Messung oder Gewähr für OCR-Ergebnisse. Bitte Zählerstände bei Bedarf direkt am Gerät prüfen.</p></details></footer>
@@ -408,13 +426,39 @@ Bei anhaltenden Problemen benachrichtigen
 let next = {next_check};
 const lang = '{language}';
 const searchPrefs = new URLSearchParams(location.search);
-if (searchPrefs.has('ui')) {{
-  searchPrefs.delete('ui');
-  history.replaceState(null, '', location.pathname + (searchPrefs.size ? '?' + searchPrefs : ''));
+const tabs = [...document.querySelectorAll('[role="tab"]')];
+const views = [...document.querySelectorAll('.tab-content')];
+function activateTab(name, updateUrl = true) {{
+  const selected = name === 'settings' ? 'settings' : 'overview';
+  tabs.forEach(tab => {{
+    const active = tab.id === `tab-${{selected}}`;
+    tab.setAttribute('aria-selected', String(active));
+    tab.tabIndex = active ? 0 : -1;
+  }});
+  views.forEach(view => view.hidden = view.id !== `view-${{selected}}`);
+  if (updateUrl) {{
+    const url = new URL(location.href);
+    if (selected === 'settings') url.searchParams.set('ui', 'settings');
+    else url.searchParams.delete('ui');
+    history.replaceState(null, '', url.pathname + (url.searchParams.size ? '?' + url.searchParams : ''));
+  }}
 }}
+tabs.forEach((tab, index) => {{
+  tab.addEventListener('click', () => activateTab(tab.id === 'tab-settings' ? 'settings' : 'overview'));
+  tab.addEventListener('keydown', event => {{
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length;
+    tabs[next].focus();
+    tabs[next].click();
+  }});
+}});
+const settingsSections = ['#setup-wizard', '#source-settings', '#automatic-settings', '#notification-settings'];
+const settingsOpen = searchPrefs.get('ui') === 'settings' || settingsSections.some(selector => document.querySelector(selector).open);
+activateTab(settingsOpen ? 'settings' : 'overview', false);
 document.querySelector('#open-setup').addEventListener('click', () => {{
+  activateTab('settings');
   const wizard = document.querySelector('#setup-wizard'); wizard.open = !wizard.open;
-  if (wizard.open) wizard.scrollIntoView({{behavior:'smooth',block:'start'}});
 }});
 const setupForm = document.querySelector('#setup-form');
 const setupSteps = [...setupForm.querySelectorAll('.setup-step')];
@@ -457,12 +501,13 @@ setupForm.querySelector('[name="fraction_digits"]').addEventListener('change', e
   if (Number(precision.value) > maximum) precision.value = String(maximum);
 }});
 document.querySelector('#setup-open-manual').addEventListener('click', () => {{
+  activateTab('overview');
   const manual = document.querySelector('#manual-panel'); manual.open = true;
-  manual.scrollIntoView({{behavior:'smooth',block:'start'}});
 }});
 document.querySelector('#language-select').addEventListener('change', () => {{
   const url = new URL(document.querySelector('#language-form').action);
   if (document.querySelector('#manual-panel').open) url.searchParams.set('test', 'open');
+  if (document.querySelector('#view-settings').hidden === false) url.searchParams.set('ui', 'settings');
   document.querySelector('#language-form').action = url;
   document.querySelector('#language-form').submit();
 }});

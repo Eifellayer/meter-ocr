@@ -90,7 +90,7 @@ class ComparisonTests(unittest.TestCase):
 class PanelTests(unittest.TestCase):
     def test_panel_template_and_donation_footer(self):
         page = formatted_page()
-        self.assertIn("Gaszähler OCR-Kontrolle", page)
+        self.assertIn("Meter OCR", page)
         self.assertIn("FG4Q7VKQJ9BW8", page)
         self.assertIn("Manuellen Test öffnen", page)
         self.assertIn("Getesteten Ausschnitt für die Automatik übernehmen", page)
@@ -99,7 +99,7 @@ class PanelTests(unittest.TestCase):
 
     def test_english_page_translates_controls_and_remains_format_safe(self):
         page = formatted_page("en")
-        self.assertIn("Gas Meter OCR Verification", page)
+        self.assertIn("Meter OCR", page)
         self.assertIn("Automatic verification", page)
         self.assertIn("Open manual test", page)
         self.assertIn("Use tested crop for automatic checks", page)

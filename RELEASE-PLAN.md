@@ -38,14 +38,17 @@ Die Beta 0.8.2 folgt auf die Beta 0.8.1 im bestehenden Home-Assistant-Repository
 | #3 · OCR-Diagnose | Einzelversuche in aufklappbaren Details. Nur verglichene Stellen werden als unklar gemeldet. Bei ausschließlich unlesbaren Versuchen entfallen Positionsangaben. Crop-Vorschau und Übernahme über den Browser geprüft. |
 | #4 · Sprache | Zwei nachgebildete Ingress-Nutzer, regionale Sprachcodes, Speichern, Wechsel während eines Tests, Neustart und Browser-Fallback geprüft. Ein fremder Elternkontext wird abgelehnt. |
 | Daten und Schnittstellen | Worker-Test mit echten Bilddateien und nachgebildeten HA-Endpunkten. Optionenmigration, Prüfhistorie und beide Sensor-IDs geprüft. Bestehende Historie und Regeln benötigen keine neue Migration. |
-| OCR und Toolchain | Lokal 36 Tests unter Python 3.11.18 bestanden, darunter Tesseract 5.5.0 mit einem synthetischen Zählwerk und ein Chromium-Test. JavaScript-Syntax beider Sprachvarianten geprüft. |
+| OCR und Toolchain | Lokal 43 Tests unter Python 3.11.18 bestanden, darunter Tesseract 5.5.0 mit einem synthetischen Zählwerk und ein Chromium-Test. Die Kameratests enthalten verschiedene Kontraste, Helligkeitsverläufe, leichte Neigung und einen um 90° gedrehten Ausschnitt aus einem 2560 × 1440-Pixel-Bild. JavaScript-Syntax beider Sprachvarianten geprüft. |
 
 Der Profilsprache-Zugriff verwendet den angemeldeten Home-Assistant-Frontend-Kontext und liest ausschließlich den Sprachschlüssel des aktuellen Nutzers. Der Quellcode-Abgleich umfasst die [Ingress-Einbettung](https://github.com/home-assistant/frontend/blob/2d6ebd26d995ccb6c2445af0bbb305cdcca58cfa/src/panels/app/ha-panel-app.ts), den [Frontend-User-Data-Aufruf](https://github.com/home-assistant/frontend/blob/2d6ebd26d995ccb6c2445af0bbb305cdcca58cfa/src/data/frontend.ts), die [Zuordnung zum Sprachschlüssel](https://github.com/home-assistant/frontend/blob/2d6ebd26d995ccb6c2445af0bbb305cdcca58cfa/src/data/translation.ts) und die [Supervisor-Ingress-Header](https://github.com/home-assistant/supervisor/blob/98a2322374ae3d0c248079d11f7435ad759935fa/supervisor/api/ingress.py).
 
 Der Workflow prüft die App-Images auf AMD64 und ARM64. Ein Live-Upgrade mit Supervisor, reale Zählerbilder einer SLFork- und ESPHome-Kamera, Companion App und Zustellung von Push und SMTP-E-Mail bleiben Freigabeprüfungen.
+
+Die [Foto-Vergleichstests](METER-PHOTO-TESTS.md) dokumentieren zehn reale Anzeigen mit Ausschnitt, sichtbarer Ziffernfolge und OCR-Ergebnis.
 
 ## Ergänzungen für die Bedienung
 
 - **Ersteinrichtung und Moduswechsel:** SLFork, Home-Assistant-Kamera mit optionaler Referenz und ESPHome/Kamera mit lokaler OCR. Der Worker-Test durchläuft den Kameraabruf und die Ausgabe des eigenen m³-Sensors. Er prüft Mindestübereinstimmung, PNG-Eingang, niedrigere Folgelesungen und die Trennung von bestätigten Referenztreffern.
 - **Status:** Der Browser-Test prüft grünen Haken, roten Hinweis, Ausblenden und einen späteren neuen Vorfall. Unsichere Ziffernpositionen werden in kurzen Gruppen angezeigt.
 - **Benachrichtigungen:** Getrennte Wartezeiten, Hinweis in Home Assistant, zusätzlich Push und/oder ein Notify-Ziel. Regressionstests simulieren die Aufrufe, Zustellfehler und Folgeversuche. Es werden dabei keine echten Nachrichten gesendet.
+- **Verbrauch:** Tests prüfen den kumulativen m³-Sensor, den letzten gültigen Stand als Basis, Rücksprünge, unrealistische Anstiege, eine andere Vergleichsgenauigkeit und Quellenwechsel. Ein Live-Test mit Home Assistant Recorder und Energie-Dashboard steht aus.

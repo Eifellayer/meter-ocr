@@ -1,8 +1,8 @@
-# Gaszähler OCR-Kontrolle – Home-Assistant-App
+# Meter OCR – Home-Assistant-App
 
 **Sprache / Language:** [Deutsch](README.md) · [English](README.en.md)
 
-**Kontrolliert einen automatisch erkannten Gaszählerstand mit einer zweiten, lokalen OCR-Lesung aus dem Zählerfoto.** Entwickelt für Pipersberg G4 RF1 und AI on the Edge / SLFork; auch eine passende Home-Assistant-Kamera ist möglich.
+**Liest Zählerstände lokal aus Kamerabildern und kann sie mit einem vorhandenen Messwert abgleichen.** Entwickelt für Pipersberg G4 RF1 und AI on the Edge / SLFork; auch eine passende Home-Assistant-Kamera ist möglich.
 
 Das ist eine **zusätzliche Plausibilitätskontrolle**, kein amtliches Messgerät. OCR-Fehler sind möglich; für eine Abrechnung zählt die direkt am Zähler überprüfte Ablesung. Privates Hobbyprojekt ohne garantierten Support.
 
@@ -12,7 +12,7 @@ Die ausführliche Einführung, Voraussetzungen, Installation und Konfiguration f
 
 Diese App befindet sich in der Beta-Phase.
 
-Über **Einstellungen → Apps → App installieren → ⋮ → Repositories** die Adresse `https://github.com/Thunder86/rf1-kontrollmessung` hinzufügen und **Gaszähler OCR-Kontrolle** installieren. Im SLFork-Modus die `esp_url` eintragen, starten und die Weboberfläche öffnen.
+Über **Einstellungen → Apps → App installieren → ⋮ → Repositories** die Adresse `https://github.com/Thunder86/rf1-kontrollmessung` hinzufügen und **Meter OCR** installieren. Im SLFork-Modus die `esp_url` eintragen, starten und die Weboberfläche öffnen.
 
 **Ältere lokale Installationen:** Der technische Ordner heißt weiter `rf1_ocr_test`. Beim Update innerhalb derselben App bleiben die Einstellungen normalerweise erhalten. Vor einem Wechsel zwischen lokaler und Repository-App die Einstellungen übernehmen und die alte App stoppen. Beide Varianten dürfen nicht gleichzeitig dieselben Sensoren aktualisieren.
 

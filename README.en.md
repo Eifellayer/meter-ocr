@@ -1,14 +1,14 @@
-# Gas Meter OCR Verification for Home Assistant
+# Meter OCR for Home Assistant
 
-**An independent, local, image-based second check of camera-read mechanical gas meters.**
+**Local camera OCR for Home Assistant with ESPHome and AI on the Edge / SLFork.**
 
 [Deutsch / German](README.md) · [English](README.en.md)
 
 **Release status: Beta.** Versions below 0.5.0 are alpha. The beta phase starts at 0.5.0, and the first stable version is 1.0.0.
 
-This community project checks whether a reading produced by an ESP or Home Assistant sensor really matches the visible digits on the gas meter. Instead of trusting the first reading, it analyzes the latest camera image again with **local Tesseract OCR**. It is a plausibility check, not a separate certified meter.
+Meter OCR reads camera images with **local Tesseract OCR**. It can provide its own reading from an ESPHome or Home Assistant camera, or double-check an existing reading from AI on the Edge / SLFork or a reference sensor.
 
-Designed for the **Pipersberg G4 RF1** with **AI on the Edge / SLFork**. A compatible Home Assistant camera can also supply the image. The `rf1_ocr_test` directory, app slug, and existing Home Assistant entity IDs are retained for compatibility.
+Designed for mechanical gas meters such as the **Pipersberg G4 RF1**. The register format is five whole digits, with up to three decimal digits. The current Home Assistant sensor output uses cubic meters.
 
 > **Private hobby project, not a certified instrument.** OCR can misread digits. Check the physical meter directly for billing or official readings. Provided without warranty or guaranteed support.
 
@@ -24,7 +24,7 @@ For each image, OCR can attempt between **1 and 10 different processing profiles
 
 1. In Home Assistant, open **Settings → Apps → Install app → ⋮ → Repositories** and add:
    `https://github.com/Thunder86/rf1-kontrollmessung`
-2. Install **Gaszähler OCR-Kontrolle** (Gas Meter OCR Verification).
+2. Install **Meter OCR**.
 3. Configure `esp_url` for the SLFork ESP, for example `http://esp-gaszaehler.local`. Alternatively configure `kamera_entitaet` and optionally `referenz_entitaet`.
 4. Start the app and open its web interface.
 
@@ -42,7 +42,23 @@ On a fresh installation, open the web interface and choose a mode under **Image 
 
 For ESPHome, configure an [ESP32 camera](https://esphome.io/components/esp32_camera/) with the [native API](https://esphome.io/components/api/) and add the device to Home Assistant. Check the image there, then select its `camera.*` entity in RF1. Use the **manual test** to adjust the crop and apply a working preview to automatic checks. This mode works without SLFork or a reference sensor.
 
-The standalone sensor requires a majority of at least two OCR profiles on the same photo. It reports **unavailable** if the reading is uncertain or goes below the last valid reading from that camera. Standalone OCR values have no reference confirmation or long-term statistics configuration. Upgrades retain the active source. Changing the source starts a new automatic confirmation count.
+The standalone sensor requires a majority of at least two OCR profiles on the same photo. It reports **unavailable** if the reading is uncertain or goes below the last valid reading from that camera. Standalone OCR values are independent readings. The Energy dashboard uses the separate cumulative consumption sensor. Upgrades retain the active source. Changing the source starts a new automatic confirmation count.
+
+## Set up the camera crop
+
+In the **manual test**, select a manual image region and enter pixel coordinates from the original frame. Use **Clockwise rotation** for sideways or upside-down photos. Measure the width of the whole digits after rotation. Run the test to inspect the result, then apply the tested crop and rotation to automatic checks.
+
+Automatic digit color handles light or dark digits. Later OCR attempts can compensate for uneven lighting in the register. Reflections that cover digits and severe perspective distortion require a clearer camera image. For a meter with a digit register and small pointer dials, test the register at **whole cubic meters** precision. The OCR reads the digit window and leaves the pointer dials unread.
+
+The [photo test report (German)](METER-PHOTO-TESTS.md) records the results for ten gas, water and electricity meters.
+
+## Plausibility check and Energy dashboard
+
+Meter OCR records consumption from automatic reference matches or agreeing OCR profiles in standalone mode. The first accepted reading establishes the baseline. Later readings are checked against the last accepted value. An out-of-order time, backwards reading or increase above the configured flow limit is rejected. The check accounts for the selected digit precision.
+
+Under **Automatic check settings → Maximum flow**, enter the Qmax marked on your meter. The G4 default is 6 m³/h. Rejected readings leave the cumulative counter untouched. The first accepted reading after a source or precision change establishes a baseline for later consumption differences.
+
+In Home Assistant, go to **Energy → Configuration → Gas consumption** and select **Meter OCR Gasverbrauch gesamt** (`sensor.rf1_verbrauch_gesamt`). The sensor appears after the first accepted reading. It supplies cumulative gas consumption in m³. Home Assistant calculates hourly, daily, weekly and monthly views from this sensor.
 
 ## Notifications and automatic status
 

@@ -135,7 +135,7 @@ class IngressTests(IngressFixture):
 
     def test_queue_does_not_replace_a_running_job_and_crop_is_bound_to_result(self):
         form = dict(decimals=2, attempts=3, crop_mode="manual", polarity="dark",
-                    crop="5,5,390,85", width=220)
+                    crop="1925,5,2005,390", width=220, rotation=90)
         self.assertEqual((303, "./?test=queued"), self.submit("/pruefen", **form))
         job = self.requested.get_nowait()
         self.update(job["request_id"], "ocr", "OCR-Versuch 2 von 3 läuft …", 1)
@@ -156,9 +156,9 @@ class IngressTests(IngressFixture):
         self.assertEqual(409, self.submit("/ausschnitt-uebernehmen", checked_at="90.0")[0])
         self.assertEqual((303, "./?saved=crop"), self.submit(
             "/ausschnitt-uebernehmen", checked_at=status["crop_id"]))
-        self.assertEqual(("manual", "5,5,390,85", 220, 0),
-                         (self.rules["crop_mode"], self.rules["crop"],
-                          self.rules["width"], self.rules["decimals"]))
+        self.assertEqual(("manual", "1925,5,2005,390", 220, 90, 0),
+                         (self.rules["crop_mode"], self.rules["crop"], self.rules["width"],
+                          self.rules["rotation"], self.rules["decimals"]))
 
     def test_invalid_manual_crop_returns_localized_form_error(self):
         for language, message in (("en", "Check the form values"), ("de", "Bitte die Formulareingaben prüfen")):
@@ -300,24 +300,28 @@ class BrowserTests(IngressFixture):
 
             frame = page.frame_locator("iframe")
 
-            def expect_heading(title):
-                frame.get_by_role("heading", name=title, exact=True).wait_for()
+            def expect_language(language):
+                heading = frame.locator(f"html[lang='{language}'] h1")
+                heading.wait_for()
+                self.assertEqual("Meter OCR", heading.inner_text())
                 self.assertTrue(frame.locator("html").evaluate(
                     "element => element.scrollWidth <= element.clientWidth"))
 
             page.goto(parent + "/?de")
-            expect_heading("Gaszähler OCR-Kontrolle")
+            expect_language("de")
             self.assertEqual(1, page.evaluate("window.calls"))
             self.assertIn("Home Assistant: Deutsch", frame.locator("#language-select").inner_text())
             page.goto(parent + "/?en")
-            expect_heading("Gas Meter OCR Verification")
+            expect_language("en")
             frame.locator("#manual-panel summary").first.click()
             frame.locator("#manual-form select[name=crop_mode]").select_option("manual")
+            frame.locator("#manual-form input[name=crop]").fill("0,0,90,400")
+            frame.locator("#manual-form select[name=rotation]").select_option("90")
             frame.locator("#start-check").click()
             frame.get_by_text("Request accepted", exact=True).wait_for()
             self.assertEqual("neutral", frame.locator("#test-box").get_attribute("data-result"))
             frame.locator("#language-select").select_option("de")
-            expect_heading("Gaszähler OCR-Kontrolle")
+            expect_language("de")
             frame.get_by_text("Anfrage angenommen", exact=True).wait_for()
             job = self.requested.get(timeout=2)
             Image.new("RGB", (400, 90), "white").save(self.preview, "JPEG")
@@ -337,14 +341,17 @@ class BrowserTests(IngressFixture):
             frame.locator("#apply-crop-form button").click()
             frame.get_by_text("Getesteten Bildausschnitt für die Automatik übernommen.", exact=True).wait_for()
             self.assertEqual("manual", self.rules["crop_mode"])
+            self.assertEqual(90, self.rules["rotation"])
             frame.locator("#auto-form select[name=decimals]").select_option("2")
+            frame.locator("#auto-form input[name=max_flow]").fill("4,5")
             frame.locator("#auto-form button").click()
             frame.get_by_text("Automatische Prüfregeln gespeichert.", exact=True).wait_for()
+            self.assertEqual(4500, self.rules["max_flow_lph"])
             self.assertEqual("de", frame.locator("#language-select").input_value())
             page.reload()
-            expect_heading("Gaszähler OCR-Kontrolle")
+            expect_language("de")
             frame.locator("#language-select").select_option("auto")
-            expect_heading("Gas Meter OCR Verification")
+            expect_language("en")
             page.set_viewport_size({"width": 1280, "height": 900})
             frame.locator("#manual-panel summary").first.click()
             frame.locator("#start-check").click()
@@ -352,7 +359,7 @@ class BrowserTests(IngressFixture):
             self.assertEqual("neutral", frame.locator("#test-box").get_attribute("data-result"))
             for profile in ("unsupported", "mismatch"):
                 page.goto(parent + "/?" + profile)
-                expect_heading("Gas Meter OCR Verification")
+                expect_language("en")
                 self.assertIn("Automatic (Home Assistant)", frame.locator("#language-select").inner_text())
             self.assertEqual(0, page.evaluate("window.calls"))
             self.history.write_text(json.dumps({"status": "match", "check_status": "match",

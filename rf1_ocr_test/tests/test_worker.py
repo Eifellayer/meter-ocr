@@ -10,14 +10,15 @@ from tempfile import TemporaryDirectory
 from unittest import TestCase
 from unittest.mock import patch
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from checks import (FRESH_SAMPLE_AGE, NORMAL_INTERVAL, RETRY_INTERVAL, WINDOW_SECONDS,
+from checks import (FRESH_SAMPLE_AGE, NORMAL_INTERVAL, OCR_PROFILES, RETRY_INTERVAL, WINDOW_SECONDS,
                     explain_uncertain_positions, read_register, record_sample, rolling_summary,
                     schedule_next_check)
-from layout import find_digit_row
+from consumption import EXCESSIVE_INCREASE
+from layout import crop_coordinates, find_digit_row
 from settings import load_options
 import run
 
@@ -89,11 +90,50 @@ class SourceTests(TestCase):
             run.select_register(frame, None, (0, 0, 400, 100), 80)
 
 
+    def test_rotated_high_resolution_camera_crop_is_readable(self):
+        frame = Image.new("RGB", (2560, 1440), "gray")
+        upright = synthetic_meter()
+        sideways = upright.transpose(Image.Transpose.ROTATE_90)
+        frame.paste(sideways, (2190, 310))
+
+        crop = crop_coordinates("2190,310,2290,810", upright.width, rotation=90)
+        register, width, _, _, mode = run.select_register(frame, None, crop, upright.width, rotation=90)
+
+        self.assertEqual("manual", mode)
+        self.assertEqual(upright.size, register.size)
+        self.assertEqual(upright.width, width)
+        self.assertEqual(upright.tobytes(), register.tobytes())
+        self.assertEqual("12345", read_register(register, False))
+        with self.assertRaises(ValueError):
+            crop_coordinates("2190,310,2290,810", upright.width)
+
+
 class OCRTests(TestCase):
     def test_tesseract_reads_a_synthetic_register(self):
         image = synthetic_meter()
         self.assertEqual("12345", read_register(image, False, force_polarity=True))
         self.assertEqual("12345", read_register(image, False))
+
+    def test_ocr_for_light_digits_and_slightly_tilted_image(self):
+        meter = synthetic_meter().convert("L")
+        light_digits = ImageOps.invert(meter).point(lambda value: 20 + value // 4)
+        self.assertEqual("12345", read_register(light_digits, False))
+        tilted = meter.rotate(6, expand=True, fillcolor=255)
+        self.assertEqual("12345", read_register(tilted, False))
+
+    def test_lighting_correction_recovers_a_display_under_a_gradient(self):
+        size = (305, 116)
+        gradient = Image.linear_gradient("L").transpose(Image.Transpose.ROTATE_90).resize(size)
+        gradient = gradient.point(lambda value: int(45 + value * 0.73))
+        font = ImageFont.truetype("DejaVuSansMono.ttf", 82)
+        for number, contrast in (("27536", -37), ("38605", 36)):
+            with self.subTest(light_digits=contrast > 0):
+                mask = Image.new("L", size, 0)
+                ImageDraw.Draw(mask).text((18, 61), number, font=font, fill=255, anchor="lm")
+                ink = gradient.point(lambda level: min(255, max(0, level + contrast)))
+                meter = Image.composite(ink, gradient, mask)
+                self.assertEqual(number, read_register(meter, False, profile=OCR_PROFILES[2]))
+        self.assertIsNone(read_register(gradient, False, profile=OCR_PROFILES[2]))
 
     def test_no_reads_do_not_invent_digit_positions(self):
         detail = explain_uncertain_positions(["?????.???"] * 5, 2)
@@ -169,7 +209,7 @@ class StateTests(TestCase):
         def collect(url, payload, _):
             entity = url.rsplit("/", 1)[1]
             published[entity] = payload
-            if entity == run.OCR_ENTITY:
+            if entity == run.CONSUMPTION_ENTITY:
                 raise StopLoop
 
         self.enterContext(patch.object(run, "publish_state", collect))
@@ -179,9 +219,35 @@ class StateTests(TestCase):
         self.assertEqual(2, recognize.call_count)
         self.assertEqual("12345", published[run.OCR_ENTITY]["state"])
         self.assertEqual("ocr_only", published[run.CHECK_ENTITY]["state"])
-        self.assertEqual([], json.loads(files["HISTORY"].read_text())["confirmations"])
+        initial = json.loads(files["HISTORY"].read_text())
+        self.assertEqual([], initial["confirmations"])
+        self.assertEqual("0", published[run.CONSUMPTION_ENTITY]["state"])
+        attributes = published[run.CONSUMPTION_ENTITY]["attributes"]
+        self.assertEqual(("gas", "total_increasing", "m³"),
+                         (attributes["device_class"], attributes["state_class"], attributes["unit_of_measurement"]))
         with Image.open(files["DESTINATION"]) as current:
             self.assertEqual("JPEG", current.format)
+
+        initial["next_check_at"] = 0
+        initial["consumption"]["timestamp"] -= 3600
+        files["HISTORY"].write_text(json.dumps(initial))
+        recognize.return_value = "12347.???"
+        with self.assertRaises(StopLoop):
+            run.main()
+        self.assertEqual("2", published[run.CONSUMPTION_ENTITY]["state"])
+        second = json.loads(files["HISTORY"].read_text())
+
+        second["next_check_at"] = 0
+        files["HISTORY"].write_text(json.dumps(second))
+        recognize.return_value = "13347.???"
+        with self.assertRaises(StopLoop):
+            run.main()
+        rejected = json.loads(files["HISTORY"].read_text())
+        self.assertEqual("2", published[run.CONSUMPTION_ENTITY]["state"])
+        self.assertEqual("unavailable", published[run.OCR_ENTITY]["state"])
+        self.assertEqual("ocr_unclear", published[run.CHECK_ENTITY]["state"])
+        self.assertEqual(EXCESSIVE_INCREASE, rejected["check_detail"])
+        self.assertEqual(second["consumption"], rejected["consumption"])
 
     def test_main_keeps_manual_run_separate_from_automated_entities_and_history(self):
         class StopLoop(Exception):
@@ -213,7 +279,7 @@ class StateTests(TestCase):
         def fake_publish(url, payload, _):
             published.append((url, payload))
             history_updates.append(json.loads(paths["HISTORY"].read_text()))
-            if url.endswith(run.ENTITY):
+            if url.endswith(run.CONSUMPTION_ENTITY):
                 raise StopLoop
 
         data = sample(datetime.now(timezone.utc))
@@ -226,11 +292,13 @@ class StateTests(TestCase):
         self.assertEqual("difference", progress_updates[-1][1]["outcome"])
         with Image.open(paths["TEST_IMAGE"]) as preview:
             self.assertEqual((480, 100), preview.size)
-        self.assertEqual([run.CHECK_ENTITY, run.ENTITY], [url.rsplit("/", 1)[1] for url, _ in published])
+        self.assertEqual([run.CHECK_ENTITY, run.ENTITY, run.CONSUMPTION_ENTITY],
+                         [url.rsplit("/", 1)[1] for url, _ in published])
         self.assertEqual("match", published[0][1]["state"])
         self.assertEqual(0, published[1][1]["attributes"]["decimal_places"])
         history = history_updates[-1]
         self.assertEqual("difference", history["manual_result"]["status"])
         self.assertEqual(1, len(history["confirmations"]))
         self.assertEqual(0, history["comparison_decimals"])
+        self.assertEqual(0, history["consumption"]["total_litres"])
         self.assertTrue(paths["GOOD_IMAGE"].exists())

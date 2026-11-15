@@ -1,14 +1,14 @@
-# Gaszähler OCR-Kontrolle für Home Assistant
+# Meter OCR für Home Assistant
 
 **Sprache / Language:** [Deutsch](README.md) · [English](README.en.md)
 
 **Versionsstatus: Beta.** Unter 0.5.0 gilt Alpha, ab 0.5.0 bis vor 1.0.0 Beta und ab 1.0.0 stabil.
 
-**Unabhängige optische Zweitprüfung für automatisch ausgelesene mechanische Gaszähler.**
+**Zählerstände lokal aus Kamerabildern lesen und mit Home Assistant abgleichen.**
 
-Du liest deinen Gaszähler bereits mit Kamera und ESP aus, möchtest aber prüfen, ob die erkannten Ziffern wirklich zum Zählerbild passen? Diese App liest das vorhandene Foto **ein zweites Mal lokal mit Tesseract OCR** und vergleicht die Ziffern mit dem vorhandenen Messwert. Damit ist sie eine zusätzliche Plausibilitätskontrolle, kein zweiter Gaszähler.
+Meter OCR liest das Zählerfoto mit **Tesseract OCR**. Mit ESPHome oder einer anderen Home-Assistant-Kamera kann die App einen eigenen OCR-Stand liefern. Mit **AI on the Edge / SLFork** oder einem Referenzsensor prüft sie zusätzlich, ob der vorhandene Messwert zum Bild passt.
 
-Entwickelt für den **Pipersberg G4 RF1** mit **AI on the Edge / SLFork**. Eine geeignete Home-Assistant-Kamera kann alternativ als Bildquelle dienen. „RF1“ bleibt aus Kompatibilitätsgründen in bestehenden Entitäts-IDs und im App-Verzeichnis erhalten.
+Entwickelt für mechanische Gaszähler wie den **Pipersberg G4 RF1**. Das Ziffernfenster hat fünf Vorkommastellen und bei Bedarf bis zu drei Nachkommastellen. Die Messwertausgabe in Home Assistant ist auf Kubikmeter ausgelegt.
 
 > **Privates Hobbyprojekt, keine geeichte Zweitmessung.** OCR kann Ziffern falsch lesen. Für Abrechnungen und Meldungen an den Versorger gilt der direkt am Zähler kontrollierte Stand. Nutzung auf eigene Gefahr; kein garantierter Support.
 
@@ -45,7 +45,23 @@ Beim ersten Öffnen einer frischen Installation wählst du unter **Bildquelle** 
 
 Für ESPHome richte eine [ESP32-Kamera](https://esphome.io/components/esp32_camera/) mit [nativer API](https://esphome.io/components/api/) ein und füge das Gerät in Home Assistant hinzu. Prüfe das Kamerabild dort und trage anschließend die `camera.*`-Entität in RF1 ein. Öffne **Manuellen Test**, passe den Bildausschnitt an und übernimm die Vorschau in die Automatik. Die App benötigt für diese Betriebsart weder SLFork noch einen Referenzsensor.
 
-Der OCR-Sensor benötigt eine Mehrheit von mindestens zwei OCR-Profilen desselben Bildes. Bei einer unsicheren Lesung oder einem Rückgang gegenüber dem letzten gültigen Stand derselben Kamera wird er als **nicht verfügbar** gemeldet. Ein OCR-Stand ohne Referenz ist keine bestätigte Messung und wird nicht für Langzeitstatistiken eingerichtet. Bestehende Installationen übernehmen zuerst ihre bisherige Bildquelle. Ein späterer Wechsel startet die automatische Bestätigungszählung für die neue Quelle neu.
+Der OCR-Sensor benötigt eine Mehrheit von mindestens zwei OCR-Profilen desselben Bildes. Bei einer unsicheren Lesung oder einem Rückgang gegenüber dem letzten gültigen Stand derselben Kamera wird er als **nicht verfügbar** gemeldet. Ein OCR-Stand ohne Referenz ist eine eigenständige Ablesung. Für das Energie-Dashboard gibt es einen kumulativen Verbrauchssensor. Bestehende Installationen übernehmen zuerst ihre bisherige Bildquelle. Ein späterer Wechsel startet die automatische Bestätigungszählung für die neue Quelle neu.
+
+## Kamerabild und Ausschnitt einrichten
+
+Öffne **Manuellen Test** und wähle unter **Bildbereich** die manuelle Einstellung. Gib die Koordinaten im Originalbild in Pixeln ein. Wenn das Foto seitlich oder auf dem Kopf steht, wähle die passende **Bilddrehung**. Die Breite der Vorkommastellen bezieht sich auf den Ausschnitt nach der Drehung. Mit **Jetzt prüfen** siehst du das Auswertungsergebnis und kannst den getesteten Ausschnitt mitsamt Drehung für die Automatik übernehmen.
+
+Die Voreinstellung erkennt helle oder dunkle Ziffern automatisch. Weitere OCR-Versuche können ungleichmäßiges Licht im Ziffernfenster ausgleichen. Glanzstellen, die Ziffern verdecken, und starke Perspektivverzerrungen erfordern ein besseres Kamerabild. Bei Zählern mit Rollenfenster und kleinen Zeigern lässt sich mit **volle m³** das Rollenfenster einzeln testen. Die Zeiger selbst werden nicht ausgewertet.
+
+Die Ergebnisse mit zehn Gas-, Wasser- und Stromzählerfotos stehen im [Vergleichstest](METER-PHOTO-TESTS.md).
+
+## Plausibilitätsprüfung und Energie-Dashboard
+
+Für den Verbrauch verwendet Meter OCR automatische Treffer mit Referenz oder übereinstimmende OCR-Versuche im eigenständigen Modus. Der erste gültige Stand setzt die Basis. Danach vergleicht die App den neuen Stand mit der letzten gültigen Messung. Sie verwirft Rücksprünge und Anstiege, die für die verstrichene Zeit zu groß sind. Die berücksichtigte Ziffernauflösung bestimmt den Rundungsspielraum.
+
+Unter **Automatische Prüfung – Einstellungen → Maximaler Durchfluss** trägst du den Qmax-Wert vom Zähler ein. Die Vorgabe für G4 beträgt 6 m³/h. Ein abgelehnter Wert verändert den Verbrauchszähler nicht. Wechselt die Bildquelle oder die Vergleichsgenauigkeit, dient die nächste gültige Ablesung als Basis für weitere Verbrauchsdifferenzen.
+
+Füge in Home Assistant unter **Energie → Einstellungen → Gasverbrauch** den Sensor **Meter OCR Gasverbrauch gesamt** (`sensor.rf1_verbrauch_gesamt`) hinzu. Er entsteht mit der ersten gültigen Messung und summiert die bestätigten Verbrauchsdifferenzen in m³. Home Assistant berechnet aus diesem kumulativen Wert die Ansichten für Stunde, Tag, Woche und Monat.
 
 ## Benachrichtigungen und Prüfstatus
 
@@ -99,7 +115,7 @@ Ein SLFork-Messzeitpunkt wird automatisch nur einmal gezählt. Alte Bilder lasse
 ## Installation
 
 1. In Home Assistant unter **Einstellungen → Apps → App installieren → ⋮ → Repositories** die Adresse `https://github.com/Thunder86/rf1-kontrollmessung` hinzufügen.
-2. **Gaszähler OCR-Kontrolle** installieren.
+2. **Meter OCR** installieren.
 3. Für SLFork `esp_url` auf die Adresse des ESP setzen (z. B. `http://esp-gaszaehler.local`). Alternativ `kamera_entitaet`, `ausschnitt` und optional `referenz_entitaet` konfigurieren.
 4. App starten, **Weboberfläche öffnen** und mit **Jetzt prüfen** eine Testlesung durchführen.
 
@@ -130,6 +146,6 @@ Eine Meldung `match` bedeutet Übereinstimmung **bei der eingestellten Genauigke
 
 ## Projekt unterstützen
 
-Die Gaszähler OCR-Kontrolle ist ein kostenloses Hobbyprojekt. Wenn sie dir hilft, freue ich mich über eine [freiwillige PayPal-Spende](https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8).
+Meter OCR ist ein kostenloses Hobbyprojekt. Wenn sie dir hilft, freue ich mich über eine [freiwillige PayPal-Spende](https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8).
 
 [Änderungsprotokoll](rf1_ocr_test/CHANGELOG.md) · [Installationshinweise für lokale Altversionen](rf1_ocr_test/README.md) · [English documentation](README.en.md)

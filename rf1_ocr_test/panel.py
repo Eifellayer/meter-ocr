@@ -2,7 +2,6 @@
 
 import html
 import json
-import re
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from queue import Full
@@ -10,8 +9,10 @@ from secrets import compare_digest, token_urlsafe
 from threading import Lock, Thread
 from urllib.parse import parse_qs, urlsplit
 
+from consumption import DEFAULT_FLOW_LPH, format_cubic_metres, parse_flow_limit
 from i18n import EN_UI, english_progress, english_result, translate_page
 from language import MODES, SUPPORTED, USER_ID, browser_locale, profile_script
+from layout import ROTATIONS, crop_coordinates
 from notification_settings import notification_rules
 from source_settings import SOURCE_MODES, source_rules
 
@@ -19,7 +20,7 @@ SUPERVISOR_ADDRESS = "172.30.32.2"
 
 PAGE = """<!doctype html>
 <html lang="{language}"><meta charset="utf-8"><meta name="viewport" content="width=device-width">
-<title>Gaszähler OCR-Kontrolle</title>
+<title>Meter OCR</title>
 <style>.resolving-language body{{visibility:hidden}}</style>
 {profile_script}
 <style>
@@ -70,7 +71,8 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .settings-note{{font-size:.85rem;color:var(--muted);margin:.7rem 0 0}}
 .save-notice{{font-size:.88rem;color:light-dark(#1e7650,#8ad4a9);margin:.7rem 0 0}}
 .crop-fields{{display:flex;gap:.8rem;flex-wrap:wrap;margin-top:.7rem}}
-.crop-fields label:first-child{{flex:2 1 17rem}}.crop-fields label:last-child{{flex:1 1 10rem}}
+.crop-fields label{{flex:1 1 10rem}}.crop-fields label:first-child{{flex-grow:2;flex-basis:16rem}}
+.crop-fields .settings-note{{flex-basis:100%;margin:0}}
 .crop-fields[hidden]{{display:none}}
 .preview{{margin-top:1rem;padding-top:1rem;border-top:1px solid var(--edge)}}
 .preview img{{display:block;width:100%;max-width:740px;height:auto;border-radius:.5rem;border:1px solid var(--edge)}}
@@ -117,7 +119,7 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 @media(max-width:500px){{body{{padding:.8rem .7rem 2rem}}.panel{{padding:.9rem}}dl{{grid-template-columns:minmax(5.5rem,1fr) minmax(0,1.7fr);gap:.5rem .85rem}}form:not(.language-bar) button{{width:100%;min-height:2.75rem}}}}
 </style>
 <header>
-<h1>Gaszähler OCR-Kontrolle</h1>
+<h1>Meter OCR</h1>
 <form method="post" action="sprache" class="language-bar" id="language-form">
 <input type="hidden" name="csrf" value="{csrf}">
 <label for="language-select">Sprache / Language</label>
@@ -188,6 +190,8 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <select name="decimals">{auto_decimal_options}</select></label>
 <label>Max. OCR-Versuche
 <select name="attempts">{auto_attempt_options}</select></label>
+<label title="Qmax steht auf deinem Zähler. Die Vorgabe für einen G4 beträgt 6 m³/h.">Maximaler Durchfluss (m³/h)
+<input name="max_flow" type="text" inputmode="decimal" maxlength="10" value="{max_flow}" required></label>
 <label>Ziffernfarbe
 <select name="polarity">{auto_polarity_options}</select></label>
 <label>Bildbereich
@@ -195,8 +199,11 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <div class="crop-fields" id="auto-crop-fields" hidden>
 <label>Bildbereich (links, oben, rechts, unten)
 <input name="crop" type="text" value="{auto_crop_value}" maxlength="30" placeholder="52,56,564,132"></label>
+<label>Bilddrehung im Uhrzeigersinn
+<select name="rotation">{auto_rotation_options}</select></label>
 <label>Breite der Vorkommastellen
-<input name="width" type="number" min="1" max="1920" value="{auto_width_value}"></label>
+<input name="width" type="number" min="1" max="9999" value="{auto_width_value}"></label>
+<p class="settings-note">Wähle den Ausschnitt im Originalbild. Die Vorkommabreite gilt nach der Drehung.</p>
 </div>
 <button type="submit">Speichern</button>
 </form>
@@ -250,8 +257,11 @@ Bei anhaltenden Problemen benachrichtigen
 <div class="crop-fields" id="crop-fields" hidden>
 <label>Manueller Ausschnitt (links, oben, rechts, unten)
 <input name="crop" type="text" value="{crop_value}" maxlength="30" placeholder="52,56,564,132"></label>
+<label>Bilddrehung im Uhrzeigersinn
+<select name="rotation">{rotation_options}</select></label>
 <label>Breite der Vorkommastellen
-<input name="width" type="number" min="1" max="1920" value="{width_value}"></label>
+<input name="width" type="number" min="1" max="9999" value="{width_value}"></label>
+<p class="settings-note">Wähle den Ausschnitt im Originalbild. Die Vorkommabreite gilt nach der Drehung.</p>
 </div>
 <button id="start-check">Jetzt prüfen</button>
 </form>
@@ -522,6 +532,7 @@ refreshAutomatic();
 </script></html>"""
 
 
+ROTATION_OPTIONS = {str(angle): f"{angle}°" for angle in ROTATIONS}
 POLARITIES = {"auto": "Automatisch", "light": "Hell", "dark": "Dunkel"}
 DECIMALS = {"0": "Volle Kubikmeter", "1": "1 Nachkommastelle", "2": "2 Nachkommastellen", "3": "3 Nachkommastellen"}
 ATTEMPTS = {str(value): str(value) for value in range(1, 11)}
@@ -805,6 +816,8 @@ def start_panel(
                 ),
                 auto_crop_value=html.escape(auto_rules["crop"], quote=True),
                 auto_width_value=auto_rules["width"],
+                max_flow=format_cubic_metres(auto_rules.get("max_flow_lph", DEFAULT_FLOW_LPH)),
+                auto_rotation_options=select_options(ROTATION_OPTIONS, str(auto_rules.get("rotation", 0))),
                 auto_saved_notice=auto_saved_notice if saved in ("1", "crop") else "",
                 crop_mode_options=select_options(
                     CROP_MODES_EN if language == "en" else CROP_MODES,
@@ -812,6 +825,7 @@ def start_panel(
                 ),
                 crop_value=html.escape(str(settings.get("crop", default_crop)), quote=True),
                 width_value=int(settings.get("width", default_width)),
+                rotation_options=select_options(ROTATION_OPTIONS, str(settings.get("rotation", 0))),
 
                 attempt_options=select_options(ATTEMPTS, str(settings.get("attempts", auto_rules["attempts"]))),
                 default_attempts=default_attempts,
@@ -871,7 +885,7 @@ def start_panel(
                 length = int(self.headers.get("Content-Length", "0"))
                 if not 0 < length <= 768:
                     raise ValueError("Invalid form length")
-                form = parse_qs(self.rfile.read(length).decode("ascii"), keep_blank_values=True, max_num_fields=10)
+                form = parse_qs(self.rfile.read(length).decode("ascii"), keep_blank_values=True, max_num_fields=11)
             except ValueError:
                 problem(400)
                 return
@@ -963,7 +977,8 @@ def start_panel(
                             problem(409, "Bitte den Ausschnitt erneut testen.", "Run the crop test again.")
                             return
                         current = get_auto_rules()
-                        current.update(crop_mode="manual", crop=settings["crop"], width=settings["width"])
+                        current.update(crop_mode="manual", crop=settings["crop"], width=settings["width"],
+                                       rotation=settings.get("rotation", 0))
                         save_auto_rules(current)
                 except (OSError, ValueError, KeyError, TypeError):
                     problem(503, "Der Ausschnitt konnte nicht gespeichert werden.",
@@ -976,31 +991,33 @@ def start_panel(
                 attempts = form.get("attempts", [])
                 polarity = form.get("polarity", [])
                 crop_mode = form.get("crop_mode", [])
-                crop_text = form.get("crop", [get_auto_rules()["crop"]])
-                width_text = form.get("width", [str(get_auto_rules()["width"])])
                 if (len(decimals) != 1 or decimals[0] not in DECIMALS
                         or len(attempts) != 1 or attempts[0] not in ATTEMPTS
                         or len(polarity) != 1 or polarity[0] not in POLARITIES
-                        or len(crop_mode) != 1 or crop_mode[0] not in CROP_MODES
-                        or len(crop_text) != 1 or len(width_text) != 1):
-                    problem(400)
-                    return
-                if (crop_mode[0] == "manual" and
-                        (not re.fullmatch(r"\d{1,4}\s*,\s*\d{1,4}\s*,\s*\d{1,4}\s*,\s*\d{1,4}", crop_text[0])
-                         or not re.fullmatch(r"\d{1,4}", width_text[0]))):
+                        or len(crop_mode) != 1 or crop_mode[0] not in CROP_MODES):
                     problem(400)
                     return
                 try:
                     with rules_lock:
                         old_rules = get_auto_rules()
-                        crop = crop_text[0] if crop_mode[0] == "manual" else old_rules["crop"]
-                        width = int(width_text[0]) if crop_mode[0] == "manual" else old_rules["width"]
+                        crop = old_rules["crop"]
+                        width = old_rules["width"]
+                        rotation = old_rules.get("rotation", 0)
+                        if crop_mode[0] == "manual":
+                            crop = field("crop", crop)
+                            width = int(field("width", str(width)))
+                            rotation = int(field("rotation", str(rotation)))
+                            crop_coordinates(crop, width, rotation)
+                        max_flow = parse_flow_limit(field(
+                            "max_flow", format_cubic_metres(old_rules.get("max_flow_lph", DEFAULT_FLOW_LPH))
+                        ))
                         save_auto_rules({"decimals": int(decimals[0]), "attempts": int(attempts[0]),
                                          "polarity": polarity[0], "crop_mode": crop_mode[0],
-                                         "crop": crop, "width": width})
+                                         "crop": crop, "width": width, "rotation": rotation,
+                                         "max_flow_lph": max_flow})
                 except ValueError:
-                    problem(400, "Bitte Bildbereich und Vorkommabreite prüfen.",
-                            "Check the image region and whole-digit width.")
+                    problem(400, "Bitte Bildbereich und Durchfluss prüfen.",
+                            "Check the image region and maximum flow.")
                     return
                 except OSError:
                     problem(503)
@@ -1012,8 +1029,6 @@ def start_panel(
             decimals = form.get("decimals", [str(auto_rules["decimals"])])
             attempts = form.get("attempts", [str(auto_rules["attempts"])])
             crop_mode = form.get("crop_mode", ["auto"])
-            crop_text = form.get("crop", [default_crop])
-            whole_width = form.get("width", [str(default_width)])
             if (len(polarity) != 1 or polarity[0] not in POLARITIES or len(decimals) != 1
                     or decimals[0] not in DECIMALS or len(attempts) != 1 or attempts[0] not in ATTEMPTS):
                 problem(400)
@@ -1021,27 +1036,22 @@ def start_panel(
             if len(crop_mode) != 1 or crop_mode[0] not in CROP_MODES:
                 problem(400)
                 return
-            if len(crop_text) != 1 or len(whole_width) != 1:
-                problem(400)
-                return
             crop_value = default_crop
             width_value = default_width
+            rotation = 0
             if crop_mode[0] == "manual":
-                if not re.fullmatch(r"\d{1,4}\s*,\s*\d{1,4}\s*,\s*\d{1,4}\s*,\s*\d{1,4}", crop_text[0]):
+                try:
+                    crop_value = field("crop", default_crop)
+                    width_value = int(field("width", str(default_width)))
+                    rotation = int(field("rotation", "0"))
+                    boundaries = crop_coordinates(crop_value, width_value, rotation)
+                    crop_value = ",".join(map(str, boundaries))
+                except ValueError:
                     problem(400)
                     return
-                boundaries = [int(number.strip()) for number in crop_text[0].split(",")]
-                if not (0 <= boundaries[0] < boundaries[2] <= 1920
-                        and 0 <= boundaries[1] < boundaries[3] <= 1920
-                        and re.fullmatch(r"[0-9]{1,4}", whole_width[0])
-                        and 1 <= int(whole_width[0]) <= boundaries[2] - boundaries[0]):
-                    problem(400)
-                    return
-                crop_value = ",".join(map(str, boundaries))
-                width_value = int(whole_width[0])
             settings = {"polarity": polarity[0], "decimals": int(decimals[0]),
                         "attempts": int(attempts[0]), "crop_mode": crop_mode[0],
-                        "crop": crop_value, "width": width_value}
+                        "crop": crop_value, "width": width_value, "rotation": rotation}
             with request_lock:
                 if progress["phase"] in ("queued", "running", "ocr"):
                     self.redirect("?test=busy" + keep_mode)

@@ -1,7 +1,38 @@
-"""Locate the row of digit frames in the SLFork overlay."""
+"""Validate crop settings and locate digit frames in the SLFork overlay."""
 
 from itertools import pairwise
+import re
 from statistics import median
+
+from PIL import Image
+
+CROP_COORDINATES = re.compile(r"\d{1,4}\s*,\s*\d{1,4}\s*,\s*\d{1,4}\s*,\s*\d{1,4}")
+ROTATIONS = {
+    0: None,
+    90: Image.Transpose.ROTATE_270,
+    180: Image.Transpose.ROTATE_180,
+    270: Image.Transpose.ROTATE_90,
+}
+
+
+def crop_coordinates(text, whole_width, rotation=0):
+    """Check settings in the original image's coordinates before opening the frame."""
+    if not isinstance(text, str) or not CROP_COORDINATES.fullmatch(text):
+        raise ValueError("Ungültige Bildkoordinaten")
+    if type(rotation) is not int or rotation not in ROTATIONS:
+        raise ValueError("Ungültige Bilddrehung")
+    left, top, right, bottom = (int(part) for part in text.split(","))
+    if not (left < right and top < bottom):
+        raise ValueError("Der Ausschnitt muss eine positive Größe haben")
+    width = bottom - top if rotation in (90, 270) else right - left
+    if type(whole_width) is not int or not 1 <= whole_width <= width:
+        raise ValueError("Die Vorkommabreite muss in den gedrehten Ausschnitt passen")
+    return left, top, right, bottom
+
+
+def turn_crop(image, rotation):
+    method = ROTATIONS[rotation]
+    return image.transpose(method) if method is not None else image
 
 
 def find_digit_row(overlay):

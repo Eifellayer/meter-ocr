@@ -1,10 +1,10 @@
-# Gas Meter OCR Verification – Home Assistant App
+# Meter OCR – Home Assistant App
 
 [Deutsch](README.md) · [Project documentation (English)](../README.en.md)
 
-**Independent local OCR verification of mechanical gas meter readings.**
+**Local camera OCR and reference checks for Home Assistant.**
 
-This Home Assistant app takes the latest available gas meter image from **AI on the Edge / SLFork**, or from a compatible Home Assistant camera, reads the digits again with **Tesseract OCR**, and compares the result with an existing reference reading. Designed for the **Pipersberg G4 RF1**.
+This Home Assistant app takes the latest available gas meter image from **AI on the Edge / SLFork**, or from a compatible Home Assistant camera, reads the digits again with **Tesseract OCR**, and optionally compares the result with an existing reference reading. Designed for the **Pipersberg G4 RF1**.
 
 This is an additional plausibility check, **not a certified measurement device**. OCR may be wrong. Read the physical meter for billing and legally relevant measurements. Private hobby project, no warranty or guaranteed support.
 
@@ -12,7 +12,7 @@ This is an additional plausibility check, **not a certified measurement device**
 
 This app is in beta.
 
-Add `https://github.com/Thunder86/rf1-kontrollmessung` under **Settings → Apps → Install app → ⋮ → Repositories**, then install **Gaszähler OCR-Kontrolle**. Set `esp_url` for SLFork, or configure `kamera_entitaet` and an optional `referenz_entitaet` sensor.
+Add `https://github.com/Thunder86/rf1-kontrollmessung` under **Settings → Apps → Install app → ⋮ → Repositories**, then install **Meter OCR**. Set `esp_url` for SLFork, or configure `kamera_entitaet` and an optional `referenz_entitaet` sensor.
 
 For an upgrade from a separate local installation, copy the settings and stop the old app before starting the new one. Both use the same Home Assistant sensor entity IDs, so they should not run together.
 

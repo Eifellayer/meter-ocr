@@ -5,7 +5,7 @@ import io
 import re
 import subprocess
 
-from PIL import ImageFilter, ImageOps
+from PIL import Image, ImageChops, ImageFilter, ImageOps
 
 WINDOW_SECONDS = 24 * 60 * 60
 REQUIRED_MATCHES = 5
@@ -13,17 +13,18 @@ NORMAL_INTERVAL = 60 * 60
 RETRY_INTERVAL = 5 * 60
 REVIEW_AFTER = 4 * 60 * 60
 FRESH_SAMPLE_AGE = 15 * 60
+# Cutoff, sharpening, threshold and optional correction for uneven lighting.
 OCR_PROFILES = (
-    (2, 175, 155),
-    (0, 125, 125),
-    (1, 225, 140),
-    (4, 150, 165),
-    (6, 200, 180),
-    (2, 130, 145),
-    (3, 215, 175),
-    (1, 185, 155),
-    (5, 160, 135),
-    (0, 210, 195),
+    (2, 175, 155, False),
+    (0, 125, 125, False),
+    (1, 225, 140, True),
+    (3, 215, 175, True),
+    (6, 200, 180, True),
+    (2, 130, 145, False),
+    (4, 150, 165, False),
+    (1, 185, 155, True),
+    (5, 160, 135, False),
+    (0, 210, 195, True),
 )
 MAX_OCR_ATTEMPTS = len(OCR_PROFILES)
 
@@ -45,8 +46,23 @@ def read_register(picture, light_digits, digits=5, *, force_polarity=False, prof
     return next(iter(reads)) if len(reads) == 1 else None
 
 
+def reduce_uneven_lighting(image):
+    """Estimate broad shadows on a small image while excluding the dark strokes."""
+    background = image.copy()
+    background.thumbnail((240, 80))
+    kernel = max(5, (background.height // 12) | 1)
+    background = background.filter(ImageFilter.MaxFilter(kernel)).filter(ImageFilter.MinFilter(kernel))
+    low, high = background.resize((6, 2), Image.Resampling.BILINEAR).getextrema()
+    if high - low < 45:
+        return image
+    background = background.resize(image.size, Image.Resampling.BILINEAR)
+    return ImageChops.subtract(image, background, offset=255)
+
+
 def read_polarity(image, digits, profile):
-    cutoff, sharpening, threshold = profile
+    cutoff, sharpening, threshold, reduce_shadows = profile
+    if reduce_shadows:
+        image = reduce_uneven_lighting(image)
     gray = ImageOps.autocontrast(image, cutoff=cutoff)
     variants = (
         gray,

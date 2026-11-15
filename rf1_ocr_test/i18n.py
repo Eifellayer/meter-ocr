@@ -10,7 +10,6 @@ from checks import uncertain_positions
 
 
 EN_UI = {
-    "Gaszähler OCR-Kontrolle": "Gas Meter OCR Verification",
     "Unabhängiger Bildabgleich deines Gaszählerstands mit der vorhandenen Messung. Die OCR liest die Ziffern erneut direkt aus dem Kamerabild – ohne den vom ESP erkannten Wert einfach zu übernehmen.":
         "Independent visual cross-check of your gas meter reading. Local OCR reads the digits again from the camera image instead of simply reusing the ESP's reading.",
     "Automatische Kontrolle": "Automatic verification",
@@ -26,6 +25,12 @@ EN_UI = {
     "Ziffernfarbe": "Digit color",
     "Bildbereich (links, oben, rechts, unten)": "Image region (left, top, right, bottom)",
     "Manueller Ausschnitt (links, oben, rechts, unten)": "Custom crop (left, top, right, bottom)",
+    "Bilddrehung im Uhrzeigersinn": "Clockwise rotation",
+    "Wähle den Ausschnitt im Originalbild. Die Vorkommabreite gilt nach der Drehung.":
+        "Use coordinates from the original image. The whole-digit width applies after rotation.",
+    "Maximaler Durchfluss (m³/h)": "Maximum flow (m³/h)",
+    "Qmax steht auf deinem Zähler. Die Vorgabe für einen G4 beträgt 6 m³/h.":
+        "Check the Qmax value printed on your meter. The default for G4 is 6 m³/h.",
     "Breite der Vorkommastellen": "Width of whole-number digits",
     "Bildbereich": "Image region",
     "Speichern": "Save",
@@ -152,6 +157,10 @@ EN_UI = {
 }
 
 EN_DETAILS = {
+    "Zählerstand liegt unter dem letzten gültigen Wert.": "Reading is lower than the last accepted value.",
+    "Zählerstand steigt schneller als der eingestellte Durchfluss erlaubt.":
+        "Reading increased faster than the configured maximum flow.",
+    "Messzeitpunkt liegt vor der letzten gültigen Messung.": "The reading is older than the last accepted measurement.",
     "Der gelesene Stand liegt unter dem letzten OCR-Stand. Bitte das Kamerabild prüfen.":
         "Reading lower than the previous OCR value. Check the image.",
     "Bild oder Messwert fehlt. Verbindung prüfen.": "Image or reading unavailable. Check the connection.",

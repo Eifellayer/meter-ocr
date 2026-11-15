@@ -8,7 +8,6 @@ import io
 import json
 import os
 from pathlib import Path
-import re
 import subprocess
 from queue import Empty, Queue
 from tempfile import NamedTemporaryFile
@@ -24,7 +23,9 @@ from checks import (
     explain_uncertain_positions, meter_prefix,
     rolling_summary, sample_epoch, sample_timestamp, schedule_next_check,
 )
-from layout import find_digit_row
+from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, MAX_FLOW_LPH, ImplausibleReading,
+                         accumulate_consumption, format_cubic_metres)
+from layout import crop_coordinates, find_digit_row, turn_crop
 from reminder import Reminder
 from notification_settings import (DEFAULT_DELIVERY_HOURS, DEFAULT_REVIEW_MINUTES, PUSH_SERVICE,
                                    notification_rules)
@@ -50,6 +51,7 @@ ENTITY = "sensor.rf1_kontrollbild"
 CORE_URL = f"http://supervisor/core/api/states/{ENTITY}"
 CHECK_ENTITY = "sensor.rf1_pruefstatus"
 OCR_ENTITY = "sensor.rf1_ocr_zaehlerstand"
+CONSUMPTION_ENTITY = "sensor.rf1_verbrauch_gesamt"
 MAX_IMAGE_PIXELS = 4_000_000
 Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
 
@@ -133,7 +135,7 @@ def capture_camera(camera, reference, token, zone):
     }
 
 
-def select_register(frame, overlay, manual_crop, manual_width):
+def select_register(frame, overlay, manual_crop, manual_width, rotation=0):
     if overlay is not None:
         try:
             with Image.open(io.BytesIO(overlay)) as annotated:
@@ -144,7 +146,7 @@ def select_register(frame, overlay, manual_crop, manual_width):
                         return crop_register(frame, crop), width, boxes[:5], boxes[5:], "auto"
         except (OSError, ValueError, Image.DecompressionBombError):
             pass
-    register = crop_register(frame, manual_crop)
+    register = turn_crop(crop_register(frame, manual_crop), rotation)
     if not 0 < manual_width <= register.width:
         raise ValueError("vorkomma_breite liegt außerhalb des Ausschnitts")
     # Ohne Rahmen teilt der konfigurierte Ausschnitt den Rest in drei Rollen.
@@ -310,6 +312,21 @@ def publish_standalone(history, camera, token):
     publish_state(f"http://supervisor/core/api/states/{OCR_ENTITY}", payload, token)
 
 
+def publish_consumption(history, token):
+    consumption = history.get("consumption")
+    if consumption is not None:
+        payload = {
+            "state": format_cubic_metres(consumption["total_litres"]),
+            "attributes": {
+                "friendly_name": "Meter OCR Gasverbrauch gesamt",
+                "unit_of_measurement": "m³",
+                "device_class": "gas",
+                "state_class": "total_increasing",
+            },
+        }
+        publish_state(f"http://supervisor/core/api/states/{CONSUMPTION_ENTITY}", payload, token)
+
+
 def publish_state(url, payload, token):
     request = Request(
         url, data=json.dumps(payload).encode("utf-8"), method="POST",
@@ -382,7 +399,8 @@ def main():
     default_attempts = options["ocr_versuche"]
     auto_rules = {"decimals": default_decimals, "attempts": default_attempts, "polarity": "auto",
                   "crop_mode": "auto", "crop": options["ausschnitt"],
-                  "width": options["vorkomma_breite"]}
+                  "width": options["vorkomma_breite"], "rotation": 0,
+                  "max_flow_lph": DEFAULT_FLOW_LPH}
     try:
         saved_rules = json.loads(AUTO_RULES.read_text(encoding="utf-8"))
         if (type(saved_rules.get("decimals")) is int and 0 <= saved_rules["decimals"] <= 3
@@ -393,14 +411,22 @@ def main():
             crop_mode = saved_rules.get("crop_mode", "auto")
             crop_text = saved_rules.get("crop", options["ausschnitt"])
             width = saved_rules.get("width", options["vorkomma_breite"])
-            crop_valid = (isinstance(crop_text, str) and
-                          re.fullmatch(r"\d{1,4}\s*,\s*\d{1,4}\s*,\s*\d{1,4}\s*,\s*\d{1,4}", crop_text)
-                          and type(width) is int and 1 <= width <= 1920)
-            if crop_mode not in ("auto", "manual") or not crop_valid:
-                crop_mode, crop_text, width = "auto", options["ausschnitt"], options["vorkomma_breite"]
+            rotation = saved_rules.get("rotation", 0)
+            try:
+                crop_coordinates(crop_text, width, rotation)
+                if crop_mode not in ("auto", "manual"):
+                    raise ValueError("Ungültiger Ausschnittmodus")
+            except ValueError:
+                crop_mode, crop_text, width, rotation = (
+                    "auto", options["ausschnitt"], options["vorkomma_breite"], 0
+                )
+            max_flow = saved_rules.get("max_flow_lph", DEFAULT_FLOW_LPH)
+            if type(max_flow) is not int or not 1 <= max_flow <= MAX_FLOW_LPH:
+                max_flow = DEFAULT_FLOW_LPH
             auto_rules = {"decimals": saved_rules["decimals"],
                           "attempts": saved_rules["attempts"], "polarity": polarity,
-                          "crop_mode": crop_mode, "crop": crop_text, "width": width}
+                          "crop_mode": crop_mode, "crop": crop_text, "width": width, "rotation": rotation,
+                          "max_flow_lph": max_flow}
         else:
             print("Ungültige gespeicherte Automatikregeln; verwende die App-Konfiguration.")
     except FileNotFoundError:
@@ -416,16 +442,14 @@ def main():
         if (type(values.get("decimals")) is not int or not 0 <= values["decimals"] <= 3
                 or type(values.get("attempts")) is not int or not 1 <= values["attempts"] <= 10
                 or values.get("polarity") not in ("auto", "light", "dark")
-                or values.get("crop_mode") not in ("auto", "manual")
-                or type(values.get("width")) is not int or not 1 <= values["width"] <= 1920
-                or not isinstance(values.get("crop"), str)
-                or not re.fullmatch(r"\d{1,4}\s*,\s*\d{1,4}\s*,\s*\d{1,4}\s*,\s*\d{1,4}", values["crop"])):
+                or values.get("crop_mode") not in ("auto", "manual")):
             raise ValueError("Ungültige Einstellungen für die automatische Kontrolle")
-        coords = [int(part.strip()) for part in values["crop"].split(",")]
-        if not (0 <= coords[0] < coords[2] <= 1920 and 0 <= coords[1] < coords[3] <= 1920
-                and values["width"] <= coords[2] - coords[0]):
-            raise ValueError("Ungültiger Ausschnitt oder zu große Vorkommabreite")
-        updated_rules = dict(values)
+        rotation = values.get("rotation", 0)
+        coords = crop_coordinates(values["crop"], values["width"], rotation)
+        max_flow = values.get("max_flow_lph", DEFAULT_FLOW_LPH)
+        if type(max_flow) is not int or not 1 <= max_flow <= MAX_FLOW_LPH:
+            raise ValueError("Ungültiger maximaler Durchfluss")
+        updated_rules = {**values, "rotation": rotation, "max_flow_lph": max_flow}
         updated_rules["crop"] = ",".join(str(part) for part in coords)
         atomic_write(AUTO_RULES, json.dumps(updated_rules, indent=2).encode("utf-8"), 0o600)
         auto_rules = updated_rules
@@ -512,6 +536,7 @@ def main():
                     if standalone or published_standalone:
                         publish_standalone(history, camera if standalone else "", token)
                         published_standalone = standalone
+                    publish_consumption(history, token)
                 except OSError as error:
                     print(f"Prüfstatus konnte nicht übertragen werden: {error}")
                 check_reminder(reminder, history, now, review_after)
@@ -532,7 +557,9 @@ def main():
             updated.pop("last_match_at", None)
             updated.pop("failure_since", None)
         updated["check_source"] = source_key
-        standalone_detail = None
+        validation_detail = None
+        new_consumption = None
+        new_standalone = None
         # Confirmations obtained with another precision are not valid evidence
         # for the newly chosen automatic comparison rules.
         if history.get("comparison_decimals", decimals) != decimals:
@@ -572,20 +599,18 @@ def main():
                     ocr_readings = []
                     ocr_error = None
                     try:
-                        # Manual crop is a diagnostic override for this test only.
+                        crop_rules = manual_options if manual else active_rules
                         manual_crop = crop
                         manual_width = options["vorkomma_breite"]
                         selected_overlay = overlay
-                        if manual and manual_options.get("crop_mode") == "manual":
-                            manual_crop = tuple(int(part.strip()) for part in manual_options["crop"].split(","))
-                            manual_width = manual_options["width"]
-                            selected_overlay = None
-                        elif not manual and active_rules["crop_mode"] == "manual":
-                            manual_crop = tuple(int(part.strip()) for part in active_rules["crop"].split(","))
-                            manual_width = active_rules["width"]
+                        rotation = 0
+                        if crop_rules["crop_mode"] == "manual":
+                            rotation = crop_rules.get("rotation", 0)
+                            manual_width = crop_rules["width"]
+                            manual_crop = crop_coordinates(crop_rules["crop"], manual_width, rotation)
                             selected_overlay = None
                         register, integer_width, whole_boxes, fraction_boxes, source = select_register(
-                            frame, selected_overlay, manual_crop, manual_width
+                            frame, selected_overlay, manual_crop, manual_width, rotation
                         )
                         read = partial(
                             read_visible_digits,
@@ -612,14 +637,23 @@ def main():
                         register, ocr, source = frame, None, "unavailable"
                         ocr_confirmed, ocr_attempts = True, 0
                     if not manual:
-                        if standalone and ocr_confirmed and ocr is not None:
-                            reading = standalone_reading(camera, sample, ocr, decimals, history.get("standalone_reading"))
-                            if reading is None:
+                        reading_status, _ = compare_sample(sample, ocr, decimals, ocr_confirmed=ocr_confirmed)
+                        if reading_status == "match" or (standalone and reading_status == "ocr_only"):
+                            try:
+                                if standalone:
+                                    new_standalone = standalone_reading(
+                                        camera, sample, ocr, decimals, history.get("standalone_reading")
+                                    )
+                                    if new_standalone is None:
+                                        raise ImplausibleReading(LOWER_READING)
+                                new_consumption = accumulate_consumption(
+                                    history.get("consumption", {}), source_key, captured, ocr, decimals,
+                                    active_rules["max_flow_lph"],
+                                )
+                            except ImplausibleReading as error:
                                 ocr_confirmed = False
-                                standalone_detail = ("Der gelesene Stand liegt unter dem letzten OCR-Stand. "
-                                                     "Bitte das Kamerabild prüfen.")
-                            else:
-                                updated["standalone_reading"] = reading
+                                validation_detail = str(error)
+                                new_standalone = None
                         jpeg, size = transfer_jpeg(register)
                 if manual:
                     image_time = sample_timestamp(sample, zone)
@@ -660,9 +694,13 @@ def main():
                                    ocr_confirmed=ocr_confirmed):
                     atomic_write(DESTINATION, picture, 0o644)
                     outcome = updated["status"]
+                    if new_consumption is not None:
+                        updated["consumption"] = new_consumption
+                    if new_standalone is not None:
+                        updated["standalone_reading"] = new_standalone
                     updated["ocr_readings"] = ocr_readings if outcome == "ocr_unclear" else []
                     if outcome == "ocr_unclear":
-                        updated["check_detail"] = standalone_detail or ocr_error or explain_uncertain_positions(ocr_readings, decimals)
+                        updated["check_detail"] = validation_detail or ocr_error or explain_uncertain_positions(ocr_readings, decimals)
                     if outcome == "match":
                         atomic_write(GOOD_IMAGE, picture, 0o644)
                     data = {**sample, "crop_source": source, "ocr_attempts": ocr_attempts}
@@ -733,6 +771,7 @@ def main():
             if standalone or published_standalone:
                 publish_standalone(history, camera if standalone else "", token)
                 published_standalone = standalone
+            publish_consumption(history, token)
         except OSError as error:
             print(f"Home Assistant konnte nicht aktualisiert werden: {error}")
         check_reminder(reminder, history, now, review_after)

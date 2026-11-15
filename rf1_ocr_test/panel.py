@@ -32,12 +32,12 @@ button:not(:disabled):hover{{background:light-dark(#ccdce6,#445e70)}}
 button:disabled{{opacity:.65;cursor:wait}}
 button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible{{outline:3px solid #65bcaf;outline-offset:2px}}
 input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem;max-width:100%;background:var(--surface);border:1px solid var(--edge);color:inherit}}
-.manual-panel summary{{display:flex;align-items:center;justify-content:space-between;gap:1rem;cursor:pointer;list-style:none}}
-.manual-panel summary::-webkit-details-marker{{display:none}}
-.manual-panel summary::after{{content:"▾";font-size:1.2rem;color:var(--muted)}}
-.manual-panel[open] summary::after{{content:"▴"}}
+.manual-panel > summary{{display:flex;align-items:center;justify-content:space-between;gap:1rem;cursor:pointer;list-style:none}}
+.manual-panel > summary::-webkit-details-marker{{display:none}}
+.manual-panel > summary::after{{content:"▾";font-size:1.2rem;color:var(--muted)}}
+.manual-panel[open] > summary::after{{content:"▴"}}
 .manual-content{{margin-top:1.2rem;padding-top:1rem;border-top:1px solid var(--edge)}}
-.manual-panel summary small{{font-weight:400;color:var(--muted)}}
+.manual-panel > summary small{{font-weight:400;color:var(--muted)}}
 .settings-note{{font-size:.85rem;color:var(--muted);margin:.7rem 0 0}}
 .save-notice{{font-size:.88rem;color:light-dark(#1e7650,#8ad4a9);margin:.7rem 0 0}}
 .crop-fields{{display:flex;gap:.8rem;flex-wrap:wrap;margin-top:.7rem}}
@@ -60,7 +60,7 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .page-footer a:hover{{color:light-dark(#1c5d77,#9bcbe8)}}
 [hidden]{{display:none!important}}
 .hint{{font-size:.85rem;color:var(--muted);margin:1rem 0 0;line-height:1.55}}
-.test-box{{border:1px solid var(--edge);background:light-dark(#f6faf9,#192e2c);border-radius:.8rem;padding:.95rem 1rem;margin:1rem 0 0;display:grid;gap:.35rem}}
+.test-box{{border:1px solid var(--edge);background:light-dark(#f5f7f9,#1d2832);border-radius:.8rem;padding:.95rem 1rem;margin:1rem 0 0;display:grid;gap:.35rem}}
 .test-box strong{{font-size:.94rem;color:inherit}}
 .test-box[data-result="match"]{{border-color:light-dark(#9dceb2,#40785f);background:light-dark(#f0f8f2,#1b3029)}}
 .test-box[data-result="match"] strong{{color:light-dark(#1e7650,#8ad4a9)}}
@@ -435,8 +435,9 @@ def start_panel(
                           else f'{auto_rules["decimals"]} Nachkommastelle(n)')
             polarity_label = {"auto": "Farbe automatisch", "light": "helle Ziffern",
                               "dark": "dunkle Ziffern"}[auto_rules["polarity"]]
+            crop_label = "fester Bildausschnitt" if auto_rules["crop_mode"] == "manual" else "Bildausschnitt automatisch"
             auto_rule_description = (f'{rule_label} · max. {auto_rules["attempts"]} OCR-Versuche '
-                                     f'· {polarity_label}')
+                                     f'· {polarity_label} · {crop_label}')
             if (history.get("comparison_decimals") is not None
                     and history["comparison_decimals"] != auto_rules["decimals"]):
                 values["detail"] = ("Neue Vergleichsgenauigkeit gespeichert. Die nächste automatische "
@@ -579,7 +580,7 @@ def start_panel(
                 if not (0 <= boundaries[0] < boundaries[2] <= 1920
                         and 0 <= boundaries[1] < boundaries[3] <= 1920
                         and re.fullmatch(r"[0-9]{1,4}", whole_width[0])
-                        and 1 <= int(whole_width[0]) <= 1920):
+                        and 1 <= int(whole_width[0]) <= boundaries[2] - boundaries[0]):
                     self.send_error(400)
                     return
                 crop_value = ",".join(map(str, boundaries))

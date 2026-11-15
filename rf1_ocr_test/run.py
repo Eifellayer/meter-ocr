@@ -45,6 +45,7 @@ MAX_TRANSFER_BYTES = 11_000
 DESTINATION = Path(f"/media/{NAMESPACE}/kontrollbild.jpg")
 GOOD_IMAGE = Path(f"/media/{NAMESPACE}/letzter_treffer.jpg")
 TEST_IMAGE = Path("/data/ocr-testvorschau.jpg")
+AUTOMATIC_PREVIEW = Path("/data/ocr-automatikvorschau.jpg")
 TEST_SOURCE_IMAGE = Path("/data/ocr-testbild.jpg")
 HISTORY = Path("/data/kontrollmessung.json")
 OPTIONS = Path("/data/options.json")
@@ -409,6 +410,8 @@ def main():
         raise ValueError("referenz_entitaet muss ein Home-Assistant-Sensor sein")
     configured_source = dict(mode="camera" if camera else "slfork", url=options["esp_url"],
                   camera=camera, reference=reference)
+    default_source = dict(configured_source)
+    initial_setup_pending = setup_pending
     initial_source_key = [configured_source["mode"], camera or configured_source["url"].rstrip("/"), reference if camera else ""]
     try:
         configured_source = source_rules(json.loads(SOURCE_SETTINGS.read_text(encoding="utf-8")))
@@ -436,6 +439,7 @@ def main():
                   "max_flow_lph": DEFAULT_FLOW_LPH, "interval_minutes": DEFAULT_INTERVAL_MINUTES,
                   "integer_digits": 5, "fraction_digits": 3, "meter_display": "rollers",
                   "fallback_value": "", "fallback_time": ""}
+    default_auto_rules = dict(auto_rules)
     try:
         saved_rules = json.loads(AUTO_RULES.read_text(encoding="utf-8"))
         if (type(saved_rules.get("decimals")) is int and 0 <= saved_rules["decimals"] <= 3
@@ -557,6 +561,7 @@ def main():
         legacy_push = ""
     delivery = dict(enabled=bool(legacy_push), review_minutes=DEFAULT_REVIEW_MINUTES, delivery_hours=DEFAULT_DELIVERY_HOURS,
                     push=legacy_push, target="")
+    default_delivery = dict(delivery)
     try:
         delivery = notification_rules(json.loads(NOTIFICATIONS.read_text(encoding="utf-8")))
     except FileNotFoundError:
@@ -573,19 +578,75 @@ def main():
         atomic_write(NOTIFICATIONS, json.dumps(validated).encode("utf-8"), 0o600)
         delivery = validated
 
+    reset_requested = Event()
+    reset_finished = Event()
+    reset_result = {"value": "pending"}
+
+    def request_factory_reset():
+        if reset_requested.is_set():
+            return "pending"
+        reset_finished.clear()
+        reset_result["value"] = "pending"
+        reset_requested.set()
+        wake_worker.set()
+        if reset_finished.wait(timeout=60):
+            return reset_result["value"]
+        return "pending"
+
+    def skip_setup():
+        nonlocal setup_pending
+        setup_pending = False
+        snapshot["setup_pending"] = False
+        atomic_write(EFFECTIVE_OPTIONS, json.dumps(snapshot, indent=2).encode("utf-8"), 0o600)
+        wake_worker.set()
+
     _, update_progress = start_panel(
         HISTORY, DESTINATION, GOOD_IMAGE, requested, default_decimals, default_attempts,
         get_auto_rules, save_auto_rules, options["ausschnitt"], options["vorkomma_breite"], TEST_IMAGE,
         partial(load_preferences, LANGUAGE_MODES), save_language_modes, get_delivery, save_delivery, get_source, save_source,
-        wake_worker.set, test_source_image=TEST_SOURCE_IMAGE,
+        wake_worker.set, test_source_image=TEST_SOURCE_IMAGE, automatic_preview=AUTOMATIC_PREVIEW,
+        request_factory_reset=request_factory_reset, skip_setup=skip_setup,
     )
     reminder = Reminder(token)
     pending_image = None
     startup = True
     published_standalone = bool(history.get("standalone_reading"))
     print(f"{APP_NAME} gestartet")
+
+    def perform_factory_reset():
+        nonlocal history, configured_source, setup_pending, auto_rules, delivery
+        nonlocal pending_image, startup, published_standalone, snapshot
+        try:
+            reminder.clear_for_reset(history)
+            paths = (
+                HISTORY, AUTO_RULES, SOURCE_SETTINGS, NOTIFICATIONS, LANGUAGE_MODES,
+                HISTORY.with_name("manual-test-settings.json"), DESTINATION, GOOD_IMAGE,
+                TEST_IMAGE, TEST_SOURCE_IMAGE, AUTOMATIC_PREVIEW,
+            )
+            for path in paths:
+                path.unlink(missing_ok=True)
+            history = {}
+            configured_source = dict(default_source)
+            setup_pending = True
+            auto_rules = dict(default_auto_rules)
+            delivery = dict(default_delivery)
+            pending_image = None
+            startup = True
+            published_standalone = False
+            snapshot = {**snapshot, "setup_pending": True}
+            atomic_write(EFFECTIVE_OPTIONS, json.dumps(snapshot, indent=2).encode("utf-8"), 0o600)
+            reset_result["value"] = "done"
+        except (OSError, ValueError, TypeError) as error:
+            print(f"Werkreset konnte nicht abgeschlossen werden: {type(error).__name__}")
+            reset_result["value"] = "failed"
+
     while True:
         wake_worker.clear()
+        if reset_requested.is_set():
+            reset_requested.clear()
+            perform_factory_reset()
+            reset_finished.set()
+            continue
         active_rules = get_auto_rules()
         interval_minutes = active_rules["interval_minutes"]
         if reschedule_next_check(history, interval_minutes):
@@ -866,6 +927,15 @@ def main():
                         sample, image_time, ocr, ocr_readings, history.get("consumption", {}),
                         source_key, active_rules["max_flow_lph"], integer_digits,
                     )
+                if not manual and ocr_attempts and source != "unavailable":
+                    try:
+                        preview = draw_test_preview(register, integer_width, whole_boxes,
+                                                    fraction_boxes, ocr, integer_digits, fraction_digits)
+                        with io.BytesIO() as buffer:
+                            preview.save(buffer, "JPEG", quality=88, optimize=True)
+                            atomic_write(AUTOMATIC_PREVIEW, buffer.getvalue(), 0o600)
+                    except (OSError, ValueError) as error:
+                        print(f"Automatische OCR-Vorschau konnte nicht erstellt werden: {error}")
                 if manual:
                     already_checked = (image_time == history.get("last_epoch")
                                        or image_time in history.get("confirmations", ()))

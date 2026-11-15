@@ -47,6 +47,15 @@ form label,form select,form input{{min-width:0}}
 header{{display:flex;align-items:baseline;justify-content:space-between;gap:.5rem 1rem;flex-wrap:wrap;margin-bottom:1rem}}
 .language-bar{{display:flex;flex-wrap:wrap}}
 .language-bar select,.language-bar button{{min-height:2.75rem}}
+.main-tabs{{display:flex;gap:.45rem;padding:.35rem;margin:0 0 1rem;border:1px solid var(--edge);border-radius:.85rem;background:var(--surface)}}
+.main-tabs button{{flex:1;min-height:2.8rem;background:transparent;border-color:transparent;color:var(--muted)}}
+.main-tabs button[aria-selected="true"]{{background:light-dark(#e7f0f5,#293b48);border-color:var(--edge);color:inherit}}
+.setup-dialog{{width:min(46rem,calc(100vw - 1.2rem));max-height:min(90dvh,52rem);overflow:auto;padding:1rem 1.2rem;border:1px solid var(--edge);border-radius:1rem;background:var(--surface);color:inherit;box-shadow:0 1rem 3rem #0004}}
+.setup-dialog::backdrop{{background:#07121dcc;backdrop-filter:blur(2px)}}
+.setup-dialog .manual-content{{margin-top:.5rem}}
+.dialog-heading{{display:flex;align-items:center;justify-content:space-between;gap:.75rem;margin-bottom:.5rem}}
+.dialog-heading h2{{margin:0}}
+.tab-content[hidden]{{display:none}}
 .automatic-images{{margin:1rem 0}}
 .check-option{{display:flex;align-items:center;gap:.5rem;grid-column:1/-1}}
 .check-option input{{min-height:1.15rem;width:1.15rem;margin:0}}
@@ -63,6 +72,9 @@ header{{display:flex;align-items:baseline;justify-content:space-between;gap:.5re
 @media(max-width:500px){{.automatic-banner{{flex-wrap:wrap}}.automatic-banner-text{{flex:1;min-width:0}}}}
 .notification-help li + li{{margin-top:.35rem}}
 .automatic-images > summary{{cursor:pointer;color:var(--muted)}}
+.dashboard-help{{margin:.8rem 0;color:var(--muted)}}
+.dashboard-help summary{{cursor:pointer}}
+.dashboard-help pre{{overflow:auto;padding:.75rem;border-radius:.6rem;background:light-dark(#edf1f4,#202b34);color:inherit;font-size:.85rem}}
 .test-box :where(p,small){{overflow-wrap:anywhere}}
 label{{display:grid;gap:.3rem;font-weight:600;font-size:.85rem;color:var(--muted)}}
 select,button{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem}}
@@ -88,8 +100,14 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .settings-item{{border-top:1px solid var(--edge)}}
 .settings-item summary{{min-height:2.75rem;padding:.45rem 0}}
 .settings-item .manual-content{{margin:0;padding:0 0 1rem;border-top:0}}
+.check-card-heading{{display:flex;align-items:center;justify-content:space-between;gap:.65rem;flex-wrap:wrap;margin-bottom:.8rem}}
+.check-card-heading h2{{margin:0}}
+.check-actions{{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}}
 .manual-test-heading{{display:flex;align-items:center;justify-content:space-between;gap:.65rem;flex-wrap:wrap}}
 .manual-test-heading h2{{margin:0}}
+.manual-reference-entry{{display:flex;align-items:end;gap:.75rem;flex-wrap:wrap;margin-top:1rem;padding-top:1rem;border-top:1px solid var(--edge)}}
+.manual-reference-entry label{{flex:1 1 15rem}}
+.manual-reference-entry p{{flex:2 1 18rem;margin:0 0 .55rem;color:var(--muted);font-size:.85rem}}
 #manual-panel{{margin-top:.8rem}}
 .settings-note{{font-size:.85rem;color:var(--muted);margin:.7rem 0 0}}
 .save-notice{{font-size:.88rem;color:light-dark(#1e7650,#8ad4a9);margin:.7rem 0 0}}
@@ -155,7 +173,18 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <noscript><button type="submit">Speichern</button></noscript>
 </form>
 </header>
-<div class="panel"><h2>Automatische Kontrolle</h2>
+<nav class="main-tabs" role="tablist" aria-label="Hauptmenü">
+<button type="button" role="tab" id="tab-overview" aria-controls="view-overview" aria-selected="true">Übersicht</button>
+<button type="button" role="tab" id="tab-settings" aria-controls="view-settings" aria-selected="false" tabindex="-1">Einstellungen</button>
+</nav>
+<main>
+<div class="tab-content" id="view-overview" role="tabpanel" aria-labelledby="tab-overview" {overview_hidden}>
+<div class="panel" id="check-overview">
+<div class="check-card-heading"><h2>Automatische Kontrolle</h2>
+<div class="check-actions">
+<button type="button" id="open-manual-settings">Test einstellen</button>
+<button id="start-check" type="submit" form="manual-form">Test starten</button>
+</div></div>
 <div class="automatic-banner" id="automatic-banner" data-tone="{automatic_tone}"
  data-incident="{automatic_incident}" data-preference-key="{banner_preference_key}">
 <span class="automatic-banner-icon" aria-hidden="true">{automatic_icon}</span>
@@ -180,16 +209,24 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <p>? steht für eine unklare Ziffer.</p>
 <table><thead><tr><th>Versuch</th><th>Erkannter Stand</th></tr></thead><tbody></tbody></table>
 </details>
-<details class="automatic-images"><summary>Kontrollbilder</summary>
-<section><div><h2>Aktuelles Bild</h2><div id="automatic-current">{current}</div></div>
-<div><h2>Letzter Treffer</h2><div id="automatic-good">{good}</div></div></section>
+<details class="dashboard-help">
+<summary>Stand im Home-Assistant-Dashboard anzeigen</summary>
+<p>Wenn Meter OCR selbst aus einer ESPHome- oder Home-Assistant-Kamera liest, kannst du den Sensor „OCR-Zählerstand“ zum Dashboard hinzufügen. Seine Entitäts-ID lautet <code>sensor.rf1_ocr_zaehlerstand</code>.</p>
+<p>Oder füge diese kurze YAML-Konfiguration in eine manuelle Karte ein:</p>
+<pre><code>type: entity
+entity: sensor.rf1_ocr_zaehlerstand
+name: Zählerstand (OCR)</code></pre>
 </details>
+<details class="automatic-images" id="automatic-images"><summary>Erkennungsbild</summary>
+<div class="preview" id="test-preview" data-auto-src="{automatic_preview_src}" data-auto-version="{automatic_preview_version}" data-auto-available="{automatic_preview_available}" {automatic_preview_hidden}>
+<h2 id="preview-heading">Letzte automatische Erkennung</h2>
+<img id="test-preview-image" src="{automatic_preview_src}" alt="Zählerbild mit grün markierten erkannten Ziffern und rot markierten unklaren Stellen">
+<p class="legend"><span class="green-key">Grün:</span> Ziffer wurde gelesen · <span class="red-key">Rot:</span> Ziffer unklar. Die Farbrahmen zeigen die OCR-Erkennung, nicht die Übereinstimmung mit dem Referenzstand. Ohne automatisch erkannte Ziffernrahmen sind die Bereiche nur näherungsweise aufgeteilt.</p>
 </div>
-<div class="panel" id="manual-test">
-<div class="manual-test-heading">
-<h2>Manueller Test</h2>
-<button id="start-check" type="submit" form="manual-form">Test starten</button>
-</div>
+</details>
+<div class="manual-test-area" id="manual-test-area" {manual_area_hidden}>
+<div class="manual-test-heading"><h2>Manueller Test</h2>
+<button type="button" id="close-manual-test">Schließen</button></div>
 <div class="test-box" id="test-box" data-phase="idle" data-result="neutral" tabindex="-1" {test_hidden} role="status" aria-live="polite">
 <strong id="test-head">Aktueller Schritt: Bereit</strong>
 <p id="test-status">{request_status}</p>
@@ -209,12 +246,12 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <tbody></tbody></table>
 </details>
 </div>
-<div class="preview" id="test-preview" hidden>
-<h2>OCR-Testbild mit erkannten Stellen</h2>
-<img id="test-preview-image" alt="Zählerbild mit grün markierten erkannten Ziffern und rot markierten unklaren Stellen">
-<p class="legend"><span class="green-key">Grün:</span> Ziffer wurde gelesen · <span class="red-key">Rot:</span> Ziffer unklar. Die Farbrahmen zeigen die OCR-Erkennung, nicht die Übereinstimmung mit dem Referenzstand. Ohne automatisch erkannte Ziffernrahmen sind die Bereiche nur näherungsweise aufgeteilt.</p>
-</div>
 {test_source_preview}
+<div class="manual-reference-entry">
+<label for="manual-reference-entry">Fallback-Wert für diesen Test (optional)
+<input id="manual-reference-entry" name="manual_reference" form="manual-form" value="{manual_reference}" inputmode="decimal" maxlength="16" placeholder="z. B. 10446,337"></label>
+<p>Am markierten Bild ablesen und hier eintragen. Der Wert wird nur mit dem manuellen Test verglichen und nicht als automatische Referenz gespeichert.</p>
+</div>
 <form method="post" action="ausschnitt-uebernehmen" id="apply-crop-form" class="apply-crop" hidden>
 <input type="hidden" name="checked_at" id="tested-crop-id">
 <input type="hidden" name="lang" value="{language}">
@@ -236,9 +273,6 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <select name="decimals">{decimal_options}</select></label>
 <label>Max. OCR-Versuche
 <select name="attempts">{attempt_options}</select></label>
-<label>Fallback-Wert für diesen Test (optional)
-<input name="manual_reference" value="{manual_reference}" inputmode="decimal" maxlength="16" placeholder="z. B. 10446,337"></label>
-<p class="settings-note">Lass den Test zuerst das aktuelle Kamerabild laden. Lies den Stand am Bild ab und trage ihn hier ein, wenn du diesen einzelnen OCR-Test damit vergleichen möchtest. Der Wert wird nicht dauerhaft als automatische Referenz gespeichert.</p>
 <label>Bildbereich
 <select name="crop_mode" id="crop-mode">{crop_mode_options}</select></label>
 <div class="crop-fields" id="crop-fields" hidden>
@@ -256,9 +290,17 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <p>Die App verwendet das letzte vorhandene Zählerbild, ohne eine neue Aufnahme zu starten. Sie liest die Zahlen aus dem Bild und vergleicht sie mit dem Referenzwert. Sobald die Werte übereinstimmen, stoppt die Prüfung. Andernfalls werden höchstens so viele OCR-Versuche durchgeführt wie eingestellt (1–10). Der Test verändert die automatische Trefferzahl nicht.</p></details>
 </div></details>
 </div>
+</div>
+</div>
+<div class="tab-content" id="view-settings" role="tabpanel" aria-labelledby="tab-settings" {settings_hidden}>
 <div class="panel" id="settings"><h2>Einstellungen</h2>
-<details class="manual-panel settings-item" id="setup-wizard" {wizard_open}>
-<summary><strong>Einrichtungsassistent</strong></summary>
+<dialog class="setup-dialog" id="setup-dialog" aria-labelledby="setup-title" data-first-run="{setup_first_run}">
+<div class="dialog-heading"><h2 id="setup-title">Einrichtungsassistent</h2>
+<form method="post" action="einrichtung-ueberspringen" id="setup-skip-form">
+<input type="hidden" name="lang" value="{language}"><input type="hidden" name="mode" value="{language_mode}">
+<input type="hidden" name="csrf" value="{csrf}">
+<button type="submit" id="setup-skip">Später einrichten</button></form></div>
+<p class="settings-note">Du kannst die Einrichtung jederzeit über „Einrichtung öffnen“ erneut starten.</p>
 <div class="manual-content">
 <p class="settings-note">Einmal Schritt für Schritt einrichten oder später einzelne Angaben ändern. Deine aktuellen Einstellungen sind vorausgefüllt.</p>
 <form method="post" action="einrichtung" id="setup-form">
@@ -310,8 +352,9 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <div id="setup-error" class="setup-warning" hidden></div>
 </form>
 <button type="button" id="setup-open-manual">Manuellen Bildtest mit Testbild öffnen</button>
+</div>
+</dialog>
 {wizard_saved_notice}
-</div></details>
 <details class="manual-panel settings-item" id="source-settings" {source_open}>
 <summary><strong>Bildquelle</strong></summary>
 <div class="manual-content">
@@ -369,8 +412,8 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <button type="submit">Speichern</button>
 </form>
 <p class="settings-note">Das Prüfintervall gilt auch für die bereits geplante nächste Prüfung. Bei geänderter Vergleichsgenauigkeit beginnt die Trefferzählung neu.</p>
-{auto_saved_notice}
 </div></details>
+{auto_saved_notice}
 <details class="manual-panel settings-item" id="notification-settings" {notifications_open}>
 <summary><strong>Benachrichtigungen</strong></summary>
 <div class="manual-content">
@@ -400,7 +443,26 @@ Bei anhaltenden Problemen benachrichtigen
 </ul></details>
 {notification_saved_notice}
 </div></details>
+<details class="settings-item reset-section">
+<summary><strong>App-Daten zurücksetzen</strong></summary>
+<div class="manual-content">
+<p class="settings-note">Setzt die Meter-OCR-Einstellungen und Prüfhistorie auf Standardwerte zurück und entfernt gespeicherte Testbilder. Die Home-Assistant-App-Konfiguration und vorhandenen Entitäten bleiben erhalten.</p>
+<button type="button" id="open-reset">Auf Werkseinstellungen zurücksetzen</button>
+</div></details>
+{reset_notice}
 </div>
+<dialog class="setup-dialog" id="reset-dialog" aria-labelledby="reset-title">
+<h2 id="reset-title">Werkseinstellungen wiederherstellen?</h2>
+<p>Gespeicherte Bildquelle, OCR- und Benachrichtigungseinstellungen, Prüfhistorie und Testbilder werden zurückgesetzt. Home-Assistant-App-Konfiguration und Entitätsnamen bleiben erhalten.</p>
+<form method="post" action="werkreset" id="reset-form">
+<input type="hidden" name="lang" value="{language}"><input type="hidden" name="mode" value="{language_mode}">
+<input type="hidden" name="csrf" value="{csrf}">
+<button type="button" id="cancel-reset">Abbrechen</button>
+<button type="submit">Jetzt zurücksetzen</button>
+</form>
+</dialog>
+</div>
+</main>
 
 <footer class="page-footer">Kostenloses Hobbyprojekt · <a href="https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8" target="_blank" rel="noopener noreferrer">Freiwillig unterstützen (PayPal)</a>
 <details class="about-project"><summary>Über Meter OCR</summary><p><a href="https://github.com/Eifellayer" target="_blank" rel="noopener noreferrer">Projekt von EifelLayer auf GitHub</a></p><p>KI-unterstützt entwickelt. Keine geeichte Messung oder Gewähr für OCR-Ergebnisse. Bitte Zählerstände bei Bedarf direkt am Gerät prüfen.</p></details></footer>
@@ -408,14 +470,64 @@ Bei anhaltenden Problemen benachrichtigen
 let next = {next_check};
 const lang = '{language}';
 const searchPrefs = new URLSearchParams(location.search);
-if (searchPrefs.has('ui')) {{
-  searchPrefs.delete('ui');
-  history.replaceState(null, '', location.pathname + (searchPrefs.size ? '?' + searchPrefs : ''));
+const tabs = [...document.querySelectorAll('[role="tab"]')];
+const views = [...document.querySelectorAll('.tab-content')];
+function activateTab(name, updateUrl = true) {{
+  const selected = name === 'settings' ? 'settings' : 'overview';
+  tabs.forEach(tab => {{
+    const active = tab.id === `tab-${{selected}}`;
+    tab.setAttribute('aria-selected', String(active));
+    tab.tabIndex = active ? 0 : -1;
+  }});
+  views.forEach(view => view.hidden = view.id !== `view-${{selected}}`);
+  if (updateUrl) {{
+    const url = new URL(location.href);
+    if (selected === 'settings') url.searchParams.set('ui', 'settings');
+    else url.searchParams.delete('ui');
+    history.replaceState(null, '', url.pathname + (url.searchParams.size ? '?' + url.searchParams : ''));
+  }}
 }}
-document.querySelector('#open-setup').addEventListener('click', () => {{
-  const wizard = document.querySelector('#setup-wizard'); wizard.open = !wizard.open;
-  if (wizard.open) wizard.scrollIntoView({{behavior:'smooth',block:'start'}});
+tabs.forEach((tab, index) => {{
+  tab.addEventListener('click', () => activateTab(tab.id === 'tab-settings' ? 'settings' : 'overview'));
+  tab.addEventListener('keydown', event => {{
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length;
+    tabs[next].focus();
+    tabs[next].click();
+  }});
 }});
+const settingsSections = ['#source-settings', '#automatic-settings', '#notification-settings'];
+const settingsOpen = searchPrefs.get('ui') === 'settings' || ['setup', 'crop'].includes(searchPrefs.get('saved')) || settingsSections.some(selector => document.querySelector(selector).open);
+activateTab(settingsOpen ? 'settings' : 'overview', false);
+const setupDialog = document.querySelector('#setup-dialog');
+// Keep the first-run modal outside the tab panel so its hidden ancestor cannot hide it.
+document.body.appendChild(setupDialog);
+const setupDismissKey = 'meter-ocr-setup-dismissed';
+function dismissSetup() {{
+  if (setupDialog.open) setupDialog.close();
+  localStorage.setItem(setupDismissKey, '1');
+}}
+setupDialog.addEventListener('close', () => localStorage.setItem(setupDismissKey, '1'));
+document.querySelector('#setup-skip-form').addEventListener('submit', () => localStorage.setItem(setupDismissKey, '1'));
+document.querySelector('#open-setup').addEventListener('click', () => {{
+  activateTab('settings');
+  showSetupStep(0);
+  if (!setupDialog.open) setupDialog.showModal();
+}});
+if (searchPrefs.get('reset') === 'done') localStorage.removeItem(setupDismissKey);
+if (searchPrefs.get('reset') === 'pending') {{
+  searchPrefs.delete('reset');
+  history.replaceState(null, '', location.pathname + (searchPrefs.size ? '?' + searchPrefs : ''));
+  setTimeout(() => location.reload(), 5000);
+}}
+if (setupDialog.dataset.firstRun === 'true' && localStorage.getItem(setupDismissKey) !== '1') {{
+  activateTab('settings', false);
+  setupDialog.showModal();
+}}
+const resetDialog = document.querySelector('#reset-dialog');
+document.querySelector('#open-reset').addEventListener('click', () => resetDialog.showModal());
+document.querySelector('#cancel-reset').addEventListener('click', () => resetDialog.close());
 const setupForm = document.querySelector('#setup-form');
 const setupSteps = [...setupForm.querySelectorAll('.setup-step')];
 let setupStep = 0;
@@ -457,12 +569,17 @@ setupForm.querySelector('[name="fraction_digits"]').addEventListener('change', e
   if (Number(precision.value) > maximum) precision.value = String(maximum);
 }});
 document.querySelector('#setup-open-manual').addEventListener('click', () => {{
+  activateTab('overview');
+  manualTestArea.hidden = false;
   const manual = document.querySelector('#manual-panel'); manual.open = true;
-  manual.scrollIntoView({{behavior:'smooth',block:'start'}});
+}});
+document.querySelector('#close-manual-test').addEventListener('click', () => {{
+  manualTestArea.hidden = true;
 }});
 document.querySelector('#language-select').addEventListener('change', () => {{
   const url = new URL(document.querySelector('#language-form').action);
   if (document.querySelector('#manual-panel').open) url.searchParams.set('test', 'open');
+  if (document.querySelector('#view-settings').hidden === false) url.searchParams.set('ui', 'settings');
   document.querySelector('#language-form').action = url;
   document.querySelector('#language-form').submit();
 }});
@@ -533,6 +650,9 @@ async function refreshTestStatus() {{
     const bar = document.querySelector('#test-progress');
     const detail = document.querySelector('#test-result');
     const preview = document.querySelector('#test-preview');
+    const previewImage = document.querySelector('#test-preview-image');
+    const previewHeading = document.querySelector('#preview-heading');
+    const automaticImages = document.querySelector('#automatic-images');
     const sourcePreview = document.querySelector('#test-source-preview');
     const sourceImage = document.querySelector('#test-source-image');
     const sourceEmpty = document.querySelector('#test-source-empty');
@@ -589,11 +709,25 @@ async function refreshTestStatus() {{
       detail.hidden = true;
       extra.hidden = true;
     }}
-    preview.hidden = !(job.phase === 'done' && job.preview);
-    if (!preview.hidden) {{
-      const image = document.querySelector('#test-preview-image');
+    if (job.phase === 'done' && job.preview) {{
+      preview.hidden = false;
+      previewHeading.textContent = 'Manueller Test';
       const url = 'testvorschau.jpg?v=' + encodeURIComponent(String(job.checked_at));
-      if (image.getAttribute('src') !== url) image.setAttribute('src', url);
+      if (previewImage.getAttribute('src') !== url) previewImage.setAttribute('src', url);
+      automaticImages.open = true;
+    }} else if (!active) {{
+      const version = Number(job.automatic_preview || 0);
+      if (version) {{
+        preview.dataset.autoVersion = String(version);
+        preview.dataset.autoAvailable = 'true';
+        preview.dataset.autoSrc = 'automatikvorschau.jpg?v=' + encodeURIComponent(String(version));
+      }}
+      const available = preview.dataset.autoAvailable === 'true';
+      preview.hidden = !available;
+      previewHeading.textContent = 'Letzte automatische Erkennung';
+      if (available && previewImage.getAttribute('src') !== preview.dataset.autoSrc) {{
+        previewImage.setAttribute('src', preview.dataset.autoSrc);
+      }}
     }}
     apply.hidden = !(job.phase === 'done' && job.can_apply_crop);
     document.querySelector('#tested-crop-id').value = job.crop_id || '';
@@ -629,8 +763,16 @@ for (const el of document.querySelectorAll('.stamp')) {{
   const epoch = Number(el.dataset.epoch);
   if (epoch) el.textContent = formatStamp(epoch);
 }}
+const manualTestArea = document.querySelector('#manual-test-area');
+document.querySelector('#open-manual-settings').addEventListener('click', () => {{
+  manualTestArea.hidden = false;
+  manualPanel.open = true;
+  manualPanel.scrollIntoView({{block: 'nearest'}});
+}});
+manualTestArea.hidden = testBox.hidden;
 const testRequest = searchPrefs.get('test');
 if (['queued', 'open', 'busy'].includes(testRequest)) {{
+  manualTestArea.hidden = false;
   if (testRequest === 'open') manualPanel.open = true;
   else if (!testBox.hidden) testBox.focus();
   searchPrefs.delete('test');
@@ -642,6 +784,7 @@ manualForm.addEventListener('submit', event => {{
     return;
   }}
   sendingCheck = true;
+  manualTestArea.hidden = false;
   testBox.hidden = false;
   testBox.dataset.phase = 'queued';
   testBox.dataset.result = 'neutral';
@@ -742,10 +885,13 @@ def start_panel(
     history_path, current_image, good_image, requested, default_decimals, default_attempts,
     get_auto_rules, save_auto_rules, default_crop, default_width, test_image,
     load_language_modes, save_language_modes, get_delivery, save_delivery, get_source, save_source,
-    wake_worker=None, *, address=("0.0.0.0", 8099), test_source_image=None,
+    wake_worker=None, *, address=("0.0.0.0", 8099), test_source_image=None, automatic_preview=None,
+    request_factory_reset=None, skip_setup=None,
 ):
     images = {"/aktuell.jpg": current_image, "/treffer.jpg": good_image,
               "/testvorschau.jpg": test_image}
+    if automatic_preview is not None:
+        images["/automatikvorschau.jpg"] = automatic_preview
     if test_source_image is not None:
         images["/testbild.jpg"] = test_source_image
     manual_settings_path = history_path.with_name("manual-test-settings.json")
@@ -822,6 +968,16 @@ def start_panel(
                             image_time=image_time,
                             readings=readings if readings is not None else progress["readings"])
 
+    def reset_progress_state():
+        with request_lock:
+            progress.update(
+                request_id=progress["request_id"] + 1, phase="idle",
+                message="Noch kein manueller Test gestartet.", attempts=0,
+                checked_at=0, outcome=None, detail="", preview=False,
+                can_apply_crop=False, readings=[], ocr=None, reference=None,
+                reference_time=None, reference_is_fallback=False, image_time=None,
+            )
+
     def read_history():
         try:
             history = json.loads(history_path.read_text(encoding="utf-8"))
@@ -889,6 +1045,8 @@ def start_panel(
             "decimals": history.get("comparison_decimals", default_decimals),
             "current": current_image.stat().st_mtime_ns if current_image.exists() else None,
             "good": good_image.stat().st_mtime_ns if good_image.exists() else None,
+            "automatic_preview": automatic_preview.stat().st_mtime_ns if automatic_preview is not None and automatic_preview.exists() else None,
+            "automatic_preview": automatic_preview.stat().st_mtime_ns if automatic_preview is not None and automatic_preview.exists() else None,
         }
 
     class Handler(BaseHTTPRequestHandler):
@@ -940,6 +1098,10 @@ def start_panel(
                 with request_lock:
                     snapshot = dict(progress)
                 snapshot["crop_id"] = str(snapshot["checked_at"]) if snapshot["can_apply_crop"] else ""
+                snapshot["automatic_preview"] = (
+                    automatic_preview.stat().st_mtime_ns
+                    if automatic_preview is not None and automatic_preview.exists() else None
+                )
                 if language == "en":
                     snapshot["message"] = english_progress(snapshot.get("message"))
                     if snapshot.get("detail"):
@@ -994,6 +1156,11 @@ def start_panel(
             manual_precision = min(int(settings.get("decimals", auto_rules["decimals"])),
                                    auto_rules["fraction_digits"])
             saved = query.get("saved", [""])[0]
+            settings_tab_active = (
+                query.get("ui", [""])[0] == "settings"
+                or saved in ("setup", "1", "crop", "notifications", "source")
+                or setup_pending
+            )
             saved_message = (
                 "Einrichtung gespeichert." if saved == "setup" else
                 "Automatische Prüfregeln gespeichert." if saved == "1" else
@@ -1019,11 +1186,11 @@ def start_panel(
             test_source_version = (test_source_image.stat().st_mtime_ns
                                    if test_source_image is not None and test_source_image.exists() else 0)
             test_source_preview = (
-                '<div class="preview" id="test-source-preview" {test_source_visible}>'
-                '<h2>Aktuelles Bild zum Ablesen</h2>'
+                '<details class="source-image" id="test-source-preview" {test_source_visible}>'
+                '<summary>Originalbild zum Ablesen</summary>'
                 f'<img id="test-source-image" src="testbild.jpg?v={test_source_version}" alt="Aktuelles Kamerabild für den manuellen Test">'
                 '<p class="legend" id="test-source-empty" hidden>Kein Bild vorhanden. Bitte Bildquelle und Verbindung prüfen und den manuellen Test erneut starten.</p>'
-                '</div>'
+                '</details>'
             )
             page = translate_page(PAGE) if language == "en" else PAGE
             self.reply(page.format(**values,
@@ -1036,9 +1203,11 @@ def start_panel(
                 anonymous_banner_key=f"{NAMESPACE}-ignored-warning",
                 ignore_hidden="" if summary["incident"] else "hidden",
                 profile_script=scripts,
+                overview_hidden="hidden" if settings_tab_active else "",
+                settings_hidden="" if settings_tab_active else "hidden",
                 language_options=select_options({"auto": automatic, "de": "Deutsch", "en": "English"}, mode),
                 settings_open="open" if saved in ("1", "crop") else "",
-                wizard_open="open" if setup_pending or saved == "setup" else "",
+                setup_first_run=str(bool(setup_pending)).lower(),
                 wizard_source_options=select_options(source_choices, source["mode"]),
                 meter_display_options=select_options({
                     "rollers": "Number rollers" if language == "en" else "Ziffernrollen",
@@ -1103,6 +1272,22 @@ def start_panel(
                 manual_reference=html.escape(str(settings.get("manual_reference", auto_rules["fallback_value"])),
                                              quote=True),
                 test_source_preview=test_source_preview,
+                automatic_preview_src=(
+                    f'automatikvorschau.jpg?v={summary["automatic_preview"]}'
+                    if summary["automatic_preview"] else 'automatikvorschau.jpg?v=0'
+                ),
+                automatic_preview_version=summary["automatic_preview"] or 0,
+                automatic_preview_available=str(bool(summary["automatic_preview"])).lower(),
+                automatic_preview_hidden='' if summary["automatic_preview"] else 'hidden',
+                reset_notice=(
+                    '<p class="save-notice" role="status">' + html.escape({
+                        "done": "Werkseinstellungen wiederhergestellt. Die Einrichtung öffnet sich erneut.",
+                        "pending": "Werkreset läuft noch. Bitte die Seite in Kürze neu laden.",
+                        "failed": "Werkreset konnte nicht vollständig ausgeführt werden.",
+                    }.get(query.get("reset", [""])[0], "")) + '</p>'
+                    if query.get("reset", [""])[0] in ("done", "pending", "failed") else ""
+                ),
+                manual_area_hidden='' if test in ("queued", "busy", "open") else 'hidden',
                 crop_mode_options=select_options(
                     CROP_MODES_EN if language == "en" else CROP_MODES,
                     settings.get("crop_mode", "auto"),
@@ -1139,7 +1324,8 @@ def start_panel(
                 return
             path = urlsplit(self.path).path
             if path not in ("/pruefen", "/automatik", "/ausschnitt-uebernehmen", "/sprache",
-                            "/benachrichtigungen", "/bildquelle", "/einrichtung"):
+                            "/benachrichtigungen", "/bildquelle", "/einrichtung",
+                            "/einrichtung-ueberspringen", "/werkreset"):
                 self.send_error(404)
                 return
             fallback = browser_locale(self.headers.get("Accept-Language", ""))
@@ -1190,6 +1376,24 @@ def start_panel(
             supplied = form.get("csrf", [])
             if len(supplied) != 1 or not compare_digest(supplied[0].encode(), csrf_token.encode()):
                 problem(403)
+                return
+            if path == "/einrichtung-ueberspringen":
+                try:
+                    if skip_setup is not None:
+                        skip_setup()
+                except OSError:
+                    problem(503, "Die Einrichtung konnte nicht übersprungen werden.",
+                            "Setup could not be skipped.")
+                    return
+                self.redirect("?saved=skip" + keep_mode)
+                return
+            if path == "/werkreset":
+                result = request_factory_reset() if request_factory_reset is not None else "failed"
+                if result == "done":
+                    reset_progress_state()
+                if result not in ("done", "pending", "failed"):
+                    result = "failed"
+                self.redirect("?reset=" + result + "&ui=settings" + keep_mode)
                 return
             if path == "/sprache":
                 if user:
@@ -1340,7 +1544,7 @@ def start_panel(
                     problem(503, "Der Ausschnitt konnte nicht gespeichert werden.",
                             "Could not save the image crop.")
                     return
-                self.redirect("?saved=crop" + keep_mode)
+                self.redirect("?saved=crop&ui=settings" + keep_mode)
                 return
             if path == "/automatik":
                 decimals = form.get("decimals", [])

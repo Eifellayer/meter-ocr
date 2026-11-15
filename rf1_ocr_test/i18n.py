@@ -10,6 +10,39 @@ from checks import FALLBACK_NOTICE, uncertain_positions
 
 
 EN_UI = {
+    "Erkennungsbild": "Recognition image",
+    "Letzte automatische Erkennung": "Latest automatic reading",
+    "Schließen": "Close",
+    "Originalbild zum Ablesen": "Original image for reading",
+    "Später einrichten": "Set up later",
+    "Du kannst die Einrichtung jederzeit über „Einrichtung öffnen“ erneut starten.":
+        "You can restart setup at any time using “Open setup wizard”.",
+    "Stand im Home-Assistant-Dashboard anzeigen": "Show the reading on a Home Assistant dashboard",
+    "Wenn Meter OCR selbst aus einer ESPHome- oder Home-Assistant-Kamera liest, kannst du den Sensor „OCR-Zählerstand“ zum Dashboard hinzufügen. Seine Entitäts-ID lautet ":
+        "When Meter OCR reads directly from an ESPHome or Home Assistant camera, you can add its OCR meter reading sensor to your dashboard. Its entity ID is ",
+    "Oder füge diese kurze YAML-Konfiguration in eine manuelle Karte ein:":
+        "Or paste this short YAML configuration into a manual card:",
+    "App-Daten zurücksetzen": "Reset app data",
+    "Setzt die Meter-OCR-Einstellungen und Prüfhistorie auf Standardwerte zurück und entfernt gespeicherte Testbilder. Die Home-Assistant-App-Konfiguration und vorhandenen Entitäten bleiben erhalten.":
+        "Resets Meter OCR settings and check history to defaults and removes saved test images. Home Assistant app configuration and existing entities are kept.",
+    "Auf Werkseinstellungen zurücksetzen": "Restore factory settings",
+    "Werkseinstellungen wiederherstellen?": "Restore factory settings?",
+    "Gespeicherte Bildquelle, OCR- und Benachrichtigungseinstellungen, Prüfhistorie und Testbilder werden zurückgesetzt. Home-Assistant-App-Konfiguration und Entitätsnamen bleiben erhalten.":
+        "Saved image source, OCR and notification settings, check history, and test images will be reset. Home Assistant app configuration and entity IDs will be kept.",
+    "Abbrechen": "Cancel",
+    "Jetzt zurücksetzen": "Reset now",
+    "Werkseinstellungen wiederhergestellt. Die Einrichtung öffnet sich erneut.":
+        "Factory settings restored. Setup will open again.",
+    "Werkreset läuft noch. Bitte die Seite in Kürze neu laden.":
+        "The reset is still running. Reload the page shortly.",
+    "Werkreset konnte nicht vollständig ausgeführt werden.":
+        "The reset could not be completed.",
+    "Die Einrichtung konnte nicht übersprungen werden.": "Setup could not be skipped.",
+    "Übersicht": "Overview",
+    "Hauptmenü": "Main menu",
+    "Fallback-Wert für diesen Test (optional)": "Fallback reading for this test (optional)",
+    "Am markierten Bild ablesen und hier eintragen. Der Wert wird nur mit dem manuellen Test verglichen und nicht als automatische Referenz gespeichert.":
+        "Read the marked image and enter the value here. It is compared only with the manual test and is not saved as the automatic reference.",
     "Über Meter OCR": "About Meter OCR",
     "EifelLayer-Projektlogo": "EifelLayer project logo",
     "Ein privates Hobbyprojekt von EifelLayer. KI-unterstützt entwickelt. Keine geeichte Messung oder Gewähr für OCR-Ergebnisse. Bitte Zählerstände bei Bedarf direkt am Gerät prüfen.": "A private hobby project by EifelLayer, developed with AI assistance. Not a certified measurement and no guarantee of OCR results. Check readings on the physical meter when needed.",
@@ -48,6 +81,7 @@ EN_UI = {
     "Das Prüfintervall gilt auch für die bereits geplante nächste Prüfung. Bei geänderter Vergleichsgenauigkeit beginnt die Trefferzählung neu.":
         "The interval also applies to the next scheduled check. Changing comparison precision resets the match count.",
     "Manueller Test": "Manual test",
+    "Test einstellen": "Test settings",
     "Test starten": "Start test",
     "Testeinstellungen": "Test settings",
     "Zusätzliche Bild- und OCR-Einstellungen": "Advanced image and OCR settings",

@@ -221,7 +221,7 @@ class StateTests(TestCase):
         folder = Path(self.enterContext(TemporaryDirectory()))
         files = {name: folder / name for name in (
             "OPTIONS", "HISTORY", "EFFECTIVE_OPTIONS", "AUTO_RULES", "LANGUAGE_MODES",
-            "SOURCE_SETTINGS", "NOTIFICATIONS", "DESTINATION", "GOOD_IMAGE", "TEST_IMAGE",
+            "SOURCE_SETTINGS", "NOTIFICATIONS", "DESTINATION", "GOOD_IMAGE", "TEST_IMAGE", "AUTOMATIC_PREVIEW",
         )}
         files["OPTIONS"].write_text(json.dumps({"esp_url": "http://meter", "ausschnitt": "0,0,500,100",
                                                 "vorkomma_breite": 350, "vergleich_nachkommastellen": 3}))
@@ -292,6 +292,7 @@ class StateTests(TestCase):
         files = {name: folder / name for name in (
             "OPTIONS", "HISTORY", "EFFECTIVE_OPTIONS", "AUTO_RULES", "LANGUAGE_MODES",
             "SOURCE_SETTINGS", "NOTIFICATIONS", "DESTINATION", "GOOD_IMAGE", "TEST_IMAGE",
+            "AUTOMATIC_PREVIEW",
         )}
         files["OPTIONS"].write_text(json.dumps({"ausschnitt": "0,0,500,100", "vorkomma_breite": 350,
                                                 "ocr_versuche": 1}))
@@ -328,6 +329,9 @@ class StateTests(TestCase):
                          (attributes["device_class"], attributes["state_class"], attributes["unit_of_measurement"]))
         with Image.open(files["DESTINATION"]) as current:
             self.assertEqual("JPEG", current.format)
+        with Image.open(files["AUTOMATIC_PREVIEW"]) as overlay:
+            self.assertEqual("JPEG", overlay.format)
+            self.assertGreater(overlay.width, 0)
 
         initial["next_check_at"] = 0
         initial["consumption"]["timestamp"] -= 3600

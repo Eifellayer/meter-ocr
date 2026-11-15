@@ -444,6 +444,10 @@ class BrowserTests(IngressFixture):
                 "async image => { await image.decode(); return image.naturalWidth; }"))
             frame.locator("#apply-crop-form button").click()
             frame.locator("#tab-settings").click()
+            print("DEBUG_SETTINGS_VIEW", frame.locator("#tab-settings").get_attribute("aria-selected"),
+                  frame.locator("#view-settings").get_attribute("hidden"),
+                  frame.locator("html").get_attribute("lang"),
+                  frame.evaluate("() => location.href"))
             automatic_settings = frame.locator("#automatic-settings")
             if not automatic_settings.evaluate("section => section.open"):
                 automatic_settings.locator("summary").click()

@@ -496,6 +496,7 @@ class BrowserTests(IngressFixture):
             self.history.write_text(json.dumps({**failed, "failure_since": 200}))
             page.reload()
             frame.get_by_text("Check the meter reading", exact=True).wait_for()
+            frame.locator("#tab-settings").click()
             frame.locator("#notification-settings summary").first.click()
             frame.get_by_text("How are notifications sent?", exact=False).click()
             frame.get_by_text("Leave both optional fields blank", exact=False).wait_for()

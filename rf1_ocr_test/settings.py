@@ -10,6 +10,7 @@ DEFAULTS = {
     "zeitzone": "Europe/Berlin",
     "push_dienst": "",
     "vergleich_nachkommastellen": 0,
+    "ocr_versuche": 5,
     "kamera_entitaet": "",
     "referenz_entitaet": "",
 }

@@ -78,16 +78,20 @@ def meter_prefix(value, decimals):
     return int(match[1] + fractional)
 
 
-def read_with_retries(read, data, decimals):
+def read_with_retries(read, data, decimals, progress=None):
     readings = []
     matching_read = None
-    for profile in OCR_PROFILES:
+    for index, profile in enumerate(OCR_PROFILES, start=1):
+        if progress:
+            progress(index - 1, f"OCR-Aufbereitung {index} von {len(OCR_PROFILES)} läuft …")
         try:
             value = read(profile)
         except subprocess.TimeoutExpired as error:
             print(f"OCR-Variante hat das Zeitlimit überschritten: {error}")
             value = "?????.???"
         status, _ = compare_sample(data, value, decimals)
+        if progress:
+            progress(index, f"OCR-Aufbereitung {index} von {len(OCR_PROFILES)} abgeschlossen.")
         if not readings and status not in ("difference", "ocr_unclear"):
             return value, True, 1
         if status == "match" and matching_read is None:

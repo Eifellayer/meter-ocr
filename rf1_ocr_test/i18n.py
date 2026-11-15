@@ -33,6 +33,9 @@ EN_UI = {
     RAW_ROW_UNCLEAR: "Could not find a clear digit row. Set the crop in the manual test.",
     MANUAL_ROW_UNCLEAR: "The digits are hard to read. Check the image rotation, camera angle, focus and lighting.",
     "Ausschnitt im Bild ziehen": "Draw a crop on the image",
+    "Ausschnitt zurücksetzen": "Reset crop",
+    "Ausschnitt zurückgesetzt. Die Automatik sucht die Ziffernreihe wieder selbst.":
+        "Crop reset. Automatic checks will locate the digit row again.",
     "Ziehe mit Maus oder Finger einen Rahmen um die gesamte Ziffernreihe. Prüfe danach den Ausschnitt mit „Jetzt prüfen“.":
         "Draw a rectangle around the full digit row with a mouse or finger. Then select “Run check now” to test the crop.",
     "Originalbild zum Einstellen des Ausschnitts": "Original image for setting the crop",

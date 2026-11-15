@@ -1,8 +1,10 @@
 # Changelog
 
-## In Vorbereitung
+## 0.4.7 Alpha
 
 - Die bebilderte Bedienungsanleitung ist direkt über den Menüpunkt „Anleitung“ erreichbar.
+
+- Der Bildausschnitt lässt sich im manuellen Test zurücksetzen. In den Automatik-Einstellungen stellt der Knopf die automatische Ausschnitterkennung wieder her.
 
 ## 0.4.6 Alpha
 

@@ -12,9 +12,9 @@ This is an additional plausibility check, **not a certified measurement device**
 
 ## Installation
 
-**AI Meter Reader (Alpha)** is the regular test channel in version 0.4.6. After 0.4, a Hall / pulse sensor is planned as the first separate Beta feature because it needs a real hardware test.
+**AI Meter Reader (Alpha)** is the regular test channel in version 0.4.7. After 0.4, a Hall / pulse sensor is planned as the first separate Beta feature because it needs a real hardware test.
 
-Add **Add-ons by Eifellayer** under **Settings → Apps → Install app → ⋮ → Repositories** using the [Stable link](https://github.com/Eifellayer/meter-ocr#stable), then install **AI Meter Reader (Alpha)**. Version 0.4.6 is the Alpha test build; the planned Hall / pulse sensor feature will be prepared separately on the Beta channel. Set `esp_url` for SLFork, or configure `kamera_entitaet` and an optional `referenz_entitaet` sensor.
+Add **Add-ons by Eifellayer** under **Settings → Apps → Install app → ⋮ → Repositories** using the [Stable link](https://github.com/Eifellayer/meter-ocr#stable), then install **AI Meter Reader (Alpha)**. Version 0.4.7 is the Alpha test build; the planned Hall / pulse sensor feature will be prepared separately on the Beta channel. Set `esp_url` for SLFork, or configure `kamera_entitaet` and an optional `referenz_entitaet` sensor.
 
 ## Choose a language
 

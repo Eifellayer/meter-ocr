@@ -365,6 +365,8 @@ name: Zählerstand (OCR)</code></pre>
 <label>Breite der Vorkommastellen
 <input name="width" type="number" min="1" max="9999" value="{width_value}"></label>
 <p class="settings-note">Wähle den Ausschnitt im Originalbild. Positive Winkel drehen nach rechts, negative nach links. Die Vorkommabreite gilt nach der Drehung.</p>
+<button type="button" id="reset-manual-crop" data-default-crop="{default_crop_value}"
+        data-default-width="{default_crop_width}">Ausschnitt zurücksetzen</button>
 </div>
 <label>Eigenes Testbild (optional, JPG oder PNG)
 <input type="file" name="image" accept="image/jpeg,image/png"></label>
@@ -536,6 +538,7 @@ name: Zählerstand (OCR)</code></pre>
 <label>Breite der Vorkommastellen
 <input name="width" type="number" min="1" max="9999" value="{auto_width_value}"></label>
 <p class="settings-note">Wähle den Ausschnitt im Originalbild. Die Vorkommabreite gilt nach der Drehung.</p>
+<button type="submit" name="reset_crop" value="1" formnovalidate>Ausschnitt zurücksetzen</button>
 </div>
 <details class="help setup-help" id="reflection-settings">
 <summary>ⓘ Spiegelungen und verdeckte Ziffern</summary>
@@ -823,6 +826,7 @@ let drawUploadUrl = '';
 let drawStart = null;
 let drawnCrop = null;
 let lastManualImageTime = 0;
+let lastManualCropResetTime = 0;
 
 function updateDrawnWidth(box) {{
   const [left, top, right, bottom] = box;
@@ -941,6 +945,19 @@ function showCropFields() {{
 }}
 cropMode.addEventListener('change', showCropFields);
 showCropFields();
+const resetManualCrop = document.querySelector('#reset-manual-crop');
+resetManualCrop.addEventListener('click', () => {{
+  drawnCrop = null;
+  lastManualCropResetTime = Date.now() / 1000;
+  drawOutline.hidden = true;
+  document.querySelector('#apply-crop-form').hidden = true;
+  manualForm.elements.crop.value = resetManualCrop.dataset.defaultCrop;
+  manualForm.elements.width.value = resetManualCrop.dataset.defaultWidth;
+  manualForm.elements.rotation.value = '0';
+  cropMode.value = 'auto';
+  showCropFields();
+  cropMode.focus();
+}});
 function renderAttempts(details, readings, decimals) {{
   details.hidden = !Array.isArray(readings) || !readings.length;
   if (details.hidden) return;
@@ -1051,7 +1068,7 @@ async function refreshTestStatus() {{
         if (showManual) automaticImages.open = true;
       }}
     }}
-    apply.hidden = !(job.phase === 'done' && job.can_apply_crop);
+    apply.hidden = !(job.phase === 'done' && job.can_apply_crop && job.checked_at > lastManualCropResetTime);
     document.querySelector('#tested-crop-id').value = job.crop_id || '';
   }} catch (_) {{
     document.querySelector('#test-meta').textContent = 'Status nicht erreichbar – Verbindung prüfen.';
@@ -1677,6 +1694,7 @@ def start_panel(
                 "Einrichtung gespeichert." if saved == "setup" else
                 "Automatische Prüfregeln gespeichert." if saved == "1" else
                 "Getesteten Bildausschnitt für die Automatik übernommen." if saved == "crop" else
+                "Ausschnitt zurückgesetzt. Die Automatik sucht die Ziffernreihe wieder selbst." if saved == "crop-reset" else
                 "Benachrichtigungen gespeichert." if saved == "notifications" else
                 "Bildquelle gespeichert." if saved == "source" else ""
             )
@@ -1723,7 +1741,7 @@ def start_panel(
                 overview_hidden="hidden" if settings_tab_active else "",
                 settings_hidden="" if settings_tab_active else "hidden",
                 language_options=select_options({"auto": automatic, "de": "Deutsch", "en": "English"}, mode),
-                settings_open="open" if saved in ("1", "crop") else "",
+                settings_open="open" if saved in ("1", "crop", "crop-reset") else "",
                 setup_first_run=str(bool(setup_pending or reset_state == "done")).lower(),
                 precision_hidden="" if auto_rules["decimals"] == 3 else "hidden",
                 precision_checked="checked" if auto_rules.get("precision_mode") else "",
@@ -1807,7 +1825,7 @@ def start_panel(
                 max_interval_minutes=MAX_INTERVAL_MINUTES,
                 interval_minutes=auto_rules.get("interval_minutes", DEFAULT_INTERVAL_MINUTES),
                 auto_rotation_value=editable_rotation(auto_rules),
-                auto_saved_notice=auto_saved_notice if saved in ("1", "crop") else "",
+                auto_saved_notice=auto_saved_notice if saved in ("1", "crop", "crop-reset") else "",
                 manual_reference=html.escape(str(settings.get("manual_reference", auto_rules["fallback_value"])),
                                              quote=True),
                 test_source_preview=test_source_preview,
@@ -1826,6 +1844,8 @@ def start_panel(
                     settings.get("crop_mode", "auto"),
                 ),
                 crop_value=html.escape(str(settings.get("crop", default_crop)), quote=True),
+                default_crop_value=html.escape(default_crop, quote=True),
+                default_crop_width=default_width,
                 crop_whole_ratio=auto_rules["integer_digits"] /
                     (auto_rules["integer_digits"] + auto_rules["fraction_digits"]),
                 width_value=int(settings.get("width", default_width)),
@@ -2151,6 +2171,17 @@ def start_panel(
                 self.redirect("?saved=crop&ui=settings" + keep_mode)
                 return
             if path == "/automatik":
+                if form.get("reset_crop") == ["1"]:
+                    try:
+                        with rules_lock:
+                            save_auto_rules({**read_auto_rules(), "crop_mode": "auto", "crop": default_crop,
+                                             "width": default_width, "rotation": 0})
+                    except (OSError, ValueError):
+                        problem(503, "Der Bildausschnitt konnte nicht zurückgesetzt werden.",
+                                "Could not reset the image crop.")
+                        return
+                    self.redirect("?saved=crop-reset&ui=settings" + keep_mode)
+                    return
                 decimals = form.get("decimals", [])
                 attempts = form.get("attempts", [])
                 polarity = form.get("polarity", [])

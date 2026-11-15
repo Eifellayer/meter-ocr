@@ -35,6 +35,7 @@ GOOD_IMAGE = Path("/media/rf1/letzter_treffer.jpg")
 HISTORY = Path("/data/kontrollmessung.json")
 OPTIONS = Path("/data/options.json")
 EFFECTIVE_OPTIONS = Path("/data/rf1-settings.json")
+AUTO_RULES = Path("/data/auto-pruefregeln.json")
 ENTITY = "sensor.rf1_kontrollbild"
 CORE_URL = f"http://supervisor/core/api/states/{ENTITY}"
 CHECK_ENTITY = "sensor.rf1_pruefstatus"
@@ -264,10 +265,38 @@ def main():
         raise ValueError("kamera_entitaet muss eine Home-Assistant-Kamera sein")
     if reference and not re.fullmatch(r"sensor\.[a-z0-9_]+", reference):
         raise ValueError("referenz_entitaet muss ein Home-Assistant-Sensor sein")
-    decimals = options["vergleich_nachkommastellen"]
-    max_attempts = options["ocr_versuche"]
+    default_decimals = options["vergleich_nachkommastellen"]
+    default_attempts = options["ocr_versuche"]
+    auto_rules = {"decimals": default_decimals, "attempts": default_attempts}
+    try:
+        saved_rules = json.loads(AUTO_RULES.read_text(encoding="utf-8"))
+        if (type(saved_rules.get("decimals")) is int and 0 <= saved_rules["decimals"] <= 3
+                and type(saved_rules.get("attempts")) is int and 1 <= saved_rules["attempts"] <= 10):
+            auto_rules = {"decimals": saved_rules["decimals"], "attempts": saved_rules["attempts"]}
+        else:
+            print("Ungültige gespeicherte Automatikregeln; verwende die App-Konfiguration.")
+    except FileNotFoundError:
+        pass
+    except (OSError, ValueError, AttributeError) as error:
+        print(f"Automatikregeln konnten nicht geladen werden: {type(error).__name__}")
+
+    def get_auto_rules():
+        return dict(auto_rules)
+
+    def save_auto_rules(values):
+        nonlocal auto_rules
+        if (type(values.get("decimals")) is not int or not 0 <= values["decimals"] <= 3
+                or type(values.get("attempts")) is not int or not 1 <= values["attempts"] <= 10):
+            raise ValueError("Ungültige Einstellungen für die automatische Kontrolle")
+        updated_rules = {"decimals": values["decimals"], "attempts": values["attempts"]}
+        atomic_write(AUTO_RULES, json.dumps(updated_rules, indent=2).encode("utf-8"), 0o600)
+        auto_rules = updated_rules
+
     requested = Queue(maxsize=1)
-    update_progress = start_panel(HISTORY, DESTINATION, GOOD_IMAGE, requested, decimals, max_attempts)
+    update_progress = start_panel(
+        HISTORY, DESTINATION, GOOD_IMAGE, requested, default_decimals, default_attempts,
+        get_auto_rules, save_auto_rules, options["ausschnitt"], options["vorkomma_breite"],
+    )
     push_service = (options.get("push_dienst") or "").strip()
     reminder = None
     if push_service:
@@ -280,6 +309,9 @@ def main():
     manual_options = None
     print("RF1 Kontrollmessung gestartet")
     while True:
+        active_rules = get_auto_rules()
+        decimals = active_rules["decimals"]
+        max_attempts = active_rules["attempts"]
         now = datetime.now(zone)
         remaining = history.get("next_check_at", 0) - now.timestamp()
         if manual_options is None:
@@ -339,8 +371,16 @@ def main():
                         raise ValueError("Der ESP hat kein JPEG geliefert")
                     frame.load()
                     try:
+                        # Manual crop is a diagnostic override for this test only.
+                        manual_crop = crop
+                        manual_width = options["vorkomma_breite"]
+                        selected_overlay = overlay
+                        if manual and manual_options.get("crop_mode") == "manual":
+                            manual_crop = tuple(int(part.strip()) for part in manual_options["crop"].split(","))
+                            manual_width = manual_options["width"]
+                            selected_overlay = None
                         register, integer_width, whole_boxes, fraction_boxes, source = select_register(
-                            frame, overlay, crop, options["vorkomma_breite"]
+                            frame, selected_overlay, manual_crop, manual_width
                         )
                         read = partial(
                             read_visible_digits,

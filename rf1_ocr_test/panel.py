@@ -102,6 +102,7 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .settings-item .manual-content{{margin:0;padding:0 0 1rem;border-top:0}}
 .check-card-heading{{display:flex;align-items:center;justify-content:space-between;gap:.65rem;flex-wrap:wrap;margin-bottom:.8rem}}
 .check-card-heading h2{{margin:0}}
+.check-actions{{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}}
 .manual-test-heading{{display:flex;align-items:center;justify-content:space-between;gap:.65rem;flex-wrap:wrap}}
 .manual-test-heading h2{{margin:0}}
 .manual-reference-entry{{display:flex;align-items:end;gap:.75rem;flex-wrap:wrap;margin-top:1rem;padding-top:1rem;border-top:1px solid var(--edge)}}
@@ -180,7 +181,10 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <div class="tab-content" id="view-overview" role="tabpanel" aria-labelledby="tab-overview">
 <div class="panel" id="check-overview">
 <div class="check-card-heading"><h2>Automatische Kontrolle</h2>
-<button id="start-check" type="submit" form="manual-form">Test starten</button></div>
+<div class="check-actions">
+<button type="button" id="open-manual-settings">Test einstellen</button>
+<button id="start-check" type="submit" form="manual-form">Test starten</button>
+</div></div>
 <div class="automatic-banner" id="automatic-banner" data-tone="{automatic_tone}"
  data-incident="{automatic_incident}" data-preference-key="{banner_preference_key}">
 <span class="automatic-banner-icon" aria-hidden="true">{automatic_icon}</span>
@@ -757,6 +761,11 @@ for (const el of document.querySelectorAll('.stamp')) {{
   if (epoch) el.textContent = formatStamp(epoch);
 }}
 const manualTestArea = document.querySelector('#manual-test-area');
+document.querySelector('#open-manual-settings').addEventListener('click', () => {{
+  manualTestArea.hidden = false;
+  manualPanel.open = true;
+  manualPanel.scrollIntoView({{block: 'nearest'}});
+}});
 manualTestArea.hidden = testBox.hidden;
 const testRequest = searchPrefs.get('test');
 if (['queued', 'open', 'busy'].includes(testRequest)) {{

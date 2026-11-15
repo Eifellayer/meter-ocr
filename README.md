@@ -1,52 +1,77 @@
-# EifelLayer RF1
+# Gaszähler OCR-Kontrolle für Home Assistant
 
-> **Privates Hobbyprojekt · Verwendung auf eigene Gefahr**  
-> Der Quellcode ist öffentlich zugänglich. Für dieses Projekt wird kein Support angeboten. Wartung und weitere Updates sind freiwillig.  
-> Die OCR kann Ziffern falsch erkennen. Für Abrechnungen und Meldungen an den Versorger gilt der direkt am Zähler abgelesene Stand.
+**Unabhängige optische Zweitprüfung für automatisch ausgelesene mechanische Gaszähler.**
 
-Home-Assistant-App zur unabhängigen Bildkontrolle eines Pipersberg G4 RF1 mit lokaler OCR. Sie liest die fünf Vorkommastellen und zeigt erkennbare Nachkommastellen an.
+Du liest deinen Gaszähler bereits mit Kamera und ESP aus, möchtest aber prüfen, ob die erkannten Ziffern wirklich zum Zählerbild passen? Diese App liest das vorhandene Foto **ein zweites Mal lokal mit Tesseract OCR** und vergleicht die Ziffern mit dem vorhandenen Messwert. Damit ist sie eine zusätzliche Plausibilitätskontrolle, kein zweiter Gaszähler.
 
-[Änderungen je Version](rf1_ocr_test/CHANGELOG.md)
+Entwickelt für den **Pipersberg G4 RF1** mit **AI on the Edge / SLFork**. Eine geeignete Home-Assistant-Kamera kann alternativ als Bildquelle dienen. „RF1“ bleibt aus Kompatibilitätsgründen in bestehenden Entitäts-IDs und im App-Verzeichnis erhalten.
+
+> **Privates Hobbyprojekt, keine geeichte Zweitmessung.** OCR kann Ziffern falsch lesen. Für Abrechnungen und Meldungen an den Versorger gilt der direkt am Zähler kontrollierte Stand. Nutzung auf eigene Gefahr; kein garantierter Support.
+
+## Was wird kontrolliert?
+
+Die Standardeinstellung vergleicht **fünf Vorkommastellen, also volle m³**. Erkannte Nachkommastellen werden zusätzlich angezeigt. Ein `?` steht für eine unklare Ziffer. Solange `vergleich_nachkommastellen: 0` eingestellt ist, werden unklare Nachkommastellen nicht bewertet.
+
+Die App holt das letzte vorhandene Foto sowie die zugehörigen Werte aus SLFork. Sie erkennt den Ziffernausschnitt anhand der grünen Rahmen oder nutzt einen eingestellten Bildausschnitt. Tesseract OCR liest den Zählerstand unabhängig aus dem Bild. Bei unklarer oder abweichender Erstlesung probiert sie **bis zu vier weitere Bildaufbereitungen desselben Fotos**. Eine passende Lesung kann den Durchlauf frühzeitig beenden.
+
+Im SLFork-Modus gleicht die App den OCR-Wert mit **Raw Value** und **Actual Value** ab. Im Kameramodus kann ein aktueller kumulierter m³-Sensor als Referenz dienen. Ohne Referenzsensor wird nur das OCR-Ergebnis ausgegeben.
+
+## „Jetzt prüfen“ – Live-Status
+
+Der Button startet einen **manuellen Test mit dem bereits vorhandenen Bild**. Er löst keine neue Aufnahme am ESP aus. Die Weboberfläche zeigt unmittelbar den aktuellen Schritt:
+
+1. Anfrage angenommen
+2. Bild und Referenzwerte laden
+3. OCR-Auswertung, **bis zu fünf Durchläufe** mit Fortschrittsbalken
+4. Ergebnis speichern und abschließen
+
+Der Balken zeigt **tatsächlich abgeschlossene OCR-Aufbereitungen** an, dazu die verstrichenen Sekunden. Eine feste Restdauer wird nicht behauptet, da die Laufzeit variiert und ein guter Treffer bereits im ersten Durchlauf möglich ist. Der manuelle Test verändert weder den automatischen Zeitplan noch die Trefferzahl.
+
+Die kompakte Weboberfläche zeigt die wichtigsten Angaben in getrennten Bereichen, Datum und Uhrzeit kurz als **TT.MM.JJ HH:MM** und die Kontrollbilder übersichtlich nebeneinander. Technische Diagnosewerte stehen weiterhin in Home Assistant zur Verfügung, ohne die normale Ansicht zu überladen.
+
+**Zwei unterschiedliche Fünfer-Zahlen:** Die bis zu **fünf OCR-Durchläufe** betreffen ein einzelnes Bild. Die **fünf bestätigten automatischen Prüfungen innerhalb von 24 Stunden** sind dagegen ein separates Kontrollziel. Auch ein einzelner manueller Durchlauf erhöht diese Zahl nicht.
+
+## Automatische Kontrolle
+
+Nach erfolgreichem Abgleich prüft die App normalerweise nach einer Stunde erneut. Bei Abweichungen, unklarer Erkennung oder fehlenden Daten versucht sie es alle fünf Minuten. Nach vier Stunden ohne bestätigte Übereinstimmung meldet `sensor.rf1_pruefstatus` den Zustand `review_due`. Ein optionaler Hinweis kann nach weiteren 24 Stunden einmalig als Push gesendet werden.
+
+Ein Messzeitpunkt wird automatisch nur einmal gezählt. Alte Bilder werden nicht als neue automatische Treffer gewertet; für manuelle Tests können sie dennoch nochmals ausgewertet werden.
 
 ## Voraussetzungen
 
-- Home Assistant mit Supervisor und App-Store auf ARM64 oder AMD64
-- Ein eingerichteter SLFork-ESP, den Home Assistant im Heimnetz erreicht
-- Ziffernrahmen in SLFork, die auf den Ziffernrollen liegen
+- Home Assistant mit Supervisor und App-Store (ARM64 oder AMD64)
+- **SLFork / AI on the Edge** auf einem im Heimnetz erreichbaren ESP mit gut ausgerichteten Ziffernrahmen, **oder** eine geeignete `camera.*`-Entität in Home Assistant
+- Ein lesbares Zählerbild; zum Vergleich ein passender Messwert (im Kameramodus optional ein aktueller kumulierter Sensor in m³)
 
 ## Installation
 
-1. Öffne **Einstellungen → Apps → App installieren → ⋮ → Repositories** und füge `https://github.com/Thunder86/rf1-kontrollmessung` hinzu.
-2. Installiere **RF1 Kontrollmessung** aus **EifelLayer RF1**.
-3. Trage unter **Konfiguration → esp_url** die vollständige Adresse deines ESP ein, beispielsweise `http://esp-gaszaehler.local`. Speichere und starte die App.
-4. Prüfe `sensor.rf1_pruefstatus` und `sensor.rf1_kontrollbild` in den Entwicklerwerkzeugen. Aktiviere auf der App-Infoseite **Automatische Updates**, wenn Home Assistant künftige Versionen selbst installieren soll.
+1. In Home Assistant unter **Einstellungen → Apps → App installieren → ⋮ → Repositories** die Adresse `https://github.com/Thunder86/rf1-kontrollmessung` hinzufügen.
+2. **Gaszähler OCR-Kontrolle** installieren.
+3. Für SLFork `esp_url` auf die Adresse des ESP setzen (z. B. `http://esp-gaszaehler.local`). Alternativ `kamera_entitaet`, `ausschnitt` und optional `referenz_entitaet` konfigurieren.
+4. App starten, **Weboberfläche öffnen** und mit **Jetzt prüfen** eine Testlesung durchführen.
 
-Wenn du von der lokalen App wechselst, übernimm zuerst deine ESP-Adresse und sonstigen Einstellungen. Stoppe die lokale App vor dem Start der Repository-Version. Beide verwenden dieselben Sensoren. Die lokal gespeicherte Prüfhistorie gehört zur jeweiligen Installation.
+Wer von einer alten lokalen RF1-App auf die Repository-Version wechselt, sollte die Einstellungen zuerst übernehmen und **nur eine Variante gleichzeitig betreiben**. Beide verwenden dieselben Entitäts-IDs; ihre lokal gespeicherten Historien sind voneinander getrennt.
 
-## Prüfverhalten
+## Wichtige Einstellungen
 
-Unter **Weboberfläche öffnen** zeigt RF1 den Countdown bis zur nächsten Prüfung, das Ergebnis und das aktuelle Bild neben dem letzten bestätigten Bild. **Jetzt prüfen** liest die vorhandene Aufnahme ein. Bei SLFork wird ein bereits ausgewerteter Messzyklus kein zweites Mal gezählt.
+| Einstellung | Funktion |
+| --- | --- |
+| `esp_url` | Adresse des SLFork-ESP |
+| `vergleich_nachkommastellen` | 0 = volle m³, 1–3 = genauere Vergleichsstellen |
+| `kamera_entitaet` | Optionales Kamerabild aus Home Assistant |
+| `referenz_entitaet` | Optionaler kumulierter m³-Sensor im Kameramodus |
+| `ausschnitt`, `vorkomma_breite` | Manueller Ziffernbereich, falls nötig |
+| `push_dienst` | Optionaler Benachrichtigungsdienst |
 
-Mit `vergleich_nachkommastellen` stellst du ein, ob null bis drei Nachkommastellen zählen. Der Standard ist **0**. Die Anzeige enthält die gelesenen Nachkommastellen auch bei einem Vergleich der vollen Kubikmeter. Ein `?` steht für eine unklare oder fehlende Ziffer. Für den Vergleich werden Stellen abgeschnitten, ohne zu runden.
+Die Einstellungen „Ziffernfarbe“ und „Vergleichsgenauigkeit“ auf der Weboberfläche gelten für den **manuellen Test**; die dauerhaft verwendeten Optionen werden in der App-Konfiguration verwaltet.
 
-### ESPHome und Pulssensor
+## Wo stehen die Ergebnisse?
 
-Für eine ESPHome-Kamera oder andere Home-Assistant-Kamera setze `kamera_entitaet` auf ihre `camera.*`-Entität. Richte dazu `ausschnitt` und `vorkomma_breite` manuell auf die Rollen ein. Mit leerem Kamerafeld läuft RF1 im SLFork-Modus.
+- **Weboberfläche öffnen:** Status, manueller Test mit Fortschritt, automatische Kontrolle und Kontrollbilder.
+- `sensor.rf1_pruefstatus`: automatischer Prüfstatus und technische Diagnosen.
+- `sensor.rf1_kontrollbild`: OCR-Erkennung, Bildzeit, `ocr_attempts` und `matches_last_24h`.
+- **Medien → Lokale Medien → rf1:** `kontrollbild.jpg` und `letzter_treffer.jpg`.
 
-Im Kameramodus kannst du mit `referenz_entitaet` einen kumulierten `sensor.*` in m³ angeben. Ein Pulssensor eignet sich, wenn er den absoluten Stand als Startstand plus Impulse × m³ pro Impuls liefert. Der Faktor richtet sich nach dem Zählertyp. Der Sensor muss den Stand mindestens alle fünf Minuten melden, auch wenn er gleich bleibt. Home Assistant liefert beim Kameraabruf keinen garantierten Aufnahmezeitstempel. Verwende deshalb eine Kamera, die ein aktuelles Bild liefert. Ohne Referenzsensor zeigt RF1 nur die OCR-Lesung an.
+Eine Meldung `match` bedeutet Übereinstimmung **bei der eingestellten Genauigkeit** – nicht notwendigerweise, dass jede sichtbare Nachkommastelle erkannt wurde.
 
-Beim Start prüft die App sofort, ob ein frisches, noch nicht ausgewertetes SLFork-Bild vorliegt.
-
-Nach einem Treffer prüft die App nach einer Stunde erneut. Bei Abweichungen, unklarer OCR oder fehlenden aktuellen Daten prüft sie alle fünf Minuten. Nach vier Stunden ohne bestätigte Übereinstimmung zeigt `sensor.rf1_pruefstatus` den Zustand `review_due` an. Diesen Status kannst du in eigenen Automationen verwenden.
-
-Die App liest sowohl normale als auch invertierte Bilder und übernimmt den Ausschnitt aus den SLFork-Ziffernrahmen. Falls die Rahmen fehlen, nutzt sie `ausschnitt` und `vorkomma_breite` aus der App-Konfiguration.
-
-## Optionale Push-Erinnerung
-
-Installiere die Home Assistant Companion App auf deinem Handy und verbinde sie mit Home Assistant. Suche unter **Entwicklerwerkzeuge → Aktionen** nach `notify.mobile_app_`. Trage den vollständigen Namen des Dienstes in der App-Konfiguration unter `push_dienst` ein, zum Beispiel `notify.mobile_app_mein_handy`. Speichere die Konfiguration und starte RF1 Kontrollmessung neu. Ein leeres Feld deaktiviert die Funktion.
-
-Bei `review_due` erscheint ein Hinweis in der Seitenleiste unter **Benachrichtigungen**. Ist er nach 24 Stunden noch offen, sendet die App einmalig einen Push mit **Prüfstatus öffnen** und **Überspringen**. Home Assistant meldet keinen Lesestatus. Schließe den Hinweis, um ihn zu quittieren. **Überspringen** quittiert den aktuellen Fall ebenfalls. Sobald die Messung wieder bestätigt ist, räumt die App den Hinweis auf. Bei einer neuen Störung beginnt die Frist von vorn.
-
-## Einstellungen bei Updates
-
-Ändere Werte weiterhin auf der Konfigurationsseite von Home Assistant. Bei einem Update derselben App bleiben deine Einstellungen erhalten. Die App speichert zusätzlich eine versionierte Kopie in ihrem Datenverzeichnis. Neue Felder erhalten Standardwerte. Migrationen in `settings.py` können gezielt alte Einträge umbenennen oder entfernen. Das frühere `intervall_sekunden` bleibt für ältere Installationen im Supervisor-Schema zulässig und wird aus der wirksamen Konfiguration entfernt.
+[Änderungsprotokoll](rf1_ocr_test/CHANGELOG.md) · [Installationshinweise für lokale Altversionen](rf1_ocr_test/README.md)

@@ -53,9 +53,12 @@ form label,form select,form input{{min-width:0}}
 header{{display:flex;align-items:baseline;justify-content:space-between;gap:.5rem 1rem;flex-wrap:wrap;margin-bottom:1rem}}
 .language-bar{{display:flex;flex-wrap:wrap}}
 .language-bar select,.language-bar button{{min-height:2.75rem}}
-.main-tabs{{display:flex;gap:.45rem;padding:.35rem;margin:0 0 1rem;border:1px solid var(--edge);border-radius:.85rem;background:var(--surface)}}
+.main-menu{{display:flex;align-items:center;gap:.45rem;padding:.35rem;margin:0 0 1rem;border:1px solid var(--edge);border-radius:.85rem;background:var(--surface)}}
+.main-tabs{{display:flex;flex:1;min-width:0;gap:.45rem}}
 .main-tabs button{{flex:1;min-height:2.8rem;background:transparent;border-color:transparent;color:var(--muted)}}
 .main-tabs button[aria-selected="true"]{{background:light-dark(#e7f0f5,#293b48);border-color:var(--edge);color:inherit}}
+.main-guide{{display:flex;align-items:center;justify-content:center;align-self:stretch;padding:.45rem .65rem;border-radius:.55rem;color:inherit;font-size:.9rem}}
+@media(max-width:400px){{.main-menu,.main-tabs{{gap:.2rem}}.main-tabs button,.main-guide{{padding-inline:.3rem}}}}
 .setup-dialog{{width:min(46rem,calc(100vw - 1.2rem));max-height:min(90dvh,52rem);overflow:auto;padding:1rem 1.2rem;border:1px solid var(--edge);border-radius:1rem;background:var(--surface);color:inherit;box-shadow:0 1rem 3rem #0004}}
 .setup-dialog::backdrop{{background:#07121dcc;backdrop-filter:blur(2px)}}
 .setup-dialog .manual-content{{margin-top:.5rem}}
@@ -214,9 +217,12 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <noscript><button type="submit">Speichern</button></noscript>
 </form>
 </header>
-<nav class="main-tabs" role="tablist" aria-label="Hauptmenü">
+<nav class="main-menu" aria-label="Hauptmenü">
+<div class="main-tabs" role="tablist" aria-label="Ansichten">
 <button type="button" role="tab" id="tab-overview" aria-controls="view-overview" aria-selected="true">Übersicht</button>
 <button type="button" role="tab" id="tab-settings" aria-controls="view-settings" aria-selected="false" tabindex="-1">Einstellungen</button>
+</div>
+<a id="open-user-guide" class="main-guide" href="https://github.com/Eifellayer/meter-ocr/blob/main/docs/Bedienungsanleitung-AI-Meter-Reader.pdf" target="_blank" rel="noopener noreferrer" title="Bebilderte Bedienungsanleitung (PDF)">Anleitung</a>
 </nav>
 <main>
 <div class="tab-content" id="view-overview" role="tabpanel" aria-labelledby="tab-overview" {overview_hidden}>
@@ -359,6 +365,8 @@ name: Zählerstand (OCR)</code></pre>
 <label>Breite der Vorkommastellen
 <input name="width" type="number" min="1" max="9999" value="{width_value}"></label>
 <p class="settings-note">Wähle den Ausschnitt im Originalbild. Positive Winkel drehen nach rechts, negative nach links. Die Vorkommabreite gilt nach der Drehung.</p>
+<button type="button" id="reset-manual-crop" data-default-crop="{default_crop_value}"
+        data-default-width="{default_crop_width}">Ausschnitt zurücksetzen</button>
 </div>
 <label>Eigenes Testbild (optional, JPG oder PNG)
 <input type="file" name="image" accept="image/jpeg,image/png"></label>
@@ -530,6 +538,7 @@ name: Zählerstand (OCR)</code></pre>
 <label>Breite der Vorkommastellen
 <input name="width" type="number" min="1" max="9999" value="{auto_width_value}"></label>
 <p class="settings-note">Wähle den Ausschnitt im Originalbild. Die Vorkommabreite gilt nach der Drehung.</p>
+<button type="submit" form="reset-auto-crop-form" name="reset_crop" value="1">Ausschnitt zurücksetzen</button>
 </div>
 <details class="help setup-help" id="reflection-settings">
 <summary>ⓘ Spiegelungen und verdeckte Ziffern</summary>
@@ -538,6 +547,11 @@ name: Zählerstand (OCR)</code></pre>
 <label class="check-option"><input type="checkbox" name="reflection_suggestion_hidden" value="1" {reflection_hide_checked}> Vorschlag bei wiederholt unlesbarer Ziffer ausblenden</label>
 </details>
 <button type="submit">Speichern</button>
+</form>
+<form method="post" action="automatik" id="reset-auto-crop-form" hidden>
+<input type="hidden" name="lang" value="{language}">
+<input type="hidden" name="mode" value="{language_mode}">
+<input type="hidden" name="csrf" value="{csrf}">
 </form>
 <p class="settings-note">Nach zwei Fehlprüfungen mit kurzem Abstand gilt wieder dein eingestelltes Prüfintervall. Bei geänderter Vergleichsgenauigkeit beginnt die Trefferzählung neu.</p>
 </div></details>
@@ -817,6 +831,7 @@ let drawUploadUrl = '';
 let drawStart = null;
 let drawnCrop = null;
 let lastManualImageTime = 0;
+let lastManualCropResetTime = 0;
 
 function updateDrawnWidth(box) {{
   const [left, top, right, bottom] = box;
@@ -935,6 +950,19 @@ function showCropFields() {{
 }}
 cropMode.addEventListener('change', showCropFields);
 showCropFields();
+const resetManualCrop = document.querySelector('#reset-manual-crop');
+resetManualCrop.addEventListener('click', () => {{
+  drawnCrop = null;
+  lastManualCropResetTime = Date.now() / 1000;
+  drawOutline.hidden = true;
+  document.querySelector('#apply-crop-form').hidden = true;
+  manualForm.elements.crop.value = resetManualCrop.dataset.defaultCrop;
+  manualForm.elements.width.value = resetManualCrop.dataset.defaultWidth;
+  manualForm.elements.rotation.value = '0';
+  cropMode.value = 'auto';
+  showCropFields();
+  cropMode.focus();
+}});
 function renderAttempts(details, readings, decimals) {{
   details.hidden = !Array.isArray(readings) || !readings.length;
   if (details.hidden) return;
@@ -1045,7 +1073,7 @@ async function refreshTestStatus() {{
         if (showManual) automaticImages.open = true;
       }}
     }}
-    apply.hidden = !(job.phase === 'done' && job.can_apply_crop);
+    apply.hidden = !(job.phase === 'done' && job.can_apply_crop && job.checked_at > lastManualCropResetTime);
     document.querySelector('#tested-crop-id').value = job.crop_id || '';
   }} catch (_) {{
     document.querySelector('#test-meta').textContent = 'Status nicht erreichbar – Verbindung prüfen.';
@@ -1671,6 +1699,7 @@ def start_panel(
                 "Einrichtung gespeichert." if saved == "setup" else
                 "Automatische Prüfregeln gespeichert." if saved == "1" else
                 "Getesteten Bildausschnitt für die Automatik übernommen." if saved == "crop" else
+                "Ausschnitt zurückgesetzt. Die Automatik sucht die Ziffernreihe wieder selbst." if saved == "crop-reset" else
                 "Benachrichtigungen gespeichert." if saved == "notifications" else
                 "Bildquelle gespeichert." if saved == "source" else ""
             )
@@ -1717,7 +1746,7 @@ def start_panel(
                 overview_hidden="hidden" if settings_tab_active else "",
                 settings_hidden="" if settings_tab_active else "hidden",
                 language_options=select_options({"auto": automatic, "de": "Deutsch", "en": "English"}, mode),
-                settings_open="open" if saved in ("1", "crop") else "",
+                settings_open="open" if saved in ("1", "crop", "crop-reset") else "",
                 setup_first_run=str(bool(setup_pending or reset_state == "done")).lower(),
                 precision_hidden="" if auto_rules["decimals"] == 3 else "hidden",
                 precision_checked="checked" if auto_rules.get("precision_mode") else "",
@@ -1801,7 +1830,7 @@ def start_panel(
                 max_interval_minutes=MAX_INTERVAL_MINUTES,
                 interval_minutes=auto_rules.get("interval_minutes", DEFAULT_INTERVAL_MINUTES),
                 auto_rotation_value=editable_rotation(auto_rules),
-                auto_saved_notice=auto_saved_notice if saved in ("1", "crop") else "",
+                auto_saved_notice=auto_saved_notice if saved in ("1", "crop", "crop-reset") else "",
                 manual_reference=html.escape(str(settings.get("manual_reference", auto_rules["fallback_value"])),
                                              quote=True),
                 test_source_preview=test_source_preview,
@@ -1820,6 +1849,8 @@ def start_panel(
                     settings.get("crop_mode", "auto"),
                 ),
                 crop_value=html.escape(str(settings.get("crop", default_crop)), quote=True),
+                default_crop_value=html.escape(default_crop, quote=True),
+                default_crop_width=default_width,
                 crop_whole_ratio=auto_rules["integer_digits"] /
                     (auto_rules["integer_digits"] + auto_rules["fraction_digits"]),
                 width_value=int(settings.get("width", default_width)),
@@ -2145,6 +2176,17 @@ def start_panel(
                 self.redirect("?saved=crop&ui=settings" + keep_mode)
                 return
             if path == "/automatik":
+                if form.get("reset_crop") == ["1"]:
+                    try:
+                        with rules_lock:
+                            save_auto_rules({**read_auto_rules(), "crop_mode": "auto", "crop": default_crop,
+                                             "width": default_width, "rotation": 0})
+                    except (OSError, ValueError):
+                        problem(503, "Der Bildausschnitt konnte nicht zurückgesetzt werden.",
+                                "Could not reset the image crop.")
+                        return
+                    self.redirect("?saved=crop-reset&ui=settings" + keep_mode)
+                    return
                 decimals = form.get("decimals", [])
                 attempts = form.get("attempts", [])
                 polarity = form.get("polarity", [])

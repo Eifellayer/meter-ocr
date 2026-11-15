@@ -33,6 +33,9 @@ EN_UI = {
     RAW_ROW_UNCLEAR: "Could not find a clear digit row. Set the crop in the manual test.",
     MANUAL_ROW_UNCLEAR: "The digits are hard to read. Check the image rotation, camera angle, focus and lighting.",
     "Ausschnitt im Bild ziehen": "Draw a crop on the image",
+    "Ausschnitt zurücksetzen": "Reset crop",
+    "Ausschnitt zurückgesetzt. Die Automatik sucht die Ziffernreihe wieder selbst.":
+        "Crop reset. Automatic checks will locate the digit row again.",
     "Ziehe mit Maus oder Finger einen Rahmen um die gesamte Ziffernreihe. Prüfe danach den Ausschnitt mit „Jetzt prüfen“.":
         "Draw a rectangle around the full digit row with a mouse or finger. Then select “Run check now” to test the crop.",
     "Originalbild zum Einstellen des Ausschnitts": "Original image for setting the crop",
@@ -91,6 +94,9 @@ EN_UI = {
     "Die Einrichtung konnte nicht übersprungen werden.": "Setup could not be skipped.",
     "Übersicht": "Overview",
     "Hauptmenü": "Main menu",
+    "Ansichten": "Views",
+    "Bebilderte Bedienungsanleitung (PDF)": "Illustrated user guide (PDF)",
+    ">Anleitung</a>": ">Guide</a>",
     "Fallback-Wert für diesen Test (optional)": "Fallback reading for this test (optional)",
     "Am markierten Bild ablesen und hier eintragen. Der Wert wird nur mit dem manuellen Test verglichen und nicht als automatische Referenz gespeichert.":
         "Read the marked image and enter the value here. It is compared only with the manual test and is not saved as the automatic reference.",

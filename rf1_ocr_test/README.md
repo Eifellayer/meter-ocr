@@ -12,9 +12,9 @@ Die ausführliche Einführung, Voraussetzungen, Installation und Konfiguration f
 
 ## Installation
 
-**AI Meter Reader (Alpha)** ist in Version 0.4.6 der reguläre Testkanal. Danach ist ein Hall-/Impuls-Sensor als erste separate Beta-Funktion geplant, weil dafür ein realer Hardwaretest nötig ist.
+**AI Meter Reader (Alpha)** ist in Version 0.4.7 der reguläre Testkanal. Danach ist ein Hall-/Impuls-Sensor als erste separate Beta-Funktion geplant, weil dafür ein realer Hardwaretest nötig ist.
 
-Über **Einstellungen → Apps → App installieren → ⋮ → Repositories** den [Stable-Link](https://github.com/Eifellayer/meter-ocr#stable) hinzufügen und **AI Meter Reader** installieren. Version 0.4.6 ist die Alpha-Testversion. Im SLFork-Modus die `esp_url` eintragen, starten und die Weboberfläche öffnen.
+Über **Einstellungen → Apps → App installieren → ⋮ → Repositories** den [Stable-Link](https://github.com/Eifellayer/meter-ocr#stable) hinzufügen und **AI Meter Reader** installieren. Version 0.4.7 ist die Alpha-Testversion. Im SLFork-Modus die `esp_url` eintragen, starten und die Weboberfläche öffnen.
 
 ## Sprache wählen
 

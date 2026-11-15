@@ -132,8 +132,10 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .source-mode-guide{{grid-column:1/-1;display:grid;gap:.75rem;grid-template-columns:repeat(auto-fit,minmax(min(100%,14rem),1fr))}}
 .source-mode-guide ul{{padding-inline-start:1.25rem;margin:0}}
 .source-mode-guide li + li{{margin-top:.35rem}}
-.crop-draw{{grid-column:1/-1}}
-.crop-draw summary{{cursor:pointer}}
+.crop-draw{{grid-column:1/-1;padding:.85rem;border:1px solid var(--edge);border-radius:.65rem}}
+.crop-draw > p{{margin:.3rem 0 .7rem}}
+.crop-actions{{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:.55rem}}
+.crop-reset{{background:transparent}}
 .crop-draw-image{{position:relative;max-width:700px;touch-action:none;user-select:none;cursor:crosshair}}
 .crop-draw-image img{{display:block;width:100%;height:auto;pointer-events:none}}
 .crop-draw-outline{{position:absolute;box-sizing:border-box;border:3px solid #ffcf53;background:#ffcf5320;pointer-events:none}}
@@ -345,6 +347,7 @@ name: Zählerstand (OCR)</code></pre>
 <details class="manual-panel settings-item" id="manual-panel" {manual_open}>
 <summary><strong>Testeinstellungen</strong></summary>
 <div class="manual-content">
+{manual_saved_notice}
 <form method="post" action="pruefen" id="manual-form" enctype="multipart/form-data">
 <input type="hidden" name="lang" value="{language}">
 <input type="hidden" name="mode" value="{language_mode}">
@@ -357,6 +360,14 @@ name: Zählerstand (OCR)</code></pre>
 <select name="attempts">{attempt_options}</select></label>
 <label>Bildbereich
 <select name="crop_mode" id="crop-mode">{crop_mode_options}</select></label>
+<div class="crop-draw" id="crop-draw" hidden>
+<p class="settings-note">Ziehe mit Maus oder Finger einen Rahmen um die gesamte Ziffernreihe.</p>
+<div class="crop-draw-image" id="crop-draw-area" hidden>
+<img alt="Originalbild zum Einstellen des Ausschnitts" draggable="false">
+<span class="crop-draw-outline" hidden></span>
+</div>
+<p class="settings-note" role="status">Kamerabild wird geladen …</p>
+</div>
 <div class="crop-fields" id="crop-fields" hidden>
 <label>Manueller Ausschnitt (links, oben, rechts, unten)
 <input name="crop" type="text" value="{crop_value}" maxlength="30" placeholder="52,56,564,132"></label>
@@ -365,22 +376,16 @@ name: Zählerstand (OCR)</code></pre>
 <label>Breite der Vorkommastellen
 <input name="width" type="number" min="1" max="9999" value="{width_value}"></label>
 <p class="settings-note">Wähle den Ausschnitt im Originalbild. Positive Winkel drehen nach rechts, negative nach links. Die Vorkommabreite gilt nach der Drehung.</p>
-<button type="button" id="reset-manual-crop" data-default-crop="{default_crop_value}"
-        data-default-width="{default_crop_width}">Ausschnitt zurücksetzen</button>
 </div>
 <label>Eigenes Testbild (optional, JPG oder PNG)
 <input type="file" name="image" accept="image/jpeg,image/png"></label>
 <p class="settings-note">Ein ausgewähltes Bild wird nur für diesen manuellen Test verwendet (max. 3 MB).</p>
-<details class="crop-draw" id="crop-draw">
-<summary>Ausschnitt im Bild ziehen</summary>
-<p class="settings-note">Ziehe mit Maus oder Finger einen Rahmen um die gesamte Ziffernreihe. Prüfe danach den Ausschnitt mit „Jetzt prüfen“.</p>
-<div class="crop-draw-image" id="crop-draw-area" hidden>
-<img id="crop-draw-original" alt="Originalbild zum Einstellen des Ausschnitts" draggable="false">
-<span class="crop-draw-outline" id="crop-draw-outline" hidden></span>
-</div>
-<p class="settings-note" id="crop-draw-empty" hidden>Kein Bild vorhanden. Starte einen manuellen Test oder wähle ein eigenes Bild.</p>
-</details>
+<div class="crop-actions">
 <button id="start-check-with-options" type="submit">Jetzt prüfen</button>
+<button id="save-manual-crop" type="submit" name="save_settings" value="1" hidden>Ausschnitt und Drehung speichern</button>
+<button type="button" id="reset-manual-crop" class="crop-reset" data-default-crop="{default_crop_value}"
+        data-default-width="{default_crop_width}" hidden>Ausschnitt zurücksetzen</button>
+</div>
 </form>
 <details class="help"><summary title="Informationen zum manuellen Bildtest">ⓘ Was passiert bei „Jetzt prüfen“?</summary>
 <p>Die App verwendet das letzte vorhandene Zählerbild oder ein ausgewähltes eigenes JPG-/PNG-Testbild (bis 3 MB). Sie liest die Zahlen aus dem Bild und vergleicht sie mit dem Referenzwert. Sobald die Werte übereinstimmen, stoppt die Prüfung. Andernfalls werden höchstens so viele OCR-Versuche durchgeführt wie eingestellt (1–10). Der Test verändert die automatische Trefferzahl nicht.</p></details>
@@ -510,7 +515,7 @@ name: Zählerstand (OCR)</code></pre>
 <details class="manual-panel settings-item" id="automatic-settings" {settings_open}>
 <summary><strong>Automatische Prüfung</strong></summary>
 <div class="manual-content">
-<form method="post" action="automatik" id="auto-form">
+<form method="post" action="automatik" id="auto-form" data-saved-crop-mode="{saved_auto_crop_mode}">
 <input type="hidden" name="lang" value="{language}">
 <input type="hidden" name="mode" value="{language_mode}">
 <input type="hidden" name="csrf" value="{csrf}">
@@ -530,6 +535,14 @@ name: Zählerstand (OCR)</code></pre>
 <select name="polarity">{auto_polarity_options}</select></label>
 <label>Bildbereich
 <select name="crop_mode" id="auto-crop-mode">{auto_crop_mode_options}</select></label>
+<div class="crop-draw" id="auto-crop-draw" hidden>
+<p class="settings-note">Ziehe mit Maus oder Finger einen Rahmen um die gesamte Ziffernreihe.</p>
+<div class="crop-draw-image" id="auto-crop-draw-area" hidden>
+<img alt="Originalbild zum Einstellen des Ausschnitts" draggable="false">
+<span class="crop-draw-outline" hidden></span>
+</div>
+<p class="settings-note" role="status">Kamerabild wird geladen …</p>
+</div>
 <div class="crop-fields" id="auto-crop-fields" hidden>
 <label>Bildbereich (links, oben, rechts, unten)
 <input name="crop" type="text" value="{auto_crop_value}" maxlength="30" placeholder="52,56,564,132"></label>
@@ -538,7 +551,11 @@ name: Zählerstand (OCR)</code></pre>
 <label>Breite der Vorkommastellen
 <input name="width" type="number" min="1" max="9999" value="{auto_width_value}"></label>
 <p class="settings-note">Wähle den Ausschnitt im Originalbild. Die Vorkommabreite gilt nach der Drehung.</p>
-<button type="submit" form="reset-auto-crop-form" name="reset_crop" value="1">Ausschnitt zurücksetzen</button>
+</div>
+<div class="crop-actions">
+<button type="submit" id="save-auto-settings">Speichern</button>
+<button type="submit" id="reset-auto-crop" class="crop-reset" form="reset-auto-crop-form"
+        name="reset_crop" value="1" hidden>Ausschnitt zurücksetzen</button>
 </div>
 <details class="help setup-help" id="reflection-settings">
 <summary>ⓘ Spiegelungen und verdeckte Ziffern</summary>
@@ -546,7 +563,6 @@ name: Zählerstand (OCR)</code></pre>
 <p>Die App ergänzt eine Ziffer nur, wenn zwischen zwei sicheren Ständen genau ein Wert plausibel ist. Die berechnete Ziffer bleibt gelb. Ein manuell eingetragener Startwert mit Ablesezeit kann als erster Vergleichswert dienen.</p>
 <label class="check-option"><input type="checkbox" name="reflection_suggestion_hidden" value="1" {reflection_hide_checked}> Vorschlag bei wiederholt unlesbarer Ziffer ausblenden</label>
 </details>
-<button type="submit">Speichern</button>
 </form>
 <form method="post" action="automatik" id="reset-auto-crop-form" hidden>
 <input type="hidden" name="lang" value="{language}">
@@ -819,114 +835,140 @@ function setTestActive(active) {{
     button.textContent = active ? 'Prüfung läuft …' : (index === 0 ? 'Test starten' : 'Jetzt prüfen');
   }}
 }}
-const cropMode = document.querySelector('#crop-mode');
-const cropFields = document.querySelector('#crop-fields');
-const drawPanel = document.querySelector('#crop-draw');
-const drawArea = document.querySelector('#crop-draw-area');
-const drawImage = document.querySelector('#crop-draw-original');
-const drawOutline = document.querySelector('#crop-draw-outline');
-const drawEmpty = document.querySelector('#crop-draw-empty');
-const uploadInput = manualForm.elements.image;
-let drawUploadUrl = '';
-let drawStart = null;
-let drawnCrop = null;
-let lastManualImageTime = 0;
 let lastManualCropResetTime = 0;
 
-function updateDrawnWidth(box) {{
-  const [left, top, right, bottom] = box;
-  const width = right - left;
-  const height = bottom - top;
-  const angle = Math.abs(Number(manualForm.elements.rotation.value)) % 180;
-  const radians = angle * Math.PI / 180;
-  const span = width * Math.abs(Math.cos(radians)) + height * Math.abs(Math.sin(radians));
-  const rotatedWidth = angle === 0 ? width : angle === 90 ? height :
-    Math.ceil((width + span) / 2) - Math.floor((width - span) / 2);
-  manualForm.elements.width.value = Math.min(9999, Math.max(1, Math.round(rotatedWidth * {crop_whole_ratio})));
-}}
-manualForm.elements.rotation.addEventListener('change', () => {{
-  if (drawnCrop && manualForm.elements.crop.value === drawnCrop.join(',')) updateDrawnWidth(drawnCrop);
-}});
+function cropEditor(form, panel, fields, reset, save, emptyText) {{
+  const mode = form.elements.crop_mode;
+  const crop = form.elements.crop;
+  const rotation = form.elements.rotation;
+  const area = panel.querySelector('.crop-draw-image');
+  const image = area.querySelector('img');
+  const outline = area.querySelector('span');
+  const status = panel.querySelector('[role="status"]');
+  const upload = form.elements.image;
+  let currentVersion = '';
+  let manualVersion = '';
+  let displayedUrl = '';
+  let drawnCrop = null;
+  let drag = null;
 
-function drawCropOutline(box) {{
-  const [left, top, right, bottom] = box;
-  const w = drawImage.naturalWidth;
-  const h = drawImage.naturalHeight;
-  drawOutline.style.left = left / w * 100 + '%';
-  drawOutline.style.top = top / h * 100 + '%';
-  drawOutline.style.width = (right - left) / w * 100 + '%';
-  drawOutline.style.height = (bottom - top) / h * 100 + '%';
-  drawOutline.hidden = !w || !h;
-}}
-function loadCropDrawImage() {{
-  if (drawUploadUrl) URL.revokeObjectURL(drawUploadUrl);
-  const file = uploadInput.files[0];
-  drawUploadUrl = file ? URL.createObjectURL(file) : '';
-  const time = Date.now();
-  const images = drawUploadUrl ? [drawUploadUrl] : lastManualImageTime ?
-    ['testbild.jpg?v=' + lastManualImageTime, 'aktuell.jpg?v=' + time] :
-    ['aktuell.jpg?v=' + time, 'testbild.jpg?v=' + time];
-  drawArea.hidden = true;
-  drawEmpty.hidden = true;
-  drawOutline.hidden = true;
-  let index = 0;
-  drawImage.onerror = () => {{
-    index += 1;
-    if (index < images.length) drawImage.src = images[index];
-    else drawEmpty.hidden = false;
-  }};
-  drawImage.onload = () => {{
-    drawArea.hidden = false;
-    const box = manualForm.elements.crop.value.split(',').map(Number);
-    if (cropMode.value === 'manual' && box.length === 4 && box.every(Number.isFinite) &&
-        box[0] >= 0 && box[1] >= 0 && box[0] < box[2] && box[1] < box[3] &&
-        box[2] <= drawImage.naturalWidth && box[3] <= drawImage.naturalHeight) drawCropOutline(box);
-  }};
-  drawImage.src = images[index];
-}}
-function pointerPosition(event) {{
-  const rect = drawImage.getBoundingClientRect();
-  const w = drawImage.naturalWidth;
-  const h = drawImage.naturalHeight;
-  return [Math.round(Math.max(0, Math.min(w, (event.clientX - rect.left) * w / rect.width))),
-          Math.round(Math.max(0, Math.min(h, (event.clientY - rect.top) * h / rect.height)))];
-}}
-function rectangleTo(event) {{
-  const [x, y] = pointerPosition(event);
-  const [left, top] = drawStart.point;
-  return [Math.min(left, x), Math.min(top, y), Math.max(left, x), Math.max(top, y)];
-}}
-drawPanel.addEventListener('toggle', () => {{ if (drawPanel.open) loadCropDrawImage(); }});
-uploadInput.addEventListener('change', () => {{ if (drawPanel.open) loadCropDrawImage(); }});
-drawArea.addEventListener('pointerdown', event => {{
-  if (event.button !== 0 || drawStart || !drawImage.naturalWidth) return;
-  event.preventDefault();
-  drawStart = {{id: event.pointerId, point: pointerPosition(event)}};
-  drawArea.setPointerCapture(event.pointerId);
-  drawCropOutline(rectangleTo(event));
-}});
-drawArea.addEventListener('pointermove', event => {{
-  if (drawStart?.id === event.pointerId) drawCropOutline(rectangleTo(event));
-}});
-drawArea.addEventListener('pointerup', event => {{
-  if (drawStart?.id !== event.pointerId) return;
-  const box = rectangleTo(event);
-  drawStart = null;
-  const [left, top, right, bottom] = box;
-  if (right - left < 8 || bottom - top < 8) {{
-    drawOutline.hidden = true;
-    return;
+  function updateWidth(box) {{
+    const [left, top, right, bottom] = box;
+    const width = right - left;
+    const height = bottom - top;
+    const angle = Math.abs(Number(rotation.value)) % 180;
+    const radians = angle * Math.PI / 180;
+    const span = width * Math.abs(Math.cos(radians)) + height * Math.abs(Math.sin(radians));
+    const turned = angle === 0 ? width : angle === 90 ? height :
+      Math.ceil((width + span) / 2) - Math.floor((width - span) / 2);
+    form.elements.width.value = Math.min(9999, Math.max(1, Math.round(turned * {crop_whole_ratio})));
   }}
-  drawnCrop = box;
-  manualForm.elements.crop.value = box.join(',');
-  updateDrawnWidth(box);
-  cropMode.value = 'manual';
-  showCropFields();
-  drawCropOutline(box);
-}});
-drawArea.addEventListener('pointercancel', () => {{ drawStart = null; drawOutline.hidden = true; }});
-const autoCropMode = document.querySelector('#auto-crop-mode');
-const autoCropFields = document.querySelector('#auto-crop-fields');
+  function paint(box) {{
+    const [left, top, right, bottom] = box;
+    const w = image.naturalWidth;
+    const h = image.naturalHeight;
+    outline.hidden = !w || !h || box.length !== 4 || !box.every(Number.isFinite) ||
+      left < 0 || top < 0 || left >= right || top >= bottom || right > w || bottom > h;
+    if (outline.hidden) return;
+    outline.style.left = left / w * 100 + '%';
+    outline.style.top = top / h * 100 + '%';
+    outline.style.width = (right - left) / w * 100 + '%';
+    outline.style.height = (bottom - top) / h * 100 + '%';
+  }}
+  function paintSaved() {{ paint(crop.value.split(',').map(Number)); }}
+  function loadImage() {{
+    if (displayedUrl.startsWith('blob:')) URL.revokeObjectURL(displayedUrl);
+    const file = upload?.files[0];
+    displayedUrl = file ? URL.createObjectURL(file) : 'aktuell.jpg?v=' + encodeURIComponent(currentVersion || Date.now());
+    area.hidden = true;
+    status.hidden = false;
+    status.textContent = 'Kamerabild wird geladen …';
+    image.src = displayedUrl;
+  }}
+  image.addEventListener('load', () => {{
+    area.hidden = false;
+    status.hidden = true;
+    paintSaved();
+  }});
+  image.addEventListener('error', () => {{
+    if (upload && !upload.files[0] && manualVersion && !displayedUrl.startsWith('testbild.jpg')) {{
+      displayedUrl = 'testbild.jpg?v=' + encodeURIComponent(manualVersion);
+      image.src = displayedUrl;
+      return;
+    }}
+    status.textContent = emptyText;
+  }});
+  function syncMode() {{
+    const manual = mode.value === 'manual';
+    panel.hidden = fields.hidden = !manual;
+    reset.hidden = !manual && (!save || form.dataset.savedCropMode !== 'manual');
+    if (save) save.textContent = manual ? 'Ausschnitt, Drehung und Einstellungen speichern' : 'Einstellungen speichern';
+    else form.querySelector('#save-manual-crop').hidden = !manual;
+    if (manual) loadImage();
+  }}
+  function rectangle(event) {{
+    const rect = image.getBoundingClientRect();
+    const point = (value, offset, size, pixels) => Math.round(Math.max(0, Math.min(pixels, (value - offset) * pixels / size)));
+    const x = point(event.clientX, rect.left, rect.width, image.naturalWidth);
+    const y = point(event.clientY, rect.top, rect.height, image.naturalHeight);
+    return [Math.min(drag.x, x), Math.min(drag.y, y), Math.max(drag.x, x), Math.max(drag.y, y)];
+  }}
+  area.addEventListener('pointerdown', event => {{
+    if (event.button !== 0 || drag || !image.naturalWidth) return;
+    event.preventDefault();
+    const rect = image.getBoundingClientRect();
+    drag = {{id: event.pointerId,
+      x: Math.round((event.clientX - rect.left) * image.naturalWidth / rect.width),
+      y: Math.round((event.clientY - rect.top) * image.naturalHeight / rect.height)}};
+    area.setPointerCapture(event.pointerId);
+  }});
+  area.addEventListener('pointermove', event => {{
+    if (drag?.id === event.pointerId) paint(rectangle(event));
+  }});
+  area.addEventListener('pointerup', event => {{
+    if (drag?.id !== event.pointerId) return;
+    const box = rectangle(event);
+    drag = null;
+    if (box[2] - box[0] >= 8 && box[3] - box[1] >= 8) {{
+      drawnCrop = box;
+      crop.value = box.join(',');
+      updateWidth(box);
+    }}
+    paintSaved();
+  }});
+  area.addEventListener('pointercancel', () => {{ drag = null; paintSaved(); }});
+  rotation.addEventListener('change', () => {{
+    if (drawnCrop && crop.value === drawnCrop.join(',')) updateWidth(drawnCrop);
+  }});
+  crop.addEventListener('change', paintSaved);
+  upload?.addEventListener('change', () => {{ if (!panel.hidden) loadImage(); }});
+  mode.addEventListener('change', syncMode);
+  if (!save) reset.addEventListener('click', () => {{
+    drawnCrop = drag = null;
+    lastManualCropResetTime = Date.now() / 1000;
+    document.querySelector('#apply-crop-form').hidden = true;
+    crop.value = reset.dataset.defaultCrop;
+    form.elements.width.value = reset.dataset.defaultWidth;
+    rotation.value = '0';
+    mode.value = 'auto';
+    syncMode();
+    mode.focus();
+  }});
+  syncMode();
+  return (version, testVersion = '') => {{
+    if (version === currentVersion && testVersion === manualVersion) return;
+    currentVersion = version;
+    manualVersion = testVersion;
+    if (!panel.hidden && area.hidden && !upload?.files[0]) loadImage();
+  }};
+}}
+const updateManualCropImage = cropEditor(manualForm, document.querySelector('#crop-draw'),
+  document.querySelector('#crop-fields'), document.querySelector('#reset-manual-crop'), null,
+  'Kein Kamerabild verfügbar. Wähle ein eigenes Bild oder starte einen Test.');
+const updateAutoCropImage = cropEditor(document.querySelector('#auto-form'), document.querySelector('#auto-crop-draw'),
+  document.querySelector('#auto-crop-fields'), document.querySelector('#reset-auto-crop'),
+  document.querySelector('#save-auto-settings'),
+  'Kein Kamerabild verfügbar. Prüfe die Bildquelle oder warte auf die nächste automatische Prüfung.');
 const sourceMode = document.querySelector('#source-mode');
 function showSourceFields() {{
   const mode = sourceMode.value;
@@ -940,29 +982,6 @@ function showSourceFields() {{
 }}
 sourceMode.addEventListener('change', showSourceFields);
 showSourceFields();
-function showAutoCropFields() {{
-  autoCropFields.hidden = autoCropMode.value !== 'manual';
-}}
-autoCropMode.addEventListener('change', showAutoCropFields);
-showAutoCropFields();
-function showCropFields() {{
-  cropFields.hidden = cropMode.value !== 'manual';
-}}
-cropMode.addEventListener('change', showCropFields);
-showCropFields();
-const resetManualCrop = document.querySelector('#reset-manual-crop');
-resetManualCrop.addEventListener('click', () => {{
-  drawnCrop = null;
-  lastManualCropResetTime = Date.now() / 1000;
-  drawOutline.hidden = true;
-  document.querySelector('#apply-crop-form').hidden = true;
-  manualForm.elements.crop.value = resetManualCrop.dataset.defaultCrop;
-  manualForm.elements.width.value = resetManualCrop.dataset.defaultWidth;
-  manualForm.elements.rotation.value = '0';
-  cropMode.value = 'auto';
-  showCropFields();
-  cropMode.focus();
-}});
 function renderAttempts(details, readings, decimals) {{
   details.hidden = !Array.isArray(readings) || !readings.length;
   if (details.hidden) return;
@@ -1032,7 +1051,6 @@ async function refreshTestStatus() {{
       job.phase === 'done' ? (done === 1 ? '1 OCR-Versuch' : done + ' OCR-Versuche') : 'Bereit für den manuellen Test.';
 
     if (job.phase === 'done') {{
-      lastManualImageTime = job.checked_at;
       sourcePreview.hidden = false;
       sourceImage.hidden = false;
       sourceImage.onload = () => {{ sourceImage.hidden = false; sourceEmpty.hidden = true; }};
@@ -1053,6 +1071,8 @@ async function refreshTestStatus() {{
       detail.hidden = true;
       extra.hidden = true;
     }}
+    updateManualCropImage(job.current_image, job.manual_source_image);
+    updateAutoCropImage(job.current_image);
     const automaticVersion = job.automatic_preview || job.current_image;
     const showManual = job.phase === 'done' && job.preview &&
       (!automaticVersion || job.checked_at * 1e9 >= Number(automaticVersion));
@@ -1127,6 +1147,7 @@ if (['queued', 'open', 'busy'].includes(testRequest)) {{
   history.replaceState(null, '', location.pathname + (searchPrefs.size ? '?' + searchPrefs : ''));
 }}
 manualForm.addEventListener('submit', event => {{
+  if (event.submitter?.name === 'save_settings') return;
   if (sendingCheck) {{
     event.preventDefault();
     return;
@@ -1270,11 +1291,11 @@ def editable_rotation(values):
 POLARITIES = {"auto": "Automatisch", "light": "Hell", "dark": "Dunkel"}
 DECIMALS = {"0": "Volle Kubikmeter", "1": "1 Nachkommastelle", "2": "2 Nachkommastellen", "3": "3 Nachkommastellen"}
 ATTEMPTS = {str(value): str(value) for value in range(1, 11)}
-CROP_MODES = {"auto": "Automatisch erkennen", "manual": "Ausschnitt selbst festlegen"}
+CROP_MODES = {"auto": "Automatisch erkennen", "manual": "Rahmen ziehen"}
 POLARITIES_EN = {"auto": "Automatic", "light": "Light digits", "dark": "Dark digits"}
 DECIMALS_EN = {"0": "Whole cubic meters", "1": "1 decimal place",
                "2": "2 decimal places", "3": "3 decimal places"}
-CROP_MODES_EN = {"auto": "Detect automatically", "manual": "Specify crop"}
+CROP_MODES_EN = {"auto": "Detect automatically", "manual": "Draw a frame"}
 
 
 def select_options(choices, chosen):
@@ -1616,6 +1637,7 @@ def start_panel(
                 snapshot["crop_id"] = str(snapshot["checked_at"]) if snapshot["can_apply_crop"] else ""
                 snapshot["automatic_preview"] = image_version(automatic_preview)
                 snapshot["current_image"] = image_version(current_image)
+                snapshot["manual_source_image"] = image_version(test_source_image)
                 if language == "en":
                     snapshot["message"] = english_progress(snapshot.get("message"))
                     if snapshot.get("detail"):
@@ -1696,6 +1718,7 @@ def start_panel(
             settings_tab_active = (selected_tab == "settings" if selected_tab in ("settings", "overview") else
                                    saved in ("1", "crop", "notifications", "source") or setup_pending)
             saved_message = (
+                "Ausschnitt und Drehung für manuelle Tests gespeichert." if saved == "manual-crop" else
                 "Einrichtung gespeichert." if saved == "setup" else
                 "Automatische Prüfregeln gespeichert." if saved == "1" else
                 "Getesteten Bildausschnitt für die Automatik übernommen." if saved == "crop" else
@@ -1779,7 +1802,8 @@ def start_panel(
                     {key: label for key, label in (DECIMALS_EN if language == "en" else DECIMALS).items()
                      if int(key) <= auto_rules["fraction_digits"]}, str(auto_rules["decimals"])),
                 wizard_crop_options=select_options(
-                    CROP_MODES_EN if language == "en" else CROP_MODES, auto_rules["crop_mode"]),
+                    {**CROP_MODES_EN, "manual": "Enter crop coordinates"} if language == "en"
+                    else {**CROP_MODES, "manual": "Bildkoordinaten eingeben"}, auto_rules["crop_mode"]),
                 fallback_value=html.escape(auto_rules["fallback_value"], quote=True),
                 fallback_time=html.escape(auto_rules["fallback_time"], quote=True),
                 wizard_saved_notice=(
@@ -1788,6 +1812,7 @@ def start_panel(
                     if saved == "setup" else ""
                 ),
                 manual_open="open" if test == "open" else "",
+                manual_saved_notice=auto_saved_notice if saved == "manual-crop" else "",
                 test_hidden="" if test_visible or test in ("queued", "busy") else "hidden",
                 test_source_visible="" if test_visible else "hidden",
                 notifications_open="open" if saved == "notifications" else "",
@@ -1821,6 +1846,7 @@ def start_panel(
                 auto_polarity_options=select_options(
                     POLARITIES_EN if language == "en" else POLARITIES, auto_rules["polarity"],
                 ),
+                saved_auto_crop_mode=auto_rules["crop_mode"],
                 auto_crop_mode_options=select_options(
                     CROP_MODES_EN if language == "en" else CROP_MODES, auto_rules["crop_mode"],
                 ),
@@ -2277,12 +2303,16 @@ def start_panel(
             settings["manual_reference"] = manual_reference
             try:
                 save_manual_settings({key: value for key, value in settings.items() if key not in ("request_id", "image")})
-                if test_source_image is not None:
-                    test_source_image.unlink(missing_ok=True)
-                test_image.unlink(missing_ok=True)
+                if form.get("save_settings") != ["1"]:
+                    if test_source_image is not None:
+                        test_source_image.unlink(missing_ok=True)
+                    test_image.unlink(missing_ok=True)
             except OSError:
                 problem(503, "Die Testeinstellungen konnten nicht gespeichert werden.",
                         "Could not save the manual test settings.")
+                return
+            if form.get("save_settings") == ["1"]:
+                self.redirect("?test=open&saved=manual-crop&ui=overview" + keep_mode)
                 return
             with request_lock:
                 if progress["phase"] in ("queued", "running", "ocr"):

@@ -21,6 +21,7 @@ options:
   zeitzone: Europe/Berlin
   push_dienst: ""
   vergleich_nachkommastellen: 0
+  ocr_versuche: 5
   kamera_entitaet: ""
   referenz_entitaet: ""
 schema:
@@ -32,5 +33,6 @@ schema:
   push_dienst: str?
   intervall_sekunden: int?
   vergleich_nachkommastellen: int(0,3)
+  ocr_versuche: int(1,10)
   kamera_entitaet: str?
   referenz_entitaet: str?

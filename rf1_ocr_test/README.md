@@ -16,7 +16,7 @@ Die ausführliche Einführung, Voraussetzungen, Installation und Konfiguration f
 
 Die **dauerhaften Prüfregeln** stehen auf der Weboberfläche im Abschnitt **„Automatische Prüfung – Einstellungen“**. Dort lassen sich die Vergleichsgenauigkeit (volle m³ oder 1–3 Nachkommastellen), die **maximalen OCR-Versuche (1–10)** und die **Ziffernfarbe (automatisch, hell oder dunkel)** einstellen und mit **„Speichern“** dauerhaft übernehmen.
 
-Die gespeicherten Werte gelten ab den folgenden automatischen Prüfungen, auch nach Neustart. Bei einer Änderung der Vergleichsgenauigkeit startet die Bestätigungszählung mit der nächsten automatischen Prüfung neu. Sie liegen in `/data/auto-pruefregeln.json` und haben Vorrang vor den beiden entsprechenden Optionen der App-Konfiguration. Die anderen App-Einstellungen werden weiterhin in Home Assistant konfiguriert.
+Die gespeicherten Werte gelten ab den folgenden automatischen Prüfungen, auch nach Neustart. Bei einer Änderung der Vergleichsgenauigkeit startet die Bestätigungszählung mit der nächsten automatischen Prüfung neu. Sie liegen in `/data/auto-pruefregeln.json` und haben für diese Prüfregeln Vorrang vor den entsprechenden Optionen der App-Konfiguration. Die anderen App-Einstellungen werden weiterhin in Home Assistant konfiguriert.
 
 ## Was bedeutet „Jetzt prüfen“?
 

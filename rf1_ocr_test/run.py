@@ -8,7 +8,6 @@ import io
 import json
 import os
 from pathlib import Path
-import re
 import subprocess
 from queue import Empty, Queue
 from tempfile import NamedTemporaryFile
@@ -20,14 +19,21 @@ from PIL import Image, ImageDraw
 from websocket import WebSocketException
 
 from checks import (
-    RETRY_INTERVAL, compare_sample, crop_register, read_register, read_with_retries, record_sample,
-    explain_uncertain_positions,
+    RETRY_INTERVAL, REVIEW_AFTER, compare_sample, crop_register, read_register, read_with_retries, record_sample,
+    explain_uncertain_positions, meter_prefix,
     rolling_summary, sample_epoch, sample_timestamp, schedule_next_check,
 )
-from layout import find_digit_row
+from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, MAX_FLOW_LPH, ImplausibleReading,
+                         accumulate_consumption, format_cubic_metres)
+from layout import crop_coordinates, find_digit_row, turn_crop
 from reminder import Reminder
-from settings import SCHEMA_VERSION, load_options
+from notification_settings import (DEFAULT_DELIVERY_HOURS, DEFAULT_REVIEW_MINUTES, PUSH_SERVICE,
+                                   notification_rules)
+from settings import DEFAULTS, SCHEMA_VERSION, load_options
+from source_settings import CAMERA, REFERENCE, source_rules
 from panel import start_panel
+from language import load_preferences
+from transport import open_core
 
 MAX_RESPONSE_BYTES = 3_000_000
 MAX_TRANSFER_BYTES = 11_000
@@ -38,15 +44,22 @@ HISTORY = Path("/data/kontrollmessung.json")
 OPTIONS = Path("/data/options.json")
 EFFECTIVE_OPTIONS = Path("/data/rf1-settings.json")
 AUTO_RULES = Path("/data/auto-pruefregeln.json")
+LANGUAGE_MODES = Path("/data/rf1-language.json")
+NOTIFICATIONS = Path("/data/benachrichtigungen.json")
+SOURCE_SETTINGS = Path("/data/bildquelle.json")
 ENTITY = "sensor.rf1_kontrollbild"
 CORE_URL = f"http://supervisor/core/api/states/{ENTITY}"
 CHECK_ENTITY = "sensor.rf1_pruefstatus"
-Image.MAX_IMAGE_PIXELS = 4_000_000
+OCR_ENTITY = "sensor.rf1_ocr_zaehlerstand"
+CONSUMPTION_ENTITY = "sensor.rf1_verbrauch_gesamt"
+MAX_IMAGE_PIXELS = 4_000_000
+Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
 
 
 def get_bytes(url, token=None):
     headers = {"Authorization": f"Bearer {token}"} if token else {}
-    with urlopen(Request(url, headers=headers), timeout=8) as response:
+    open_request = open_core if token else urlopen
+    with open_request(Request(url, headers=headers), timeout=8) as response:
         data = response.read(MAX_RESPONSE_BYTES + 1)
     if len(data) > MAX_RESPONSE_BYTES:
         raise ValueError("Antwort zu groß")
@@ -70,17 +83,23 @@ def slfork_diagnostics(data):
 
 
 def capture(base, diagnostics):
-    before = json.loads(get_bytes(base + "/process_data"))
+    def process_data():
+        payload = json.loads(get_bytes(base + "/process_data"))
+        if not isinstance(payload, dict):
+            raise ValueError("Ungültige SLFork-Messdaten")
+        return payload
+
+    before = process_data()
     diagnostics.update(slfork_diagnostics(before))
     picture = get_bytes(base + "/img_tmp/alg.jpg")
     try:
         overlay = get_bytes(base + "/img_tmp/alg_roi.jpg")
     except (OSError, ValueError):
         overlay = None
-    after = json.loads(get_bytes(base + "/process_data"))
+    after = process_data()
     diagnostics.update(slfork_diagnostics(after))
     timestamp = sequence_value(after, "timestamp_processed")
-    if not timestamp:
+    if not isinstance(timestamp, str) or not timestamp:
         raise ValueError("Kein Zeitstempel vom ESP")
     if sequence_value(before, "timestamp_processed") != timestamp:
         return None
@@ -101,10 +120,11 @@ def capture_camera(camera, reference, token, zone):
         try:
             state = json.loads(get_bytes(f"{base}/states/{reference}", token))
             reported = datetime.fromisoformat(state.get("last_reported") or state["last_updated"])
-            if (state.get("attributes", {}).get("unit_of_measurement") == "m³"
+            if (reported.tzinfo is not None
+                    and state.get("attributes", {}).get("unit_of_measurement") == "m³"
                     and abs((captured - reported).total_seconds()) <= 5 * 60):
                 value = state["state"]
-        except (OSError, ValueError, KeyError) as error:
+        except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
             print(f"Referenzsensor konnte nicht gelesen werden: {type(error).__name__}")
     return picture, None, {
         "esp_timestamp": captured.isoformat(),
@@ -115,18 +135,18 @@ def capture_camera(camera, reference, token, zone):
     }
 
 
-def select_register(frame, overlay, manual_crop, manual_width):
+def select_register(frame, overlay, manual_crop, manual_width, rotation=0):
     if overlay is not None:
         try:
             with Image.open(io.BytesIO(overlay)) as annotated:
-                if annotated.size == frame.size:
+                if annotated.size == frame.size and annotated.width * annotated.height <= MAX_IMAGE_PIXELS:
                     layout = find_digit_row(annotated)
                     if layout is not None:
                         crop, width, boxes = layout
                         return crop_register(frame, crop), width, boxes[:5], boxes[5:], "auto"
         except (OSError, ValueError, Image.DecompressionBombError):
             pass
-    register = crop_register(frame, manual_crop)
+    register = turn_crop(crop_register(frame, manual_crop), rotation)
     if not 0 < manual_width <= register.width:
         raise ValueError("vorkomma_breite liegt außerhalb des Ausschnitts")
     # Ohne Rahmen teilt der konfigurierte Ausschnitt den Rest in drei Rollen.
@@ -236,14 +256,14 @@ def atomic_write(destination, content, mode):
             temp_path.unlink(missing_ok=True)
 
 
-def publish(data, jpeg, size, history, now, token):
+def publish(data, jpeg, size, history, now, token, review_after=REVIEW_AFTER):
     digest = hashlib.sha256(jpeg).hexdigest()
     payload = {
         "state": data["esp_timestamp"],
         "attributes": {
             "friendly_name": "RF1 Kontrollbild",
             **data,
-            **rolling_summary(history, now),
+            **rolling_summary(history, now, review_after),
             "decimal_places": history.get("comparison_decimals", 0),
             "ocr_display": history.get("ocr_value"),
             "ocr_status": history["status"],
@@ -257,8 +277,8 @@ def publish(data, jpeg, size, history, now, token):
     publish_state(CORE_URL, payload, token)
 
 
-def publish_check(history, now, token):
-    summary = rolling_summary(history, now)
+def publish_check(history, now, token, review_after=REVIEW_AFTER):
+    summary = rolling_summary(history, now, review_after)
     payload = {
         "state": "review_due" if summary["review_due"] else history["check_status"],
         "attributes": {"friendly_name": "RF1 Prüfstatus", **summary, **history.get("slfork_diagnostics", {})},
@@ -266,27 +286,69 @@ def publish_check(history, now, token):
     publish_state(f"http://supervisor/core/api/states/{CHECK_ENTITY}", payload, token)
 
 
+def standalone_reading(camera, sample, ocr, decimals, previous):
+    """Keep a majority reading only if it does not go backwards at shared precision."""
+    latest = {"camera": camera, "reading": ocr, "decimals": decimals, "image_time": sample["esp_timestamp"]}
+    if previous and previous["camera"] == camera:
+        common = min(decimals, previous["decimals"])
+        if meter_prefix(ocr, common) < meter_prefix(previous["reading"], common):
+            return None
+    return latest
+
+
+def publish_standalone(history, camera, token):
+    last = history.get("standalone_reading")
+    value = "unavailable"
+    captured = None
+    if last and last["camera"] == camera:
+        if history.get("check_status") == "ocr_only":
+            value = last["reading"][:5 + (last["decimals"] + 1 if last["decimals"] else 0)]
+        captured = last["image_time"]
+    payload = {
+        "state": value,
+        "attributes": {"friendly_name": "RF1 OCR-Zählerstand", "unit_of_measurement": "m³",
+                       "device_class": "gas", "source_camera": camera, "last_successful_image": captured},
+    }
+    publish_state(f"http://supervisor/core/api/states/{OCR_ENTITY}", payload, token)
+
+
+def publish_consumption(history, token):
+    consumption = history.get("consumption")
+    if consumption is not None:
+        payload = {
+            "state": format_cubic_metres(consumption["total_litres"]),
+            "attributes": {
+                "friendly_name": "Meter OCR Gasverbrauch gesamt",
+                "unit_of_measurement": "m³",
+                "device_class": "gas",
+                "state_class": "total_increasing",
+            },
+        }
+        publish_state(f"http://supervisor/core/api/states/{CONSUMPTION_ENTITY}", payload, token)
+
+
 def publish_state(url, payload, token):
     request = Request(
         url, data=json.dumps(payload).encode("utf-8"), method="POST",
         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
     )
-    with urlopen(request, timeout=10) as response:
+    with open_core(request, timeout=10) as response:
         if response.status not in (200, 201):
             raise OSError(f"Home Assistant meldet HTTP {response.status}")
 
 
-def check_reminder(reminder, history, now):
-    if reminder is None:
-        return
+def check_reminder(reminder, history, now, review_after=REVIEW_AFTER):
     before = json.dumps(history)
     try:
-        reminder.sync(history, rolling_summary(history, now), now.timestamp())
+        reminder.sync(history, rolling_summary(history, now, review_after), now.timestamp())
     except (OSError, ValueError, WebSocketException) as error:
         print(f"RF1-Erinnerung konnte nicht aktualisiert werden: {type(error).__name__}")
     after = json.dumps(history)
     if after != before:
-        atomic_write(HISTORY, after.encode("utf-8"), 0o600)
+        try:
+            atomic_write(HISTORY, after.encode("utf-8"), 0o600)
+        except OSError as error:
+            print(f"RF1-Erinnerung konnte nicht gespeichert werden: {type(error).__name__}")
 
 
 def main():
@@ -295,10 +357,12 @@ def main():
     # It regenerates options.json. Record a versioned, normalized copy separately.
     snapshot = json.loads(EFFECTIVE_OPTIONS.read_text(encoding="utf-8")) if EFFECTIVE_OPTIONS.exists() else {}
     options = load_options(raw_options, snapshot)
+    configured = bool(options.get("kamera_entitaet")) or options["esp_url"] != DEFAULTS["esp_url"]
+    setup_pending = not configured and snapshot.get(
+        "setup_pending", not EFFECTIVE_OPTIONS.exists() and not HISTORY.exists())
     atomic_write(EFFECTIVE_OPTIONS, json.dumps({
-        "schema_version": SCHEMA_VERSION, "options": options,
+        "schema_version": SCHEMA_VERSION, "options": options, "setup_pending": setup_pending,
     }, indent=2).encode("utf-8"), 0o600)
-    base = options["esp_url"].rstrip("/")
     zone = ZoneInfo(options["zeitzone"])
     crop = tuple(int(part.strip()) for part in options["ausschnitt"].split(","))
     if len(crop) != 4:
@@ -307,15 +371,36 @@ def main():
     history = json.loads(HISTORY.read_text(encoding="utf-8")) if HISTORY.exists() else {}
     camera = (options.get("kamera_entitaet") or "").strip()
     reference = (options.get("referenz_entitaet") or "").strip()
-    if camera and not re.fullmatch(r"camera\.[a-z0-9_]+", camera):
+    if camera and not CAMERA.fullmatch(camera):
         raise ValueError("kamera_entitaet muss eine Home-Assistant-Kamera sein")
-    if reference and not re.fullmatch(r"sensor\.[a-z0-9_]+", reference):
+    if reference and not REFERENCE.fullmatch(reference):
         raise ValueError("referenz_entitaet muss ein Home-Assistant-Sensor sein")
+    configured_source = dict(mode="camera" if camera else "slfork", url=options["esp_url"],
+                  camera=camera, reference=reference)
+    initial_source_key = [configured_source["mode"], camera or configured_source["url"].rstrip("/"), reference if camera else ""]
+    try:
+        configured_source = source_rules(json.loads(SOURCE_SETTINGS.read_text(encoding="utf-8")))
+        setup_pending = False
+    except FileNotFoundError:
+        pass
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
+        print(f"Bildquelle konnte nicht geladen werden: {type(error).__name__}")
+
+    def get_source():
+        return dict(configured_source), setup_pending
+
+    def save_source(values):
+        nonlocal configured_source, setup_pending
+        validated = source_rules(values)
+        atomic_write(SOURCE_SETTINGS, json.dumps(validated).encode("utf-8"), 0o600)
+        configured_source, setup_pending = validated, False
+
     default_decimals = options["vergleich_nachkommastellen"]
     default_attempts = options["ocr_versuche"]
     auto_rules = {"decimals": default_decimals, "attempts": default_attempts, "polarity": "auto",
                   "crop_mode": "auto", "crop": options["ausschnitt"],
-                  "width": options["vorkomma_breite"]}
+                  "width": options["vorkomma_breite"], "rotation": 0,
+                  "max_flow_lph": DEFAULT_FLOW_LPH}
     try:
         saved_rules = json.loads(AUTO_RULES.read_text(encoding="utf-8"))
         if (type(saved_rules.get("decimals")) is int and 0 <= saved_rules["decimals"] <= 3
@@ -326,14 +411,22 @@ def main():
             crop_mode = saved_rules.get("crop_mode", "auto")
             crop_text = saved_rules.get("crop", options["ausschnitt"])
             width = saved_rules.get("width", options["vorkomma_breite"])
-            crop_valid = (isinstance(crop_text, str) and
-                          re.fullmatch(r"\d{1,4}\s*,\s*\d{1,4}\s*,\s*\d{1,4}\s*,\s*\d{1,4}", crop_text)
-                          and type(width) is int and 1 <= width <= 1920)
-            if crop_mode not in ("auto", "manual") or not crop_valid:
-                crop_mode, crop_text, width = "auto", options["ausschnitt"], options["vorkomma_breite"]
+            rotation = saved_rules.get("rotation", 0)
+            try:
+                crop_coordinates(crop_text, width, rotation)
+                if crop_mode not in ("auto", "manual"):
+                    raise ValueError("Ungültiger Ausschnittmodus")
+            except ValueError:
+                crop_mode, crop_text, width, rotation = (
+                    "auto", options["ausschnitt"], options["vorkomma_breite"], 0
+                )
+            max_flow = saved_rules.get("max_flow_lph", DEFAULT_FLOW_LPH)
+            if type(max_flow) is not int or not 1 <= max_flow <= MAX_FLOW_LPH:
+                max_flow = DEFAULT_FLOW_LPH
             auto_rules = {"decimals": saved_rules["decimals"],
                           "attempts": saved_rules["attempts"], "polarity": polarity,
-                          "crop_mode": crop_mode, "crop": crop_text, "width": width}
+                          "crop_mode": crop_mode, "crop": crop_text, "width": width, "rotation": rotation,
+                          "max_flow_lph": max_flow}
         else:
             print("Ungültige gespeicherte Automatikregeln; verwende die App-Konfiguration.")
     except FileNotFoundError:
@@ -349,38 +442,70 @@ def main():
         if (type(values.get("decimals")) is not int or not 0 <= values["decimals"] <= 3
                 or type(values.get("attempts")) is not int or not 1 <= values["attempts"] <= 10
                 or values.get("polarity") not in ("auto", "light", "dark")
-                or values.get("crop_mode") not in ("auto", "manual")
-                or type(values.get("width")) is not int or not 1 <= values["width"] <= 1920
-                or not isinstance(values.get("crop"), str)
-                or not re.fullmatch(r"\d{1,4}\s*,\s*\d{1,4}\s*,\s*\d{1,4}\s*,\s*\d{1,4}", values["crop"])):
+                or values.get("crop_mode") not in ("auto", "manual")):
             raise ValueError("Ungültige Einstellungen für die automatische Kontrolle")
-        coords = [int(part.strip()) for part in values["crop"].split(",")]
-        if not (0 <= coords[0] < coords[2] <= 1920 and 0 <= coords[1] < coords[3] <= 1920
-                and values["width"] <= coords[2] - coords[0]):
-            raise ValueError("Ungültiger Ausschnitt oder zu große Vorkommabreite")
-        updated_rules = dict(values)
+        rotation = values.get("rotation", 0)
+        coords = crop_coordinates(values["crop"], values["width"], rotation)
+        max_flow = values.get("max_flow_lph", DEFAULT_FLOW_LPH)
+        if type(max_flow) is not int or not 1 <= max_flow <= MAX_FLOW_LPH:
+            raise ValueError("Ungültiger maximaler Durchfluss")
+        updated_rules = {**values, "rotation": rotation, "max_flow_lph": max_flow}
         updated_rules["crop"] = ",".join(str(part) for part in coords)
         atomic_write(AUTO_RULES, json.dumps(updated_rules, indent=2).encode("utf-8"), 0o600)
         auto_rules = updated_rules
 
     requested = Queue(maxsize=1)
-    update_progress = start_panel(
+    def save_language_modes(modes):
+        atomic_write(LANGUAGE_MODES, json.dumps(modes).encode("utf-8"), 0o600)
+
+    legacy_push = (options.get("push_dienst") or "").strip()
+    if legacy_push and not PUSH_SERVICE.fullmatch(legacy_push):
+        print("Handy-Push ist deaktiviert. Bitte den Dienst im Bereich Benachrichtigungen prüfen.")
+        legacy_push = ""
+    delivery = dict(enabled=bool(legacy_push), review_minutes=DEFAULT_REVIEW_MINUTES, delivery_hours=DEFAULT_DELIVERY_HOURS,
+                    push=legacy_push, target="")
+    try:
+        delivery = notification_rules(json.loads(NOTIFICATIONS.read_text(encoding="utf-8")))
+    except FileNotFoundError:
+        pass
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
+        print(f"Benachrichtigungseinstellungen konnten nicht geladen werden: {type(error).__name__}")
+
+    def get_delivery():
+        return dict(delivery)
+
+    def save_delivery(values):
+        nonlocal delivery
+        validated = notification_rules(values)
+        atomic_write(NOTIFICATIONS, json.dumps(validated).encode("utf-8"), 0o600)
+        delivery = validated
+
+    _, update_progress = start_panel(
         HISTORY, DESTINATION, GOOD_IMAGE, requested, default_decimals, default_attempts,
         get_auto_rules, save_auto_rules, options["ausschnitt"], options["vorkomma_breite"], TEST_IMAGE,
+        partial(load_preferences, LANGUAGE_MODES), save_language_modes, get_delivery, save_delivery, get_source, save_source,
     )
-    push_service = (options.get("push_dienst") or "").strip()
-    reminder = None
-    if push_service:
-        try:
-            reminder = Reminder(push_service, token)
-        except ValueError as error:
-            print(f"RF1-Erinnerung deaktiviert: {error}")
+    reminder = Reminder(token)
     pending_image = None
     startup = True
     manual_options = None
+    published_standalone = bool(history.get("standalone_reading"))
     print("RF1 Kontrollmessung gestartet")
     while True:
         active_rules = get_auto_rules()
+        active_source, waiting_for_setup = get_source()
+        standalone = active_source["mode"] == "esphome"
+        base = active_source["url"].rstrip("/")
+        camera = active_source["camera"] if active_source["mode"] != "slfork" else ""
+        reference = active_source["reference"] if active_source["mode"] == "camera" else ""
+        source_key = [active_source["mode"], camera or base, reference]
+        source_changed = history.get("check_source", initial_source_key) != source_key
+        if source_changed:
+            pending_image = None
+        active_delivery = get_delivery()
+        review_after = active_delivery["review_minutes"] * 60
+        reminder.configure(enabled=active_delivery["enabled"], push=active_delivery["push"], target=active_delivery["target"],
+                           delay=active_delivery["delivery_hours"] * 60 * 60)
         decimals = active_rules["decimals"]
         max_attempts = active_rules["attempts"]
         now = datetime.now(zone)
@@ -394,36 +519,55 @@ def main():
         request_id = manual_options["request_id"] if manual else None
         if manual:
             update_progress(request_id, "running", "Lade Zählerbild und Referenzdaten …")
-        if remaining > 0 and not startup and not manual:
+        if waiting_for_setup and not manual:
+            try:
+                manual_options = requested.get(timeout=2)
+            except Empty:
+                pass
+            continue
+        if remaining > 0 and not startup and not manual and not source_changed:
             # Refresh status after a Home Assistant restart, even between checks.
             if "check_status" in history:
                 try:
-                    publish_check(history, now, token)
+                    publish_check(history, now, token, review_after)
                     if pending_image is not None:
-                        publish(*pending_image, history, now, token)
+                        publish(*pending_image, history, now, token, review_after)
                         pending_image = None
+                    if standalone or published_standalone:
+                        publish_standalone(history, camera if standalone else "", token)
+                        published_standalone = standalone
+                    publish_consumption(history, token)
                 except OSError as error:
                     print(f"Prüfstatus konnte nicht übertragen werden: {error}")
-                check_reminder(reminder, history, now)
+                check_reminder(reminder, history, now, review_after)
             try:
                 manual_options = requested.get(timeout=min(remaining, RETRY_INTERVAL))
             except Empty:
                 pass
             continue
 
-        keep_schedule = startup and remaining > 0
+        keep_schedule = startup and remaining > 0 and not source_changed
         startup = startup and manual
         data = None
         outcome = "capture_unavailable"
         updated = dict(history)
+        if source_changed:
+            updated["confirmations"] = []
+            updated.pop("last_epoch", None)
+            updated.pop("last_match_at", None)
+            updated.pop("failure_since", None)
+        updated["check_source"] = source_key
+        validation_detail = None
+        new_consumption = None
+        new_standalone = None
         # Confirmations obtained with another precision are not valid evidence
         # for the newly chosen automatic comparison rules.
         if history.get("comparison_decimals", decimals) != decimals:
             updated["confirmations"] = []
             updated.pop("last_match_at", None)
         updated["comparison_decimals"] = decimals
-        updated["check_detail"] = "Das Zählerbild oder die Messwerte sind nicht verfügbar. Bitte die ESP- bzw. Kameraverbindung prüfen."
-        manual_result = {"detail": updated["check_detail"]}
+        updated["check_detail"] = "Bild oder Messwert fehlt. Verbindung prüfen."
+        manual_result = {"status": "capture_unavailable", "detail": updated["check_detail"]}
         diagnostics = {}
         try:
             result = capture_camera(camera, reference, token, zone) if camera else capture(base, diagnostics)
@@ -437,32 +581,36 @@ def main():
                 picture, overlay, sample = result
                 now = datetime.now(zone)
                 captured = sample_epoch(sample, zone, now)
-                if not manual and (captured is None or captured <= history.get("last_epoch", 0)):
+                if not manual and (captured is None or captured <= updated.get("last_epoch", 0)):
                     outcome = "stale_sample"
-                    updated["check_detail"] = "Das Bild ist zu alt oder wurde schon ausgewertet."
+                    updated["check_detail"] = "Bild zu alt oder schon geprüft."
                     result = None
             if result is not None:
                 with Image.open(io.BytesIO(picture)) as frame:
+                    if frame.width * frame.height > MAX_IMAGE_PIXELS:
+                        raise ValueError("Kamerabild hat zu viele Pixel")
                     if frame.format != "JPEG":
-                        raise ValueError("Der ESP hat kein JPEG geliefert")
+                        if not camera or frame.format != "PNG":
+                            raise ValueError("Das Kameraformat wird nicht unterstützt")
+                        with io.BytesIO() as normalized:
+                            frame.convert("RGB").save(normalized, "JPEG", quality=95)
+                            picture = normalized.getvalue()
                     frame.load()
                     ocr_readings = []
                     ocr_error = None
                     try:
-                        # Manual crop is a diagnostic override for this test only.
+                        crop_rules = manual_options if manual else active_rules
                         manual_crop = crop
                         manual_width = options["vorkomma_breite"]
                         selected_overlay = overlay
-                        if manual and manual_options.get("crop_mode") == "manual":
-                            manual_crop = tuple(int(part.strip()) for part in manual_options["crop"].split(","))
-                            manual_width = manual_options["width"]
-                            selected_overlay = None
-                        elif not manual and active_rules["crop_mode"] == "manual":
-                            manual_crop = tuple(int(part.strip()) for part in active_rules["crop"].split(","))
-                            manual_width = active_rules["width"]
+                        rotation = 0
+                        if crop_rules["crop_mode"] == "manual":
+                            rotation = crop_rules.get("rotation", 0)
+                            manual_width = crop_rules["width"]
+                            manual_crop = crop_coordinates(crop_rules["crop"], manual_width, rotation)
                             selected_overlay = None
                         register, integer_width, whole_boxes, fraction_boxes, source = select_register(
-                            frame, selected_overlay, manual_crop, manual_width
+                            frame, selected_overlay, manual_crop, manual_width, rotation
                         )
                         read = partial(
                             read_visible_digits,
@@ -478,19 +626,34 @@ def main():
                             lambda profile: read(profile=profile), sample,
                             manual_options["decimals"] if manual else decimals,
                             progress=report_ocr if manual else None,
-                            max_attempts=manual_options["attempts"] if manual else max_attempts,
-                            trace=ocr_readings,
+                            max_attempts=(manual_options["attempts"] if manual else
+                                          max(2, max_attempts) if standalone else max_attempts),
+                            trace=ocr_readings, standalone=standalone and not manual,
                         )
                     except (OSError, ValueError, subprocess.SubprocessError) as error:
                         print(f"OCR-Bildprüfung fehlgeschlagen: {error}")
-                        ocr_error = ("Der Bildausschnitt konnte nicht ausgewertet werden. "
-                                     "Bitte die Ausschnitt-Koordinaten und die Breite der "
-                                     "Vorkommastellen prüfen." if isinstance(error, ValueError)
-                                     else "Die Texterkennung ist fehlgeschlagen. Bitte "
-                                     "den Ziffernbereich und die OCR-Installation prüfen.")
+                        ocr_error = ("Ausschnitt ungültig. Koordinaten prüfen." if isinstance(error, ValueError)
+                                     else "OCR fehlgeschlagen. Ziffernbereich prüfen.")
                         register, ocr, source = frame, None, "unavailable"
                         ocr_confirmed, ocr_attempts = True, 0
                     if not manual:
+                        reading_status, _ = compare_sample(sample, ocr, decimals, ocr_confirmed=ocr_confirmed)
+                        if reading_status == "match" or (standalone and reading_status == "ocr_only"):
+                            try:
+                                if standalone:
+                                    new_standalone = standalone_reading(
+                                        camera, sample, ocr, decimals, history.get("standalone_reading")
+                                    )
+                                    if new_standalone is None:
+                                        raise ImplausibleReading(LOWER_READING)
+                                new_consumption = accumulate_consumption(
+                                    history.get("consumption", {}), source_key, captured, ocr, decimals,
+                                    active_rules["max_flow_lph"],
+                                )
+                            except ImplausibleReading as error:
+                                ocr_confirmed = False
+                                validation_detail = str(error)
+                                new_standalone = None
                         jpeg, size = transfer_jpeg(register)
                 if manual:
                     image_time = sample_timestamp(sample, zone)
@@ -501,7 +664,7 @@ def main():
                     if ocr_error:
                         detail = ocr_error
                     elif status == "ocr_unclear":
-                        detail = explain_uncertain_positions(ocr_readings, manual_options["decimals"], show_details=True)
+                        detail = explain_uncertain_positions(ocr_readings, manual_options["decimals"])
                     preview_available = False
                     if ocr_attempts and source != "unavailable":
                         try:
@@ -531,16 +694,32 @@ def main():
                                    ocr_confirmed=ocr_confirmed):
                     atomic_write(DESTINATION, picture, 0o644)
                     outcome = updated["status"]
+                    if new_consumption is not None:
+                        updated["consumption"] = new_consumption
+                    if new_standalone is not None:
+                        updated["standalone_reading"] = new_standalone
+                    updated["ocr_readings"] = ocr_readings if outcome == "ocr_unclear" else []
                     if outcome == "ocr_unclear":
-                        updated["check_detail"] = explain_uncertain_positions(ocr_readings, decimals)
+                        updated["check_detail"] = validation_detail or ocr_error or explain_uncertain_positions(ocr_readings, decimals)
                     if outcome == "match":
                         atomic_write(GOOD_IMAGE, picture, 0o644)
                     data = {**sample, "crop_source": source, "ocr_attempts": ocr_attempts}
                     updated["last_reference"] = sample["actual_value"]
                 else:
                     outcome = "stale_sample"
+                    updated["check_detail"] = "Bild zu alt oder schon geprüft."
         except (OSError, ValueError, Image.DecompressionBombError) as error:
-            print(f"Bildabruf fehlgeschlagen: {error}")
+            print(f"Bildabruf fehlgeschlagen: {type(error).__name__}")
+            if not manual and data is None:
+                detail = manual_result["detail"]
+                updated = {**history, "check_detail": detail}
+                if source_changed:
+                    updated["confirmations"] = []
+                    updated.pop("last_epoch", None)
+                    updated.pop("last_match_at", None)
+                    updated.pop("failure_since", None)
+                updated["check_source"] = source_key
+                outcome = "capture_unavailable"
 
         now = datetime.now(zone)
         if manual:
@@ -548,20 +727,36 @@ def main():
                             manual_result.get("ocr_attempts", 0))
             manual_result.update(checked_at=now.timestamp(), settings=manual_options, slfork_diagnostics=diagnostics)
             manual_options = None
-            history["manual_result"] = manual_result
-            atomic_write(HISTORY, json.dumps(history).encode("utf-8"), 0o600)
+            try:
+                next_history = {**history, "manual_result": manual_result}
+                atomic_write(HISTORY, json.dumps(next_history).encode("utf-8"), 0o600)
+                history = next_history
+            except OSError as error:
+                print(f"Manueller Test konnte nicht gespeichert werden: {type(error).__name__}")
+                manual_result.update(status="storage_error", can_apply_crop=False, preview=False,
+                                     detail="Das Prüfergebnis konnte nicht gespeichert werden.")
             update_progress(request_id, "done", "Prüfung beendet.",
                             manual_result.get("ocr_attempts", 0), now.timestamp(),
-                            outcome=manual_result.get("status", "capture_unavailable"),
-                            detail=manual_result["detail"], preview=manual_result.get("preview", False),
+                            outcome=manual_result["status"], detail=manual_result["detail"],
+                            preview=manual_result.get("preview", False),
                             can_apply_crop=manual_result.get("can_apply_crop", False),
-                            readings=manual_result.get("readings", []))
+                            readings=manual_result.get("readings", []),
+                            ocr=manual_result.get("ocr"), reference=manual_result.get("reference"))
             continue
         if keep_schedule and data is None and history.get("next_check_at", 0) > now.timestamp():
             continue
         updated["slfork_diagnostics"] = diagnostics
         schedule_next_check(updated, outcome, now.timestamp())
-        atomic_write(HISTORY, json.dumps(updated).encode("utf-8"), 0o600)
+        try:
+            atomic_write(HISTORY, json.dumps(updated).encode("utf-8"), 0o600)
+        except OSError as error:
+            print(f"Automatik konnte die Prüfhistorie nicht speichern: {type(error).__name__}")
+            startup = False
+            try:
+                manual_options = requested.get(timeout=RETRY_INTERVAL)
+            except Empty:
+                pass
+            continue
         history = updated
         if data is not None:
             pending_image = (data, jpeg, size)
@@ -569,13 +764,17 @@ def main():
                   f"OCR: {ocr or '?'} ({data['ocr_attempts']} Durchläufe) | "
                   f"SLFork: {data['actual_value']} | Ergebnis: {outcome}")
         try:
-            publish_check(history, now, token)
+            publish_check(history, now, token, review_after)
             if pending_image is not None:
-                publish(*pending_image, history, now, token)
+                publish(*pending_image, history, now, token, review_after)
                 pending_image = None
+            if standalone or published_standalone:
+                publish_standalone(history, camera if standalone else "", token)
+                published_standalone = standalone
+            publish_consumption(history, token)
         except OSError as error:
             print(f"Home Assistant konnte nicht aktualisiert werden: {error}")
-        check_reminder(reminder, history, now)
+        check_reminder(reminder, history, now, review_after)
 
 
 if __name__ == "__main__":

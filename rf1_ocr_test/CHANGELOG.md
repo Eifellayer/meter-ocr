@@ -1,6 +1,22 @@
 # Änderungen
 
-## 0.8.1
+Versionen unter 0.5.0 sind Alpha. Ab 0.5.0 bis vor 1.0.0 gilt Beta. Ab 1.0.0 beginnt die stabile Reihe.
+
+## 0.8.2 · Beta
+
+- Die App heißt jetzt **Meter OCR**. Der technische App-Slug und die bestehenden Home-Assistant-Entitäts-IDs bleiben erhalten.
+- Der manuelle Bildausschnitt unterstützt Vierteldrehungen und Koordinaten für größere Kamerabilder. Einige OCR-Profile gleichen ungleichmäßige Beleuchtung aus.
+- Die automatische Plausibilitätsprüfung vergleicht Zeit und Durchfluss mit dem letzten gültigen Stand. Der kumulative m³-Sensor `sensor.rf1_verbrauch_gesamt` liefert Verbrauchsdaten für das Home-Assistant-Energie-Dashboard.
+- Wahl der Bildquelle bei der Ersteinrichtung und später in der Oberfläche. Der ESPHome-Modus liest Kamerabilder lokal und veröffentlicht den optionalen OCR-Sensor.
+- Grüner Haken bei bestätigtem Vergleich, roter ausblendbarer Hinweis bei Problemen und kurze OCR-Meldungen mit gruppierten Ziffernpositionen.
+- Einstellbare Wartezeiten und Ziele für Home-Assistant-Hinweis, Companion-Push und E-Mail über eine Benachrichtigungs-Entität. Aufklappbare Hilfe und Kurzerklärungen an den Feldern.
+
+- Automatische Übernahme der Home-Assistant-Profilsprache mit Deutsch und Englisch als dauerhafter Auswahl pro Ingress-Nutzer.
+- Kompakte Übersicht mit Hintergrundaktualisierung. Automatikregeln, Kontrollbilder und manueller Test lassen sich getrennt aufklappen.
+- Laufende manuelle Tests behalten ihren Auftrag. Die Ausschnittübernahme ist an die angezeigte Vorschau gebunden. Bei vollständig fehlender OCR-Lesung nennt das Ergebnis keine vermeintlich betroffenen Ziffern.
+- Core-Anfragen mit Supervisor-Anmeldedaten folgen keinen HTTP- oder WebSocket-Weiterleitungen. Tests prüfen OCR, Ingress und die App-Images.
+
+## 0.8.1 · Beta
 
 - **Deutsch / English** als Sprachauswahl oben in der App. Die ausgewählte Sprache wird im Browser gespeichert und nach erneuter Öffnung wiederhergestellt.
 - Die komplette Ingress-Oberfläche ist auf Englisch verfügbar: Automatik, dauerhafte Einstellungen, manueller OCR-Test, Bildvorschau, Fortschrittsanzeige, Ergebnisse, unklare Ziffernpositionen und aufklappbare Einzelversuche.

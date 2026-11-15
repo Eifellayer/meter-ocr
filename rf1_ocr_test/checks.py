@@ -5,7 +5,7 @@ import io
 import re
 import subprocess
 
-from PIL import ImageFilter, ImageOps
+from PIL import Image, ImageChops, ImageFilter, ImageOps
 
 WINDOW_SECONDS = 24 * 60 * 60
 REQUIRED_MATCHES = 5
@@ -13,17 +13,18 @@ NORMAL_INTERVAL = 60 * 60
 RETRY_INTERVAL = 5 * 60
 REVIEW_AFTER = 4 * 60 * 60
 FRESH_SAMPLE_AGE = 15 * 60
+# Cutoff, sharpening, threshold and optional correction for uneven lighting.
 OCR_PROFILES = (
-    (2, 175, 155),
-    (0, 125, 125),
-    (1, 225, 140),
-    (4, 150, 165),
-    (6, 200, 180),
-    (2, 130, 145),
-    (3, 215, 175),
-    (1, 185, 155),
-    (5, 160, 135),
-    (0, 210, 195),
+    (2, 175, 155, False),
+    (0, 125, 125, False),
+    (1, 225, 140, True),
+    (3, 215, 175, True),
+    (6, 200, 180, True),
+    (2, 130, 145, False),
+    (4, 150, 165, False),
+    (1, 185, 155, True),
+    (5, 160, 135, False),
+    (0, 210, 195, True),
 )
 MAX_OCR_ATTEMPTS = len(OCR_PROFILES)
 
@@ -45,8 +46,23 @@ def read_register(picture, light_digits, digits=5, *, force_polarity=False, prof
     return next(iter(reads)) if len(reads) == 1 else None
 
 
+def reduce_uneven_lighting(image):
+    """Estimate broad shadows on a small image while excluding the dark strokes."""
+    background = image.copy()
+    background.thumbnail((240, 80))
+    kernel = max(5, (background.height // 12) | 1)
+    background = background.filter(ImageFilter.MaxFilter(kernel)).filter(ImageFilter.MinFilter(kernel))
+    low, high = background.resize((6, 2), Image.Resampling.BILINEAR).getextrema()
+    if high - low < 45:
+        return image
+    background = background.resize(image.size, Image.Resampling.BILINEAR)
+    return ImageChops.subtract(image, background, offset=255)
+
+
 def read_polarity(image, digits, profile):
-    cutoff, sharpening, threshold = profile
+    cutoff, sharpening, threshold, reduce_shadows = profile
+    if reduce_shadows:
+        image = reduce_uneven_lighting(image)
     gray = ImageOps.autocontrast(image, cutoff=cutoff)
     variants = (
         gray,
@@ -55,8 +71,10 @@ def read_polarity(image, digits, profile):
     )
     votes = Counter()
     for variant in variants:
-        prepared = ImageOps.expand(variant.resize((variant.width * 3, variant.height * 3)),
-                                   border=24, fill=255)
+        scale = min(3, 2200 / variant.width, 700 / variant.height)
+        resized = variant.resize((max(1, round(variant.width * scale)),
+                                  max(1, round(variant.height * scale))))
+        prepared = ImageOps.expand(resized, border=24, fill=255)
         with io.BytesIO() as png:
             prepared.save(png, "PNG")
             result = subprocess.run(
@@ -90,35 +108,38 @@ def comparison_scope(decimals):
     return f"volle Kubikmeter und {decimals} Nachkommastelle" + ("n" if decimals > 1 else "")
 
 
-def explain_uncertain_positions(readings, decimals, *, show_details=False):
-    """Explain differences at digit positions relevant to this comparison."""
-    if not readings:
-        return ("Zählerstand nicht sicher erkannt. Es liegt keine verwertbare "
-                "OCR-Lesung vor. Bitte Bildausschnitt und Beleuchtung prüfen.")
+def uncertain_positions(readings, decimals):
+    """Return 1-based digit positions, or None when all were unreadable."""
     positions = list(range(5)) + list(range(6, 6 + decimals))
-    unclear = []
-    for position in positions:
-        candidates = {str(reading)[position] if len(str(reading)) > position else "?"
-                      for reading in readings}
-        if len(candidates) <= 1 and all(character.isdigit() for character in candidates):
-            continue
-        place = (f"{position + 1}. Vorkommastelle von links" if position < 5
-                 else f"{position - 5}. Nachkommastelle")
-        options = sorted(character for character in candidates if character.isdigit())
-        if len(options) >= 2:
-            unclear.append(f"{place} (gelesen als {' oder '.join(options)})")
-        else:
-            unclear.append(place)
-    if not unclear:
-        return ("Zählerstand nicht sicher erkannt. Die Lesungen stimmen nicht zuverlässig "
-                "überein. Bitte das Zählerbild prüfen.")
-    message = "Zählerstand nicht sicher erkannt. Unklare Stellen: " + "; ".join(unclear) + "."
-    if show_details:
-        return message + " Die einzelnen Lesungen findest du unter „Mehr Infos“."
-    return message + " Bitte Bildausschnitt, Beleuchtung und Ziffern prüfen."
+    evidence = [
+        {value[position] if len(value) > position else "?" for value in readings}
+        for position in positions
+    ]
+    if not any(any(char in "0123456789" for char in chars) for chars in evidence):
+        return None
+    return [
+        (position >= 6, position - 5 if position >= 6 else position + 1)
+        for position, chars in zip(positions, evidence)
+        if len(chars) != 1 or not all(char in "0123456789" for char in chars)
+    ]
 
 
-def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace=None):
+def explain_uncertain_positions(readings, decimals):
+    """Explain differences at digit positions relevant to this comparison."""
+    positions = uncertain_positions(readings, decimals)
+    if positions is None:
+        return "Keine Ziffern lesbar. Ausschnitt und Licht prüfen."
+    if not positions:
+        return "OCR unsicher. Bild prüfen."
+    groups = []
+    for fractional, title in ((False, "Vor dem Komma"), (True, "Nach dem Komma")):
+        digits = [str(index) for is_fractional, index in positions if is_fractional == fractional]
+        if digits:
+            groups.append(title + ": " + ", ".join(digits) + ".")
+    return "OCR unsicher. " + " ".join(groups)
+
+
+def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace=None, *, standalone=False):
     """Read one image up to max_attempts times; stop on the first valid agreement."""
     if type(max_attempts) is not int or not 1 <= max_attempts <= MAX_OCR_ATTEMPTS:
         raise ValueError("OCR-Versuche müssen zwischen 1 und 10 liegen")
@@ -139,15 +160,16 @@ def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace
             progress(index, f"OCR-Versuch {index} von {max_attempts} abgeschlossen.")
         # Stop immediately on a verified match.
         # Without a reference, a valid OCR result ends the read.
-        if status in ("match", "ocr_only"):
+        if status == "match" or (status == "ocr_only" and not standalone):
             return value, True, index
 
     # No match: show a majority reading for diagnostics if possible.
     majority = len(readings) // 2 + 1
+    minimum_votes = max(2, majority) if standalone else majority
     prefix_length = 5 + (decimals + 1 if decimals else 0)
     prefixes = Counter(value[:prefix_length] for value in readings
                        if meter_prefix(value, decimals) is not None)
-    prefix = next((value for value, count in prefixes.items() if count >= majority), None)
+    prefix = next((value for value, count in prefixes.items() if count >= minimum_votes), None)
     display = []
     for column in zip(*readings):
         digit, count = Counter(column).most_common(1)[0]
@@ -174,7 +196,7 @@ def compare_sample(data, ocr, decimals, *, ocr_confirmed=True):
     raw = meter_prefix(data["raw_value"], decimals)
     actual = meter_prefix(data["actual_value"], decimals)
     if raw is None or actual is None:
-        return "slfork_unclear", "Kein gültiger Vergleichswert verfügbar. Bitte den Referenzsensor prüfen oder eine neue Messung abwarten."
+        return "slfork_unclear", "Referenzwert fehlt oder ist ungültig."
     if raw != actual:
         return "slfork_unclear", "Der ESP liefert widersprüchliche Zählerwerte. Bitte den angezeigten Stand am ESP prüfen."
     if value != actual:
@@ -190,7 +212,7 @@ def compare_sample(data, ocr, decimals, *, ocr_confirmed=True):
     return "match", f"Bestätigt: Zählerstand und Referenzwert stimmen bis einschließlich der {decimals}. Nachkommastelle überein."
 
 
-def rolling_summary(history, now):
+def rolling_summary(history, now, review_after=REVIEW_AFTER):
     epoch = now.timestamp()
     count = sum(epoch - WINDOW_SECONDS < stamp <= epoch for stamp in history.get("confirmations", ()))
     failure = history.get("failure_since")
@@ -199,7 +221,7 @@ def rolling_summary(history, now):
         "required_matches": REQUIRED_MATCHES,
         "window_started_at_epoch": history.get("started_at"),
         "failure_since_epoch": failure,
-        "review_due": failure is not None and epoch - failure >= REVIEW_AFTER,
+        "review_due": failure is not None and epoch - failure >= review_after,
         "check_status": history.get("check_status"),
         "next_check_at_epoch": history.get("next_check_at"),
         "last_match_at_epoch": history.get("last_match_at"),

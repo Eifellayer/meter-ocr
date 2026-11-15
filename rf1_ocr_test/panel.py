@@ -2,33 +2,59 @@
 
 import html
 import json
-import re
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from queue import Empty, Full
+from queue import Full
 from secrets import compare_digest, token_urlsafe
 from threading import Lock, Thread
 from urllib.parse import parse_qs, urlsplit
 
+from consumption import DEFAULT_FLOW_LPH, format_cubic_metres, parse_flow_limit
 from i18n import EN_UI, english_progress, english_result, translate_page
+from language import MODES, SUPPORTED, USER_ID, browser_locale, profile_script
+from layout import ROTATIONS, crop_coordinates
+from notification_settings import notification_rules
+from source_settings import SOURCE_MODES, source_rules
 
 SUPERVISOR_ADDRESS = "172.30.32.2"
 
 PAGE = """<!doctype html>
 <html lang="{language}"><meta charset="utf-8"><meta name="viewport" content="width=device-width">
-<title>Gaszähler OCR-Kontrolle</title>
+<title>Meter OCR</title>
+<style>.resolving-language body{{visibility:hidden}}</style>
+{profile_script}
 <style>
-:root{{color-scheme:light dark;font:15px system-ui,-apple-system,sans-serif;--edge:light-dark(#dfe6ec,#34424d);--surface:light-dark(#fff,#1b252e);--muted:light-dark(#536475,#aebcc8);--accent:#158765;--page:light-dark(#f4f7f9,#111a22)}}
+:root{{color-scheme:light dark;font:15px system-ui,-apple-system,sans-serif;--edge:light-dark(#dfe6ec,#34424d);--surface:light-dark(#fff,#1b252e);--muted:light-dark(#536475,#aebcc8);--page:light-dark(#f4f7f9,#111a22)}}
 *{{box-sizing:border-box}}
 body{{max-width:62rem;margin:0 auto;padding:1.5rem 1rem 3rem;background:var(--page);color:light-dark(#162b3b,#e8f0f5);line-height:1.45}}
 h1{{font-size:clamp(1.5rem,4vw,2rem);letter-spacing:-.03em;margin:.2rem 0 .25rem}}
 h2{{font-size:1rem;margin:0 0 .85rem;letter-spacing:-.01em}}
-.intro{{max-width:48rem;color:var(--muted);margin:.25rem 0 1.4rem}}
 .language-bar{{display:flex;align-items:center;justify-content:flex-end;gap:.45rem;margin:0 0 .5rem}}
 .language-bar label{{display:block;font-size:.8rem;font-weight:500}}
 .language-bar select{{min-height:2rem;padding:.25rem .5rem;font-size:.85rem}}
 .panel{{background:var(--surface);border:1px solid var(--edge);border-radius:1rem;padding:1.15rem 1.25rem;margin:0 0 1rem;box-shadow:0 3px 14px light-dark(#162b3b09,#0002)}}
-form{{display:flex;flex-wrap:wrap;align-items:end;gap:.8rem}}
+form{{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,10.5rem),1fr));align-items:end;gap:.8rem}}
+form > button{{justify-self:start}}
+form > .crop-fields{{grid-column:1/-1}}
+form label,form select,form input{{min-width:0}}
+header{{display:flex;align-items:baseline;justify-content:space-between;gap:.5rem 1rem;flex-wrap:wrap;margin-bottom:1rem}}
+.language-bar{{display:flex;flex-wrap:wrap}}
+.language-bar select,.language-bar button{{min-height:2.75rem}}
+.automatic-images{{margin:1rem 0}}
+.check-option{{display:flex;align-items:center;gap:.5rem;grid-column:1/-1}}
+.check-option input{{min-height:1.15rem;width:1.15rem;margin:0}}
+.notification-form input{{width:100%}}
+.notification-form .check-option input{{width:1.15rem}}
+.automatic-banner{{display:flex;align-items:flex-start;gap:.6rem;margin:0 0 1rem;padding:.8rem .9rem;border:1px solid var(--edge);border-radius:.75rem}}
+.automatic-banner[data-tone="ok"]{{border-color:#65a986;background:light-dark(#edf8f0,#183a2a);color:light-dark(#155d39,#a2e5bc)}}
+.automatic-banner[data-tone="problem"]{{border-color:#c67a7a;background:light-dark(#fff2f1,#46282c);color:light-dark(#8d282e,#ffc0c1)}}
+.automatic-banner-icon{{font-weight:750;font-size:1.15rem;line-height:1.2}}
+.automatic-banner p{{margin:.2rem 0 0;overflow-wrap:anywhere}}
+.automatic-banner button{{margin-left:auto;padding:.35rem .7rem;min-height:2.75rem}}
+@media(max-width:500px){{.automatic-banner{{flex-wrap:wrap}}.automatic-banner-text{{flex:1;min-width:0}}}}
+.notification-help li + li{{margin-top:.35rem}}
+.automatic-images > summary{{cursor:pointer;color:var(--muted)}}
+.test-box :where(p,small){{overflow-wrap:anywhere}}
 label{{display:grid;gap:.3rem;font-weight:600;font-size:.85rem;color:var(--muted)}}
 select,button{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem}}
 select{{background:var(--surface);border:1px solid var(--edge);color:inherit}}
@@ -42,11 +68,11 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .manual-panel > summary::after{{content:"▾";font-size:1.2rem;color:var(--muted)}}
 .manual-panel[open] > summary::after{{content:"▴"}}
 .manual-content{{margin-top:1.2rem;padding-top:1rem;border-top:1px solid var(--edge)}}
-.manual-panel > summary small{{font-weight:400;color:var(--muted)}}
 .settings-note{{font-size:.85rem;color:var(--muted);margin:.7rem 0 0}}
 .save-notice{{font-size:.88rem;color:light-dark(#1e7650,#8ad4a9);margin:.7rem 0 0}}
 .crop-fields{{display:flex;gap:.8rem;flex-wrap:wrap;margin-top:.7rem}}
-.crop-fields label:first-child{{flex:2 1 17rem}}.crop-fields label:last-child{{flex:1 1 10rem}}
+.crop-fields label{{flex:1 1 10rem}}.crop-fields label:first-child{{flex-grow:2;flex-basis:16rem}}
+.crop-fields .settings-note{{flex-basis:100%;margin:0}}
 .crop-fields[hidden]{{display:none}}
 .preview{{margin-top:1rem;padding-top:1rem;border-top:1px solid var(--edge)}}
 .preview img{{display:block;width:100%;max-width:740px;height:auto;border-radius:.5rem;border:1px solid var(--edge)}}
@@ -90,31 +116,82 @@ section{{display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(min(
 section>div{{background:var(--surface);border:1px solid var(--edge);border-radius:1rem;padding:1rem;overflow:hidden}}
 section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 .stamp,#countdown{{font-variant-numeric:tabular-nums}}
-@media(max-width:500px){{body{{padding:.8rem .7rem 2rem}}.panel{{padding:.9rem}}dl{{grid-template-columns:7.4rem minmax(0,1fr)}}form label{{flex:1 1 9rem}}button{{width:100%}}}}
+@media(max-width:500px){{body{{padding:.8rem .7rem 2rem}}.panel{{padding:.9rem}}dl{{grid-template-columns:minmax(5.5rem,1fr) minmax(0,1.7fr);gap:.5rem .85rem}}form:not(.language-bar) button{{width:100%;min-height:2.75rem}}}}
 </style>
-<form method="get" action="" class="language-bar" id="language-form">
+<header>
+<h1>Meter OCR</h1>
+<form method="post" action="sprache" class="language-bar" id="language-form">
+<input type="hidden" name="csrf" value="{csrf}">
 <label for="language-select">Sprache / Language</label>
-<select id="language-select" name="lang" aria-label="Sprache / Language">
-<option value="de"{de_selected}>Deutsch</option><option value="en"{en_selected}>English</option>
-</select>
+<select id="language-select" name="mode">{language_options}</select>
+<noscript><button type="submit">Speichern</button></noscript>
 </form>
-<h1>Gaszähler OCR-Kontrolle</h1>
-<p class="intro">Unabhängiger Bildabgleich deines Gaszählerstands mit der vorhandenen Messung. Die OCR liest die Ziffern erneut direkt aus dem Kamerabild – ohne den vom ESP erkannten Wert einfach zu übernehmen.</p>
+</header>
 <div class="panel"><h2>Automatische Kontrolle</h2>
-<dl><dt>Nächste Prüfung</dt><dd id="countdown">–</dd>
-<dt>Vergleich</dt><dd>{auto_rule_description}</dd>
-<dt>Erkannter Stand</dt><dd>{ocr}</dd>
-<dt>Referenz</dt><dd>{reference}</dd>
-<dt>Prüfergebnis</dt><dd>{detail}</dd>
-<dt>Bildzeit</dt><dd class="stamp" data-epoch="{image_time}">–</dd></dl></div>
-<div class="panel"><h2>Automatische Prüfung – Einstellungen</h2>
+<div class="automatic-banner" id="automatic-banner" data-tone="{automatic_tone}"
+ data-incident="{automatic_incident}" data-preference-key="{banner_preference_key}">
+<span class="automatic-banner-icon" aria-hidden="true">{automatic_icon}</span>
+<div class="automatic-banner-text" role="status" aria-live="polite">
+<strong id="automatic-status-heading">{automatic_heading}</strong>
+<p id="automatic-result">{detail}</p>
+</div>
+<button id="ignore-automatic-warning" type="button" {ignore_hidden}
+ title="Blendet diesen Hinweis hier aus. Prüfungen und Benachrichtigungen laufen weiter.">Ignorieren</button>
+</div>
+<dl><dt>Erkannter Stand</dt><dd id="automatic-ocr">{ocr}</dd>
+<dt>Referenz</dt><dd id="automatic-reference">{reference}</dd>
+<dt>Bildzeit</dt><dd id="automatic-image-time" class="stamp" data-epoch="{image_time}">–</dd>
+<dt>Nächste Prüfung</dt><dd id="countdown">–</dd></dl>
+<details class="ocr-details" id="automatic-ocr-details" hidden>
+<summary>Mehr Infos: Was wurde bei den OCR-Versuchen gelesen?</summary>
+<p class="ocr-scope"></p>
+<p>? steht für eine unklare Ziffer.</p>
+<table><thead><tr><th>Versuch</th><th>Erkannter Stand</th></tr></thead><tbody></tbody></table>
+</details>
+<details class="automatic-images"><summary>Kontrollbilder</summary>
+<section><div><h2>Aktuelles Bild</h2><div id="automatic-current">{current}</div></div>
+<div><h2>Letzter Treffer</h2><div id="automatic-good">{good}</div></div></section>
+</details>
+</div>
+<details class="panel manual-panel" id="source-settings" {source_open}>
+<summary><strong>Bildquelle</strong></summary>
+<div class="manual-content">
+{source_intro}
+<form method="post" action="bildquelle" id="source-form">
+<input type="hidden" name="lang" value="{language}">
+<input type="hidden" name="mode" value="{language_mode}">
+<input type="hidden" name="csrf" value="{csrf}">
+<label title="Wähle, woher das Zählerbild und gegebenenfalls der Vergleichswert kommen.">Betriebsmodus
+<select name="source_mode" id="source-mode">{source_options}</select></label>
+<label id="source-url" title="Die Adresse deines SLFork-Geräts im Heimnetz.">SLFork-Adresse
+<input name="url" value="{source_url}" placeholder="http://esp-gaszaehler.local" maxlength="150"></label>
+<label id="source-camera" title="Die Entitäts-ID der Kamera in Home Assistant.">Kamera in Home Assistant
+<input name="camera" value="{source_camera}" placeholder="camera.gaszaehler" maxlength="80"></label>
+<label id="source-reference" title="Optionaler Sensor mit aktuellem Zählerstand in Kubikmetern.">Vergleichssensor (optional)
+<input name="reference" value="{source_reference}" placeholder="sensor.gaszaehler" maxlength="80"></label>
+<button type="submit">Speichern</button>
+</form>
+<details class="help"><summary title="Erklärung zu den verfügbaren Modi">ⓘ Welcher Modus passt?</summary>
+<ul>
+<li><strong>SLFork:</strong> Das Gerät liefert Foto und Vergleichswert.</li>
+<li><strong>Home-Assistant-Kamera:</strong> Die App liest das Bild und vergleicht es mit einem Sensor, falls einer eingetragen ist.</li>
+<li><strong>ESPHome oder Kamera mit lokaler OCR:</strong> Die Kamera liefert das Foto, die App liest den Stand und stellt ihn als eigenen Sensor bereit.</li>
+</ul></details>
+{source_saved_notice}
+</div></details>
+<details class="panel manual-panel" id="automatic-settings" {settings_open}>
+<summary><strong>Automatische Prüfung – Einstellungen</strong></summary>
+<div class="manual-content">
 <form method="post" action="automatik" id="auto-form">
 <input type="hidden" name="lang" value="{language}">
+<input type="hidden" name="mode" value="{language_mode}">
 <input type="hidden" name="csrf" value="{csrf}">
 <label>Vergleich
 <select name="decimals">{auto_decimal_options}</select></label>
 <label>Max. OCR-Versuche
 <select name="attempts">{auto_attempt_options}</select></label>
+<label title="Qmax steht auf deinem Zähler. Die Vorgabe für einen G4 beträgt 6 m³/h.">Maximaler Durchfluss (m³/h)
+<input name="max_flow" type="text" inputmode="decimal" maxlength="10" value="{max_flow}" required></label>
 <label>Ziffernfarbe
 <select name="polarity">{auto_polarity_options}</select></label>
 <label>Bildbereich
@@ -122,20 +199,52 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <div class="crop-fields" id="auto-crop-fields" hidden>
 <label>Bildbereich (links, oben, rechts, unten)
 <input name="crop" type="text" value="{auto_crop_value}" maxlength="30" placeholder="52,56,564,132"></label>
+<label>Bilddrehung im Uhrzeigersinn
+<select name="rotation">{auto_rotation_options}</select></label>
 <label>Breite der Vorkommastellen
-<input name="width" type="number" min="1" max="1920" value="{auto_width_value}"></label>
+<input name="width" type="number" min="1" max="9999" value="{auto_width_value}"></label>
+<p class="settings-note">Wähle den Ausschnitt im Originalbild. Die Vorkommabreite gilt nach der Drehung.</p>
 </div>
 <button type="submit">Speichern</button>
 </form>
 <p class="settings-note">Gilt dauerhaft ab der nächsten automatischen Prüfung. Bei geänderter Vergleichsgenauigkeit beginnt die Trefferzählung neu.</p>
 {auto_saved_notice}
-</div>
-<details class="panel manual-panel" id="manual-panel">
-<summary><strong>Manuellen Test öffnen</strong><small>Zusätzliche Bild- und OCR-Einstellungen</small></summary>
+</div></details>
+<details class="panel manual-panel" id="notification-settings" {notifications_open}>
+<summary><strong>Benachrichtigungen</strong></summary>
 <div class="manual-content">
-<h2>Manueller Bildtest</h2>
+<form class="notification-form" method="post" action="benachrichtigungen">
+<input type="hidden" name="lang" value="{language}">
+<input type="hidden" name="mode" value="{language_mode}">
+<input type="hidden" name="csrf" value="{csrf}">
+<label class="check-option" title="Gilt für die automatische Kontrolle. Ein manueller Test löst keinen Versand aus.">
+<input type="checkbox" name="enabled" value="1" {notifications_enabled}>
+Bei anhaltenden Problemen benachrichtigen
+</label>
+<label title="So lange muss die automatische Kontrolle ohne Erfolg bleiben, bevor Home Assistant einen Hinweis anzeigt.">Hinweis nach (Minuten)
+<input type="number" name="review_minutes" min="1" max="2880" value="{notification_review}" required></label>
+<label title="Wartezeit für Handy-Push und E-Mail, nachdem der Hinweis erschienen ist. Bei 0 werden beide sofort gesendet.">Push und E-Mail nach weiteren Stunden
+<input type="number" name="delivery_hours" min="0" max="168" value="{notification_delay}" required></label>
+<label title="Optionaler Dienst deiner Home Assistant Companion App, zum Beispiel notify.mobile_app_mein_handy.">Handy-Push (optional)
+<input name="push" value="{notification_push}" maxlength="80" placeholder="notify.mobile_app_mein_handy" autocapitalize="off" spellcheck="false"></label>
+<label title="Optionales Benachrichtigungsziel in Home Assistant, zum Beispiel eine SMTP-Empfänger-Entität.">E-Mail oder anderes Ziel (optional)
+<input name="target" value="{notification_target}" maxlength="80" placeholder="notify.meine_email" autocapitalize="off" spellcheck="false"></label>
+<button type="submit">Speichern</button>
+</form>
+<details class="help notification-help"><summary title="Beispiele und Erklärung zu den Benachrichtigungen">ⓘ Wie funktioniert der Versand?</summary>
+<ul>
+<li>Nur einen Hinweis in Home Assistant erhalten? Lass beide optionalen Felder leer.</li>
+<li>Für E-Mail richte zuerst die SMTP-Integration in Home Assistant ein und trage hier die Entitäts-ID des Empfängers ein. Andere Benachrichtigungs-Entitäten funktionieren ebenfalls.</li>
+<li>Wenn die Prüfung wieder gelingt oder du den Hinweis schließt, entfallen noch ausstehende Nachrichten. Je Ziel wird pro Störung eine Nachricht gesendet.</li>
+</ul></details>
+{notification_saved_notice}
+</div></details>
+<details class="panel manual-panel" id="manual-panel" {manual_open}>
+<summary><strong>Manuellen Test öffnen</strong></summary>
+<div class="manual-content">
 <form method="post" action="pruefen" id="manual-form">
 <input type="hidden" name="lang" value="{language}">
+<input type="hidden" name="mode" value="{language_mode}">
 <input type="hidden" name="csrf" value="{csrf}">
 <label>Ziffernfarbe
 <select name="polarity">{polarity_options}</select></label>
@@ -148,8 +257,11 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <div class="crop-fields" id="crop-fields" hidden>
 <label>Manueller Ausschnitt (links, oben, rechts, unten)
 <input name="crop" type="text" value="{crop_value}" maxlength="30" placeholder="52,56,564,132"></label>
+<label>Bilddrehung im Uhrzeigersinn
+<select name="rotation">{rotation_options}</select></label>
 <label>Breite der Vorkommastellen
-<input name="width" type="number" min="1" max="1920" value="{width_value}"></label>
+<input name="width" type="number" min="1" max="9999" value="{width_value}"></label>
+<p class="settings-note">Wähle den Ausschnitt im Originalbild. Die Vorkommabreite gilt nach der Drehung.</p>
 </div>
 <button id="start-check">Jetzt prüfen</button>
 </form>
@@ -162,12 +274,14 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <small id="test-meta">Bereit für den manuellen Test.</small>
 <div class="test-result" id="test-result" hidden>
 <p id="test-result-detail"></p>
+<dl id="manual-readings" hidden><dt>Erkannter Stand</dt><dd id="manual-ocr"></dd><dt>Referenz</dt><dd id="manual-reference"></dd></dl>
 <small id="test-result-stamp"></small>
 <details class="ocr-details" id="ocr-details" hidden>
 <summary>Mehr Infos: Was wurde bei den OCR-Versuchen gelesen?</summary>
-<p id="ocr-scope"></p>
+<p class="ocr-scope"></p>
+<p>? steht für eine unklare Ziffer.</p>
 <table><thead><tr><th>Versuch</th><th>Erkannter Stand</th></tr></thead>
-<tbody id="ocr-attempt-table"></tbody></table>
+<tbody></tbody></table>
 </details>
 </div>
 <div class="preview" id="test-preview" hidden>
@@ -176,39 +290,50 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <p class="legend"><span class="green-key">Grün:</span> Ziffer wurde gelesen · <span class="red-key">Rot:</span> Ziffer unklar. Die Farbrahmen zeigen die OCR-Erkennung, nicht die Übereinstimmung mit dem Referenzstand. Ohne automatisch erkannte Ziffernrahmen sind die Bereiche nur näherungsweise aufgeteilt.</p>
 </div>
 <form method="post" action="ausschnitt-uebernehmen" id="apply-crop-form" class="apply-crop" hidden>
+<input type="hidden" name="checked_at" id="tested-crop-id">
 <input type="hidden" name="lang" value="{language}">
+<input type="hidden" name="mode" value="{language_mode}">
 <input type="hidden" name="csrf" value="{csrf}">
 <button type="submit">Getesteten Ausschnitt für die Automatik übernehmen</button>
 </form>
 </div></div></details>
 
-<section><div><h2>Aktuelles Bild</h2>{current}</div>
-<div><h2>Letzter Treffer</h2>{good}</div></section>
 <footer class="page-footer">Kostenloses Hobbyprojekt · <a href="https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8" target="_blank" rel="noopener noreferrer">Freiwillig unterstützen (PayPal)</a></footer>
 <script>
-const next = {next_check};
+let next = {next_check};
 const lang = '{language}';
 const searchPrefs = new URLSearchParams(location.search);
-try {{
-  const savedLanguage = localStorage.getItem('rf1-language');
-  if (!searchPrefs.has('lang') && (savedLanguage === 'en' || savedLanguage === 'de') && savedLanguage !== lang) {{
-    searchPrefs.set('lang', savedLanguage);
-    location.replace(location.pathname + '?' + searchPrefs.toString());
-  }} else if (searchPrefs.has('lang')) {{
-    localStorage.setItem('rf1-language', lang);
-  }}
-}} catch (_) {{ /* Browser storage is optional. */ }}
+if (searchPrefs.has('ui')) {{
+  searchPrefs.delete('ui');
+  history.replaceState(null, '', location.pathname + (searchPrefs.size ? '?' + searchPrefs : ''));
+}}
 document.querySelector('#language-select').addEventListener('change', () => {{
+  const url = new URL(document.querySelector('#language-form').action);
+  if (document.querySelector('#manual-panel').open) url.searchParams.set('test', 'open');
+  document.querySelector('#language-form').action = url;
   document.querySelector('#language-form').submit();
 }});
 
-let currentPhase = 'idle';
+let sendingCheck = false;
+let statusPending = false;
 const manualPanel = document.querySelector('#manual-panel');
 const manualForm = document.querySelector('#manual-form');
 const cropMode = document.querySelector('#crop-mode');
 const cropFields = document.querySelector('#crop-fields');
 const autoCropMode = document.querySelector('#auto-crop-mode');
 const autoCropFields = document.querySelector('#auto-crop-fields');
+const sourceMode = document.querySelector('#source-mode');
+function showSourceFields() {{
+  const mode = sourceMode.value;
+  for (const [selector, show] of [['#source-url', mode === 'slfork'],
+      ['#source-camera', mode !== 'slfork'], ['#source-reference', mode === 'camera']]) {{
+    const field = document.querySelector(selector);
+    field.hidden = !show;
+    field.querySelector('input').disabled = !show;
+  }}
+}}
+sourceMode.addEventListener('change', showSourceFields);
+showSourceFields();
 function showAutoCropFields() {{
   autoCropFields.hidden = autoCropMode.value !== 'manual';
 }}
@@ -219,12 +344,31 @@ function showCropFields() {{
 }}
 cropMode.addEventListener('change', showCropFields);
 showCropFields();
+function renderAttempts(details, readings, decimals) {{
+  details.hidden = !Array.isArray(readings) || !readings.length;
+  if (details.hidden) return;
+  details.querySelector('.ocr-scope').textContent = decimals === 0 ?
+    'Verglichen wurden nur die vollen Kubikmeter (ohne Nachkommastellen).' :
+    'Verglichen wurden die vollen Kubikmeter und ' + decimals + ' Nachkommastelle(n).';
+  const body = details.querySelector('tbody');
+  const key = JSON.stringify(readings);
+  if (body.dataset.values === key) return;
+  body.replaceChildren();
+  readings.slice(0, 10).forEach((value, index) => {{
+    const row = body.insertRow();
+    row.insertCell().textContent = String(index + 1);
+    row.insertCell().textContent = String(value ?? '?');
+  }});
+  body.dataset.values = key;
+}}
 async function refreshTestStatus() {{
+  if (statusPending || sendingCheck) return;
+  statusPending = true;
   try {{
     const response = await fetch('status?lang=' + lang, {{cache: 'no-store'}});
-    if (!response.ok) throw new Error('Status nicht abrufbar');
+    if (!response.ok) throw new Error();
     const job = await response.json();
-    currentPhase = job.phase;
+    if (sendingCheck) return;
     const box = document.querySelector('#test-box');
     const bar = document.querySelector('#test-progress');
     const button = document.querySelector('#start-check');
@@ -263,31 +407,13 @@ async function refreshTestStatus() {{
 
     if (job.phase === 'done') {{
       detail.hidden = false;
+      document.querySelector('#manual-readings').hidden = !job.ocr && job.reference == null;
+      document.querySelector('#manual-ocr').textContent = job.ocr ?? '–';
+      document.querySelector('#manual-reference').textContent = job.reference ?? '–';
       document.querySelector('#test-result-detail').textContent = job.detail || job.message || 'Kein Ergebnis.';
       document.querySelector('#test-result-stamp').textContent = job.checked_at ?
         new Intl.DateTimeFormat(lang === 'en' ? 'en-GB' : 'de-DE', {{day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'}}).format(new Date(job.checked_at*1000)) : '';
-      extra.hidden = !Array.isArray(job.readings) || !job.readings.length;
-      if (!extra.hidden) {{
-        const scope = Number(job.comparison_decimals) || 0;
-        document.querySelector('#ocr-scope').textContent = scope === 0 ?
-          'Verglichen wurden nur die vollen Kubikmeter (ohne Nachkommastellen).' :
-          'Verglichen wurden die vollen Kubikmeter und ' + scope + ' Nachkommastelle(n).';
-        const body = document.querySelector('#ocr-attempt-table');
-        const key = JSON.stringify(job.readings);
-        if (body.dataset.values !== key) {{
-          body.replaceChildren();
-          job.readings.slice(0, 10).forEach((value, index) => {{
-            const row = document.createElement('tr');
-            const attempt = document.createElement('td');
-            const reading = document.createElement('td');
-            attempt.textContent = String(index + 1);
-            reading.textContent = String(value ?? '?');
-            row.append(attempt, reading);
-            body.appendChild(row);
-          }});
-          body.dataset.values = key;
-        }}
-      }}
+      renderAttempts(extra, job.readings, job.comparison_decimals);
     }} else {{
       detail.hidden = true;
       extra.hidden = true;
@@ -299,32 +425,40 @@ async function refreshTestStatus() {{
       if (image.getAttribute('src') !== url) image.setAttribute('src', url);
     }}
     apply.hidden = !(job.phase === 'done' && job.can_apply_crop);
+    document.querySelector('#tested-crop-id').value = job.crop_id || '';
   }} catch (_) {{
     document.querySelector('#test-meta').textContent = 'Status nicht erreichbar – Verbindung prüfen.';
+  }} finally {{
+    statusPending = false;
   }}
 }}
 refreshTestStatus();
 setInterval(refreshTestStatus, 1000);
 function tick() {{
   const out = document.querySelector('#countdown');
-  if (!next) return;
+  if (!next) {{
+    out.textContent = '–';
+    return;
+  }}
   const seconds = Math.max(0, Math.ceil(next - Date.now() / 1000));
   out.textContent = seconds ? Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2,'0') + ' min' : 'Jetzt fällig';
 }}
+const formatStamp = epoch => new Intl.DateTimeFormat(lang === 'en' ? 'en-GB' : 'de-DE', {{day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'}}).format(new Date(epoch * 1000));
 for (const el of document.querySelectorAll('.stamp')) {{
   const epoch = Number(el.dataset.epoch);
-  if (epoch) el.textContent = new Intl.DateTimeFormat(lang === 'en' ? 'en-GB' : 'de-DE', {{day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'}}).format(new Date(epoch * 1000));
+  if (epoch) el.textContent = formatStamp(epoch);
 }}
-if (searchPrefs.get('test') === 'queued') {{
+if (['queued', 'open', 'busy'].includes(searchPrefs.get('test'))) {{
   manualPanel.open = true;
   searchPrefs.delete('test');
-  history.replaceState(null, '', location.pathname + '?' + searchPrefs.toString());
+  history.replaceState(null, '', location.pathname + (searchPrefs.size ? '?' + searchPrefs : ''));
 }}
-let edited = false;
-manualForm.addEventListener('change', () => {{ edited = true; }});
-document.querySelector('#auto-form').addEventListener('change', () => {{ edited = true; }});
-manualForm.addEventListener('submit', () => {{
-  currentPhase = 'queued';
+manualForm.addEventListener('submit', event => {{
+  if (sendingCheck) {{
+    event.preventDefault();
+    return;
+  }}
+  sendingCheck = true;
   const box = document.querySelector('#test-box');
   box.dataset.phase = 'queued';
   box.dataset.result = 'neutral';
@@ -339,13 +473,66 @@ manualForm.addEventListener('submit', () => {{
   button.textContent = 'Prüfung läuft …';
 }});
 tick(); setInterval(tick, 1000);
-setInterval(() => {{
-  if (!edited && !['queued','running','ocr'].includes(currentPhase) &&
-      !manualPanel.open && !document.querySelector('#auto-form').contains(document.activeElement)) location.reload();
-}}, 15000);
+const automaticBanner = document.querySelector('#automatic-banner');
+const ignoreWarning = document.querySelector('#ignore-automatic-warning');
+const preferenceKey = automaticBanner.dataset.preferenceKey;
+let ignoredIncident = '';
+try {{
+  ignoredIncident = (preferenceKey ? localStorage : sessionStorage).getItem(preferenceKey || 'rf1-ignored-warning') || '';
+}} catch (_) {{ /* Storage is optional. */ }}
+function updateBannerVisibility() {{
+  automaticBanner.hidden = automaticBanner.dataset.tone === 'problem' &&
+    automaticBanner.dataset.incident === ignoredIncident;
+}}
+ignoreWarning.addEventListener('click', () => {{
+  ignoredIncident = automaticBanner.dataset.incident;
+  try {{
+    (preferenceKey ? localStorage : sessionStorage).setItem(preferenceKey || 'rf1-ignored-warning', ignoredIncident);
+  }} catch (_) {{ /* Keep the choice for the current view. */ }}
+  updateBannerVisibility();
+}});
+updateBannerVisibility();
+
+async function refreshAutomatic() {{
+  try {{
+    const response = await fetch('automatic?lang=' + lang, {{cache: 'no-store'}});
+    if (!response.ok) throw new Error();
+    const sample = await response.json();
+    next = sample.next_check;
+    automaticBanner.dataset.tone = sample.tone;
+    automaticBanner.dataset.incident = sample.incident;
+    ignoreWarning.hidden = sample.tone !== 'problem';
+    const heading = document.querySelector('#automatic-status-heading');
+    const icon = automaticBanner.querySelector('.automatic-banner-icon');
+    const detail = document.querySelector('#automatic-result');
+    if (heading.textContent !== sample.heading) heading.textContent = sample.heading;
+    if (icon.textContent !== sample.icon) icon.textContent = sample.icon;
+    if (detail.textContent !== sample.detail) detail.textContent = sample.detail;
+    updateBannerVisibility();
+    document.querySelector('#automatic-ocr').textContent = sample.ocr;
+    document.querySelector('#automatic-reference').textContent = sample.reference;
+    renderAttempts(document.querySelector('#automatic-ocr-details'), sample.readings, sample.decimals);
+    const stamp = document.querySelector('#automatic-image-time');
+    stamp.textContent = sample.image_time ? formatStamp(sample.image_time) : '–';
+    for (const [name, file] of [['current', 'aktuell.jpg'], ['good', 'treffer.jpg']]) {{
+      const timestamp = sample[name];
+      if (!timestamp) continue;
+      const container = document.querySelector('#automatic-' + name);
+      const image = container.querySelector('img') || document.createElement('img');
+      const url = file + '?v=' + timestamp;
+      if (image.getAttribute('src') === url) continue;
+      image.alt = name === 'current' ? 'Aktuelles Kontrollbild' : 'Kontrollbild des letzten Treffers';
+      image.src = url;
+      if (!image.parentNode) container.replaceChildren(image);
+    }}
+  }} catch (_) {{ /* Keep the last available result while reconnecting. */ }}
+  setTimeout(refreshAutomatic, 15000);
+}}
+refreshAutomatic();
 </script></html>"""
 
 
+ROTATION_OPTIONS = {str(angle): f"{angle}°" for angle in ROTATIONS}
 POLARITIES = {"auto": "Automatisch", "light": "Hell", "dark": "Dunkel"}
 DECIMALS = {"0": "Volle Kubikmeter", "1": "1 Nachkommastelle", "2": "2 Nachkommastellen", "3": "3 Nachkommastellen"}
 ATTEMPTS = {str(value): str(value) for value in range(1, 11)}
@@ -366,31 +553,38 @@ def select_options(choices, chosen):
 def start_panel(
     history_path, current_image, good_image, requested, default_decimals, default_attempts,
     get_auto_rules, save_auto_rules, default_crop, default_width, test_image,
+    load_language_modes, save_language_modes, get_delivery, save_delivery, get_source, save_source,
+    *, address=("0.0.0.0", 8099),
 ):
     images = {"/aktuell.jpg": current_image, "/treffer.jpg": good_image,
               "/testvorschau.jpg": test_image}
     csrf_token = token_urlsafe(32)
     request_lock = Lock()
+    preferences_lock = Lock()
+    rules_lock = Lock()
+    delivery_lock = Lock()
+    source_lock = Lock()
     progress = {
         "request_id": 0, "phase": "idle", "message": "Noch kein manueller Test gestartet.",
         "attempts": 0, "max_attempts": default_attempts,
         "started_at": 0, "checked_at": 0, "outcome": None, "detail": "",
         "preview": False, "can_apply_crop": False, "readings": [],
-        "comparison_decimals": default_decimals,
+        "comparison_decimals": default_decimals, "ocr": None, "reference": None,
     }
     try:
         saved_history = json.loads(history_path.read_text(encoding="utf-8"))
         previous = saved_history.get("manual_result", {})
-        if previous.get("checked_at") and previous.get("status"):
+        if previous.get("checked_at"):
             progress.update(
                 phase="done", message="Letzter manueller Test",
                 attempts=previous.get("ocr_attempts", 0),
                 max_attempts=previous.get("settings", {}).get("attempts", default_attempts),
                 checked_at=previous["checked_at"],
-                outcome=previous.get("status") or "ocr_unclear",
+                outcome=previous.get("status", "capture_unavailable"),
                 detail=previous.get("detail", "Kein Prüfergebnis gespeichert."),
                 preview=bool(previous.get("preview") and test_image.exists()),
-                can_apply_crop=bool(previous.get("can_apply_crop")),
+                can_apply_crop=bool(previous.get("can_apply_crop") and test_image.exists()),
+                ocr=previous.get("ocr"), reference=previous.get("reference"),
                 readings=previous.get("readings", []),
                 comparison_decimals=previous.get("settings", {}).get("decimals", default_decimals),
             )
@@ -398,15 +592,63 @@ def start_panel(
         pass
 
     def update_progress(request_id, phase, message, attempts=0, checked_at=0, outcome=None,
-                        detail="", preview=False, can_apply_crop=False, readings=None):
+                        detail="", preview=False, can_apply_crop=False, readings=None,
+                        ocr=None, reference=None):
         """Only the newest request may update the visible status."""
         with request_lock:
             if progress["request_id"] != request_id:
                 return
             progress.update(phase=phase, message=message, attempts=attempts,
                             checked_at=checked_at, outcome=outcome, detail=detail,
-                            preview=preview, can_apply_crop=can_apply_crop,
+                            preview=preview, can_apply_crop=can_apply_crop, ocr=ocr, reference=reference,
                             readings=readings if readings is not None else progress["readings"])
+
+    def read_history():
+        try:
+            history = json.loads(history_path.read_text(encoding="utf-8"))
+            return history if isinstance(history, dict) else {}
+        except (OSError, ValueError):
+            return {}
+
+    def automatic_summary(history, language, auto_rules):
+        detail = history.get("check_detail")
+        precision_pending = (history.get("comparison_decimals") is not None
+                             and history["comparison_decimals"] != auto_rules["decimals"])
+        if precision_pending:
+            detail = ("Neue Vergleichsgenauigkeit gespeichert. Die nächste automatische "
+                      "Prüfung zeigt das erste Ergebnis mit dieser Einstellung.")
+        if language == "en" and detail:
+            detail = english_result(
+                detail, history.get("check_status") or history.get("status"),
+                history.get("comparison_decimals", default_decimals), history.get("ocr_readings"),
+            )
+        status = history.get("check_status") or history.get("status")
+        tone = "neutral"
+        heading = "Automatischer Prüfstatus"
+        icon = ""
+        if not precision_pending and status == "match":
+            tone, heading, icon = "ok", "Zählerstand bestätigt", "✓"
+        elif not precision_pending and status in (
+            "difference", "ocr_unclear", "slfork_unclear", "stale_sample", "capture_unavailable",
+        ):
+            tone, heading, icon = "problem", "Zählerstand bitte prüfen", "!"
+        if language == "en":
+            heading = EN_UI[heading]
+        return {
+            "detail": detail or ("No automatic result yet." if language == "en"
+                                 else "Noch kein automatisches Prüfergebnis."),
+            "tone": tone, "heading": heading, "icon": icon,
+            "incident": str(history.get("failure_since") or status) if tone == "problem" else "",
+            "ocr": str(history["ocr_value"]) if history.get("ocr_value") is not None else "–",
+            "reference": str(history["last_reference"]) if history.get("last_reference") is not None else "–",
+            "image_time": history.get("last_epoch") or 0,
+            "next_check": history.get("next_check_at"),
+            "readings": (history.get("ocr_readings", []) if not precision_pending
+                         and history.get("check_status") == "ocr_unclear" else []),
+            "decimals": history.get("comparison_decimals", default_decimals),
+            "current": current_image.stat().st_mtime_ns if current_image.exists() else None,
+            "good": good_image.stat().st_mtime_ns if good_image.exists() else None,
+        }
 
     class Handler(BaseHTTPRequestHandler):
         def authorized(self):
@@ -415,12 +657,24 @@ def start_panel(
             self.send_error(403)
             return False
 
-        def reply(self, content, media_type):
-            self.send_response(200)
+        def user_id(self):
+            value = self.headers.get("X-Remote-User-Id", "")
+            return value if USER_ID.fullmatch(value) else None
+
+        def redirect(self, suffix=""):
+            self.send_response(303)
+            self.send_header("Location", "./" + suffix)
+            self.send_header("Content-Length", "0")
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+
+        def reply(self, content, media_type, status=200):
+            self.send_response(status)
             self.send_header("Content-Type", media_type)
             self.send_header("Content-Length", str(len(content)))
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Referrer-Policy", "no-referrer")
             self.end_headers()
             self.wfile.write(content)
 
@@ -431,9 +685,8 @@ def start_panel(
             path = url.path
             query = parse_qs(url.query)
             requested_lang = query.get("lang", [""])[0]
-            language = (requested_lang if requested_lang in ("de", "en") else
-                        "en" if self.headers.get("Accept-Language", "").lower().startswith("en")
-                        else "de")
+            fallback = browser_locale(self.headers.get("Accept-Language", ""))
+            language = requested_lang if requested_lang in SUPPORTED else fallback
             if path in images:
                 try:
                     content = images[path].read_bytes()
@@ -445,45 +698,60 @@ def start_panel(
             if path == "/status":
                 with request_lock:
                     snapshot = dict(progress)
+                snapshot["crop_id"] = str(snapshot["checked_at"]) if snapshot["can_apply_crop"] else ""
                 if language == "en":
                     snapshot["message"] = english_progress(snapshot.get("message"))
                     if snapshot.get("detail"):
                         snapshot["detail"] = english_result(
                             snapshot["detail"], snapshot.get("outcome"),
                             snapshot.get("comparison_decimals", default_decimals),
-                            snapshot.get("readings"), manual=True,
+                            snapshot.get("readings"),
                         )
                 self.reply(json.dumps(snapshot).encode("utf-8"), "application/json; charset=utf-8")
                 return
-            if path != "/":
+            if path not in ("/", "/automatic"):
                 self.send_error(404)
                 return
-            try:
-                history = json.loads(history_path.read_text(encoding="utf-8"))
-            except (OSError, ValueError):
-                history = {}
-            values = {name: html.escape(str(history.get(key) or "–")) for name, key in (
-                ("ocr", "ocr_value"), ("reference", "last_reference"), ("detail", "check_detail"),
-            )}
-            if language == "en" and history.get("check_detail"):
-                values["detail"] = html.escape(english_result(
-                    history["check_detail"],
-                    history.get("status") or history.get("check_status"),
-                    history.get("comparison_decimals", default_decimals),
-                    history.get("ocr_readings", []),
-                ))
-            manual = history.get("manual_result", {})
-            manual_detail = manual.get("detail", "Noch kein manueller Test.")
-            if manual.get("already_checked"):
-                manual_detail += " Dieses Bild wurde bereits ausgewertet."
-            if manual.get("outside_window"):
-                manual_detail += " Das Bild ist für eine neue automatische Bestätigung zu alt."
-            settings = manual.get("settings", {})
+            history = read_history()
             auto_rules = get_auto_rules()
+            if path == "/automatic":
+                payload = json.dumps(automatic_summary(history, language, auto_rules))
+                self.reply(payload.encode("utf-8"), "application/json; charset=utf-8")
+                return
+            user = self.user_id()
+            try:
+                mode = (load_language_modes().get(user, "auto") if user else
+                        query.get("mode", ["auto"])[0])
+            except (OSError, ValueError):
+                mode = "auto"
+            if mode not in MODES:
+                mode = "auto"
+            profile = query.get("ui", [""])[0] if user and mode == "auto" else ""
+            language = mode if mode in SUPPORTED else profile if profile in SUPPORTED else fallback
+            source_name = {"de": "Deutsch", "en": "English"}.get(profile)
+            automatic = "Automatic" if language == "en" else "Automatisch"
+            automatic += f" (Home Assistant: {source_name})" if source_name else " (Home Assistant)"
+            scripts = (f"<script>{profile_script(user)}</script>"
+                       if user and mode == "auto" and not source_name else "")
+            summary = automatic_summary(history, language, auto_rules)
+            delivery = get_delivery()
+            source, setup_pending = get_source()
+            source_choices = (
+                {"slfork": "SLFork / AI on the Edge", "camera": "Home Assistant camera",
+                 "esphome": "ESPHome or camera with local OCR"} if language == "en" else
+                {"slfork": "SLFork / AI on the Edge", "camera": "Home-Assistant-Kamera",
+                 "esphome": "ESPHome oder Kamera mit lokaler OCR"}
+            )
+            intro = ("Choose a source to start automatic checks." if language == "en" else
+                     "Wähle eine Bildquelle, um die automatische Kontrolle zu starten.")
+            values = {name: html.escape(summary[name]) for name in ("ocr", "reference", "detail")}
+            settings = history.get("manual_result", {}).get("settings", {})
             saved = query.get("saved", [""])[0]
             saved_message = (
                 "Automatische Prüfregeln gespeichert." if saved == "1" else
-                "Getesteten Bildausschnitt für die Automatik übernommen." if saved == "crop" else ""
+                "Getesteten Bildausschnitt für die Automatik übernommen." if saved == "crop" else
+                "Benachrichtigungen gespeichert." if saved == "notifications" else
+                "Bildquelle gespeichert." if saved == "source" else ""
             )
             if language == "en" and saved_message:
                 saved_message = EN_UI[saved_message]
@@ -491,46 +759,38 @@ def start_panel(
                 '<p class="save-notice" role="status">' + html.escape(saved_message) + '</p>'
                 if saved_message else ""
             )
-            if language == "en":
-                rule_label = ("Whole m³" if auto_rules["decimals"] == 0
-                              else f'{auto_rules["decimals"]} decimal place(s)')
-                polarity_label = {"auto": "automatic digit color", "light": "light digits",
-                                  "dark": "dark digits"}[auto_rules["polarity"]]
-                crop_label = ("fixed image crop" if auto_rules["crop_mode"] == "manual"
-                              else "automatic image crop")
-                auto_rule_description = (
-                    f'{rule_label} · max. {auto_rules["attempts"]} OCR attempts '
-                    f'· {polarity_label} · {crop_label}'
-                )
-            else:
-                rule_label = ("Volle m³" if auto_rules["decimals"] == 0
-                              else f'{auto_rules["decimals"]} Nachkommastelle(n)')
-                polarity_label = {"auto": "Farbe automatisch", "light": "helle Ziffern",
-                                  "dark": "dunkle Ziffern"}[auto_rules["polarity"]]
-                crop_label = ("fester Bildausschnitt" if auto_rules["crop_mode"] == "manual"
-                              else "Bildausschnitt automatisch")
-                auto_rule_description = (
-                    f'{rule_label} · max. {auto_rules["attempts"]} OCR-Versuche '
-                    f'· {polarity_label} · {crop_label}'
-                )
-            if (history.get("comparison_decimals") is not None
-                    and history["comparison_decimals"] != auto_rules["decimals"]):
-                pending_message = ("Neue Vergleichsgenauigkeit gespeichert. Die nächste automatische "
-                                   "Prüfung zeigt das erste Ergebnis mit dieser Einstellung.")
-                values["detail"] = html.escape(
-                    EN_UI[pending_message] if language == "en" else pending_message
-                )
+            test = query.get("test", [""])[0]
             request_status = (
-                "Test angenommen. Die Bearbeitung wird hier live angezeigt."
-                if query.get("test", [""])[0] == "queued" else "Status wird geladen …"
+                "Test angenommen. Die Bearbeitung wird hier live angezeigt." if test == "queued" else
+                "Ein manueller Test läuft bereits." if test == "busy" else "Status wird geladen …"
             )
             if language == "en":
                 request_status = EN_UI.get(request_status, request_status)
+            with request_lock:
+                manual_open = progress["phase"] in ("queued", "running", "ocr")
             page = translate_page(PAGE) if language == "en" else PAGE
             self.reply(page.format(**values,
                 language=language,
-                de_selected=" selected" if language == "de" else "",
-                en_selected=" selected" if language == "en" else "",
+                language_mode=mode,
+                automatic_tone=summary["tone"], automatic_heading=summary["heading"],
+                automatic_icon=summary["icon"], automatic_incident=html.escape(summary["incident"]),
+                banner_preference_key=f"rf1-ignored-warning-{user}" if user else "",
+                ignore_hidden="" if summary["tone"] == "problem" else "hidden",
+                profile_script=scripts,
+                language_options=select_options({"auto": automatic, "de": "Deutsch", "en": "English"}, mode),
+                settings_open="open" if saved in ("1", "crop") else "",
+                manual_open="open" if manual_open or test in ("queued", "busy", "open") else "",
+                notifications_open="open" if saved == "notifications" else "",
+                source_open="open" if setup_pending or saved == "source" else "",
+                source_intro=f'<p class="settings-note">{intro}</p>' if setup_pending else "",
+                source_options=select_options(source_choices, source["mode"]),
+                source_url=html.escape(source["url"]), source_camera=html.escape(source["camera"]),
+                source_reference=html.escape(source["reference"]),
+                source_saved_notice=auto_saved_notice if saved == "source" else "",
+                notifications_enabled="checked" if delivery["enabled"] else "",
+                notification_review=delivery["review_minutes"], notification_delay=delivery["delivery_hours"],
+                notification_push=html.escape(delivery["push"]), notification_target=html.escape(delivery["target"]),
+                notification_saved_notice=auto_saved_notice if saved == "notifications" else "",
                 request_status=request_status,
                 polarity_options=select_options(
                     POLARITIES_EN if language == "en" else POLARITIES,
@@ -543,7 +803,11 @@ def start_panel(
                 auto_decimal_options=select_options(
                     DECIMALS_EN if language == "en" else DECIMALS, str(auto_rules["decimals"]),
                 ),
-                auto_attempt_options=select_options(ATTEMPTS, str(auto_rules["attempts"])),
+                auto_attempt_options=select_options(
+                    {value: label for value, label in ATTEMPTS.items()
+                     if source["mode"] != "esphome" or value != "1"},
+                    str(max(2, auto_rules["attempts"]) if source["mode"] == "esphome" else auto_rules["attempts"]),
+                ),
                 auto_polarity_options=select_options(
                     POLARITIES_EN if language == "en" else POLARITIES, auto_rules["polarity"],
                 ),
@@ -552,34 +816,30 @@ def start_panel(
                 ),
                 auto_crop_value=html.escape(auto_rules["crop"], quote=True),
                 auto_width_value=auto_rules["width"],
-                auto_saved_notice=auto_saved_notice,
-                auto_rule_description=html.escape(auto_rule_description),
+                max_flow=format_cubic_metres(auto_rules.get("max_flow_lph", DEFAULT_FLOW_LPH)),
+                auto_rotation_options=select_options(ROTATION_OPTIONS, str(auto_rules.get("rotation", 0))),
+                auto_saved_notice=auto_saved_notice if saved in ("1", "crop") else "",
                 crop_mode_options=select_options(
                     CROP_MODES_EN if language == "en" else CROP_MODES,
                     settings.get("crop_mode", "auto"),
                 ),
                 crop_value=html.escape(str(settings.get("crop", default_crop)), quote=True),
                 width_value=int(settings.get("width", default_width)),
+                rotation_options=select_options(ROTATION_OPTIONS, str(settings.get("rotation", 0))),
 
                 attempt_options=select_options(ATTEMPTS, str(settings.get("attempts", auto_rules["attempts"]))),
                 default_attempts=default_attempts,
-                manual_checked_at=manual.get("checked_at", 0),
-                manual_image_time=manual.get("image_time", 0),
-                manual_ocr=html.escape(str(manual.get("ocr") or "–")),
-                manual_reference=html.escape(str(manual.get("reference") or "–")),
-                manual_detail=html.escape(manual_detail),
                 csrf=csrf_token,
-                last_good=history.get("last_match_at") or 0,
-                image_time=history.get("last_epoch") or 0,
-                next_check=json.dumps(history.get("next_check_at")),
+                image_time=summary["image_time"],
+                next_check=json.dumps(summary["next_check"]),
                 current=(
-                    '<img src="aktuell.jpg" alt="' +
+                    '<img src="aktuell.jpg?v={}" alt="'.format(summary["current"]) +
                     ("Latest check image" if language == "en" else "Aktuelles Kontrollbild") + '">'
                     if current_image.exists() else
                     ("No check image available yet." if language == "en" else "Noch kein Kontrollbild.")
                 ),
                 good=(
-                    '<img src="treffer.jpg" alt="' +
+                    '<img src="treffer.jpg?v={}" alt="'.format(summary["good"]) +
                     ("Image from last match" if language == "en" else "Kontrollbild des letzten Treffers") + '">'
                     if good_image.exists() else
                     ("No confirmed image available yet." if language == "en" else "Noch kein bestätigtes Bild.")
@@ -590,145 +850,230 @@ def start_panel(
             if not self.authorized():
                 return
             path = urlsplit(self.path).path
-            if path not in ("/pruefen", "/automatik", "/ausschnitt-uebernehmen"):
+            if path not in ("/pruefen", "/automatik", "/ausschnitt-uebernehmen", "/sprache", "/benachrichtigungen", "/bildquelle"):
                 self.send_error(404)
                 return
+            fallback = browser_locale(self.headers.get("Accept-Language", ""))
+            language = fallback
+            keep_mode = ""
+
+            def problem(code, german=None, english=None):
+                if german is None:
+                    german, english = {
+                        400: ("Bitte die Formulareingaben prüfen.", "Check the form values."),
+                        403: ("Bitte die App erneut öffnen und das Formular nochmals absenden.",
+                              "Reopen the app and submit the form again."),
+                        503: ("Die Einstellungen konnten nicht gespeichert werden.",
+                              "Could not save the settings."),
+                    }[code]
+                message, back = ((english, "Back to the checks") if language == "en"
+                                 else (german, "Zurück zur Kontrolle"))
+                again = "./" + ("?" + keep_mode[1:] if keep_mode else "")
+                content = (f'<!doctype html><html lang="{language}"><meta charset="utf-8">'
+                           '<meta name="viewport" content="width=device-width">'
+                           f'<title>{html.escape(message)}</title>'
+                           '<style>body{font:1rem system-ui;max-width:40rem;margin:2rem auto;'
+                           'padding:0 1rem}a{display:inline-block;padding:.5rem 0}</style>'
+                           f'<main><p>{html.escape(message)}</p><a href="{again}">{back}</a></main></html>')
+                self.reply(content.encode("utf-8"), "text/html; charset=utf-8", code)
+
             # Ingress and companion webviews need not forward Fetch Metadata headers.
             if self.headers.get_content_type() != "application/x-www-form-urlencoded":
-                self.send_error(403)
+                problem(403)
                 return
             try:
                 length = int(self.headers.get("Content-Length", "0"))
-                if not 0 < length <= 512:
+                if not 0 < length <= 768:
                     raise ValueError("Invalid form length")
-                form = parse_qs(self.rfile.read(length).decode("ascii"), max_num_fields=9)
+                form = parse_qs(self.rfile.read(length).decode("ascii"), keep_blank_values=True, max_num_fields=11)
             except ValueError:
-                self.send_error(400)
+                problem(400)
                 return
-            supplied = form.get("csrf", [])
-            form_language = form.get("lang", ["de"])
-            if len(form_language) != 1 or form_language[0] not in ("de", "en"):
-                self.send_error(400)
+            user = self.user_id()
+            mode = form.get("mode", ["auto"])
+            form_language = form.get("lang", [fallback])
+            if len(mode) != 1 or mode[0] not in MODES or len(form_language) != 1 or form_language[0] not in SUPPORTED:
+                problem(400)
                 return
             language = form_language[0]
+            mode = mode[0]
+            keep_mode = "&mode=" + mode if not user and mode != "auto" else ""
+            supplied = form.get("csrf", [])
             if len(supplied) != 1 or not compare_digest(supplied[0].encode(), csrf_token.encode()):
-                self.send_error(403)
+                problem(403)
+                return
+            if path == "/sprache":
+                if user:
+                    try:
+                        with preferences_lock:
+                            preferences = load_language_modes()
+                            if mode == "auto":
+                                preferences.pop(user, None)
+                            else:
+                                preferences[user] = mode
+                            save_language_modes(preferences)
+                    except (OSError, ValueError):
+                        if mode in SUPPORTED:
+                            language = mode
+                        problem(503, "Die Spracheinstellung konnte nicht gespeichert werden.",
+                                "Could not save the language setting.")
+                        return
+                test_open = parse_qs(urlsplit(self.path).query).get("test") == ["open"]
+                params = (["test=open"] if test_open else []) + (
+                    ["mode=" + mode] if keep_mode else [])
+                self.redirect("?" + "&".join(params) if params else "")
+                return
+            def field(name, default=""):
+                value, = form.get(name, [default])
+                return value
+
+            if path == "/bildquelle":
+                try:
+                    with source_lock:
+                        current, _ = get_source()
+                        values = source_rules({
+                            "mode": field("source_mode"),
+                            **{key: field(key, current[key]) for key in ("url", "camera", "reference")},
+                        })
+                        save_source(values)
+                except ValueError:
+                    problem(400, "Bitte prüfe die Adresse oder die Entitäts-ID der Bildquelle.",
+                            "Check the address or entity ID of the image source.")
+                    return
+                except OSError:
+                    problem(503)
+                    return
+                self.redirect("?saved=source" + keep_mode)
+                return
+            if path == "/benachrichtigungen":
+                try:
+                    values = notification_rules({
+                        "enabled": field("enabled") == "1",
+                        "review_minutes": int(field("review_minutes")),
+                        "delivery_hours": int(field("delivery_hours")),
+                        "push": field("push"),
+                        "target": field("target"),
+                    })
+                    with delivery_lock:
+                        save_delivery(values)
+                except ValueError:
+                    problem(400, "Bitte Wartezeiten und Benachrichtigungsziele prüfen.",
+                            "Check the notification delays and destinations.")
+                    return
+                except OSError:
+                    problem(503)
+                    return
+                self.redirect("?saved=notifications" + keep_mode)
                 return
             if path == "/ausschnitt-uebernehmen":
                 try:
-                    history = json.loads(history_path.read_text(encoding="utf-8"))
-                    previous = history["manual_result"]
-                    settings = previous["settings"]
-                    if settings.get("crop_mode") != "manual" or previous.get("ocr_attempts", 0) < 1:
-                        self.send_error(400, ("No tested custom crop is available." if language == "en"
-                                              else "Kein getesteter manueller Ausschnitt vorhanden"))
-                        return
-                    current = get_auto_rules()
-                    current.update(crop_mode="manual", crop=settings["crop"], width=settings["width"])
-                    save_auto_rules(current)
+                    with request_lock, rules_lock:
+                        previous = read_history().get("manual_result", {})
+                        settings = previous.get("settings", {})
+                        if (progress["phase"] != "done" or not progress["can_apply_crop"]
+                                or form.get("checked_at") != [str(previous.get("checked_at"))]
+                                or not previous.get("can_apply_crop") or not test_image.exists()
+                                or settings.get("crop_mode") != "manual"):
+                            problem(409, "Bitte den Ausschnitt erneut testen.", "Run the crop test again.")
+                            return
+                        current = get_auto_rules()
+                        current.update(crop_mode="manual", crop=settings["crop"], width=settings["width"],
+                                       rotation=settings.get("rotation", 0))
+                        save_auto_rules(current)
                 except (OSError, ValueError, KeyError, TypeError):
-                    self.send_error(503, ("Could not save the image crop." if language == "en"
-                                          else "Ausschnitt konnte nicht gespeichert werden"))
+                    problem(503, "Der Ausschnitt konnte nicht gespeichert werden.",
+                            "Could not save the image crop.")
                     return
-                self.send_response(303)
-                self.send_header("Location", "./?saved=crop&lang=" + language)
-                self.send_header("Content-Length", "0")
-                self.end_headers()
+                self.redirect("?saved=crop" + keep_mode)
                 return
             if path == "/automatik":
                 decimals = form.get("decimals", [])
                 attempts = form.get("attempts", [])
                 polarity = form.get("polarity", [])
                 crop_mode = form.get("crop_mode", [])
-                crop_text = form.get("crop", [get_auto_rules()["crop"]])
-                width_text = form.get("width", [str(get_auto_rules()["width"])])
                 if (len(decimals) != 1 or decimals[0] not in DECIMALS
                         or len(attempts) != 1 or attempts[0] not in ATTEMPTS
                         or len(polarity) != 1 or polarity[0] not in POLARITIES
-                        or len(crop_mode) != 1 or crop_mode[0] not in CROP_MODES
-                        or len(crop_text) != 1 or len(width_text) != 1):
-                    self.send_error(400)
-                    return
-                if (crop_mode[0] == "manual" and
-                        (not re.fullmatch(r"\d{1,4}\s*,\s*\d{1,4}\s*,\s*\d{1,4}\s*,\s*\d{1,4}", crop_text[0])
-                         or not re.fullmatch(r"\d{1,4}", width_text[0]))):
-                    self.send_error(400)
+                        or len(crop_mode) != 1 or crop_mode[0] not in CROP_MODES):
+                    problem(400)
                     return
                 try:
-                    old_rules = get_auto_rules()
-                    crop = crop_text[0] if crop_mode[0] == "manual" else old_rules["crop"]
-                    width = int(width_text[0]) if crop_mode[0] == "manual" else old_rules["width"]
-                    save_auto_rules({"decimals": int(decimals[0]), "attempts": int(attempts[0]),
-                                     "polarity": polarity[0], "crop_mode": crop_mode[0],
-                                     "crop": crop, "width": width})
-                except (OSError, ValueError):
-                    self.send_error(503)
+                    with rules_lock:
+                        old_rules = get_auto_rules()
+                        crop = old_rules["crop"]
+                        width = old_rules["width"]
+                        rotation = old_rules.get("rotation", 0)
+                        if crop_mode[0] == "manual":
+                            crop = field("crop", crop)
+                            width = int(field("width", str(width)))
+                            rotation = int(field("rotation", str(rotation)))
+                            crop_coordinates(crop, width, rotation)
+                        max_flow = parse_flow_limit(field(
+                            "max_flow", format_cubic_metres(old_rules.get("max_flow_lph", DEFAULT_FLOW_LPH))
+                        ))
+                        save_auto_rules({"decimals": int(decimals[0]), "attempts": int(attempts[0]),
+                                         "polarity": polarity[0], "crop_mode": crop_mode[0],
+                                         "crop": crop, "width": width, "rotation": rotation,
+                                         "max_flow_lph": max_flow})
+                except ValueError:
+                    problem(400, "Bitte Bildbereich und Durchfluss prüfen.",
+                            "Check the image region and maximum flow.")
                     return
-                self.send_response(303)
-                self.send_header("Location", "./?saved=1&lang=" + language)
-                self.send_header("Content-Length", "0")
-                self.end_headers()
+                except OSError:
+                    problem(503)
+                    return
+                self.redirect("?saved=1" + keep_mode)
                 return
             auto_rules = get_auto_rules()
             polarity = form.get("polarity", ["auto"])
             decimals = form.get("decimals", [str(auto_rules["decimals"])])
             attempts = form.get("attempts", [str(auto_rules["attempts"])])
             crop_mode = form.get("crop_mode", ["auto"])
-            crop_text = form.get("crop", [default_crop])
-            whole_width = form.get("width", [str(default_width)])
             if (len(polarity) != 1 or polarity[0] not in POLARITIES or len(decimals) != 1
                     or decimals[0] not in DECIMALS or len(attempts) != 1 or attempts[0] not in ATTEMPTS):
-                self.send_error(400)
+                problem(400)
                 return
             if len(crop_mode) != 1 or crop_mode[0] not in CROP_MODES:
-                self.send_error(400)
-                return
-            if len(crop_text) != 1 or len(whole_width) != 1:
-                self.send_error(400)
+                problem(400)
                 return
             crop_value = default_crop
             width_value = default_width
+            rotation = 0
             if crop_mode[0] == "manual":
-                if not re.fullmatch(r"\d{1,4}\s*,\s*\d{1,4}\s*,\s*\d{1,4}\s*,\s*\d{1,4}", crop_text[0]):
-                    self.send_error(400)
+                try:
+                    crop_value = field("crop", default_crop)
+                    width_value = int(field("width", str(default_width)))
+                    rotation = int(field("rotation", "0"))
+                    boundaries = crop_coordinates(crop_value, width_value, rotation)
+                    crop_value = ",".join(map(str, boundaries))
+                except ValueError:
+                    problem(400)
                     return
-                boundaries = [int(number.strip()) for number in crop_text[0].split(",")]
-                if not (0 <= boundaries[0] < boundaries[2] <= 1920
-                        and 0 <= boundaries[1] < boundaries[3] <= 1920
-                        and re.fullmatch(r"[0-9]{1,4}", whole_width[0])
-                        and 1 <= int(whole_width[0]) <= boundaries[2] - boundaries[0]):
-                    self.send_error(400)
-                    return
-                crop_value = ",".join(map(str, boundaries))
-                width_value = int(whole_width[0])
             settings = {"polarity": polarity[0], "decimals": int(decimals[0]),
                         "attempts": int(attempts[0]), "crop_mode": crop_mode[0],
-                        "crop": crop_value, "width": width_value}
+                        "crop": crop_value, "width": width_value, "rotation": rotation}
             with request_lock:
+                if progress["phase"] in ("queued", "running", "ocr"):
+                    self.redirect("?test=busy" + keep_mode)
+                    return
                 request_id = progress["request_id"] + 1
                 settings["request_id"] = request_id
+                try:
+                    requested.put_nowait(settings)
+                except Full:
+                    self.redirect("?test=busy" + keep_mode)
+                    return
                 progress.update(request_id=request_id, max_attempts=settings["attempts"], outcome=None,
                                 detail="", preview=False, can_apply_crop=False, readings=[],
                                 comparison_decimals=settings["decimals"], phase="queued",
                                 message="Anfrage angenommen – warte auf die Bildprüfung.",
-                                attempts=0, started_at=time.time(), checked_at=0)
-                try:
-                    requested.put_nowait(settings)
-                except Full:
-                    # The worker may have taken the pending request in the meantime.
-                    try:
-                        requested.get_nowait()
-                    except Empty:
-                        pass
-                    requested.put_nowait(settings)
-            self.send_response(303)
-            self.send_header("Location", "./?test=queued&lang=" + language)
-            self.send_header("Content-Length", "0")
-            self.end_headers()
+                                attempts=0, started_at=time.time(), checked_at=0,
+                                ocr=None, reference=None)
+            self.redirect("?test=queued" + keep_mode)
 
         def log_message(self, format, *args):
             pass
 
-    server = ThreadingHTTPServer(("0.0.0.0", 8099), Handler)
+    server = ThreadingHTTPServer(address, Handler)
     Thread(target=server.serve_forever, daemon=True).start()
-    return update_progress
+    return server, update_progress

@@ -22,7 +22,11 @@ jobs:
         with:
           python-version: "3.11"
       - name: Installiere Testabhängigkeiten
-        run: python -m pip install pillow websocket-client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr-eng tesseract-ocr fonts-dejavu-core
+          python -m pip install pillow websocket-client playwright
+          python -m playwright install --with-deps --only-shell chromium
       - name: Prüfe Python-Syntax
         run: python -m compileall -q rf1_ocr_test
       - name: Prüfe OCR-Regeln und Weboberfläche
@@ -33,3 +37,16 @@ jobs:
           node --check /tmp/rf1-panel.js
           python rf1_ocr_test/tests/test_release.py --write-js-en /tmp/rf1-panel-en.js
           node --check /tmp/rf1-panel-en.js
+
+  container:
+    strategy:
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: App-Image bauen und Laufzeit prüfen
+        run: |
+          docker build --tag rf1-test rf1_ocr_test
+          docker run --rm --entrypoint /usr/bin/python3 rf1-test -c 'import run, checks, language, panel, reminder'
+          docker run --rm --entrypoint tesseract rf1-test --list-langs | grep -x eng

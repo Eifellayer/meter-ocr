@@ -1,14 +1,20 @@
 # Meter OCR for Home Assistant
 
-**Local camera OCR for Home Assistant with ESPHome and AI on the Edge / SLFork.**
+**Read and verify meter values from camera images directly in Home Assistant.**
+
+**Long-term goal:** AI on the Edge / SLFork should no longer be a requirement. Meter OCR aims to get images from Home Assistant and process them locally, with flexible support for different meter types, camera angles, crops, and lighting. This is the project direction, not a claim that every meter is already supported or field-tested.
 
 [Deutsch / German](README.md) · [English](README.en.md)
 
-**Current version: 0.1.0.** A regular app and a separate test build for Home Assistant.
+**Current version: 0.2.0 Alpha.** Before version 0.5, testing uses the regular Meter OCR app. From 0.5 onward, Beta builds are reserved for larger changes that need dedicated testing.
+
+## Beta testers wanted
+
+Do you use Home Assistant with a gas, water, or other meter? We are looking for testers with different cameras, crops, and lighting conditions. Until version 0.5, the regular app is the testing channel. I use AI on the Edge for real-world checks; other sources and meter types have so far been tested with simulations only. To help, report your app version, meter type, and image source through [GitHub Issues](https://github.com/Eifellayer/meter-ocr/issues). Please do not post credentials or unredacted photos containing personal information.
 
 Meter OCR reads camera images with **local Tesseract OCR**. It can provide its own reading from an ESPHome or Home Assistant camera, or double-check an existing reading from AI on the Edge / SLFork or a reference sensor.
 
-Designed for mechanical gas meters such as the **Pipersberg G4 RF1**. The register format is five whole digits, with up to three decimal digits. The current Home Assistant sensor output uses cubic meters.
+The current focus is mechanical gas meters with configurable whole and fractional digits. Small pointer dials are not read automatically yet. The Home Assistant reading output currently uses cubic meters; tester feedback will help extend support to more meters and conditions.
 
 Meter OCR is a private hobby project for checking meter readings. [Usage notes](#usage-notes)
 
@@ -23,23 +29,23 @@ For each image, OCR can attempt between **1 and 10 different processing profiles
 ## Install
 
 1. In Home Assistant, open **Settings → Apps → Install app → ⋮ → Repositories** and add **Add-ons by Eifellayer** using the [shared link](https://github.com/Eifellayer/meter-ocr).
-2. Install **Meter OCR** for regular use or **Meter OCR Beta** to test new builds.
+2. Install **Meter OCR (Alpha)**. Releases below 0.5 are Alpha and use the same regular app as their test channel.
 3. Configure `esp_url` for the SLFork ESP, for example `http://esp-gaszaehler.local`. Alternatively configure `kamera_entitaet` and optionally `referenz_entitaet`.
 4. Start the app and open its web interface.
 
-A Home Assistant installation with Supervisor is required on **AMD64 or ARM64**. **Meter OCR Beta** is marked experimental and starts manually. It uses separate settings, images and sensors with the prefix `sensor.meter_ocr_beta_`.
+A Home Assistant installation with Supervisor is required on **AMD64 or ARM64**. There is no separate Beta app before version 0.5. From 0.5 onward, Beta builds are reserved for larger changes that need dedicated testing. Back up your Home Assistant configuration before updating.
 
 ## First setup and image source
 
-On a fresh installation, open the web interface and choose a mode under **Image source**. You can change it in the same place later.
+On first open, a compact setup wizard guides you through the image source, meter type, digit format, crop, schedule and notifications. You can reopen it later; saved values are prefilled for quick edits. Explanations expand on demand. Automatic checks remain separate from manual diagnostics.
 
 | Mode | What it uses |
 | --- | --- |
 | **SLFork / AI on the Edge** | The ESP supplies the image and reference reading. Enter its address. |
 | **Home Assistant camera** | Choose a `camera.*` entity and optionally a current reference sensor in m³. |
-| **ESPHome or camera with local OCR** | The camera supplies the image. RF1 reads it locally and publishes `sensor.rf1_ocr_zaehlerstand` in m³. |
+| **ESPHome or camera with local OCR** | The camera supplies the image. Meter OCR reads it locally and publishes `sensor.rf1_ocr_zaehlerstand` in m³. |
 
-For ESPHome, configure an [ESP32 camera](https://esphome.io/components/esp32_camera/) with the [native API](https://esphome.io/components/api/) and add the device to Home Assistant. Check the image there, then select its `camera.*` entity in RF1. Use the **manual test** to adjust the crop and apply a working preview to automatic checks. This mode works without SLFork or a reference sensor.
+For ESPHome, configure an [ESP32 camera](https://esphome.io/components/esp32_camera/) with the [native API](https://esphome.io/components/api/) and add the device to Home Assistant. Check the image there, then select its `camera.*` entity in Meter OCR. Use the **manual test** to adjust the crop and apply a working preview to automatic checks. This mode works without SLFork or a reference sensor.
 
 The standalone sensor requires a majority of at least two OCR profiles on the same photo. It reports **unavailable** if the reading is uncertain or goes below the last valid reading from that camera. Standalone OCR values are independent readings. The Energy dashboard uses the separate cumulative consumption sensor. Upgrades retain the active source. Changing the source starts a new automatic confirmation count.
 
@@ -49,7 +55,9 @@ In the **manual test**, select a manual image region and enter pixel coordinates
 
 Automatic digit color handles light or dark digits. Later OCR attempts can compensate for uneven lighting in the register. Reflections that cover digits and severe perspective distortion require a clearer camera image. For a meter with a digit register and small pointer dials, test the register at **whole cubic meters** precision. The OCR reads the digit window and leaves the pointer dials unread.
 
-The [photo test report (German)](METER-PHOTO-TESTS.md) records the results for ten gas, water and electricity meters.
+The [photo test report (German)](METER-PHOTO-TESTS.md) documents simulated OCR runs on ten public gas, water and electricity meter images. It is not a hardware test.
+
+> **Test status:** The maintainer uses AI on the Edge / SLFork for real meter tests. Camera and ESPHome modes and other meter types have automated and simulated coverage only; no real-device test is claimed for them.
 
 ## Plausibility check and Energy dashboard
 

@@ -2,13 +2,19 @@
 
 **Sprache / Language:** [Deutsch](README.md) · [English](README.en.md)
 
-**Aktueller Stand: 0.1.0.** Eine reguläre App und eine separate Testausgabe für Home Assistant.
+**Aktueller Stand: 0.2.0 Alpha.** Bis Version 0.5 gibt es keine separate Beta-App; getestet wird über die reguläre Meter-OCR-App. Ab 0.5 gibt es Beta-Versionen nur bei größeren Änderungen mit zusätzlichem Testbedarf.
 
-**Zählerstände lokal aus Kamerabildern lesen und mit Home Assistant abgleichen.**
+**Zählerstände direkt in Home Assistant aus Kamerabildern lesen und prüfen.**
+
+**Langfristiges Ziel:** AI on the Edge / SLFork soll keine Voraussetzung mehr sein. Meter OCR soll Bilder direkt aus Home Assistant beziehen und die Auswertung lokal dort übernehmen – flexibel für unterschiedliche Zählertypen, Kamerawinkel, Bildausschnitte und Lichtverhältnisse. Das ist das Projektziel, kein Versprechen, dass jeder Zähler bereits unterstützt oder praktisch getestet ist.
+
+## Beta-Tester gesucht
+
+Du nutzt Home Assistant mit einem Gas-, Wasser- oder anderen Zähler? Gesucht werden Tester mit unterschiedlichen Kameras, Ausschnitten und Lichtverhältnissen. Der reguläre App-Stand ist bis Version 0.5 der Testkanal. Für reale Prüfungen nutze ich selbst AI on the Edge; andere Quellen und Zählertypen sind bislang nur simuliert getestet. Wenn du beim Testen helfen möchtest, melde dich über [GitHub Issues](https://github.com/Eifellayer/meter-ocr/issues) und nenne App-Version, Zählertyp und Bildquelle. Bitte keine Zugangsdaten oder ungeschwärzten Fotos mit persönlichen Informationen posten.
 
 Meter OCR liest das Zählerfoto mit **Tesseract OCR**. Mit ESPHome oder einer anderen Home-Assistant-Kamera kann die App einen eigenen OCR-Stand liefern. Mit **AI on the Edge / SLFork** oder einem Referenzsensor prüft sie zusätzlich, ob der vorhandene Messwert zum Bild passt.
 
-Entwickelt für mechanische Gaszähler wie den **Pipersberg G4 RF1**. Das Ziffernfenster hat fünf Vorkommastellen und bei Bedarf bis zu drei Nachkommastellen. Die Messwertausgabe in Home Assistant ist auf Kubikmeter ausgelegt.
+Der aktuelle Schwerpunkt liegt auf mechanischen Gaszählern mit einstellbaren Ziffern vor und nach dem Komma. Kleine Zeiger und analoge Rädchen werden noch nicht automatisch ausgewertet. Die Messwertausgabe ist derzeit auf Kubikmeter ausgelegt; weitere Zählertypen und Situationen sollen mit Tester-Rückmeldungen schrittweise dazukommen.
 
 Meter OCR ist ein privates Hobbyprojekt für die Plausibilitätskontrolle. [Hinweise zur Nutzung](#hinweise-zur-nutzung)
 
@@ -35,7 +41,7 @@ Technisch werden die Web-Einstellungen separat im App-Datenverzeichnis (`/data/a
 
 ## Bildquelle und Ersteinrichtung
 
-Beim ersten Öffnen einer frischen Installation wählst du unter **Bildquelle** den Betriebsmodus. Dieselbe Auswahl steht später in der Weboberfläche zur Verfügung.
+Beim ersten Öffnen führt ein kompakter Einrichtungsassistent durch Bildquelle, Zählertyp, Stellenformat, Bildbereich, Prüfplan und Benachrichtigungen. Die Einrichtung kann jederzeit erneut geöffnet werden; aktuelle Werte sind vorausgefüllt, sodass sich einzelne Einstellungen schnell ändern lassen. Hilfetexte sind bei Bedarf aufklappbar. Die automatische Prüfung bleibt klar vom manuellen Diagnosebereich getrennt.
 
 | Modus | Wann passt er? |
 | --- | --- |
@@ -53,7 +59,9 @@ Der OCR-Sensor benötigt eine Mehrheit von mindestens zwei OCR-Profilen desselbe
 
 Die Voreinstellung erkennt helle oder dunkle Ziffern automatisch. Weitere OCR-Versuche können ungleichmäßiges Licht im Ziffernfenster ausgleichen. Glanzstellen, die Ziffern verdecken, und starke Perspektivverzerrungen erfordern ein besseres Kamerabild. Bei Zählern mit Rollenfenster und kleinen Zeigern lässt sich mit **volle m³** das Rollenfenster einzeln testen. Die Zeiger selbst werden nicht ausgewertet.
 
-Die Ergebnisse mit zehn Gas-, Wasser- und Stromzählerfotos stehen im [Vergleichstest](METER-PHOTO-TESTS.md).
+Der [Vergleichstest mit zehn Gas-, Wasser- und Stromzählerfotos](METER-PHOTO-TESTS.md) dokumentiert simulierte OCR-Läufe mit öffentlich zugänglichen Bildern. Er ist kein Hardwaretest.
+
+> **Teststand:** Der Maintainer verwendet für Tests an einem realen Zähler ausschließlich AI on the Edge / SLFork. Kamera- und ESPHome-Modi sowie abweichende Zählertypen sind automatisiert und simuliert geprüft; ein realer Gerätetest dafür liegt nicht vor.
 
 ## Plausibilitätsprüfung und Energie-Dashboard
 
@@ -113,11 +121,11 @@ Ein SLFork-Messzeitpunkt wird automatisch nur einmal gezählt. Alte Bilder lasse
 ## Installation
 
 1. In Home Assistant unter **Einstellungen → Apps → App installieren → ⋮ → Repositories** das Repository **Add-ons by Eifellayer** über den [gemeinsamen Link](https://github.com/Eifellayer/meter-ocr) hinzufügen.
-2. **Meter OCR** für den regulären Betrieb oder **Meter OCR Beta** zum Testen installieren.
+2. **Meter OCR (Alpha)** installieren. Releases unter 0.5 sind Alpha und verwenden dieselbe reguläre App als Teststand.
 3. Für SLFork `esp_url` auf die Adresse des ESP setzen (z. B. `http://esp-gaszaehler.local`). Alternativ `kamera_entitaet`, `ausschnitt` und optional `referenz_entitaet` konfigurieren.
 4. App starten, **Weboberfläche öffnen** und mit **Jetzt prüfen** eine Testlesung durchführen.
 
-**Meter OCR Beta** ist als experimentell markiert und startet manuell. Sie hat eigene Einstellungen, Bilder und Sensoren mit dem Präfix `sensor.meter_ocr_beta_`. Die reguläre App nutzt weiterhin ihre bisherigen Sensor-IDs.
+Bis Version 0.5 gibt es keine separate Beta-App. Ab 0.5 ist ein Beta-Kanal größeren Änderungen mit zusätzlichem Testbedarf vorbehalten. Bitte vor jedem Update eine Sicherung deiner Home-Assistant-Konfiguration erstellen.
 
 ## Wichtige Einstellungen
 

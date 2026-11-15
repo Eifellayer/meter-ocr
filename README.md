@@ -112,7 +112,7 @@ Ein SLFork-Messzeitpunkt wird automatisch nur einmal gezählt. Alte Bilder lasse
 
 ## Installation
 
-1. In Home Assistant unter **Einstellungen → Apps → App installieren → ⋮ → Repositories** das [gemeinsame Repository](https://github.com/Eifellayer/rf1-kontrollmessung) hinzufügen.
+1. In Home Assistant unter **Einstellungen → Apps → App installieren → ⋮ → Repositories** das [gemeinsame Repository](https://github.com/Eifellayer/meter-ocr) hinzufügen.
 2. **Meter OCR** für den regulären Betrieb oder **Meter OCR Beta** zum Testen installieren.
 3. Für SLFork `esp_url` auf die Adresse des ESP setzen (z. B. `http://esp-gaszaehler.local`). Alternativ `kamera_entitaet`, `ausschnitt` und optional `referenz_entitaet` konfigurieren.
 4. App starten, **Weboberfläche öffnen** und mit **Jetzt prüfen** eine Testlesung durchführen.

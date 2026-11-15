@@ -12,7 +12,7 @@ Die ausführliche Einführung, Voraussetzungen, Installation und Konfiguration f
 
 **Meter OCR** ist die reguläre App. **Meter OCR Beta** ist die separate Testausgabe im selben Repository.
 
-Über **Einstellungen → Apps → App installieren → ⋮ → Repositories** die Adresse `https://github.com/Eifellayer/rf1-kontrollmessung` hinzufügen und **Meter OCR** installieren. Im SLFork-Modus die `esp_url` eintragen, starten und die Weboberfläche öffnen.
+Über **Einstellungen → Apps → App installieren → ⋮ → Repositories** die Adresse `https://github.com/Eifellayer/meter-ocr` hinzufügen und **Meter OCR** installieren. Im SLFork-Modus die `esp_url` eintragen, starten und die Weboberfläche öffnen.
 
 ## Sprache wählen
 

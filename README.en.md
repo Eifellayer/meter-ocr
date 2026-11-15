@@ -22,7 +22,7 @@ For each image, OCR can attempt between **1 and 10 different processing profiles
 
 ## Install
 
-1. In Home Assistant, open **Settings → Apps → Install app → ⋮ → Repositories** and add the [shared repository](https://github.com/Eifellayer/rf1-kontrollmessung).
+1. In Home Assistant, open **Settings → Apps → Install app → ⋮ → Repositories** and add the [shared repository](https://github.com/Eifellayer/meter-ocr).
 2. Install **Meter OCR** for regular use or **Meter OCR Beta** to test new builds.
 3. Configure `esp_url` for the SLFork ESP, for example `http://esp-gaszaehler.local`. Alternatively configure `kamera_entitaet` and optionally `referenz_entitaet`.
 4. Start the app and open its web interface.
@@ -131,7 +131,7 @@ To the extent permitted by law, the software is provided without warranties of a
 
 ## Support and optional donations
 
-For questions and bug reports, use the [GitHub issues](https://github.com/Eifellayer/rf1-kontrollmessung/issues) page. Please include your app version, relevant log lines without secrets, and the result status.
+For questions and bug reports, use the [GitHub issues](https://github.com/Eifellayer/meter-ocr/issues) page. Please include your app version, relevant log lines without secrets, and the result status.
 
 The project is free. If it helped you, you can [make a voluntary PayPal donation](https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8). Donations are never required for use or support.
 

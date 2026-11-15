@@ -12,7 +12,7 @@ This is an additional plausibility check, **not a certified measurement device**
 
 **Meter OCR** is the regular app. **Meter OCR Beta** is the test app in the same repository.
 
-Add `https://github.com/Eifellayer/rf1-kontrollmessung` under **Settings → Apps → Install app → ⋮ → Repositories**, then install **Meter OCR**. Set `esp_url` for SLFork, or configure `kamera_entitaet` and an optional `referenz_entitaet` sensor.
+Add `https://github.com/Eifellayer/meter-ocr` under **Settings → Apps → Install app → ⋮ → Repositories**, then install **Meter OCR**. Set `esp_url` for SLFork, or configure `kamera_entitaet` and an optional `referenz_entitaet` sensor.
 
 ## Choose a language
 
@@ -45,4 +45,4 @@ The app publishes `sensor.rf1_kontrollbild` and `sensor.rf1_pruefstatus`, and st
 
 Full options and troubleshooting: [Project documentation](../README.en.md).
 
-Support: [GitHub Issues](https://github.com/Eifellayer/rf1-kontrollmessung/issues). Optional voluntary donation: [PayPal](https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8).
+Support: [GitHub Issues](https://github.com/Eifellayer/meter-ocr/issues). Optional voluntary donation: [PayPal](https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8).

@@ -1407,7 +1407,7 @@ def start_panel(
                 else:
                     problem(403)
                     return
-            except (ValueError, UnicodeDecodeError, LookupError):
+            except (ValueError, UnicodeDecodeError, UnicodeEncodeError, LookupError):
                 problem(400)
                 return
             user = self.user_id()

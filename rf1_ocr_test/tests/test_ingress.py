@@ -192,6 +192,12 @@ class IngressTests(IngressFixture):
         self.assertEqual(400, caught.exception.code)
         self.assertTrue(self.requested.empty())
 
+        oversized = body.replace(picture, b"x" * (panel.MAX_MANUAL_IMAGE_BYTES + 1))
+        with self.assertRaises(HTTPError) as caught:
+            open_core(Request(self.base + "/pruefen", data=oversized, headers=headers))
+        self.assertEqual(400, caught.exception.code)
+        self.assertTrue(self.requested.empty())
+
     def test_invalid_manual_crop_returns_localized_form_error(self):
         for language, message in (("en", "Check the form values"), ("de", "Bitte die Formulareingaben prüfen")):
             with self.subTest(language=language), self.assertRaises(HTTPError) as caught:

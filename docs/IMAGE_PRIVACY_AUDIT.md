@@ -17,3 +17,7 @@
 - Beide Dateien wurden ohne EXIF-Metadaten gespeichert. Die Anleitung bettet nur diese bereinigten Versionen ein.
 
 Die Historienprüfung deckt alle zum Prüfzeitpunkt erreichbaren Branches ab. Dateien in nicht erreichbaren oder außerhalb dieses Repositories gespeicherten Kopien sind davon nicht erfasst.
+
+## Aktuelle Anleitung
+
+Die Fotos der Gehäuse und der Zählermontage wurden aus der PDF und den aktuellen Anleitungsdateien entfernt. Bereits veröffentlichte Versionsstände behalten ihre Dateien.

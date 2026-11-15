@@ -77,7 +77,7 @@ The [photo test report (German)](METER-PHOTO-TESTS.md) documents simulated OCR r
 
 ### Automatic crop and rotation setup
 
-In the setup wizard, select **Learn crop and rotation** under **Image region**. The search starts after saving. You can also start it at any time under **Overview → Automatic setup**. The app shows the remaining time, number of images and rotation being tested. Choose the maximum number of distinct images to check (3 to 50, default 50). The app tries different crops and angles and saves a setting after at least three confirmations on fresh, distinct images. Without an external reference or a manually entered starting reading, the meter must show a plausible increase. The search ends after five minutes or when it reaches the image limit. If unsuccessful, it keeps your existing settings. You can stop the search at any time.
+In the setup wizard, select **Learn crop and rotation** under **Image region**. The search starts after saving. You can also start it at any time under **Overview → Automatic setup**. The app shows the remaining time, number of images and rotation being tested. Choose the maximum number of distinct images to check (4 to 50, default 50). The app tries different crops and angles and saves a setting after three confirmations on distinct images and a final regular OCR check on one more fresh image. Without an external reference or a manually entered starting reading, the meter must show a plausible increase. The search ends after five minutes or when it reaches the image limit. If unsuccessful, it keeps your existing settings. You can stop the search at any time.
 
 ## Plausibility check and Energy dashboard
 

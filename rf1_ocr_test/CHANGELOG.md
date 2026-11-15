@@ -4,12 +4,13 @@
 
 - „Ausschnitt und Drehung lernen“ ist im Einrichtungsassistenten auswählbar und startet nach dem Speichern.
 - Die Selbsteinrichtung hat einen direkten Einstieg in der Übersicht und eine eigene Karte in den Einstellungen.
+- Der gelernte Rahmen wird nach einer Gegenprüfung für Automatik und manuellen Test übernommen. Erfolg erscheint grün, Fehlschlag rot.
 - Der Zeitbalken läuft auch während des Bildabrufs. Status, Prüfzahl, Bestätigungen und getesteter Drehwinkel sind live sichtbar.
 - Die Option zum Ergänzen einer verdeckten Ziffer ist in den Automatik-Einstellungen direkt sichtbar.
 
 ## 0.4.9 Alpha
 
-- Optionale Selbsteinrichtung für Ausschnitt und Drehung. Einstellbares Limit von 3 bis 50 unterschiedlichen Bildern, höchstens fünf Minuten und Übernahme nach mindestens drei bestätigten Aufnahmen.
+- Optionale Selbsteinrichtung für Ausschnitt und Drehung. Einstellbares Limit von 4 bis 50 unterschiedlichen Bildern, höchstens fünf Minuten und Übernahme nach mindestens drei bestätigten Aufnahmen.
 
 ## 0.4.8 Alpha
 

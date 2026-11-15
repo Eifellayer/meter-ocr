@@ -63,6 +63,19 @@ class CalibrationTests(TestCase):
         self.assertIsNone(self.examine(1, 100, stop=lambda: True))
         self.assertEqual(0, self.job.confirmations)
 
+    def test_normal_ocr_must_accept_one_more_new_image_before_saving(self):
+        self.examine(1, 100)
+        self.examine(2, 101)
+        self.assertEqual(LAYOUT, self.examine(3, 102))
+        self.job.verification_pending = True
+        rules = {**RULES, "attempts": 3}
+        sample = {"reference_time": 103, "raw_value": "12345", "actual_value": "12345"}
+        self.assertIsNone(self.job.verify(frame(3), sample, 103, rules, lambda *_: "12345", lambda: False))
+        self.assertTrue(self.job.verification_pending)
+        self.assertIsNone(self.job.verify(frame(4), sample, 104, rules, lambda *_: "?????", lambda: False))
+        self.assertFalse(self.job.verification_pending)
+        self.assertEqual(0, self.job.confirmations)
+
     def test_boxes_transform_back_to_the_original_image(self):
         self.assertEqual((30, 10, 50, 20), unrotate_box((60, 10, 70, 30), (100, 60), 90))
 

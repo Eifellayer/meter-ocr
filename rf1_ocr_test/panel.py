@@ -16,7 +16,7 @@ from tempfile import NamedTemporaryFile
 from urllib.parse import parse_qs, urlsplit
 
 from app_channel import APP_NAME, NAMESPACE
-from calibration import DEFAULT_LIMIT, MIN_IMAGES, MAX_IMAGES
+from calibration import DEFAULT_LIMIT, MIN_IMAGE_LIMIT, MAX_IMAGES
 from checks import (DEFAULT_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, WARNING_DETAIL_AFTER, meter_prefix,
                     LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, REFLECTION_SUGGEST_AFTER, STANDALONE_PENDING, STANDALONE_REJECTED_NOTICE,
                     STANDALONE_VERIFIED_NOTICE, last_check_at, reschedule_next_check,
@@ -144,6 +144,9 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .calibration-card p{{margin:.55rem 0}}
 .calibration-live{{padding:.75rem .9rem;margin:0 0 .8rem;border:1px solid var(--edge);border-radius:.7rem}}
 .calibration-live p{{margin:0}}
+#calibration-state[data-tone]:not([data-tone=""]){{padding:.75rem .9rem;border:1px solid;border-radius:.7rem}}
+.calibration-live[data-tone="ok"],#calibration-state[data-tone="ok"]{{color:light-dark(#185d35,#9ce5b5);background:light-dark(#e9f8ee,#17382a);font-size:1.12rem;font-weight:750}}
+.calibration-live[data-tone="error"],#calibration-state[data-tone="error"]{{color:light-dark(#86272d,#ffb6bb);background:light-dark(#fff0f0,#46252b);font-size:1.12rem;font-weight:750}}
 .calibration-live progress,.calibration-card progress{{display:block;width:100%;margin:.55rem 0;accent-color:#bb861b}}
 .calibration-card form{{margin-top:.75rem}}
 .source-mode-guide{{grid-column:1/-1;display:grid;gap:.75rem;grid-template-columns:repeat(auto-fit,minmax(min(100%,14rem),1fr))}}
@@ -374,6 +377,7 @@ name: Zählerstand (OCR)</code></pre>
 <input type="hidden" name="lang" value="{language}">
 <input type="hidden" name="mode" value="{language_mode}">
 <input type="hidden" name="csrf" value="{csrf}">
+<input type="hidden" name="crop_revision" value="{manual_crop_revision}">
 <label>Ziffernfarbe
 <select name="polarity">{polarity_options}</select></label>
 <label>Vergleichsgenauigkeit
@@ -419,7 +423,7 @@ name: Zählerstand (OCR)</code></pre>
 {reset_notice}
 <section class="panel calibration-card" id="calibration-settings" aria-labelledby="calibration-title" {calibration_hidden}>
 <h2 id="calibration-title" tabindex="-1">Selbsteinrichtung für Ausschnitt und Drehung</h2>
-<p>Die App tastet sich mit unterschiedlichen Bildern an einen passenden Rahmen und Winkel heran. Nach drei bestätigten Ablesungen übernimmt sie den Rahmen und die Drehung. Nach fünf Minuten endet der Versuch automatisch.</p>
+<p>Die App tastet sich mit unterschiedlichen Bildern an einen passenden Rahmen und Winkel heran. Nach drei bestätigten Ablesungen prüft sie den gefundenen Rahmen mit einem weiteren Bild und übernimmt ihn dann. Nach fünf Minuten endet der Versuch automatisch.</p>
 <p>Ohne externen Vergleichswert hilft ein von Hand abgelesener Startwert. Ohne Startwert wartet die App zusätzlich auf einen plausiblen Zähleranstieg.</p>
 {calibration_saved_notice}
 <p id="calibration-state" role="status" hidden></p>
@@ -493,7 +497,7 @@ name: Zählerstand (OCR)</code></pre>
 <div id="wizard-calibration-options" class="setup-help" hidden>
 <label>Höchstens so viele unterschiedliche Bilder
 <input name="image_limit" type="number" min="{calibration_min}" max="{calibration_max}" value="{calibration_limit}" required disabled></label>
-<p class="settings-note">Startet nach dem Speichern und endet spätestens nach fünf Minuten. Erst nach drei bestätigten Aufnahmen übernimmt die App den Rahmen und die Drehung.</p>
+<p class="settings-note">Startet nach dem Speichern und endet spätestens nach fünf Minuten. Die App übernimmt den Rahmen nach drei Bestätigungen und einer abschließenden Gegenprüfung.</p>
 </div>
 <label>OCR-Versuche pro Bild<select name="attempts">{auto_attempt_options}</select></label>
 <label>Ziffernfarbe<select name="polarity">{auto_polarity_options}</select></label>
@@ -1064,7 +1068,6 @@ function renderAttempts(details, readings, decimals) {{
   }});
   body.dataset.values = key;
 }}
-let lastCalibrationState = null;
 function refreshCalibration(status) {{
   if (!status) return;
   const active = status.state === 'waiting' || status.state === 'testing';
@@ -1074,7 +1077,7 @@ function refreshCalibration(status) {{
   const messages = {{
     waiting: 'Warte auf ein neues Kamerabild …',
     testing: 'Prüfe Ausschnitt und Drehung …',
-    saved: 'Ausschnitt und Drehung übernommen.',
+    saved: 'Erfolgreich eingerichtet. Ausschnitt und Drehung sind übernommen.',
     failed: 'Selbsteinrichtung fehlgeschlagen. Prüfe Bildausschnitt, Kamerawinkel und Beleuchtung.',
     timeout: 'Selbsteinrichtung nach fünf Minuten beendet. Keine Einstellung sicher bestätigt.',
     cancelled: 'Selbsteinrichtung gestoppt.',
@@ -1085,13 +1088,18 @@ function refreshCalibration(status) {{
     queued: 'Selbsteinrichtung startet, sobald die laufende Prüfung beendet ist …',
     capture: 'Kamerabild wird abgerufen …',
     search: 'Suche nach der Ziffernreihe …',
+    verify_wait: 'Rahmen gefunden. Warte auf ein frisches Bild zur Gegenprüfung …',
+    verify: 'Gefundenen Rahmen mit der normalen Prüfung gegenprüfen …',
     ocr: 'Prüfe Rahmen ' + status.variant + ' mit Drehung ' + status.rotation + '° …',
   }};
   const message = active && stages[status.stage] ? stages[status.stage] : messages[status.state] || '';
   const detail = 'Bilder: ' + status.tested + '/' + status.limit +
     ' · Bestätigungen: ' + status.confirmations + '/' + status.required +
     (active ? ' · Noch ' + clock + ' min' : '');
+  const tone = status.state === 'saved' ? 'ok' : ['failed', 'timeout', 'save_failed'].includes(status.state) ? 'error' : '';
   label.textContent = message + ' ' + detail;
+  label.dataset.tone = tone;
+  document.querySelector('#calibration-overview').dataset.tone = tone;
   document.querySelector('#calibration-overview').hidden = false;
   document.querySelector('#calibration-overview-state').textContent = label.textContent;
   document.querySelector('.activity-status').hidden = active;
@@ -1102,13 +1110,16 @@ function refreshCalibration(status) {{
     if (elapsed > 0) bar.value = elapsed;
     else bar.removeAttribute('value');
   }}
-  if (status.state === 'saved' && lastCalibrationState && lastCalibrationState !== 'saved' && status.settings) {{
-    const form = document.querySelector('#auto-form');
-    for (const [name, value] of Object.entries(status.settings)) form.elements[name].value = value;
-    form.dataset.savedCropMode = status.settings.crop_mode;
-    form.elements.crop_mode.dispatchEvent(new Event('change'));
+  if (status.state === 'saved' && status.settings?.crop_revision &&
+      manualForm.elements.crop_revision.value !== status.settings.crop_revision) {{
+    const autoForm = document.querySelector('#auto-form');
+    for (const form of [autoForm, manualForm]) {{
+      for (const name of ['crop_mode', 'crop', 'width', 'rotation']) form.elements[name].value = status.settings[name];
+      if (form === autoForm) form.dataset.savedCropMode = status.settings.crop_mode;
+      form.elements.crop_mode.dispatchEvent(new Event('change'));
+    }}
+    manualForm.elements.crop_revision.value = status.settings.crop_revision;
   }}
-  lastCalibrationState = status.state;
   document.querySelector('#calibration-limit-label').hidden = active;
   document.querySelector('#calibration-start').hidden = active;
   document.querySelector('#calibration-cancel').hidden = !active;
@@ -1819,6 +1830,10 @@ def start_panel(
             values["source_connection_state"] = html.escape(summary["source_connection_state"])
             manual_saved = load_manual_settings()
             settings = {**auto_rules, **history.get("manual_result", {}).get("settings", {}), **manual_saved}
+            crop_revision = auto_rules.get("crop_revision", "")
+            manual_crop = {**history.get("manual_result", {}).get("settings", {}), **manual_saved}
+            if crop_revision and manual_crop.get("crop_revision") != crop_revision:
+                settings.update({key: auto_rules[key] for key in ("crop_mode", "crop", "width", "rotation")})
             decimals_by_language = DECIMALS_EN if language == "en" else DECIMALS
             comparable_decimals = {key: label for key, label in decimals_by_language.items()
                                    if int(key) <= auto_rules["fraction_digits"]}
@@ -1898,7 +1913,7 @@ def start_panel(
                 settings_open="open" if saved in ("1", "crop", "crop-reset") else "",
                 calibration_saved_notice=auto_saved_notice if saved == "setup-calibration" else "",
                 calibration_hidden="" if control_calibration else "hidden",
-                calibration_min=MIN_IMAGES, calibration_max=MAX_IMAGES,
+                calibration_min=MIN_IMAGE_LIMIT, calibration_max=MAX_IMAGES,
                 calibration_limit=calibration["limit"] if calibration else DEFAULT_LIMIT,
                 setup_first_run=str(bool(setup_pending or reset_state == "done")).lower(),
                 precision_hidden="" if auto_rules["decimals"] == 3 else "hidden",
@@ -2008,6 +2023,7 @@ def start_panel(
                     settings.get("crop_mode", "auto"),
                 ),
                 crop_value=html.escape(str(settings.get("crop", default_crop)), quote=True),
+                manual_crop_revision=html.escape(crop_revision, quote=True),
                 default_crop_value=html.escape(default_crop, quote=True),
                 default_crop_width=default_width,
                 crop_whole_ratio=auto_rules["integer_digits"] /
@@ -2223,7 +2239,7 @@ def start_panel(
                     learn_crop = crop_mode == "learn" and control_calibration is not None
                     if learn_crop:
                         image_limit = int(field("image_limit", str(DEFAULT_LIMIT)))
-                        if not MIN_IMAGES <= image_limit <= MAX_IMAGES:
+                        if not MIN_IMAGE_LIMIT <= image_limit <= MAX_IMAGES:
                             raise ValueError("Invalid calibration image limit")
                         crop_mode = old_rules["crop_mode"]
                     meter_display = field("meter_display")
@@ -2360,7 +2376,7 @@ def start_panel(
                     if action not in ("start", "cancel"):
                         raise ValueError("Invalid calibration action")
                     limit = int(field("image_limit", str(DEFAULT_LIMIT))) if action == "start" else 0
-                    if action == "start" and not MIN_IMAGES <= limit <= MAX_IMAGES:
+                    if action == "start" and not MIN_IMAGE_LIMIT <= limit <= MAX_IMAGES:
                         raise ValueError("Invalid calibration image limit")
                     control_calibration(action, limit)
                 except ValueError:
@@ -2447,7 +2463,11 @@ def start_panel(
             crop_value = default_crop
             width_value = default_width
             rotation = 0
-            if crop_mode[0] == "manual":
+            crop_revision = auto_rules.get("crop_revision", "")
+            if crop_revision and field("crop_revision") != crop_revision:
+                crop_mode = [auto_rules["crop_mode"]]
+                crop_value, width_value, rotation = auto_rules["crop"], auto_rules["width"], auto_rules["rotation"]
+            elif crop_mode[0] == "manual":
                 try:
                     crop_value = field("crop", default_crop)
                     width_value = int(field("width", str(default_width)))
@@ -2460,6 +2480,8 @@ def start_panel(
             settings = {"polarity": polarity[0], "decimals": int(decimals[0]),
                         "attempts": int(attempts[0]), "crop_mode": crop_mode[0],
                         "crop": crop_value, "width": width_value, "rotation": rotation}
+            if crop_revision:
+                settings["crop_revision"] = crop_revision
             manual_reference = field("manual_reference").strip()
             if manual_reference:
                 reading = re.fullmatch(r"([0-9]{1,9})(?:[.,]([0-9]{1,3}))?", manual_reference)

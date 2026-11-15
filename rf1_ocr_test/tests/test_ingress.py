@@ -129,7 +129,7 @@ class IngressFixture(TestCase):
 
 class IngressTests(IngressFixture):
     def test_calibration_uses_the_selected_image_limit_and_can_be_stopped(self):
-        for invalid in ("2", "51", "x"):
+        for invalid in ("2", "3", "51", "x"):
             self.assertEqual(400, self.submit("/selbsteinrichtung", action="start", image_limit=invalid)[0])
         self.assertIsNone(self.calibration)
         self.assertEqual((303, "./?saved=calibration&ui=settings"),
@@ -451,6 +451,23 @@ class IngressTests(IngressFixture):
         self.assertEqual((303, "./?saved=setup&ui=overview"), self.submit("/einrichtung", **values))
         self.assertEqual("slfork_camera", self.source["mode"])
         self.assertEqual("http://meter", self.source["url"])
+
+    def test_manual_test_picks_up_a_new_learned_crop_once(self):
+        path = self.root / "manual-test-settings.json"
+        path.write_text(json.dumps({"crop_mode": "manual", "crop": "0,0,250,50", "width": 150,
+                                    "rotation": 0, "attempts": 8}))
+        self.rules.update(crop_mode="manual", crop="10,20,410,100", width=270, rotation=-3,
+                          crop_revision="new")
+        page = self.request("/")[0]
+        self.assertIn('name="crop_revision" value="new"', page)
+        payload = {"crop_mode": "manual", "crop": "0,0,250,50", "width": 150,
+                   "rotation": 0, "attempts": 8, "save_settings": 1}
+        self.assertEqual(303, self.submit("/pruefen", **payload)[0])
+        saved = json.loads(path.read_text())
+        self.assertEqual(("10,20,410,100", 270, -3, 8),
+                         tuple(saved[key] for key in ("crop", "width", "rotation", "attempts")))
+        self.assertEqual(303, self.submit("/pruefen", crop_revision="new", **payload)[0])
+        self.assertEqual("0,0,250,50", json.loads(path.read_text())["crop"])
 
     def test_setup_starts_calibration_with_saved_source_without_overwriting_crop(self):
         self.rules.update(crop_mode="manual", crop="10,20,410,100", width=270, rotation=-3)

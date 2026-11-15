@@ -41,20 +41,22 @@ EN_UI = {
     "Prüfe Rahmen ": "Checking frame ",
     " mit Drehung ": " at a rotation of ",
     "Selbsteinrichtung für Ausschnitt und Drehung": "Automatic setup for crop and rotation",
-    "Die App tastet sich mit unterschiedlichen Bildern an einen passenden Rahmen und Winkel heran. Nach drei bestätigten Ablesungen übernimmt sie den Rahmen und die Drehung. Nach fünf Minuten endet der Versuch automatisch.":
-        "The app searches for a suitable crop and rotation using different images. It saves them after three confirmed readings. The search automatically ends after five minutes.",
+    "Die App tastet sich mit unterschiedlichen Bildern an einen passenden Rahmen und Winkel heran. Nach drei bestätigten Ablesungen prüft sie den gefundenen Rahmen mit einem weiteren Bild und übernimmt ihn dann. Nach fünf Minuten endet der Versuch automatisch.":
+        "The app searches for a suitable crop and rotation using different images. After three confirmed readings, it checks the result on one more image before saving. The search automatically ends after five minutes.",
     "Ohne externen Vergleichswert hilft ein von Hand abgelesener Startwert. Ohne Startwert wartet die App zusätzlich auf einen plausiblen Zähleranstieg.":
         "A manually entered starting reading helps if there is no external reference. Without either, the app also waits for a plausible increase.",
     "Geprüfte Bilder der Selbsteinrichtung": "Images checked during automatic setup",
-    "Startet nach dem Speichern und endet spätestens nach fünf Minuten. Erst nach drei bestätigten Aufnahmen übernimmt die App den Rahmen und die Drehung.":
-        "Starts after saving and ends within five minutes. The app uses the crop and rotation once three captures confirm it.",
+    "Startet nach dem Speichern und endet spätestens nach fünf Minuten. Die App übernimmt den Rahmen nach drei Bestätigungen und einer abschließenden Gegenprüfung.":
+        "Starts after saving and ends within five minutes. The app saves the crop after three confirmations and a final check.",
     "Höchstens so viele unterschiedliche Bilder": "Maximum number of distinct images",
     "Selbsteinrichtung starten": "Start automatic setup",
     "Selbsteinrichtung stoppen": "Stop automatic setup",
     "Warte auf ein neues Kamerabild …": "Waiting for a new camera image …",
     "Prüfe Ausschnitt und Drehung …": "Checking crop and rotation …",
     "Selbsteinrichtung prüft Bildausschnitt und Drehung.": "Automatic setup is checking the crop and rotation.",
-    "Ausschnitt und Drehung übernommen.": "Crop and rotation saved.",
+    "Erfolgreich eingerichtet. Ausschnitt und Drehung sind übernommen.": "Setup successful. Crop and rotation saved.",
+    "Rahmen gefunden. Warte auf ein frisches Bild zur Gegenprüfung …": "Crop found. Waiting for a fresh image to cross-check …",
+    "Gefundenen Rahmen mit der normalen Prüfung gegenprüfen …": "Cross-checking the crop with the regular OCR check …",
     "Selbsteinrichtung fehlgeschlagen. Prüfe Bildausschnitt, Kamerawinkel und Beleuchtung.":
         "Automatic setup failed. Check the crop, camera angle and lighting.",
     "Selbsteinrichtung nach fünf Minuten beendet. Keine Einstellung sicher bestätigt.":

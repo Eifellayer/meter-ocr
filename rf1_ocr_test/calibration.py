@@ -5,12 +5,13 @@ from hashlib import sha256
 from math import ceil, cos, floor, radians, sin
 import subprocess
 
-from checks import OCR_PROFILES, compare_sample, meter_prefix
+from checks import OCR_PROFILES, compare_sample, meter_prefix, read_with_retries
 from consumption import accumulate_consumption
 from layout import crop_coordinates, find_digit_row, find_raw_digit_row, rotated_width, turn_crop
 
 DEFAULT_LIMIT = 50
 MIN_IMAGES = 3
+MIN_IMAGE_LIMIT = MIN_IMAGES + 1
 MAX_IMAGES = 50
 TIME_LIMIT = 300
 CAPTURE_INTERVAL = 5
@@ -106,6 +107,7 @@ class Calibration:
     confirmations: int = 0
     anchored: bool = False
     advanced: bool = False
+    verification_pending: bool = False
 
     def expired(self, now):
         return now - self.started >= TIME_LIMIT
@@ -116,13 +118,43 @@ class Calibration:
                 "confirmations": self.confirmations, "required": MIN_IMAGES,
                 "seconds": max(0, ceil(TIME_LIMIT - (now - self.started)))}
 
-    def examine(self, frame, overlay, sample, stamp, rules, read, stop, baseline=None, on_attempt=None):
-        """Return a verified layout, checking two OCR profiles per distinct image."""
+    def remember_image(self, frame, stamp):
         digest = sha256(frame.convert("RGB").tobytes()).digest()
         if stamp <= self.last_stamp or digest in self.seen:
-            return None
+            return False
         self.seen.add(digest)
         self.last_stamp = stamp
+        return True
+
+    def verify(self, frame, sample, stamp, rules, read, stop):
+        """Confirm the exact saved geometry with the regular OCR retry routine."""
+        if not self.remember_image(frame, stamp):
+            return None
+        has_reference = sample.get("reference_required") is not False
+        precision = rules["decimals"] if has_reference else rules["fraction_digits"]
+        digits = rules["integer_digits"]
+        try:
+            value, confirmed, _ = read_with_retries(
+                lambda profile: read(self.candidate, profile), sample, precision,
+                max_attempts=max(2, rules["attempts"]), standalone=not has_reference,
+                integer_digits=digits, stop_before_attempt=stop,
+            )
+            status, _ = compare_sample(sample, value, precision, ocr_confirmed=confirmed, integer_digits=digits)
+            if status != ("match" if has_reference else "ocr_only") or (has_reference and not sample.get("reference_time")):
+                raise ValueError("Unconfirmed crop")
+            accumulate_consumption(self.counter, "calibration", stamp, value, precision,
+                                   rules["max_flow_lph"], digits)
+        except (OSError, ValueError, subprocess.SubprocessError):
+            self.verification_pending = False
+            self.candidate, self.counter = None, {}
+            self.confirmations, self.anchored, self.advanced = 0, False, False
+            return None
+        return self.candidate
+
+    def examine(self, frame, overlay, sample, stamp, rules, read, stop, baseline=None, on_attempt=None):
+        """Return a verified layout, checking two OCR profiles per distinct image."""
+        if not self.remember_image(frame, stamp):
+            return None
         has_reference = sample.get("reference_required") is not False
         # Without an outside reference, read every displayed digit to check movement.
         precision = rules["decimals"] if has_reference else rules["fraction_digits"]

@@ -12,7 +12,7 @@ Entwickelt für den **Pipersberg G4 RF1** mit **AI on the Edge / SLFork**. Eine 
 
 Die Standardeinstellung vergleicht **fünf Vorkommastellen, also volle m³**. Erkannte Nachkommastellen werden zusätzlich angezeigt. Ein `?` steht für eine unklare Ziffer. Solange `vergleich_nachkommastellen: 0` eingestellt ist, werden unklare Nachkommastellen nicht bewertet.
 
-Die App holt das letzte vorhandene Foto sowie die zugehörigen Werte aus SLFork. Sie erkennt den Ziffernausschnitt anhand der grünen Rahmen oder nutzt einen eingestellten Bildausschnitt. Tesseract OCR liest den Zählerstand unabhängig aus dem Bild. Bei unklarer oder abweichender Erstlesung probiert sie **bis zu vier weitere Bildaufbereitungen desselben Fotos**. Eine passende Lesung kann den Durchlauf frühzeitig beenden.
+Die App holt das letzte vorhandene Foto sowie die zugehörigen Werte aus SLFork. Sie erkennt den Ziffernausschnitt anhand der grünen Rahmen oder nutzt einen eingestellten Bildausschnitt. Tesseract OCR liest den Zählerstand unabhängig aus dem Bild. Bei unklarer oder abweichender Erstlesung probiert sie weitere Bildaufbereitungen **bis zum einstellbaren Maximum von 1 bis 10 Versuchen** (Standard: 5). **Bei der ersten bestätigten Übereinstimmung stoppt die Prüfung sofort.**
 
 Im SLFork-Modus gleicht die App den OCR-Wert mit **Raw Value** und **Actual Value** ab. Im Kameramodus kann ein aktueller kumulierter m³-Sensor als Referenz dienen. Ohne Referenzsensor wird nur das OCR-Ergebnis ausgegeben.
 
@@ -22,14 +22,14 @@ Der Button startet einen **manuellen Test mit dem bereits vorhandenen Bild**. Er
 
 1. Anfrage angenommen
 2. Bild und Referenzwerte laden
-3. OCR-Auswertung, **bis zu fünf Durchläufe** mit Fortschrittsbalken
+3. OCR-Auswertung, **1 bis maximal 10 Versuche** mit Fortschrittsbalken
 4. Ergebnis speichern und abschließen
 
-Der Balken zeigt **tatsächlich abgeschlossene OCR-Aufbereitungen** an, dazu die verstrichenen Sekunden. Eine feste Restdauer wird nicht behauptet, da die Laufzeit variiert und ein guter Treffer bereits im ersten Durchlauf möglich ist. Der manuelle Test verändert weder den automatischen Zeitplan noch die Trefferzahl.
+Der Balken zeigt **tatsächlich abgeschlossene OCR-Versuche**, nicht eine geschätzte Laufzeit. Die Schaltfläche wird während der Prüfung zu **„Prüfung läuft …“** und ist vorübergehend gesperrt. Danach erscheint direkt **„Test erfolgreich“** bei Übereinstimmung (dezent grün) oder eine verständliche Fehler- bzw. Abweichungsmeldung (dezent rot). Eine erfolgreiche Bildlesung ohne Referenz wird neutral angezeigt. Der manuelle Test verändert weder den automatischen Zeitplan noch die Trefferzahl.
 
 Die kompakte Weboberfläche zeigt die wichtigsten Angaben in getrennten Bereichen, Datum und Uhrzeit kurz als **TT.MM.JJ HH:MM** und die Kontrollbilder übersichtlich nebeneinander. Technische Diagnosewerte stehen weiterhin in Home Assistant zur Verfügung, ohne die normale Ansicht zu überladen.
 
-**Zwei unterschiedliche Fünfer-Zahlen:** Die bis zu **fünf OCR-Durchläufe** betreffen ein einzelnes Bild. Die **fünf bestätigten automatischen Prüfungen innerhalb von 24 Stunden** sind dagegen ein separates Kontrollziel. Auch ein einzelner manueller Durchlauf erhöht diese Zahl nicht.
+**Zwei unterschiedliche Einstellungen:** Die **1 bis 10 OCR-Versuche** betreffen die Auswertung eines einzelnen Bilds. Die **fünf bestätigten automatischen Prüfungen innerhalb von 24 Stunden** sind dagegen ein separates Kontrollziel. Ein manueller Versuch erhöht diese Zahl nicht.
 
 ## Automatische Kontrolle
 
@@ -58,12 +58,13 @@ Wer von einer alten lokalen RF1-App auf die Repository-Version wechselt, sollte 
 | --- | --- |
 | `esp_url` | Adresse des SLFork-ESP |
 | `vergleich_nachkommastellen` | 0 = volle m³, 1–3 = genauere Vergleichsstellen |
+| `ocr_versuche` | Maximale OCR-Versuche je Bild, 1 bis 10 (Standard: 5) |
 | `kamera_entitaet` | Optionales Kamerabild aus Home Assistant |
 | `referenz_entitaet` | Optionaler kumulierter m³-Sensor im Kameramodus |
 | `ausschnitt`, `vorkomma_breite` | Manueller Ziffernbereich, falls nötig |
 | `push_dienst` | Optionaler Benachrichtigungsdienst |
 
-Die Einstellungen „Ziffernfarbe“ und „Vergleichsgenauigkeit“ auf der Weboberfläche gelten für den **manuellen Test**; die dauerhaft verwendeten Optionen werden in der App-Konfiguration verwaltet.
+Die Einstellungen „Ziffernfarbe“, „Vergleichsgenauigkeit“ und „Max. OCR-Versuche“ auf der Weboberfläche gelten für den **manuellen Test**; die dauerhaft verwendeten Optionen werden in der App-Konfiguration verwaltet. Eine kurze Erklärung von „Jetzt prüfen“ lässt sich über das Infosymbol aufklappen.
 
 ## Wo stehen die Ergebnisse?
 

@@ -73,6 +73,13 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 </style>
 <h1>Gaszähler OCR-Kontrolle</h1>
 <p class="intro">Unabhängiger Bildabgleich deines Gaszählerstands mit der vorhandenen Messung. Die OCR liest die Ziffern erneut direkt aus dem Kamerabild – ohne den vom ESP erkannten Wert einfach zu übernehmen.</p>
+<div class="panel"><h2>Automatische Kontrolle</h2>
+<dl><dt>Nächste Prüfung</dt><dd id="countdown">–</dd>
+<dt>Vergleich</dt><dd>{auto_rule_description}</dd>
+<dt>Erkannter Stand</dt><dd>{ocr}</dd>
+<dt>Referenz</dt><dd>{reference}</dd>
+<dt>Prüfergebnis</dt><dd>{detail}</dd>
+<dt>Bildzeit</dt><dd class="stamp" data-epoch="{image_time}">–</dd></dl></div>
 <div class="panel"><h2>Automatische Prüfung – Einstellungen</h2>
 <form method="post" action="automatik" id="auto-form">
 <input type="hidden" name="csrf" value="{csrf}">
@@ -119,13 +126,7 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <small id="test-result-stamp"></small>
 </div>
 </div></div></details>
-<div class="panel"><h2>Automatische Kontrolle</h2>
-<dl><dt>Nächste Prüfung</dt><dd id="countdown">–</dd>
-<dt>Vergleich</dt><dd>{auto_rule_description}</dd>
-<dt>Erkannter Stand</dt><dd>{ocr}</dd>
-<dt>Referenz</dt><dd>{reference}</dd>
-<dt>Prüfergebnis</dt><dd>{detail}</dd>
-<dt>Bildzeit</dt><dd class="stamp" data-epoch="{image_time}">–</dd></dl></div>
+
 <section><div><h2>Aktuelles Bild</h2>{current}</div>
 <div><h2>Letzter Treffer</h2>{good}</div></section>
 <script>

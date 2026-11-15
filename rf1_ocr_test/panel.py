@@ -87,6 +87,8 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <select name="decimals">{auto_decimal_options}</select></label>
 <label>Max. OCR-Versuche
 <select name="attempts">{auto_attempt_options}</select></label>
+<label>Ziffernfarbe
+<select name="polarity">{auto_polarity_options}</select></label>
 <button type="submit">Speichern</button>
 </form>
 <p class="settings-note">Gilt dauerhaft ab der nächsten automatischen Prüfung. Bei geänderter Vergleichsgenauigkeit beginnt die Trefferzählung neu.</p>
@@ -344,6 +346,7 @@ def start_panel(
                 decimal_options=select_options(DECIMALS, str(settings.get("decimals", auto_rules["decimals"]))),
                 auto_decimal_options=select_options(DECIMALS, str(auto_rules["decimals"])),
                 auto_attempt_options=select_options(ATTEMPTS, str(auto_rules["attempts"])),
+                auto_polarity_options=select_options(POLARITIES, auto_rules["polarity"]),
                 auto_saved_notice=auto_saved_notice,
                 auto_rule_description=html.escape(auto_rule_description),
                 crop_mode_options=select_options(CROP_MODES, settings.get("crop_mode", "auto")),
@@ -391,12 +394,15 @@ def start_panel(
             if path == "/automatik":
                 decimals = form.get("decimals", [])
                 attempts = form.get("attempts", [])
+                polarity = form.get("polarity", [])
                 if (len(decimals) != 1 or decimals[0] not in DECIMALS
-                        or len(attempts) != 1 or attempts[0] not in ATTEMPTS):
+                        or len(attempts) != 1 or attempts[0] not in ATTEMPTS
+                        or len(polarity) != 1 or polarity[0] not in POLARITIES):
                     self.send_error(400)
                     return
                 try:
-                    save_auto_rules({"decimals": int(decimals[0]), "attempts": int(attempts[0])})
+                    save_auto_rules({"decimals": int(decimals[0]), "attempts": int(attempts[0]),
+                                     "polarity": polarity[0]})
                 except (OSError, ValueError):
                     self.send_error(503)
                     return

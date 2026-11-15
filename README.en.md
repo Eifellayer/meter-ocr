@@ -75,6 +75,10 @@ The [photo test report (German)](METER-PHOTO-TESTS.md) documents simulated OCR r
 
 > **Test status:** The maintainer uses AI on the Edge / SLFork for real meter tests. Camera and ESPHome modes and other meter types have automated and simulated coverage only; no real-device test is claimed for them.
 
+### Automatic crop and rotation setup
+
+Open **Settings → Automatic check → Automatic setup for crop and rotation**. Choose the maximum number of distinct images to check (3 to 50, default 50). The app tries different crops and angles and saves a setting after at least three confirmations on fresh, distinct images. Without an external reference or a manually entered starting reading, the meter must show a plausible increase. The search ends after five minutes or when it reaches the image limit. If unsuccessful, it keeps your existing settings. You can stop the search at any time.
+
 ## Plausibility check and Energy dashboard
 
 AI Meter Reader records consumption from automatic reference matches or agreeing OCR profiles in standalone mode. The first accepted reading establishes the baseline. Later readings are checked against the last accepted value. An out-of-order time, backwards reading or increase above the configured flow limit is rejected. The check accounts for the selected digit precision.

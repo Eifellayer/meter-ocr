@@ -76,6 +76,10 @@ Der [Vergleichstest mit zehn Gas-, Wasser- und Stromzählerfotos](METER-PHOTO-TE
 
 Unter **Automatische Prüfung → Spiegelungen und verdeckte Ziffern** kannst du optional eine einzelne Ziffer ergänzen lassen. Die App verwendet den vorherigen und den nächsten sicheren Stand samt Bildzeiten und maximalem Durchfluss. Auch ein einmal manuell abgelesener Startwert kann den ersten Vergleichswert liefern. Wenn es genau eine Möglichkeit gibt, wählst du die vorgeschlagene Ziffer aus und bestätigst den Zwischenstand. Gelb markiert die berechnete Ziffer. Die App verwendet den Zwischenstand weder als neue Referenz noch als zusätzliche Verbrauchsbuchung. Den Vorschlag kannst du dauerhaft ausblenden.
 
+### Selbsteinrichtung für Ausschnitt und Drehung
+
+Öffne **Einstellungen → Automatische Prüfung → Selbsteinrichtung für Ausschnitt und Drehung**. Wähle, wie viele unterschiedliche Bilder die App prüfen darf (3 bis 50, Vorgabe 50). Die App probiert passende Rahmen und Winkel und speichert eine Einstellung nach mindestens drei Bestätigungen mit unterschiedlichen, frischen Bildern. Ohne externen Vergleichswert oder einen von Hand abgelesenen Startwert muss sich der Zähler plausibel weiterdrehen. War die Suche nach fünf Minuten oder beim Erreichen des Bildlimits erfolglos, endet sie und die vorherige Einstellung gilt weiter. Die Suche lässt sich jederzeit stoppen.
+
 ## Plausibilitätsprüfung und Energie-Dashboard
 
 Für den Verbrauch verwendet AI Meter Reader automatische Treffer mit Referenz oder übereinstimmende OCR-Versuche im eigenständigen Modus. Der erste gültige Stand setzt die Basis. Danach vergleicht die App den neuen Stand mit der letzten gültigen Messung. Sie verwirft Rücksprünge und Anstiege, die für die verstrichene Zeit zu groß sind. Die berücksichtigte Ziffernauflösung bestimmt den Rundungsspielraum.

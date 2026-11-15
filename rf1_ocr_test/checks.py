@@ -5,6 +5,7 @@ from decimal import Decimal
 import io
 import re
 import subprocess
+import time
 
 from PIL import Image, ImageChops, ImageFilter, ImageOps
 
@@ -53,13 +54,16 @@ def crop_register(picture, crop):
     return picture.crop(crop)
 
 
-def read_register(picture, light_digits, digits=5, *, force_polarity=False, profile=OCR_PROFILES[0]):
+def read_register(picture, light_digits, digits=5, *, force_polarity=False, profile=OCR_PROFILES[0], deadline=None):
     image = picture.convert("L")
     polarities = (light_digits,) if force_polarity else (light_digits, not light_digits)
-    reads = {
-        value for invert in polarities
-        if (value := read_polarity(ImageOps.invert(image) if invert else image, digits, profile)) is not None
-    }
+    reads = set()
+    for invert in polarities:
+        gray = ImageOps.invert(image) if invert else image
+        value = (read_polarity(gray, digits, profile) if deadline is None
+                 else read_polarity(gray, digits, profile, deadline=deadline))
+        if value is not None:
+            reads.add(value)
     return next(iter(reads)) if len(reads) == 1 else None
 
 
@@ -76,7 +80,7 @@ def reduce_uneven_lighting(image):
     return ImageChops.subtract(image, background, offset=255)
 
 
-def read_polarity(image, digits, profile):
+def read_polarity(image, digits, profile, *, deadline=None):
     cutoff, sharpening, threshold, reduce_shadows = profile
     if reduce_shadows:
         image = reduce_uneven_lighting(image)
@@ -88,6 +92,9 @@ def read_polarity(image, digits, profile):
     )
     votes = Counter()
     for variant in variants:
+        timeout = min(12, deadline - time.monotonic()) if deadline is not None else 12
+        if timeout <= 0:
+            raise TimeoutError("OCR deadline reached")
         scale = min(3, 2200 / variant.width, 700 / variant.height)
         resized = variant.resize((max(1, round(variant.width * scale)),
                                   max(1, round(variant.height * scale))))
@@ -97,7 +104,7 @@ def read_polarity(image, digits, profile):
             result = subprocess.run(
                 ["tesseract", "stdin", "stdout", "-l", "eng", "--psm", "10" if digits == 1 else "7",
                  "-c", "tessedit_char_whitelist=0123456789"],
-                input=png.getvalue(), capture_output=True, timeout=12, check=True,
+                input=png.getvalue(), capture_output=True, timeout=timeout, check=True,
             ).stdout.decode("ascii", errors="ignore").strip()
         if len(result) == digits and re.fullmatch(r"[0-9]+", result):
             votes[result] += 1

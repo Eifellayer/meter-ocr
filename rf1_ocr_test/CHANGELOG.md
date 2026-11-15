@@ -1,5 +1,9 @@
 # Changelog
 
+## In Vorbereitung
+
+- Optionale Selbsteinrichtung für Ausschnitt und Drehung. Einstellbares Limit von 3 bis 50 unterschiedlichen Bildern, höchstens fünf Minuten und Übernahme nach mindestens drei bestätigten Aufnahmen.
+
 ## 0.4.8 Alpha
 
 - „Rahmen ziehen“ zeigt das Kamerabild direkt in den Test- und Automatik-Einstellungen.

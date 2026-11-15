@@ -497,7 +497,7 @@ tabs.forEach((tab, index) => {{
   }});
 }});
 const settingsSections = ['#source-settings', '#automatic-settings', '#notification-settings'];
-const settingsOpen = searchPrefs.get('ui') === 'settings' || ['setup', 'skip'].includes(searchPrefs.get('saved')) || settingsSections.some(selector => document.querySelector(selector).open);
+const settingsOpen = searchPrefs.get('ui') === 'settings' || searchPrefs.get('saved') === 'setup' || settingsSections.some(selector => document.querySelector(selector).open);
 activateTab(settingsOpen ? 'settings' : 'overview', false);
 const setupDialog = document.querySelector('#setup-dialog');
 // Keep the first-run modal outside the tab panel so its hidden ancestor cannot hide it.

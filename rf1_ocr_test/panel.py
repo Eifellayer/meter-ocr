@@ -266,7 +266,7 @@ def start_panel(history_path, current_image, good_image, requested, default_deci
             if manual.get("already_checked"):
                 manual_detail += " Dieses Bild wurde bereits ausgewertet."
             if manual.get("outside_window"):
-                manual_detail += " Die Bildzeit liegt außerhalb des Zeitfensters für automatische Prüfungen."
+                manual_detail += " Das Bild ist für eine neue automatische Bestätigung zu alt."
             settings = manual.get("settings", {})
             request_status = (
                 "Test angenommen. Die Bearbeitung wird hier live angezeigt."

@@ -133,9 +133,6 @@ def select_options(choices, chosen):
 def diagnostic_rows(data):
     fields = (
         ("slfork_value_status", "AI on the Edge · Wertstatus"),
-        ("slfork_process_status", "Messbetrieb"),
-        ("slfork_process_state", "Messphase"),
-        ("slfork_process_error", "Prozessfehlercode"),
         ("slfork_last_processed_timestamp", "Letzte Messung am ESP"),
         ("slfork_last_valid_timestamp", "Zeit des letzten gültigen Stands"),
     )

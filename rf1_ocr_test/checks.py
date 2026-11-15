@@ -321,6 +321,74 @@ STANDALONE_PENDING = "standalone_pending"
 STANDALONE_PENDING_NOTICE = "Erstes Bild gelesen. Warte auf die zweite Aufnahme zur Gegenprüfung."
 STANDALONE_VERIFIED_NOTICE = "Zählerstand mit einer zweiten Aufnahme gegengeprüft."
 STANDALONE_REJECTED_NOTICE = "Die zweite Aufnahme passt nicht zum ersten Zählerstand."
+REFLECTION_SUGGEST_AFTER = 3
+
+
+def single_missing_digit(ocr, readings, decimals, integer_digits):
+    """Only one required position may be unknown; all others need majority evidence."""
+    size = integer_digits + (decimals + 1 if decimals else 0)
+    pattern = str(ocr or "")[:size]
+    decimal_part = rf"\.[0-9?]{{{decimals}}}" if decimals else ""
+    if not re.fullmatch(rf"[0-9?]{{{integer_digits}}}{decimal_part}", pattern) or pattern.count("?") != 1:
+        return None
+    votes = max(2, len(readings) // 2 + 1)
+    for index, digit in enumerate(pattern):
+        if digit.isdigit() and sum(len(value) > index and value[index] == digit for value in readings) < votes:
+            return None
+    return pattern
+
+
+def estimate_missing_digit(pattern, stamp, previous, following, decimals, max_flow_lph):
+    """Accept a digit only when every other value violates a measured bound."""
+    before, after = previous["time"], following["time"]
+    if not before < stamp < after or after - before > WINDOW_SECONDS:
+        return None
+    step = 10 ** (3 - decimals)
+    low, high = previous["value"], following["value"]
+    candidates = []
+    for digit in "0123456789":
+        reading = pattern.replace("?", digit)
+        value = int(reading.replace(".", "")) * step
+        if (low <= value <= high
+                and value - low - step <= max_flow_lph * (stamp - before) / 3600
+                and high - value - step <= max_flow_lph * (after - stamp) / 3600):
+            candidates.append(digit)
+    if len(candidates) != 1:
+        return None
+    left, right = pattern.split("?")
+    return {"left": left, "digit": candidates[0], "right": right, "time": stamp}
+
+
+def track_reflection(history, ocr, readings, stamp, *, verified, unclear, decimals,
+                     integer_digits, max_flow_lph, enabled, manual_anchor=None):
+    pattern = single_missing_digit(ocr, readings, decimals, integer_digits) if unclear else None
+    if pattern:
+        position = pattern.index("?")
+        last = history.get("reflection_streak", {})
+        count = last.get("count", 0) + 1 if last.get("position") == position else 1
+        history["reflection_streak"] = {"position": position, "count": min(count, REFLECTION_SUGGEST_AFTER)}
+        anchor = history.get("reflection_anchor")
+        previous = max((item for item in (anchor, manual_anchor) if item and item["time"] < stamp),
+                       key=lambda item: item["time"], default=None)
+        if enabled and previous:
+            history["reflection_pending"] = {"pattern": pattern, "time": stamp, "previous": previous}
+    else:
+        history.pop("reflection_streak", None)
+    if not enabled:
+        history.pop("reflection_pending", None)
+        history.pop("reflection_estimate", None)
+    if verified:
+        value = meter_prefix(ocr, decimals, integer_digits)
+        if value is None:
+            return
+        following = {"time": stamp, "value": value * 10 ** (3 - decimals)}
+        pending = history.pop("reflection_pending", None)
+        if pending:
+            estimate = estimate_missing_digit(pending["pattern"], pending["time"], pending["previous"],
+                                              following, decimals, max_flow_lph)
+            if estimate:
+                history["reflection_estimate"] = estimate
+        history["reflection_anchor"] = following
 
 
 def last_digit_can_pass(history, precision_mode):

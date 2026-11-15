@@ -18,7 +18,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from checks import (FRESH_SAMPLE_AGE, NORMAL_INTERVAL, OCR_PROFILES, RETRY_INTERVAL, WINDOW_SECONDS,
                     LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, compare_sample, explain_uncertain_positions,
                     last_check_at, read_register, record_sample,
-                    reschedule_next_check, rolling_summary, schedule_next_check, slfork_reference)
+                    reschedule_next_check, rolling_summary, schedule_next_check, slfork_reference,
+                    estimate_missing_digit, single_missing_digit, track_reflection)
 from consumption import EXCESSIVE_INCREASE, FALLBACK_PLAUSIBLE, FALLBACK_UNKNOWN_TIME, LOWER_READING, fallback_detail
 from layout import crop_coordinates, find_digit_row, rotated_width, turn_crop
 from settings import load_options
@@ -245,6 +246,36 @@ class OCRTests(TestCase):
 
 
 class StateTests(TestCase):
+    def test_reflection_estimate_requires_one_digit_and_unique_time_bounds(self):
+        previous = {"time": 100, "value": 12345110}
+        following = {"time": 220, "value": 12345120}
+        self.assertEqual({"left": "12345.1", "digit": "1", "right": "5", "time": 160},
+                         estimate_missing_digit("12345.1?5", 160, previous, following, 3, 6000))
+        self.assertIsNone(estimate_missing_digit(
+            "12345.1?5", 160, previous, {**following, "value": 12345126}, 3, 6000))
+        self.assertIsNone(estimate_missing_digit("12345.1?5", 160, previous, following, 3, 60))
+        self.assertIsNone(single_missing_digit("12345.1??", ["12345.1??"] * 3, 3, 5))
+        self.assertIsNone(single_missing_digit("12345.1?5", ["12345.1?5", "12345.1?4"], 3, 5))
+
+    def test_reflection_can_start_with_a_manual_value_and_await_a_confirmed_reading(self):
+        history = {}
+        rules = {"decimals": 3, "integer_digits": 5, "max_flow_lph": 6000}
+        for stamp in (140, 150, 160):
+            track_reflection(history, "12345.1?5", ["12345.1?5"] * 2, stamp,
+                             verified=False, unclear=True, enabled=False, **rules)
+        self.assertEqual(3, history["reflection_streak"]["count"])
+        self.assertNotIn("reflection_pending", history)
+
+        manual = {"time": 100, "value": 12345110}
+        track_reflection(history, "12345.1?5", ["12345.1?5"] * 2, 160,
+                         verified=False, unclear=True, enabled=True, manual_anchor=manual, **rules)
+        track_reflection(history, "12345.120", [], 200, verified=False, unclear=False, enabled=True, **rules)
+        self.assertNotIn("reflection_estimate", history)
+        track_reflection(history, "12345.120", [], 220, verified=True, unclear=False, enabled=True, **rules)
+        self.assertEqual("1", history["reflection_estimate"]["digit"])
+        self.assertEqual({"time": 220, "value": 12345120}, history["reflection_anchor"])
+        self.assertNotIn("reflection_pending", history)
+
     def test_edge_camera_only_publishes_local_ocr_without_the_esp_reading(self):
         class StopLoop(Exception):
             pass

@@ -121,6 +121,30 @@ class IngressFixture(TestCase):
 
 
 class IngressTests(IngressFixture):
+    def test_reflection_notice_is_optional_and_only_marks_the_inferred_digit(self):
+        self.history.write_text(json.dumps({
+            "check_status": "ocr_unclear", "reflection_streak": {"count": 3, "position": 7},
+            "reflection_estimate": {"left": "12345.1", "digit": "1", "right": "5", "time": 160},
+        }))
+        status = json.loads(self.request("/automatic")[0])
+        self.assertTrue(status["reflection_suggestion"])
+        self.assertIsNone(status["reflection_estimate"])
+        self.assertEqual((303, "./?ui=overview"), self.submit("/spiegelungs-hinweis-ausblenden"))
+        self.assertTrue(self.rules["reflection_suggestion_hidden"])
+        self.assertFalse(json.loads(self.request("/automatic")[0])["reflection_suggestion"])
+        self.rules["reflection_estimate_enabled"] = True
+        status = json.loads(self.request("/automatic")[0])
+        self.assertEqual("1", status["reflection_estimate"]["digit"])
+        self.assertFalse(status["reflection_estimate"]["confirmed"])
+        candidate_id = status["reflection_estimate"]["id"]
+        self.assertEqual(409, self.submit("/ergaenzte-ziffer-bestaetigen", estimate_id=candidate_id, digit="2")[0])
+        self.assertEqual((303, "./?ui=overview"),
+                         self.submit("/ergaenzte-ziffer-bestaetigen", estimate_id=candidate_id, digit="1"))
+        self.assertTrue(json.loads(self.request("/automatic")[0])["reflection_estimate"]["confirmed"])
+        page = self.request("/")[0]
+        self.assertIn('class="reflection-estimate" >', page)
+        self.assertIn('<mark id="reflection-value-digit" title="Berechnete Ziffer">1</mark>', page)
+
     def test_factory_reset_clears_manual_result_after_pending_response(self):
         self.setup_pending = False
         form = dict(decimals=0, attempts=3, crop_mode="auto", polarity="auto")

@@ -31,6 +31,7 @@ from checks import (
     differs_only_at_last_digit, last_digit_can_pass, explain_uncertain_positions,
     meter_prefix, common_exact_precision, manual_confirms_failed_auto,
     reschedule_next_check, rolling_summary, sample_epoch, sample_timestamp, schedule_next_check, slfork_reference,
+    timestamp_epoch, track_reflection,
     valid_interval_minutes,
 )
 from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, MAX_FLOW_LPH, ImplausibleReading,
@@ -573,6 +574,8 @@ def main():
 
     auto_rules = {"decimals": default_decimals, "attempts": default_attempts, "polarity": "auto",
                   "precision_mode": False,
+                  "reflection_estimate_enabled": False, "reflection_suggestion_hidden": False,
+                  "reflection_confirmed_id": "",
                   "crop_mode": "auto", "crop": options["ausschnitt"],
                   "width": options["vorkomma_breite"], "rotation": 0,
                   "max_flow_lph": DEFAULT_FLOW_LPH, "interval_minutes": DEFAULT_INTERVAL_MINUTES,
@@ -635,6 +638,9 @@ def main():
                           "integer_digits": integer_digits, "fraction_digits": fraction_digits,
                           "meter_display": meter_display, "fallback_value": fallback_value,
                           "precision_mode": saved_rules.get("precision_mode") is True,
+                          "reflection_estimate_enabled": saved_rules.get("reflection_estimate_enabled") is True,
+                          "reflection_suggestion_hidden": saved_rules.get("reflection_suggestion_hidden") is True,
+                          "reflection_confirmed_id": str(saved_rules.get("reflection_confirmed_id", ""))[:80],
                           "fallback_time": fallback_time, "decimals": decimals}
         else:
             print("Ungültige gespeicherte Automatikregeln; verwende die App-Konfiguration.")
@@ -654,6 +660,9 @@ def main():
         fallback_value = values.get("fallback_value", auto_rules["fallback_value"])
         fallback_time = values.get("fallback_time", auto_rules["fallback_time"])
         precision_mode = values.get("precision_mode", auto_rules["precision_mode"])
+        reflection_estimate_enabled = values.get("reflection_estimate_enabled", auto_rules["reflection_estimate_enabled"])
+        reflection_suggestion_hidden = values.get("reflection_suggestion_hidden", auto_rules["reflection_suggestion_hidden"])
+        reflection_confirmed_id = values.get("reflection_confirmed_id", auto_rules["reflection_confirmed_id"])
         if (type(values.get("decimals")) is not int or not 0 <= values["decimals"] <= fraction_digits
                 or type(values.get("attempts")) is not int or not 1 <= values["attempts"] <= 10
                 or values.get("polarity") not in ("auto", "light", "dark")
@@ -662,6 +671,8 @@ def main():
                 or type(fraction_digits) is not int or not 0 <= fraction_digits <= 3
                 or meter_display not in ("rollers", "digital", "mixed")
                 or type(precision_mode) is not bool
+                or type(reflection_estimate_enabled) is not bool or type(reflection_suggestion_hidden) is not bool
+                or not isinstance(reflection_confirmed_id, str) or len(reflection_confirmed_id) > 80
                 or not isinstance(fallback_value, str) or not isinstance(fallback_time, str)):
             raise ValueError("Ungültige Einstellungen für die automatische Kontrolle")
         if fallback_value:
@@ -686,11 +697,19 @@ def main():
                          "interval_minutes": interval_minutes, "integer_digits": integer_digits,
                          "fraction_digits": fraction_digits, "meter_display": meter_display,
                          "precision_mode": precision_mode,
+                         "reflection_estimate_enabled": reflection_estimate_enabled,
+                         "reflection_suggestion_hidden": reflection_suggestion_hidden,
+                         "reflection_confirmed_id": reflection_confirmed_id,
                          "fallback_value": fallback_value, "fallback_time": fallback_time}
         updated_rules["crop"] = ",".join(str(part) for part in coords)
         atomic_write(AUTO_RULES, json.dumps(updated_rules, indent=2).encode("utf-8"), 0o600)
+        view_preferences = ("reflection_suggestion_hidden", "reflection_confirmed_id")
+        needs_check = any(updated_rules[key] != auto_rules.get(key) for key in updated_rules
+                          if key not in view_preferences)
+        view_changed = any(updated_rules[key] != auto_rules.get(key) for key in view_preferences)
         auto_rules = updated_rules
-        request_automatic_check()
+        if needs_check or not view_changed:
+            request_automatic_check()
 
     requested = Queue(maxsize=1)
     try:
@@ -907,6 +926,7 @@ def main():
                           "last_digit_failures",
                           "standalone_candidate",
                           "learned_rotation",
+                          "reflection_anchor", "reflection_pending", "reflection_estimate", "reflection_streak",
                           "last_slfork_match", "last_reference", "last_reference_time",
                           "last_reference_is_fallback", "ocr_value", "ocr_readings"):
                 source_history.pop(field, None)
@@ -928,6 +948,8 @@ def main():
             updated["confirmations"] = []
             updated.pop("last_match_at", None)
             updated.pop("last_digit_failures", None)
+            for field in ("reflection_anchor", "reflection_pending", "reflection_estimate", "reflection_streak"):
+                updated.pop(field, None)
             if history.get("comparison_integer_digits", integer_digits) != integer_digits:
                 updated.pop("standalone_reading", None)
         if format_changed or run_automatic_now:
@@ -1436,6 +1458,21 @@ def main():
                         updated["learned_rotation"] = {"crop": rotation_key, "adjustment": rotation_adjustment}
                     if rotation_adjustment:
                         data["ocr_rotation_adjustment"] = rotation_adjustment
+                    manual_anchor = None
+                    if active_rules["reflection_estimate_enabled"] and active_rules["fallback_value"]:
+                        prefix = meter_prefix(active_rules["fallback_value"], decimals, integer_digits)
+                        if prefix is not None and active_rules["fallback_time"]:
+                            manual_anchor = {
+                                "time": timestamp_epoch(active_rules["fallback_time"], zone),
+                                "value": prefix * 10 ** (3 - decimals),
+                            }
+                    track_reflection(
+                        updated, ocr, ocr_readings, image_time,
+                        verified=outcome == "match" or standalone_reference is not None and outcome == "ocr_only",
+                        unclear=outcome == "ocr_unclear" and not validation_detail and not ocr_error,
+                        decimals=decimals, integer_digits=integer_digits, max_flow_lph=active_rules["max_flow_lph"],
+                        enabled=active_rules["reflection_estimate_enabled"], manual_anchor=manual_anchor,
+                    )
                     updated.update(
                         last_reference=(standalone_reference["reading"] if standalone_reference else
                                         sample.get("reference", sample["actual_value"])),

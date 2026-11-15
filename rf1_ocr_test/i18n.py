@@ -15,6 +15,21 @@ EN_UI = {
     "Erkennungsbild": "Recognition image",
     "Letztes Testbild": "Latest test image",
     "Noch kein Testbild verfügbar.": "No test image available yet.",
+    "Eindeutig ergänzter Zwischenstand": "Reconstructed intermediate reading",
+    "Berechnete Ziffer": "Calculated digit",
+    "Für eine unlesbare Ziffer gibt es einen eindeutigen Vorschlag. Wähle die Ziffer aus, um den Zwischenstand zu übernehmen.":
+        "There is one plausible value for an unreadable digit. Select it to accept the intermediate reading.",
+    "Ziffer auswählen …": "Choose a digit …",
+    "Zwischenstand übernehmen": "Accept the intermediate reading",
+    "Dieselbe Ziffer ist wiederholt unlesbar. Bei Spiegelungen kannst du sie aus der vorherigen und der nächsten sicheren Ablesung ergänzen lassen.":
+        "The same digit has been unreadable repeatedly. For reflections, the previous and next confirmed readings can help reconstruct it.",
+    "Zur Einstellung": "Open settings",
+    "Vorschlag dauerhaft ausblenden": "Hide this suggestion permanently",
+    "ⓘ Spiegelungen und verdeckte Ziffern": "ⓘ Reflections and obscured digits",
+    "Einzelne verdeckte Ziffer ergänzen": "Reconstruct one obscured digit",
+    "Die App ergänzt eine Ziffer nur, wenn zwischen zwei sicheren Ständen genau ein Wert plausibel ist. Die berechnete Ziffer bleibt gelb. Ein manuell eingetragener Startwert mit Ablesezeit kann als erster Vergleichswert dienen.":
+        "The app fills in a digit only when exactly one value is plausible between two confirmed readings. The calculated digit is highlighted in yellow. A manually entered starting value with its reading time can serve as the first reference.",
+    "Vorschlag bei wiederholt unlesbarer Ziffer ausblenden": "Hide the suggestion for a repeatedly unreadable digit",
     RAW_ROW_UNCLEAR: "Could not find a clear digit row. Set the crop in the manual test.",
     MANUAL_ROW_UNCLEAR: "The digits are hard to read. Check the image rotation, camera angle, focus and lighting.",
     "Ausschnitt im Bild ziehen": "Draw a crop on the image",

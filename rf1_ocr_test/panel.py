@@ -26,17 +26,29 @@ form{{display:flex;flex-wrap:wrap;align-items:end;gap:.8rem}}
 label{{display:grid;gap:.3rem;font-weight:600;font-size:.85rem;color:var(--muted)}}
 select,button{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem}}
 select{{background:var(--surface);border:1px solid var(--edge);color:inherit}}
-button{{border:0;background:var(--accent);color:white;font-weight:700;padding:.62rem 1.1rem;cursor:pointer}}
-button:disabled{{opacity:.6;cursor:progress}}
+button{{border:1px solid light-dark(#b2c4d1,#667988);background:light-dark(#dce6ed,#354b5a);color:light-dark(#28445a,#e9f4fc);font-weight:650;padding:.62rem 1.1rem;cursor:pointer;transition:background .15s}}
+button:not(:disabled):hover{{background:light-dark(#ccdce6,#445e70)}}
+button:disabled{{opacity:.65;cursor:wait}}
 button:focus-visible,select:focus-visible{{outline:3px solid #65bcaf;outline-offset:2px}}
 .hint{{font-size:.85rem;color:var(--muted);margin:1rem 0 0;line-height:1.55}}
 .test-box{{border:1px solid var(--edge);background:light-dark(#f6faf9,#192e2c);border-radius:.8rem;padding:.95rem 1rem;margin:1rem 0 0;display:grid;gap:.35rem}}
-.test-box strong{{font-size:.94rem;color:light-dark(#17684f,#80d3b4)}}
+.test-box strong{{font-size:.94rem;color:inherit}}
+.test-box[data-result="match"]{{border-color:light-dark(#9dceb2,#40785f);background:light-dark(#f0f8f2,#1b3029)}}
+.test-box[data-result="match"] strong{{color:light-dark(#1e7650,#8ad4a9)}}
+.test-box[data-result="fail"]{{border-color:light-dark(#dfb4b4,#854e55);background:light-dark(#fdf5f5,#342227)}}
+.test-box[data-result="fail"] strong{{color:light-dark(#a13b46,#ed9fa6)}}
+.help{{margin:.7rem 0 0;font-size:.87rem;color:var(--muted)}}
+.help summary{{width:max-content;max-width:100%;cursor:help;padding:.2rem 0;list-style:none}}
+.help summary::-webkit-details-marker{{display:none}}
+.help summary:hover{{text-decoration:underline}}
+.help p{{max-width:50rem;margin:.5rem 0 0;line-height:1.55}}
+.test-result{{padding-top:.4rem;border-top:1px solid var(--edge);font-size:.93rem}}
+.test-result p{{margin:.25rem 0}}
 .test-box p{{margin:0}} .test-box small{{color:var(--muted);font-variant-numeric:tabular-nums}}
 .test-box progress{{width:100%;height:.7rem;margin:.45rem 0;border:0;border-radius:99px;overflow:hidden;accent-color:var(--accent)}}
 .test-box progress::-webkit-progress-bar{{background:light-dark(#e1e9e7,#354842);border-radius:99px}}
 .test-box progress::-webkit-progress-value{{background:var(--accent);border-radius:99px}}
-.test-box[data-phase="done"]{{border-color:var(--accent)}}
+
 dl{{display:grid;grid-template-columns:minmax(8rem,11rem) minmax(0,1fr);gap:.5rem 1rem;margin:0}}
 dt{{color:var(--muted);font-size:.9rem}}
 dd{{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums;font-weight:550}}
@@ -54,18 +66,22 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <select name="polarity">{polarity_options}</select></label>
 <label>Vergleichsgenauigkeit
 <select name="decimals">{decimal_options}</select></label>
-<button>Jetzt prüfen</button>
+<label>Max. OCR-Versuche
+<select name="attempts">{attempt_options}</select></label>
+<button id="start-check">Jetzt prüfen</button>
 </form>
-<p class="hint"><strong>Was passiert bei „Jetzt prüfen“?</strong> Die App lädt das letzte verfügbare Zählerbild (sie löst am ESP keine neue Aufnahme aus), liest die Ziffern lokal mit Tesseract und vergleicht sie mit dem Referenzstand. Falls die erste Lesung unklar ist oder abweicht, folgen bis zu vier weitere OCR-Aufbereitungen desselben Bilds. Das kann einen Moment dauern. Der manuelle Test zählt nicht zu den automatischen Treffern.</p>
-<div class="test-box" id="test-box" data-phase="idle" role="status" aria-live="polite">
+<details class="help"><summary title="Informationen zum manuellen Bildtest">ⓘ Was passiert bei „Jetzt prüfen“?</summary>
+<p>Die App verwendet das letzte vorhandene Zählerbild, ohne eine neue Aufnahme zu starten. Sie liest die Zahlen aus dem Bild und vergleicht sie mit dem Referenzwert. Sobald die Werte übereinstimmen, stoppt die Prüfung. Andernfalls werden höchstens so viele OCR-Versuche durchgeführt wie eingestellt (1–10). Der Test verändert die automatische Trefferzahl nicht.</p></details>
+<div class="test-box" id="test-box" data-phase="idle" data-result="neutral" role="status" aria-live="polite">
 <strong id="test-head">Aktueller Schritt: Bereit</strong>
 <p id="test-status">{request_status}</p>
-<progress id="test-progress" max="5" value="0" aria-label="OCR-Durchläufe" hidden></progress>
-<small id="test-meta">Der aktuelle Bearbeitungsstand wird automatisch aktualisiert.</small>
+<progress id="test-progress" max="{default_attempts}" value="0" aria-label="OCR-Versuche" hidden></progress>
+<small id="test-meta">Bereit für den manuellen Test.</small>
+<div class="test-result" id="test-result" hidden>
+<p id="test-result-detail"></p>
+<small id="test-result-stamp"></small>
+</div>
 </div></div>
-<div class="panel"><h2>Letzter manueller Test</h2>
-<dl><dt>Zeit</dt><dd class="stamp" data-epoch="{manual_checked_at}">–</dd>
-<dt>Ergebnis</dt><dd>{manual_detail}</dd></dl></div>
 <div class="panel"><h2>Automatische Kontrolle</h2>
 <dl><dt>Nächste Prüfung</dt><dd id="countdown">–</dd>
 <dt>Erkannter Stand</dt><dd>{ocr}</dd>
@@ -77,7 +93,7 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <div><h2>Letzter Treffer</h2>{good}</div></section>
 <script>
 const next = {next_check};
-const lastRenderedManual = Number({manual_checked_at});
+
 let currentPhase = 'idle';
 async function refreshTestStatus() {{
   try {{
@@ -87,28 +103,44 @@ async function refreshTestStatus() {{
     currentPhase = job.phase;
     const box = document.querySelector('#test-box');
     const bar = document.querySelector('#test-progress');
+    const button = document.querySelector('#start-check');
+    const detail = document.querySelector('#test-result');
     const active = ['queued', 'running', 'ocr'].includes(job.phase);
+    const outcome = job.phase === 'done' ? job.outcome : null;
     box.dataset.phase = job.phase;
-    document.querySelector('#test-status').textContent = job.message || 'Noch kein manueller Test gestartet.';
-    const step = job.phase === 'queued' ? 'Anfrage angenommen' : job.phase === 'running' ? 'Bild und Messwerte' : job.phase === 'ocr' ? 'OCR-Auswertung' : job.phase === 'done' ? 'Abgeschlossen' : 'Bereit';
-    document.querySelector('#test-head').textContent = 'Aktueller Schritt: ' + step;
-    document.querySelector('form button').disabled = active;
-    bar.hidden = job.phase === 'idle';
-    const done = Math.min(Number(job.attempts) || 0, 5);
-    bar.max = 5;
-    if (job.phase === 'queued' || job.phase === 'running') bar.removeAttribute('value');
+    box.dataset.result = outcome === 'match' ? 'match' : (outcome && outcome !== 'ocr_only' ? 'fail' : 'neutral');
+    button.disabled = active;
+    button.textContent = active ? 'Prüfung läuft …' : 'Jetzt prüfen';
+
+    const title = job.phase === 'queued' ? 'Anfrage angenommen' :
+      job.phase === 'running' ? 'Bild und Messwerte' :
+      job.phase === 'ocr' ? 'OCR-Auswertung' :
+      job.phase === 'done' && outcome === 'match' ? 'Test erfolgreich – Werte stimmen überein' :
+      job.phase === 'done' && outcome === 'ocr_only' ? 'Test abgeschlossen – kein Vergleichswert' :
+      job.phase === 'done' ? 'Test abgeschlossen – keine Übereinstimmung' : 'Bereit';
+    document.querySelector('#test-head').textContent = title;
+    document.querySelector('#test-status').textContent = active ? (job.message || 'Prüfung läuft …') : '';
+    const max = Math.min(10, Math.max(1, Number(job.max_attempts) || Number({default_attempts})));
+    const done = Math.min(Number(job.attempts) || 0, max);
+    bar.hidden = !active;
+    bar.max = max;
+    if (job.phase !== 'ocr') bar.removeAttribute('value');
     else bar.value = done;
-    const seconds = job.started_at ? Math.floor(Math.max(0, (job.phase === 'done' ? job.checked_at : Date.now()/1000) - job.started_at)) : 0;
-    let meta = active ? 'Verstrichen: ' + seconds + ' s · keine verlässliche Restzeit möglich' : '';
-    if (job.phase === 'ocr') meta = 'Fortschritt: ' + done + '/5 OCR-Durchläufen · ' + meta;
-    if (job.phase === 'done') meta = 'Fertig · ' + done + ' OCR-Durchläufe · ' + seconds + ' s';
-    if (job.phase === 'idle') meta = 'Bereit für einen manuellen Test.';
-    document.querySelector('#test-meta').textContent = meta;
-    if (job.phase === 'done' && Number(job.checked_at) > lastRenderedManual + .001) {{
-      location.reload();
+    document.querySelector('#test-meta').textContent = active && job.phase === 'ocr' ?
+      'Versuche abgeschlossen: ' + done + ' / ' + max :
+      active ? 'Prüfung läuft …' :
+      job.phase === 'done' ? done + ' OCR-Versuche durchgeführt (max. ' + max + ')' : 'Bereit für den manuellen Test.';
+
+    if (job.phase === 'done') {{
+      detail.hidden = false;
+      document.querySelector('#test-result-detail').textContent = job.detail || job.message || 'Kein Ergebnis.';
+      document.querySelector('#test-result-stamp').textContent = job.checked_at ?
+        new Intl.DateTimeFormat('de-DE', {{day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'}}).format(new Date(job.checked_at*1000)) : '';
+    }} else {{
+      detail.hidden = true;
     }}
   }} catch (_) {{
-    document.querySelector('#test-meta').textContent = 'Live-Status nicht erreichbar. Verbindung zur App prüfen.';
+    document.querySelector('#test-meta').textContent = 'Status nicht erreichbar – Verbindung prüfen.';
   }}
 }}
 refreshTestStatus();
@@ -136,6 +168,7 @@ setInterval(() => {{
 
 POLARITIES = {"auto": "Automatisch", "light": "Hell", "dark": "Dunkel"}
 DECIMALS = {"0": "Volle Kubikmeter", "1": "1 Nachkommastelle", "2": "2 Nachkommastellen", "3": "3 Nachkommastellen"}
+ATTEMPTS = {str(value): str(value) for value in range(1, 11)}
 
 
 def select_options(choices, chosen):
@@ -157,22 +190,23 @@ def diagnostic_rows(data):
     )
 
 
-def start_panel(history_path, current_image, good_image, requested, default_decimals):
+def start_panel(history_path, current_image, good_image, requested, default_decimals, default_attempts):
     images = {"/aktuell.jpg": current_image, "/treffer.jpg": good_image}
     csrf_token = token_urlsafe(32)
     request_lock = Lock()
     progress = {
         "request_id": 0, "phase": "idle", "message": "Noch kein manueller Test gestartet.",
-        "attempts": 0, "started_at": 0, "checked_at": 0,
+        "attempts": 0, "max_attempts": default_attempts,
+        "started_at": 0, "checked_at": 0, "outcome": None, "detail": "",
     }
 
-    def update_progress(request_id, phase, message, attempts=0, checked_at=0):
+    def update_progress(request_id, phase, message, attempts=0, checked_at=0, outcome=None, detail=""):
         """Only the newest request may update the visible status."""
         with request_lock:
             if progress["request_id"] != request_id:
                 return
             progress.update(phase=phase, message=message, attempts=attempts,
-                            checked_at=checked_at)
+                            checked_at=checked_at, outcome=outcome, detail=detail)
 
     class Handler(BaseHTTPRequestHandler):
         def authorized(self):
@@ -233,6 +267,8 @@ def start_panel(history_path, current_image, good_image, requested, default_deci
                 request_status=request_status,
                 polarity_options=select_options(POLARITIES, settings.get("polarity", "auto")),
                 decimal_options=select_options(DECIMALS, str(settings.get("decimals", default_decimals))),
+                attempt_options=select_options(ATTEMPTS, str(settings.get("attempts", default_attempts))),
+                default_attempts=default_attempts,
                 manual_checked_at=manual.get("checked_at", 0),
                 manual_image_time=manual.get("image_time", 0),
                 manual_ocr=html.escape(str(manual.get("ocr") or "–")),
@@ -262,7 +298,7 @@ def start_panel(history_path, current_image, good_image, requested, default_deci
                 length = int(self.headers.get("Content-Length", "0"))
                 if not 0 < length <= 256:
                     raise ValueError("Invalid form length")
-                form = parse_qs(self.rfile.read(length).decode("ascii"), max_num_fields=4)
+                form = parse_qs(self.rfile.read(length).decode("ascii"), max_num_fields=5)
             except ValueError:
                 self.send_error(400)
                 return
@@ -272,14 +308,16 @@ def start_panel(history_path, current_image, good_image, requested, default_deci
                 return
             polarity = form.get("polarity", ["auto"])
             decimals = form.get("decimals", [str(default_decimals)])
-            if len(polarity) != 1 or polarity[0] not in POLARITIES or len(decimals) != 1 or decimals[0] not in DECIMALS:
+            attempts = form.get("attempts", [str(default_attempts)])
+            if (len(polarity) != 1 or polarity[0] not in POLARITIES or len(decimals) != 1
+                    or decimals[0] not in DECIMALS or len(attempts) != 1 or attempts[0] not in ATTEMPTS):
                 self.send_error(400)
                 return
-            settings = {"polarity": polarity[0], "decimals": int(decimals[0])}
+            settings = {"polarity": polarity[0], "decimals": int(decimals[0]), "attempts": int(attempts[0])}
             with request_lock:
                 request_id = progress["request_id"] + 1
                 settings["request_id"] = request_id
-                progress.update(request_id=request_id, phase="queued",
+                progress.update(request_id=request_id, max_attempts=settings["attempts"], outcome=None, detail="", phase="queued",
                                 message="Anfrage angenommen – warte auf die Bildprüfung.",
                                 attempts=0, started_at=time.time(), checked_at=0)
                 try:

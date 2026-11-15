@@ -38,6 +38,33 @@ def synthetic_meter():
 
 
 class SourceTests(TestCase):
+    def test_camera_finds_digit_strip_when_default_crop_cuts_off_digits(self):
+        frame = Image.new("RGB", (640, 480), "#467b88")
+        draw = ImageDraw.Draw(frame)
+        draw.rectangle((85, 52, 408, 110), fill="#031426")
+        draw.rectangle((285, 52, 408, 110), fill="#461629")
+        font = ImageFont.truetype("DejaVuSansMono.ttf", 38)
+        for index, digit in enumerate("10449227"):
+            draw.text((105 + 39 * index, 82), digit, font=font, anchor="mm", fill="#70cad5")
+        draw.text((110, 145), "GAS SER 29823", font=font, fill="#102427")
+        register, width, whole, fractions, mode = run.select_register(
+            frame, None, (52, 79, 564, 151), 350, detect_raw=True
+        )
+        self.assertEqual(("raw_auto", 5, 3), (mode, len(whole), len(fractions)))
+        self.assertEqual("10449.227",
+                         run.read_visible_digits(register, width, whole, fractions, True, "auto",
+                                                 profile=OCR_PROFILES[0]))
+
+    def test_raw_detector_does_not_treat_text_without_a_meter_window_as_digits(self):
+        frame = Image.new("RGB", (640, 480), "white")
+        ImageDraw.Draw(frame).text(
+            (85, 52), "10449227", font=ImageFont.truetype("DejaVuSansMono.ttf", 38), fill="black"
+        )
+        register, _, _, _, mode = run.select_register(
+            frame, None, (52, 79, 564, 151), 350, detect_raw=True
+        )
+        self.assertEqual(("manual", (512, 72)), (mode, register.size))
+
     def test_edge_camera_reads_fresh_jpeg_from_either_firmware(self):
         base = "http://meter"
         modern = base + "/camera?task=capture"

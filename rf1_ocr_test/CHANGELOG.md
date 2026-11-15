@@ -3,6 +3,8 @@
 ## In Vorbereitung
 
 - Das letzte Testbild ist beim Öffnen der Übersicht bereits ausgeklappt.
+- Der Kameramodus sucht die Ziffernreihe auch ohne vorhandene SLFork-Markierungen.
+- Im manuellen Test kannst du den Bildausschnitt mit Maus oder Finger ziehen. Sind die Ziffern danach noch schwer lesbar, weist die App auf Kamerawinkel, Fokus und Beleuchtung hin.
 
 ## 0.4.4 Alpha
 

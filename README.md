@@ -64,6 +64,8 @@ Der OCR-Sensor benötigt eine Mehrheit von mindestens zwei OCR-Profilen desselbe
 
 ## Kamerabild und Ausschnitt einrichten
 
+Im Kameramodus sucht die App die Ziffernreihe im Originalbild. Wenn der automatische Ausschnitt nicht passt, öffne **Test einstellen → Ausschnitt im Bild ziehen**. Markiere die gesamte Ziffernreihe mit Maus oder Finger und wähle **Jetzt prüfen**. Passt die Vorschau, kannst du den Ausschnitt für die Automatik übernehmen. Sind die Ziffern im gewählten Ausschnitt weiterhin schwer lesbar, prüfe Kamerawinkel, Fokus und Beleuchtung.
+
 Öffne **Manuellen Test** und wähle unter **Bildbereich** die manuelle Einstellung. Gib die Koordinaten im Originalbild in Pixeln ein. Wenn das Foto seitlich oder auf dem Kopf steht, wähle die passende **Bilddrehung**. Die Breite der Vorkommastellen bezieht sich auf den Ausschnitt nach der Drehung. Mit **Jetzt prüfen** siehst du das Auswertungsergebnis und kannst den getesteten Ausschnitt mitsamt Drehung für die Automatik übernehmen.
 
 Die Voreinstellung erkennt helle oder dunkle Ziffern automatisch. Weitere OCR-Versuche können ungleichmäßiges Licht im Ziffernfenster ausgleichen. Glanzstellen, die Ziffern verdecken, und starke Perspektivverzerrungen erfordern ein besseres Kamerabild. Bei Zählern mit Rollenfenster und kleinen Zeigern lässt sich mit **volle m³** das Rollenfenster einzeln testen. Die Zeiger selbst werden nicht ausgewertet.

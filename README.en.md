@@ -61,6 +61,8 @@ The standalone sensor requires a majority of at least two OCR profiles on the sa
 
 ## Set up the camera crop
 
+In camera mode, the app looks for the digit row in the original image. If it cannot find the right area, open the manual test settings and choose **Draw a crop on the image**. Draw around the full digit row and run the test. If the preview looks right, apply the tested crop to automatic checks. If the digits are still hard to read, check the camera angle, focus and lighting.
+
 In the **manual test**, select a manual image region and enter pixel coordinates from the original frame. Use **Clockwise rotation** for sideways or upside-down photos. Measure the width of the whole digits after rotation. Run the test to inspect the result, then apply the tested crop and rotation to automatic checks.
 
 Automatic digit color handles light or dark digits. Later OCR attempts can compensate for uneven lighting in the register. Reflections that cover digits and severe perspective distortion require a clearer camera image. For a meter with a digit register and small pointer dials, test the register at **whole cubic meters** precision. The OCR reads the digit window and leaves the pointer dials unread.

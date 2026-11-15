@@ -5,6 +5,7 @@
 - „Ausschnitt und Drehung lernen“ ist im Einrichtungsassistenten auswählbar und startet nach dem Speichern.
 - Die Selbsteinrichtung hat einen direkten Einstieg in der Übersicht und eine eigene Karte in den Einstellungen.
 - Der Zeitbalken läuft auch während des Bildabrufs. Status, Prüfzahl, Bestätigungen und getesteter Drehwinkel sind live sichtbar.
+- Die Option zum Ergänzen einer verdeckten Ziffer ist in den Automatik-Einstellungen direkt sichtbar.
 
 ## 0.4.9 Alpha
 

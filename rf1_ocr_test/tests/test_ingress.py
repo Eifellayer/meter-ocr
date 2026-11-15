@@ -814,6 +814,7 @@ class BrowserTests(IngressFixture):
             frame.locator("#view-settings").wait_for(state="visible")
             self.assertEqual("manual", self.rules["crop_mode"])
             self.assertEqual(90, self.rules["rotation"])
+            frame.get_by_role("checkbox", name="Einzelne verdeckte Ziffer ergänzen").wait_for(state="visible")
             Image.new("RGB", (640, 480), "white").save(self.root / "current.jpg", "JPEG")
             frame.locator("#auto-crop-draw-area").wait_for(state="visible")
             frame.locator("#auto-form select[name=decimals]").select_option("2")

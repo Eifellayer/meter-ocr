@@ -86,6 +86,9 @@ header{{display:flex;align-items:baseline;justify-content:space-between;gap:.5re
 .reflection-suggestion{{margin:.65rem 0;color:var(--muted);font-size:.92rem}}
 .reflection-actions{{display:flex;align-items:center;gap:.65rem;flex-wrap:wrap}}
 .reflection-actions form{{display:inline}}
+.reflection-settings{{padding:.75rem .9rem;border:1px solid var(--edge);border-radius:.65rem}}
+.reflection-settings > label{{color:inherit;font-size:.95rem}}
+.reflection-settings .help{{margin:.35rem 0 0 1.65rem}}
 .reflection-estimate mark{{background:light-dark(#ffdc72,#ffcf53);color:#302100;font-weight:700;padding:0 .16em}}
 .failure-recovery[data-state="waiting"]{{font-weight:650}}
 .activity-status{{margin:.15rem 0 0;color:var(--muted);font-size:.9rem;overflow-wrap:anywhere}}
@@ -579,6 +582,14 @@ name: Zählerstand (OCR)</code></pre>
 <input name="max_flow" type="text" inputmode="decimal" maxlength="10" value="{max_flow}" required></label>
 <label>Ziffernfarbe
 <select name="polarity">{auto_polarity_options}</select></label>
+<div class="reflection-settings setup-help" id="reflection-settings">
+<label class="check-option"><input type="checkbox" name="reflection_estimate_enabled" value="1" {reflection_enabled_checked}> Einzelne verdeckte Ziffer ergänzen</label>
+<details class="help" id="reflection-settings-help">
+<summary>ⓘ Spiegelungen und verdeckte Ziffern</summary>
+<p>Die App ergänzt eine Ziffer nur, wenn zwischen zwei sicheren Ständen genau ein Wert plausibel ist. Die berechnete Ziffer bleibt gelb. Ein manuell eingetragener Startwert mit Ablesezeit kann als erster Vergleichswert dienen.</p>
+<label class="check-option"><input type="checkbox" name="reflection_suggestion_hidden" value="1" {reflection_hide_checked}> Vorschlag bei wiederholt unlesbarer Ziffer ausblenden</label>
+</details>
+</div>
 <label>Bildbereich
 <select name="crop_mode" id="auto-crop-mode">{auto_crop_mode_options}</select></label>
 <div class="crop-draw" id="auto-crop-draw" hidden>
@@ -603,12 +614,6 @@ name: Zählerstand (OCR)</code></pre>
 <button type="submit" id="reset-auto-crop" class="crop-reset" form="reset-auto-crop-form"
         name="reset_crop" value="1" hidden>Ausschnitt zurücksetzen</button>
 </div>
-<details class="help setup-help" id="reflection-settings">
-<summary>ⓘ Spiegelungen und verdeckte Ziffern</summary>
-<label class="check-option"><input type="checkbox" name="reflection_estimate_enabled" value="1" {reflection_enabled_checked}> Einzelne verdeckte Ziffer ergänzen</label>
-<p>Die App ergänzt eine Ziffer nur, wenn zwischen zwei sicheren Ständen genau ein Wert plausibel ist. Die berechnete Ziffer bleibt gelb. Ein manuell eingetragener Startwert mit Ablesezeit kann als erster Vergleichswert dienen.</p>
-<label class="check-option"><input type="checkbox" name="reflection_suggestion_hidden" value="1" {reflection_hide_checked}> Vorschlag bei wiederholt unlesbarer Ziffer ausblenden</label>
-</details>
 </form>
 <form method="post" action="automatik" id="reset-auto-crop-form" hidden>
 <input type="hidden" name="lang" value="{language}">
@@ -737,7 +742,7 @@ document.querySelector('#open-reflection-settings').addEventListener('click', ()
   activateTab('settings');
   document.querySelector('#automatic-settings').open = true;
   const section = document.querySelector('#reflection-settings');
-  section.open = true;
+  document.querySelector('#reflection-settings-help').open = true;
   section.scrollIntoView({{block: 'nearest'}});
 }});
 const resetState = '{reset_state}';

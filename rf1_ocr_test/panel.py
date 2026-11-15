@@ -58,9 +58,9 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .test-result{{padding-top:.4rem;border-top:1px solid var(--edge);font-size:.93rem}}
 .test-result p{{margin:.25rem 0}}
 .test-box p{{margin:0}} .test-box small{{color:var(--muted);font-variant-numeric:tabular-nums}}
-.test-box progress{{width:100%;height:.7rem;margin:.45rem 0;border:0;border-radius:99px;overflow:hidden;accent-color:var(--accent)}}
+.test-box progress{{width:100%;height:.7rem;margin:.45rem 0;border:0;border-radius:99px;overflow:hidden;accent-color:light-dark(#718fa3,#819aab)}}
 .test-box progress::-webkit-progress-bar{{background:light-dark(#e1e9e7,#354842);border-radius:99px}}
-.test-box progress::-webkit-progress-value{{background:var(--accent);border-radius:99px}}
+.test-box progress::-webkit-progress-value{{background:light-dark(#718fa3,#819aab);border-radius:99px}}
 
 dl{{display:grid;grid-template-columns:minmax(8rem,11rem) minmax(0,1fr);gap:.5rem 1rem;margin:0}}
 dt{{color:var(--muted);font-size:.9rem}}
@@ -89,7 +89,7 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <select name="attempts">{auto_attempt_options}</select></label>
 <button type="submit">Speichern</button>
 </form>
-<p class="settings-note">Diese Einstellungen gelten dauerhaft für alle zukünftigen automatischen Prüfungen. Bereits gespeicherte Prüfungen werden nicht rückwirkend geändert.</p>
+<p class="settings-note">Gilt dauerhaft ab der nächsten automatischen Prüfung – auch nach Neustart. Bereits erfasste Prüfungen bleiben unverändert.</p>
 {auto_saved_notice}
 </div>
 <details class="panel manual-panel" id="manual-panel">
@@ -427,7 +427,8 @@ def start_panel(
                 boundaries = [int(number.strip()) for number in crop_text[0].split(",")]
                 if not (0 <= boundaries[0] < boundaries[2] <= 1920
                         and 0 <= boundaries[1] < boundaries[3] <= 1920
-                        and whole_width[0].isdigit() and 1 <= int(whole_width[0]) <= 1920):
+                        and re.fullmatch(r"[0-9]{1,4}", whole_width[0])
+                        and 1 <= int(whole_width[0]) <= 1920):
                     self.send_error(400)
                     return
                 crop_value = ",".join(map(str, boundaries))

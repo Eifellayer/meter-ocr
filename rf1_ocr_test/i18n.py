@@ -6,7 +6,7 @@ The language only affects text shown in the ingress interface.
 
 import re
 
-from checks import FALLBACK_NOTICE, uncertain_positions
+from checks import FALLBACK_NOTICE, LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, uncertain_positions
 
 
 EN_UI = {
@@ -15,6 +15,15 @@ EN_UI = {
     "Noch kein Testbild verfügbar.": "No test image available yet.",
     "Stand aus AI on the Edge oder aus dem gewählten Home-Assistant-Sensor": "Reading from AI on the Edge or the selected Home Assistant sensor",
     "Vergleichswert": "Reference reading",
+    "Die letzte Stelle kann beim Weiterdrehen schwer lesbar sein. Das kann zu Fehlmeldungen führen.":
+        "The last digit can be hard to read as it turns, which can cause false alerts.",
+    "Präzisionsmodus: Alle drei Nachkommastellen müssen stimmen": "Precision mode: Require all three decimal places to match",
+    "Prüfung bestanden mit Hinweis": "Check passed with a note",
+    "Test bestanden mit Hinweis": "Test passed with a note",
+    "Letzte Nachkommastelle unsicher": "Last decimal digit uncertain",
+    LAST_DIGIT_NOTICE: "Only the third decimal digit is unclear or differs.",
+    LAST_DIGIT_PASS: "The first two decimal places match. The third digit remains unconfirmed.",
+    "Für den Verbrauch verwendet die App den plausiblen Vergleichswert.": "The app uses the plausible reference reading to calculate consumption.",
     "Ablesung und Vergleichswert weichen ab": "Image reading and reference differ",
     "Vergleiche beide Werte mit dem Stand direkt am Zähler.": "Compare both readings with the value on the meter itself.",
     "Die App prüft automatisch erneut. Bleibt der Unterschied, vergleiche beide Werte mit dem Stand direkt am Zähler.":
@@ -418,6 +427,8 @@ def english_result(detail, status=None, decimals=0, readings=None):
     """Translate a saved result without changing the Home Assistant sensor state."""
     if not isinstance(detail, str):
         return "No result available."
+    if detail in (LAST_DIGIT_NOTICE, LAST_DIGIT_PASS):
+        return EN_UI[detail]
     if detail in EN_DETAILS:
         return EN_DETAILS[detail]
     for prefix in (

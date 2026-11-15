@@ -14,17 +14,17 @@ Die ausführliche Einführung, Voraussetzungen, Installation und Konfiguration f
 
 ## Automatische Kontrolle einstellen
 
-Die **dauerhaften Prüfregeln** stehen auf der Weboberfläche im Abschnitt **„Automatische Prüfung – Einstellungen“**. Dort lassen sich die Vergleichsgenauigkeit (volle m³ oder 1–3 Nachkommastellen), die **maximalen OCR-Versuche (1–10)** und die **Ziffernfarbe (automatisch, hell oder dunkel)** einstellen und mit **„Speichern“** dauerhaft übernehmen.
+Die **dauerhaften Prüfregeln** stehen auf der Weboberfläche im Abschnitt **„Automatische Prüfung – Einstellungen“**. Dort lassen sich die Vergleichsgenauigkeit (volle m³ oder 1–3 Nachkommastellen), die **maximalen OCR-Versuche (1–10)**, die **Ziffernfarbe (automatisch, hell oder dunkel)** und der **Bildausschnitt (automatisch oder fest)** einstellen und mit **„Speichern“** dauerhaft übernehmen.
 
 Die gespeicherten Werte gelten ab den folgenden automatischen Prüfungen, auch nach Neustart. Bei einer Änderung der Vergleichsgenauigkeit startet die Bestätigungszählung mit der nächsten automatischen Prüfung neu. Sie liegen in `/data/auto-pruefregeln.json` und haben für diese Prüfregeln Vorrang vor den entsprechenden Optionen der App-Konfiguration. Die anderen App-Einstellungen werden weiterhin in Home Assistant konfiguriert.
 
 ## Was bedeutet „Jetzt prüfen“?
 
-Den Bereich **„Manuellen Test öffnen“** bei Bedarf aufklappen. Dort lassen sich zusätzlich zur Ziffernfarbe, Genauigkeit und Anzahl der OCR-Versuche auch ein **eigener Bildausschnitt und die Breite der Vorkommastellen** einstellen. Diese Testoptionen ändern die automatische Kontrolle nicht. Der Button startet einen manuellen OCR-Test mit dem **letzten vorhandenen Foto**. Er erzeugt keine neue Kameraaufnahme. Die Statusanzeige zeigt **Anfrage → Bildabruf → OCR-Versuche → Ergebnis**. Im Infobereich neben dem Button steht die kurze Erklärung. Während der Prüfung ist der dezent hervorgehobene Button gesperrt und heißt **„Prüfung läuft …“**.
+Den Bereich **„Manuellen Test öffnen“** bei Bedarf aufklappen. Dort lassen sich zusätzlich zur Ziffernfarbe, Genauigkeit und Anzahl der OCR-Versuche auch ein **eigener Bildausschnitt und die Breite der Vorkommastellen** einstellen. Diese Testoptionen ändern die automatische Kontrolle nicht. Nach einem durchgeführten Test mit manuellem Ausschnitt kann man die Koordinaten direkt über **„Getesteten Ausschnitt für die Automatik übernehmen“** dauerhaft speichern. Der Button startet einen manuellen OCR-Test mit dem **letzten vorhandenen Foto**. Er erzeugt keine neue Kameraaufnahme. Die Statusanzeige zeigt **Anfrage → Bildabruf → OCR-Versuche → Ergebnis**. Im Infobereich neben dem Button steht die kurze Erklärung. Während der Prüfung ist der dezent hervorgehobene Button gesperrt und heißt **„Prüfung läuft …“**.
 
 Die Zahl der OCR-Versuche lässt sich **von 1 bis maximal 10** einstellen (Standard: 5). **Sobald ein Versuch den Vergleichswert bestätigt, endet die Prüfung sofort.** Der Balken zeigt die abgeschlossenen Versuche; eine Enddauer wird nicht geschätzt. Die maximal zehn Versuche sind unabhängig von den **fünf automatischen Treffern innerhalb von 24 Stunden**. Manuelle Tests zählen nicht als automatische Treffer.
 
-Die manuelle Testansicht zeigt **sofort das Ergebnis im Statusfeld**: sanftes Grün bei bestätigter Übereinstimmung, dezentes Rot bei Abweichung oder nicht lesbaren Ziffern, neutral ohne Referenzwert. Fehlerhinweise erklären verständlich, was zu prüfen ist. Doppelte Werte sind entfernt; die gemeinsamen Zählerwerte und Bilder stehen übersichtlich in der automatischen Kontrolle. Datum und Zeit sind kompakt. Technische Meldungen bleiben über Home Assistant verfügbar.
+Die manuelle Testansicht zeigt **sofort das Ergebnis im Statusfeld**: sanftes Grün bei bestätigter Übereinstimmung, dezentes Rot bei Abweichung oder nicht lesbaren Ziffern, neutral während der Prüfung und ohne Referenzwert. Das **OCR-Testbild** zeigt grüne Rahmen an gelesenen Ziffern und rote Rahmen an unklaren Stellen. Bei manuell gesetzten Ausschnitten sind die Ziffernflächen näherungsweise aufgeteilt. Die Rahmenfarbe sagt **nicht** aus, ob die Ziffer mit dem Referenzwert übereinstimmt. Unter **„Mehr Infos“** werden die einzelnen Leseversuche aufgeführt. Fehlerhinweise erklären verständlich, was zu prüfen ist. Doppelte Werte sind entfernt; die gemeinsamen Zählerwerte und Bilder stehen übersichtlich in der automatischen Kontrolle. Datum und Zeit sind kompakt. Technische Meldungen bleiben über Home Assistant verfügbar.
 
 ## Einstellungen und automatische Prüfung
 
@@ -33,3 +33,7 @@ Standardmäßig zählen **nur volle m³** (`vergleich_nachkommastellen: 0`). Nac
 Nach einem Treffer prüft die App üblicherweise stündlich, bei Unsicherheit etwa alle fünf Minuten. Nach vier Stunden ohne Übereinstimmung entsteht `review_due`. Optional kann eine offene Erinnerung nach weiteren 24 Stunden an die Companion App geschickt werden.
 
 Die Bilddateien liegen unter **Medien → Lokale Medien → rf1**. Die bestehenden Entitäten `sensor.rf1_kontrollbild` und `sensor.rf1_pruefstatus` behalten ihre IDs für vorhandene Dashboards und Automationen.
+
+## Projekt freiwillig unterstützen
+
+Der unaufdringliche PayPal-Link steht am unteren Rand der Weboberfläche und in der [GitHub-README](../README.md). Spenden sind freiwillig und keine Voraussetzung für die Nutzung.

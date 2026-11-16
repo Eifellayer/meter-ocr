@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.8 Stable
+
+- Die Selbsteinrichtung vergleicht zuerst kleine Drehungen in Ein-Grad-Schritten.
+- Die Einzelziffernsuche startet erst bei höchstens drei offenen Stellen und prüft bis zu sechs Varianten in höchstens zwölf Sekunden OCR-Zeit.
+
 ## 0.5.7 Stable
 
 - Die Selbsteinrichtung vergleicht die groben Bildkandidaten, bevor sie höchstens einen Bereich pro Bild feinjustiert.

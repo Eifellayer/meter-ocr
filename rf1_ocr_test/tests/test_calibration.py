@@ -203,7 +203,7 @@ class CalibrationTests(TestCase):
         sample = {"reference_time": 100, "actual_value": "12345", "raw_value": "12345"}
         self.job.examine(frame(1), None, sample, 100, RULES, lambda *_: "12?45",
                          lambda: False, refine_read=lambda *_: "12?45")
-        self.assertEqual(16, self.job.attempts)
+        self.assertEqual(10, self.job.attempts)
         self.assertEqual(1, len(self.job.seen))
         self.assertEqual(0, self.job.confirmations)
 
@@ -227,6 +227,36 @@ class CalibrationTests(TestCase):
         self.assertTrue(events[4:])
         self.assertTrue(all(item == ("fine", register.box) for item in events[4:]))
         self.assertEqual(1, self.job.confirmations)
+
+    def test_sweeps_in_one_degree_steps_then_refines_at_the_best_angle(self):
+        base = Layout((0, 0, 90, 25), 0, 55, method="register_window")
+        self.candidates.return_value = [base]
+        angles, fine = [], []
+
+        def rotate(layout, profile):
+            return "12345.???" if layout.rotation == 2 else "12???.???"
+
+        def refine(layout, profile):
+            fine.append(layout.rotation)
+            return "12345.678"
+
+        self.job.examine(frame(1), None, {"reference_required": False}, 100,
+                         {**RULES, "fraction_digits": 3}, rotate, lambda: False, refine_read=refine,
+                         angle_read=rotate, on_angle=lambda _, angle: angles.append(angle))
+        self.assertEqual([-1, 1, -2, 2, -3, 3], angles)
+        self.assertTrue(fine)
+        self.assertEqual({2}, set(fine))
+        self.assertEqual(1, self.job.confirmations)
+
+    def test_four_open_positions_never_start_fine_search(self):
+        from unittest.mock import Mock
+
+        fine = Mock(side_effect=AssertionError("Too few digits recognized"))
+        self.job.examine(frame(1), None, {"reference_required": False}, 100,
+                         {**RULES, "fraction_digits": 3}, lambda *_: "1234?.???",
+                         lambda: False, refine_read=fine, angle_read=lambda *_: "1234?.???")
+        fine.assert_not_called()
+        self.assertEqual(0, self.job.confirmations)
 
     def test_confirmed_whole_digits_skip_fine_search_despite_uncertain_decimals(self):
         from unittest.mock import Mock
@@ -341,5 +371,5 @@ class CalibrationImageTests(TestCase):
             if index < 2:
                 self.assertIsNone(selected)
         self.assertIsNotNone(selected)
-        self.assertEqual(-3, selected.rotation)
+        self.assertEqual(0, selected.rotation)
         self.assertEqual(3, job.confirmations)

@@ -26,6 +26,7 @@ TIME_LIMIT = 15 * 60
 IMAGE_WAIT_LIMIT = 360
 CAPTURE_INTERVAL = 5
 ANGLES = (-3, 3, -1, 1, -2, 2, -4, 4, -6, 6, -9, 9, -12, 12, -18, 18, 90, -90, 180)
+SMALL_ANGLES = (0, -1, 1, -2, 2, -3, 3)
 MAX_LAYOUTS_PER_IMAGE = 4
 FRAME_ATTEMPT_LIMIT = 30
 
@@ -116,18 +117,20 @@ def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False
     # Reserve space for neighbour inference and, where possible, the regular crop.
     neighbour_limit = MAX_LAYOUTS_PER_IMAGE - int(configured is not None and not prefer_configured)
     raw_limit = neighbour_limit - 1
-    angles = (ANGLES[first], 0, ANGLES[(first + 1) % len(ANGLES)])
+    angles = SMALL_ANGLES if offset == 0 else (0, ANGLES[first], ANGLES[(first + 1) % len(ANGLES)])
     if len(emitted) < raw_limit:
         ranked = []
         for angle in angles:
             adjusted = turn_crop(frame, angle, expand=False)
             for detected, score in find_raw_digit_rows(adjusted, rules["integer_digits"], rules["fraction_digits"]):
                 box = unrotate_box(detected[0], frame.size, angle)
-                ranked.append((score * (1.15 if angle == angles[0] else 1), angle, detected, box))
-        ranked.sort(key=lambda item: (-item[0], item[3][1], item[3][0]))
+                ranked.append((score, angle, detected, box))
+        ranked.sort(key=lambda item: (-item[0], abs(item[1]), item[3][1], item[3][0]))
         whole, fraction = rules["integer_digits"], rules["fraction_digits"]
         windows = []
-        for angle in dict.fromkeys((0, ANGLES[first] if abs(ANGLES[first]) <= 12 else 0, -3, 3)):
+        for angle in angles:
+            if abs(angle) > 12:
+                continue
             window = find_dark_register(turn_crop(frame, angle, expand=False), whole + fraction)
             if window and (not ranked or window[2] - window[0] > 1.25 * (ranked[0][3][2] - ranked[0][3][0])):
                 l, t, r, b = window
@@ -137,7 +140,9 @@ def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False
                 if proposal is not None:
                     windows.append(((r - l) * (b - t), proposal))
         if windows:
-            proposal = replace(max(windows, key=lambda row: row[0])[1], digit_boxes=())
+            proposal = max(windows, key=lambda row: row[0])[1]
+            proposal = replace(proposal, rotation=0, width=min(proposal.width, proposal.box[2] - proposal.box[0]),
+                               digit_boxes=())
             if unique(proposal):
                 yield replace(proposal, method="register_window")
         if ranked:
@@ -272,6 +277,13 @@ def contradicts_reference(readings, sample, digits):
     return sum(a != digit for a, digit in agreed) >= 3 and all(a != digit for a, digit in agreed)
 
 
+def uncertain_slots(readings, count):
+    rows = [str(value).replace(".", "").replace(",", "") for value in readings]
+    if any(len(row) != count for row in rows):
+        return list(range(count))
+    return [index for index, (a, b) in enumerate(zip(*rows)) if a != b or a not in "0123456789"]
+
+
 def refinement_workers():
     cores = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count() or 1
     try:
@@ -308,23 +320,14 @@ def refinement_layouts(layout, rules, readings):
         boxes = tuple((a, 0, b, 1000) for a, b in zip(edges, edges[1:]))
     else:
         boxes = layout.digit_boxes
-    rows = [str(value).replace(".", "").replace(",", "") for value in readings]
-    weak = [i for i in range(count) if any(len(row) != count or row[i:i+1] not in tuple("0123456789")
-                                         for row in rows) or len({row[i:i+1] for row in rows}) > 1]
+    weak = uncertain_slots(readings, count)
     pitch = median(r - l for l, _, r, _ in boxes)
     shifts = (0, -1, 1, -2, 2)
-    slot_sets = [{i} for i in weak] + [set(weak or range(count)), set(range(count))]
-    offsets = sorted(product(shifts, shifts[:3], shifts[:3], shifts[:3], shifts[:3], shifts[:3]),
-                     key=lambda values: (sum(map(abs, values)), -abs(values[0])))
-    for angle, dx, dy, dw, dh, spacing in offsets:
+    slot_sets = [{i} for i in weak]
+    offsets = sorted(product(shifts[:3], repeat=5), key=lambda values: sum(map(abs, values)))
+    for dx, dy, dw, dh, spacing in offsets:
         for slots in slot_sets:
-            if not any((angle, dx, dy, dw, dh, spacing)) and layout.digit_boxes:
-                continue
-            if angle and slots != set(range(count)):
-                continue
-            if not -180 <= layout.rotation + angle <= 180:
-                continue
-            if layout.width > rotated_width(right - left, bottom - top, layout.rotation + angle):
+            if not any((dx, dy, dw, dh, spacing)) and layout.digit_boxes:
                 continue
             trial = []
             for i, (l, t, r, b) in enumerate(boxes):
@@ -338,7 +341,7 @@ def refinement_layouts(layout, rules, readings):
                 valid = digit_box_settings(trial, count)
             except ValueError:
                 continue
-            yield replace(layout, rotation=layout.rotation + angle, digit_boxes=tuple(map(tuple, valid)),
+            yield replace(layout, digit_boxes=tuple(map(tuple, valid)),
                           method="refined")
 
 
@@ -383,6 +386,46 @@ class Calibration:
     def image_wait_expired(self, now):
         return now - (self.last_image_at if self.last_image_at is not None else self.started) >= IMAGE_WAIT_LIMIT
 
+    def sweep_angles(self, layout, readings, sample, rules, read, stop, report, tested, frame_ceiling):
+        whole, fraction = rules["integer_digits"], rules["fraction_digits"]
+        referenced = sample.get("reference_required") is not False
+        precision = rules["decimals"] if referenced else fraction
+
+        def score(candidate, values):
+            prefixes = [meter_prefix(value, precision, whole) for value in values]
+            agreement = prefixes[0] is not None and prefixes[0] == prefixes[1]
+            match = referenced and agreement and all(reference_rejection(
+                sample, compare_sample(sample, value, precision, integer_digits=whole)[0]) is None for value in values)
+            return match, agreement, -len(uncertain_slots(values, whole + fraction)), -abs(candidate.rotation)
+
+        best = score(layout, readings), layout, readings
+        center = 0 if abs(layout.rotation) <= 3 else layout.rotation
+        l, t, r, b = layout.box
+        for offset in SMALL_ANGLES:
+            if stop() or self.attempts >= min(frame_ceiling, self.attempt_limit - MIN_IMAGES):
+                break
+            angle = center + offset
+            if angle == layout.rotation or not -180 <= angle <= 180:
+                continue
+            trial = replace(layout, rotation=angle, width=min(layout.width, rotated_width(r - l, b - t, angle)))
+            if trial in tested:
+                continue
+            tested.add(trial)
+            self.attempts += 1
+            if report is not None:
+                report(self.attempts, angle)
+            try:
+                values = [read(trial, OCR_PROFILES[0])]
+                if stop():
+                    break
+                values.append(read(trial, OCR_PROFILES[1]))
+            except (OSError, ValueError, subprocess.SubprocessError):
+                continue
+            rank = score(trial, values)
+            if rank > best[0]:
+                best = rank, trial, values
+        return best[1], best[2]
+
     def status(self, now):
         return {"state": self.state, "stage": self.stage, "rotation": self.rotation, "variant": self.variant,
                 "tested": len(self.seen), "limit": self.limit, "duration": self.duration,
@@ -424,14 +467,11 @@ class Calibration:
                 return None
 
         best = (score(readings), layout, readings)
-        if best[0][-1] < min(2, whole) and layout.method != "register_window":
+        weak = [index + 1 for index in uncertain_slots(readings, whole + fraction)]
+        if not 1 <= len(weak) <= 3 or best[0][-1] < min(2, whole):
             return layout, readings
-        rows = [str(value).replace(".", "").replace(",", "") for value in readings]
-        weak = [index + 1 for index in range(whole + fraction)
-                if len({row[index:index + 1] for row in rows}) != 1
-                or rows[0][index:index + 1] not in tuple("0123456789")]
         # Bound the work per image, leaving budget for independent confirmations.
-        budget = min(12, max(0, min(frame_ceiling, self.attempt_limit - MIN_IMAGES) - self.attempts))
+        budget = min(6, max(0, min(frame_ceiling, self.attempt_limit - MIN_IMAGES) - self.attempts))
         variants = iter(refinement_layouts(layout, rules, readings))
         with ThreadPoolExecutor(max_workers=refinement_workers()) as pool:
             while budget and not stop():
@@ -503,7 +543,7 @@ class Calibration:
 
     def examine(self, frame, overlay, sample, stamp, rules, read, stop, baseline=None, on_attempt=None,
                 on_image=None, on_decision=lambda reason: None, refine_read=None, on_refine=None, on_regions=None,
-                on_selected=None):
+                on_selected=None, angle_read=None, on_angle=None):
         """Return a verified layout, checking two OCR profiles per distinct image."""
         if not self.remember_image(frame, stamp):
             return None
@@ -602,8 +642,15 @@ class Calibration:
                         and not self.confirmations and not self.focused):
                     refined = True
                     original = layout
-                    layout, readings = self.refine(layout, readings, sample, rules, refine_read, stop, on_refine,
-                                                   tested, frame_ceiling)
+                    if angle_read is not None:
+                        layout, readings = self.sweep_angles(layout, readings, sample, rules, angle_read, stop,
+                                                             on_angle, tested, frame_ceiling)
+                    resolved = [meter_prefix(value, precision, digits) for value in readings]
+                    if (resolved[0] is None or resolved[0] != resolved[1] or
+                            has_reference and any(reference_rejection(sample, compare_sample(
+                                sample, value, precision, integer_digits=digits)[0]) for value in readings)):
+                        layout, readings = self.refine(layout, readings, sample, rules, refine_read, stop, on_refine,
+                                                       tested, frame_ceiling)
                     if layout != original and not stop() and on_selected is not None:
                         on_selected(layout, readings)
                 if stop():

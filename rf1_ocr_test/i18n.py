@@ -238,6 +238,12 @@ EN_UI = {
         "Green: read. Yellow: OCR attempts disagree. Yellow with ?: probable position, unreadable digit. Red: unclear.",
     "Rahmen mit 100 % Übereinstimmung gefunden. Die Intensivprüfung bleibt bei diesem Rahmen und wartet auf ein neues Bild.":
         "Crop found with 100% agreement. The intensive check keeps this crop and waits for a new image.",
+    "Ziffernfeld ist lesbar.": "The digit row is readable.",
+    " Ohne Vergleichswert wartet die App auf einen plausiblen Anstieg oder einen Startwert.":
+        " Without a reference, the app waits for a plausible increase or a starting reading.",
+    "Drei Treffer mit 100 %: Grobprüfung beendet. Warte auf ein frisches Bild für die Gegenprobe.":
+        "Three matches at 100%: coarse search complete. Waiting for a fresh image for verification.",
+    " · Schwankende Stellen im Intensivtest (von links): ": " · Unstable positions in the intensive check (from the left): ",
     LAST_DIGIT_PASS: "The first two decimal places match. The third digit remains unconfirmed.",
     "Für den Verbrauch verwendet die App den plausiblen Vergleichswert.": "The app uses the plausible reference reading to calculate consumption.",
     "Ablesung und Vergleichswert weichen ab": "Image reading and reference differ",
@@ -362,6 +368,9 @@ EN_UI = {
     "Nach einer fehlgeschlagenen automatischen Prüfung folgen bis zu zwei weitere Bildprüfungen im Abstand von fünf Minuten. Bleiben alle drei Prüfungen erfolglos, wartet AI Meter Reader eine Stunde auf einen höheren Zählerstand oder ein neues Bild und versucht es dann erneut. Beleuchtung, Abstand und Fokus prüfen.":
         "After a failed automatic check, up to two more image checks follow at five-minute intervals. If all three fail, AI Meter Reader waits one hour for a higher reading or a new image, then tries again. Check lighting, distance, and focus.",
     "Max. OCR-Versuche": "Max. OCR attempts",
+    "Übereinstimmung für die Intensivprüfung (%)": "Agreement for the intensive check (%)",
+    "Ab diesem Wert wechselt die Selbsteinrichtung in die Intensivprüfung. Eine einzelne vermutete Ziffernposition kann sie auch früher gezielt prüfen.":
+        "Automatic setup switches to the intensive check at this threshold. It can check a single suspected digit position sooner.",
     "Ziffernfarbe": "Digit color",
     "Bildbereich (links, oben, rechts, unten)": "Image region (left, top, right, bottom)",
     "Manueller Ausschnitt (links, oben, rechts, unten)": "Custom crop (left, top, right, bottom)",

@@ -16,7 +16,10 @@ from tempfile import NamedTemporaryFile
 from urllib.parse import parse_qs, urlsplit
 
 from app_channel import APP_NAME, NAMESPACE
-from calibration import DEFAULT_LIMIT, MIN_IMAGE_LIMIT, MAX_IMAGES, search_region
+from calibration import (
+    DEFAULT_INTENSIVE_AGREEMENT, DEFAULT_LIMIT, MIN_IMAGE_LIMIT, MAX_IMAGES,
+    search_region, valid_intensive_agreement,
+)
 from meter_learning import GEOMETRY_REPAIR_FAILURES
 from checks import (DEFAULT_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, WARNING_DETAIL_AFTER, meter_prefix,
                     LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, REFLECTION_SUGGEST_AFTER, STANDALONE_PENDING, STANDALONE_REJECTED_NOTICE,
@@ -676,6 +679,9 @@ name: Zählerstand (OCR)</code></pre>
 <small {slfork_interval_hidden}>Bei AI on the Edge / SLFork liegen reguläre Prüfungen mindestens fünf Minuten auseinander.</small></label>
 <label>Max. OCR-Versuche
 <select name="attempts">{auto_attempt_options}</select></label>
+<label>Übereinstimmung für die Intensivprüfung (%)
+<input name="intensive_agreement" type="number" min="1" max="100" step="1" value="{intensive_agreement}" required>
+<small>Ab diesem Wert wechselt die Selbsteinrichtung in die Intensivprüfung. Eine einzelne vermutete Ziffernposition kann sie auch früher gezielt prüfen.</small></label>
 <label title="Qmax steht auf deinem Zähler. Die Vorgabe für einen G4 beträgt 6 m³/h.">Maximaler Durchfluss (m³/h)
 <input name="max_flow" type="text" inputmode="decimal" maxlength="10" value="{max_flow}" required></label>
 <label>Ziffernfarbe
@@ -1583,13 +1589,15 @@ function refreshCalibration(status) {{
     }} else if (reason === 'collecting') {{
       message = 'Grobtests: ' + status.coarse_attempts + '/' + status.coarse_limit + '.';
     }} else if (status.stage === 'verify_wait' && reason === 'accepted') {{
-      message = 'Treffer gesammelt. Warte auf ein frisches Bild für die Gegenprobe.';
+      message = status.coarse_complete ?
+        'Drei Treffer mit 100 %: Grobprüfung beendet. Warte auf ein frisches Bild für die Gegenprobe.' :
+        'Treffer gesammelt. Warte auf ein frisches Bild für die Gegenprobe.';
     }} else if (reason === 'reference_unavailable') {{
       message = 'Grün bedeutet lesbar. Ein gültiger Vergleichswert für dieses Bild fehlt.';
     }} else if (reason === 'reference_mismatch') {{
       message = 'Grün bedeutet lesbar. Der abgelesene Stand passt noch nicht zum Vergleichswert.';
     }} else if (reason === 'await_movement') {{
-      message = 'Ziffern sind lesbar. Ohne Vergleichswert wartet die App auf einen plausiblen Anstieg oder einen Startwert.';
+      message = 'Ziffernfeld ist lesbar.';
     }} else if (reason === 'accepted' && status.candidate_agreement === 100) {{
       message = 'Rahmen mit 100 % Übereinstimmung gefunden. Die Intensivprüfung bleibt bei diesem Rahmen und wartet auf ein neues Bild.';
     }} else if (status.confirmations >= 2) {{
@@ -1611,6 +1619,9 @@ function refreshCalibration(status) {{
   if (active && status.preview?.last_digit_hint) {{
     message += ' Vorschlag für die letzte Rolle gefunden. Warte auf Bestätigung mit einem neuen Bild.';
   }}
+  if (active && (status.awaiting_start_value || reason === 'await_movement')) {{
+    message += ' Ohne Vergleichswert wartet die App auf einen plausiblen Anstieg oder einen Startwert.';
+  }}
   if (active && status.simplified) {{
     message += ' Für den Rahmen zählen die ersten zwei Nachkommastellen.';
   }}
@@ -1621,8 +1632,11 @@ function refreshCalibration(status) {{
     (active && status.shortlist?.length ?
       ' · Beste Kandidaten: ' + status.shortlist.map(percent => percent + '%').join(', ') : '') +
     (active ? ' · Rechenzeit übrig: ' + clock + ' min' : '');
+  const weakSlots = status.stress_weak_slots || [];
+  const stabilityNote = weakSlots.length ?
+    ' · Schwankende Stellen im Intensivtest (von links): ' + weakSlots.join(', ') : '';
   const tone = status.state === 'saved' ? 'ok' : ['failed', 'timeout', 'image_timeout', 'save_failed'].includes(status.state) ? 'error' : '';
-  label.textContent = (status.automatic ? 'Automatische Nachjustierung · ' : '') + message + ' ' + detail;
+  label.textContent = (status.automatic ? 'Automatische Nachjustierung · ' : '') + message + ' ' + detail + stabilityNote;
   label.dataset.tone = tone;
   document.querySelector('#calibration-overview').dataset.tone = tone;
   document.querySelector('#calibration-overview').hidden = false;
@@ -2540,6 +2554,7 @@ def start_panel(
                 setup_first_run=str(bool(setup_pending or reset_state == "done")).lower(),
                 precision_hidden="" if auto_rules["decimals"] == 3 else "hidden",
                 precision_checked="checked" if auto_rules.get("precision_mode") else "",
+                intensive_agreement=auto_rules.get("intensive_agreement", DEFAULT_INTENSIVE_AGREEMENT),
                 reflection_enabled_checked="checked" if auto_rules.get("reflection_estimate_enabled") else "",
                 fine_alignment_checked="checked" if auto_rules.get("fine_alignment_enabled") else "",
                 adaptive_interval_checked="checked" if auto_rules.get("adaptive_interval_enabled") else "",
@@ -3107,7 +3122,17 @@ def start_panel(
                         ))
                         if not valid_interval_minutes(interval_minutes):
                             raise ValueError("Ungültiges Prüfintervall")
+                        try:
+                            intensive_agreement = int(field("intensive_agreement", str(old_rules.get(
+                                "intensive_agreement", DEFAULT_INTENSIVE_AGREEMENT))))
+                        except ValueError:
+                            intensive_agreement = 0
+                        if not valid_intensive_agreement(intensive_agreement):
+                            problem(400, "Die Übereinstimmung für die Intensivprüfung muss zwischen 1 und 100 Prozent liegen.",
+                                    "Enter an intensive-check agreement threshold between 1 and 100 percent.")
+                            return
                         save_auto_rules({"decimals": int(decimals[0]), "attempts": int(attempts[0]),
+                                         "intensive_agreement": intensive_agreement,
                                          "precision_mode": field("precision_mode") == "1",
                                          "reflection_estimate_enabled": field("reflection_estimate_enabled") == "1",
                                          "fine_alignment_enabled": field("fine_alignment_enabled") == "1",

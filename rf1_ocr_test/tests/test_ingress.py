@@ -278,6 +278,19 @@ class IngressTests(IngressFixture):
         status_en = json.loads(self.request("/automatic?lang=en")[0])
         self.assertIn("value on the meter itself", status_en["detail"])
 
+    def test_intensive_agreement_defaults_to_eighty_and_saves_a_valid_override(self):
+        page = self.request("/")[0]
+        self.assertRegex(page, r'name="intensive_agreement"[^>]*value="80"')
+        form = dict(decimals=2, attempts=3, crop_mode="auto", polarity="auto")
+        self.assertEqual(303, self.submit("/automatik", intensive_agreement=87, **form)[0])
+        self.assertEqual(87, self.rules["intensive_agreement"])
+        self.assertRegex(self.request("/")[0], r'name="intensive_agreement"[^>]*value="87"')
+        for invalid in (0, 101, "80.5"):
+            self.assertEqual(400, self.submit("/automatik", intensive_agreement=invalid, **form)[0])
+            self.assertEqual(87, self.rules["intensive_agreement"])
+        self.assertEqual(303, self.submit("/automatik", **form)[0])
+        self.assertEqual(87, self.rules["intensive_agreement"])
+
     def test_last_digit_warning_and_optional_precision_mode(self):
         self.rules.update(decimals=3)
         page = self.request("/")[0]
@@ -778,8 +791,14 @@ class BrowserTests(IngressFixture):
                                     preview={"frame": 15, "crop": 15, "reading": "12345.67?", "reason": "accepted"})
             overview.filter(has_text="Rahmen mit 100 % Übereinstimmung gefunden.").wait_for()
             display.get_by_text("Gelb mit ?: Stelle vermutet, Ziffer nicht lesbar.", exact=False).wait_for()
+            self.calibration.update(state="waiting", confirmations=3, awaiting_start_value=True,
+                                    preview={"frame": 15, "reason": "await_movement"})
+            overview.filter(has_text="auf einen plausiblen Anstieg oder einen Startwert").wait_for()
+            self.calibration.update(state="testing", stage="capture", preview={"frame": 15})
+            overview.filter(has_text="Kamerabild wird abgerufen").filter(
+                has_text="auf einen plausiblen Anstieg oder einen Startwert").wait_for()
             self.calibration.update(state="waiting", tested=1, attempts=0, confirmations=0,
-                                    preview={"frame": 15, "reason": "no_region"})
+                                    awaiting_start_value=False, preview={"frame": 15, "reason": "no_region"})
             page.locator("#calibration-overview-state").filter(has_text="Noch kein Ziffernbereich gefunden").wait_for()
             self.calibration["tested"] = 73
             page.locator("#calibration-overview-state").filter(has_text="Grenze das Ziffernfeld im Kamerabild ein").wait_for()

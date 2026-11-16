@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.15 Stable
+
+- Die Übereinstimmung für den Wechsel von der Grobsuche zur Intensivprüfung ist einstellbar. Der Standardwert beträgt 80 Prozent.
+- Der angezeigte Prozentwert berücksichtigt alle sichtbaren Ziffernpositionen. Bei einer offenen Stelle kann das Bild den Rahmen bestätigen, die Anzeige bleibt unter 100 Prozent.
+- Ergibt eine frühe Intensivprüfung keinen Treffer, setzt das nächste Bild die noch verfügbare Grobsuche fort.
+- Der Startwert-Hinweis bleibt während weiterer Bildprüfungen sichtbar.
+- Beim dritten vollständig übereinstimmenden Bild prüft die App den ausgewählten Rahmen sofort mit zusätzlichen OCR-Profilen. Die Gegenprobe bleibt unabhängig.
+
 ## 0.5.14 Stable
 
 - Ab 90 Prozent Übereinstimmung beginnt die Intensivprüfung. Bei verlässlichen 100 Prozent bleibt die Prüfung beim gefundenen Rahmen.

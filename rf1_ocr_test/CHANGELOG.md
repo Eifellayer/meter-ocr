@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.2 Stable
+
+- Die Selbsteinrichtung lässt sich auf das markierte Ziffernfeld im aktuellen Kamerabild einschränken.
+- Längere Ziffernreihen werden bei der automatischen Rahmensuche nicht in passend kurze Kandidaten zerlegt.
+
 ## 0.5.1 Stable
 
 - Die Selbsteinrichtung zeigt das Kamerabild mit markiertem Suchbereich, den gedrehten Ausschnitt und die Ziffern pro OCR-Versuch live an.

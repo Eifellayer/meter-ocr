@@ -16,7 +16,7 @@ from tempfile import NamedTemporaryFile
 from urllib.parse import parse_qs, urlsplit
 
 from app_channel import APP_NAME, NAMESPACE
-from calibration import DEFAULT_LIMIT, MIN_IMAGE_LIMIT, MAX_IMAGES
+from calibration import DEFAULT_LIMIT, MIN_IMAGE_LIMIT, MAX_IMAGES, search_region
 from meter_learning import GEOMETRY_REPAIR_FAILURES
 from checks import (DEFAULT_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, WARNING_DETAIL_AFTER, meter_prefix,
                     LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, REFLECTION_SUGGEST_AFTER, STANDALONE_PENDING, STANDALONE_REJECTED_NOTICE,
@@ -491,6 +491,20 @@ name: Zählerstand (OCR)</code></pre>
 <input type="hidden" name="csrf" value="{csrf}">
 <label id="calibration-limit-label">Höchstens so viele unterschiedliche Bilder
 <input id="calibration-limit" name="image_limit" type="number" min="{calibration_min}" max="{calibration_max}" value="{calibration_limit}" required></label>
+<details class="setup-help" id="calibration-region">
+<summary>Suchbereich im Kamerabild eingrenzen</summary>
+<p>Ziehe einen Rahmen um das Ziffernfeld. Lass etwas Rand und spare die Seriennummer aus.</p>
+<div class="crop-draw-image" id="calibration-region-picker" hidden>
+<img id="calibration-region-image" alt="Kamerabild zur Auswahl des Suchbereichs" draggable="false">
+<span class="crop-draw-outline" id="calibration-region-outline" hidden></span>
+</div>
+<p id="calibration-region-empty" hidden>Kamerabild fehlt. Starte eine Prüfung oder die Selbsteinrichtung, um ein Bild zu laden.</p>
+<input type="hidden" id="calibration-region-value" name="region">
+<div class="crop-actions">
+<button type="submit" name="action" value="start" id="calibration-guided-start" disabled>Im markierten Bereich suchen</button>
+<button type="button" id="calibration-region-reset">Markierung löschen</button>
+</div>
+</details>
 <div class="crop-actions">
 <button id="calibration-start" type="submit" name="action" value="start">Selbsteinrichtung starten</button>
 <button id="calibration-restore" type="submit" name="action" value="restore" formnovalidate {calibration_restore_hidden}>Gesicherten Ausschnitt wiederherstellen</button>
@@ -1284,6 +1298,75 @@ calibrationProposal.addEventListener('click', () => {{
   document.querySelector('#open-manual-settings').click();
 }});
 
+const regionDetails = document.querySelector('#calibration-region');
+const regionPicker = document.querySelector('#calibration-region-picker');
+const regionPhoto = document.querySelector('#calibration-region-image');
+const regionOutline = document.querySelector('#calibration-region-outline');
+const regionValue = document.querySelector('#calibration-region-value');
+const regionStartButton = document.querySelector('#calibration-guided-start');
+const regionEmpty = document.querySelector('#calibration-region-empty');
+let recentCalibrationImage = '';
+let recentCurrentImage = '';
+let regionDrag = null;
+function showRegionPhoto() {{
+  if (!regionDetails.open || regionValue.value || regionDrag) return;
+  const url = recentCalibrationImage || 'aktuell.jpg?v=' + encodeURIComponent(recentCurrentImage);
+  if (regionPhoto.getAttribute('src') !== url) regionPhoto.src = url;
+}}
+regionPhoto.onload = () => {{ regionPicker.hidden = false; regionEmpty.hidden = true; }};
+regionPhoto.onerror = () => {{
+  const fallback = 'aktuell.jpg?v=' + encodeURIComponent(recentCurrentImage);
+  if (regionPhoto.getAttribute('src') !== fallback) {{ regionPhoto.src = fallback; return; }}
+  regionPicker.hidden = true;
+  regionEmpty.hidden = false;
+}};
+regionDetails.addEventListener('toggle', showRegionPhoto);
+function regionRect(event) {{
+  const rect = regionPhoto.getBoundingClientRect();
+  const axis = (value, origin, size) => Math.round(1000 * Math.max(0, Math.min(1, (value - origin) / size)));
+  return [axis(event.clientX, rect.left, rect.width), axis(event.clientY, rect.top, rect.height)];
+}}
+function paintRegion(box) {{
+  regionOutline.hidden = !box;
+  if (!box) return;
+  const [l, t, r, b] = box;
+  ['left', 'top', 'width', 'height'].forEach((key, i) => {{
+    regionOutline.style[key] = [l, t, r - l, b - t][i] / 10 + '%';
+  }});
+}}
+function selectedRegion(event) {{
+  const [x, y] = regionRect(event);
+  return [Math.min(x, regionDrag.x), Math.min(y, regionDrag.y), Math.max(x, regionDrag.x), Math.max(y, regionDrag.y)];
+}}
+regionPicker.addEventListener('pointerdown', event => {{
+  if (event.button !== 0 || regionDrag) return;
+  const [x, y] = regionRect(event);
+  regionDrag = {{id: event.pointerId, x, y}};
+  regionPicker.setPointerCapture(event.pointerId);
+  event.preventDefault();
+}});
+regionPicker.addEventListener('pointermove', event => {{
+  if (regionDrag?.id === event.pointerId) paintRegion(selectedRegion(event));
+}});
+regionPicker.addEventListener('pointerup', event => {{
+  if (regionDrag?.id !== event.pointerId) return;
+  const box = selectedRegion(event);
+  regionDrag = null;
+  if (box[2] - box[0] >= 20 && box[3] - box[1] >= 20) regionValue.value = box.join(',');
+  paintRegion(regionValue.value ? regionValue.value.split(',').map(Number) : null);
+  regionStartButton.disabled = !regionValue.value;
+}});
+regionPicker.addEventListener('pointercancel', () => {{
+  regionDrag = null;
+  paintRegion(regionValue.value ? regionValue.value.split(',').map(Number) : null);
+}});
+document.querySelector('#calibration-region-reset').addEventListener('click', () => {{
+  regionValue.value = '';
+  regionStartButton.disabled = true;
+  paintRegion(null);
+  showRegionPhoto();
+}});
+
 function refreshCalibrationImages(preview) {{
   const reasons = {{
     no_region: 'In diesem Bild wurde kein Ziffernbereich gefunden.',
@@ -1411,6 +1494,10 @@ async function refreshTestStatus() {{
     if (!response.ok) throw new Error();
     const job = await response.json();
     if (sendingCheck) return;
+    const frameRevision = job.calibration?.preview?.frame;
+    recentCalibrationImage = frameRevision ? 'lernvorschau.jpg?bild=frame&v=' + encodeURIComponent(frameRevision) : '';
+    recentCurrentImage = job.current_image || '';
+    showRegionPhoto();
     refreshCalibration(job.calibration);
     const calibrating = ['waiting', 'testing'].includes(job.calibration?.state);
     document.querySelector('#calibration-restore').hidden = !job.calibration_backup || calibrating;
@@ -2754,7 +2841,11 @@ def start_panel(
                     limit = int(field("image_limit", str(DEFAULT_LIMIT))) if action == "start" else 0
                     if action == "start" and not MIN_IMAGE_LIMIT <= limit <= MAX_IMAGES:
                         raise ValueError("Invalid calibration image limit")
-                    control_calibration(action, limit)
+                    region = search_region(field("region")) if action == "start" else None
+                    if region:
+                        control_calibration(action, limit, region=region)
+                    else:
+                        control_calibration(action, limit)
                 except ValueError:
                     problem(400, "Bitte Bildquelle einrichten, die Automatik fortsetzen und das Bildlimit prüfen.",
                             "Set up an image source, resume automatic checks and check the image limit.")

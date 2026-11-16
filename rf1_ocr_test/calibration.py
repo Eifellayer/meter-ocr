@@ -1,6 +1,6 @@
 """Bounded search for a reproducible meter crop and rotation."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from hashlib import sha256
 from math import ceil, cos, floor, radians, sin
 import subprocess
@@ -155,6 +155,35 @@ def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False
                 yield trial
 
 
+def search_region(value):
+    if not value:
+        return None
+    parts = tuple(map(int, value.split(",")))
+    left, top, right, bottom = parts
+    if not (0 <= left < right <= 1000 and 0 <= top < bottom <= 1000
+            and right - left >= 20 and bottom - top >= 20):
+        raise ValueError("Invalid calibration search region")
+    return parts
+
+
+def guided_layouts(frame, overlay, rules, offset, current, region):
+    left, top, right, bottom = (round(value * size / 1000) for value, size in
+                                zip(region, (frame.width, frame.height) * 2))
+    if right - left < 8 or bottom - top < 8:
+        return
+    area = left, top, right, bottom
+    local_rules = {key: value for key, value in rules.items() if key != "crop"}
+    seed = None
+    if current:
+        a, b, c, d = current.box
+        if left <= a < c <= right and top <= b < d <= bottom:
+            seed = replace(current, box=(a - left, b - top, c - left, d - top))
+    cropped_overlay = overlay.crop(area) if overlay is not None and overlay.size == frame.size else None
+    for layout in layouts(frame.crop(area), cropped_overlay, local_rules, offset, seed):
+        a, b, c, d = layout.box
+        yield replace(layout, box=(a + left, b + top, c + left, d + top))
+
+
 def reference_rejection(sample, status):
     if sample.get("reference_is_fallback") or not sample.get("reference_time"):
         return "reference_unavailable"
@@ -186,6 +215,7 @@ class Calibration:
     duration: int = TIME_LIMIT
     attempt_limit: int = MAX_ATTEMPTS
     previous_layout: Layout | None = None
+    region: tuple | None = None
 
     def expired(self, now):
         return now - self.started >= self.duration
@@ -251,8 +281,10 @@ class Calibration:
         precision = rules["decimals"] if has_reference else rules["fraction_digits"]
         digits = rules["integer_digits"]
         flow = rules["max_flow_lph"]
-        candidates = layouts(frame, overlay, rules, len(self.seen) - 1, self.candidate or self.previous_layout,
-                             prefer_configured=self.automatic)
+        seed = self.candidate or self.previous_layout
+        candidates = (guided_layouts(frame, overlay, rules, len(self.seen) - 1, seed, self.region)
+                      if self.region else layouts(frame, overlay, rules, len(self.seen) - 1, seed,
+                                                  prefer_configured=self.automatic))
         examined = False
         for index, layout in enumerate(candidates, start=1):
             if stop() or self.attempts >= self.attempt_limit:

@@ -119,6 +119,10 @@ def find_raw_digit_row(frame, whole_digits, fraction_digits):
                     not 0.66 * pitch <= gap <= 1.38 * pitch for gap in pitches
                 ):
                     continue
+                if any(0.55 * pitch <= centers[0] - (box[0] + box[2]) / 2 <= 1.45 * pitch
+                       and h * .65 <= box[3] - box[1] <= h * 1.45
+                       and abs(box[3] - row[0][3]) <= h * .30 for box in boxes[:index]):
+                    continue
                 # Reject runs of ordinary label text with no visible meter window around them.
                 left, right = row[0][0], row[-1][2]
                 top, bottom = min(box[1] for box in row), max(box[3] for box in row)
@@ -306,63 +310,73 @@ def find_neighbour_digit_rows(frame, whole_digits, fraction_digits, limit=2):
     if count < 2:
         return []
     candidates = {}
-    for threshold in (90, 150):
-        for light_digits in (True, False):
-            boxes = digit_components(image, threshold, light_digits)
-            seeds = sorted(boxes, key=lambda box: box[3] - box[1], reverse=True)[:14]
-            for seed in seeds:
-                left, top, right, bottom = seed
-                tall = bottom - top
-                center = (left + right) / 2
-                nearby = [box for box in boxes if abs((box[0] + box[2]) / 2 - center) <= count * tall * 1.7
-                          and abs((box[1] + box[3]) - (top + bottom)) <= tall * .65
-                          and tall * .55 <= box[3] - box[1] <= tall * 1.48]
-                centers = [(box[0] + box[2]) / 2 for box in nearby]
-                window = _meter_window(image, seed, count)
-                if len(nearby) < 2 and window is None:
+    scans = [(light, digit_components(image, threshold, light))
+             for threshold in (90, 150) for light in (True, False)]
+    all_boxes = set(box for _, boxes in scans for box in boxes)
+    for light_digits, boxes in scans:
+        seeds = sorted(boxes, key=lambda box: box[3] - box[1], reverse=True)[:14]
+        for seed in seeds:
+            left, top, right, bottom = seed
+            tall = bottom - top
+            if any(other[3] - other[1] > tall * 1.55 and other[0] <= right and other[2] >= left
+                   and abs(other[1] + other[3] - top - bottom) <= tall for other in all_boxes):
+                continue
+            center = (left + right) / 2
+            nearby = [box for box in boxes if abs((box[0] + box[2]) / 2 - center) <= count * tall * 1.7
+                      and abs((box[1] + box[3]) - (top + bottom)) <= tall * .65
+                      and tall * .55 <= box[3] - box[1] <= tall * 1.48]
+            # A denser run can be a serial number. Never sample it by skipping glyphs.
+            if len(nearby) > count:
+                continue
+            centers = [(box[0] + box[2]) / 2 for box in nearby]
+            window = _meter_window(image, seed, count)
+            if len(nearby) < 2 and window is None:
+                continue
+            pitches = {round(tall * factor) for factor in (.68, .85, 1.05, 1.25)}
+            for other in sorted(centers, key=lambda x: abs(x - center))[:8]:
+                for skips in range(1, min(count, 4)):
+                    pitch = abs(other - center) / skips
+                    if .48 * tall <= pitch <= 1.7 * tall:
+                        pitches.add(round(pitch))
+            hypotheses = [(center - pitch * slot - (gap if slot >= whole_digits else 0), pitch, gap)
+                          for pitch in sorted(pitches) if pitch >= 5
+                          for gap in ((0, round(pitch * .35)) if fraction_digits else (0,))
+                          for slot in range(count)]
+            if window:
+                start, end = window
+                pitch = (end - start) / count
+                hypotheses.append((start + pitch / 2, pitch, 0))
+            for start, pitch, gap in hypotheses:
+                grid = [start + i * pitch + (gap if i >= whole_digits else 0) for i in range(count)]
+                a, b = round(grid[0] - pitch / 2), round(grid[-1] + pitch / 2)
+                if not (0 <= a < b <= width):
                     continue
-                pitches = {round(tall * factor) for factor in (.68, .85, 1.05, 1.25)}
-                for other in sorted(centers, key=lambda x: abs(x - center))[:8]:
-                    for skips in range(1, min(count, 4)):
-                        pitch = abs(other - center) / skips
-                        if .48 * tall <= pitch <= 1.7 * tall:
-                            pitches.add(round(pitch))
-                hypotheses = [(center - pitch * slot - (gap if slot >= whole_digits else 0), pitch, gap)
-                              for pitch in sorted(pitches) if pitch >= 5
-                              for gap in ((0, round(pitch * .35)) if fraction_digits else (0,))
-                              for slot in range(count)]
-                if window:
-                    start, end = window
-                    pitch = (end - start) / count
-                    hypotheses.append((start + pitch / 2, pitch, 0))
-                for start, pitch, gap in hypotheses:
-                    grid = [start + i * pitch + (gap if i >= whole_digits else 0) for i in range(count)]
-                    a, b = round(grid[0] - pitch / 2), round(grid[-1] + pitch / 2)
-                    if not (0 <= a < b <= width):
-                        continue
-                    matches = []
-                    residual = 0.0
-                    for x in grid:
-                        closest = min(nearby, key=lambda box: abs((box[0] + box[2]) / 2 - x))
-                        distance = abs((closest[0] + closest[2]) / 2 - x)
-                        match = closest if distance <= pitch * .40 else None
-                        matches.append(match)
-                        if match:
-                            residual += distance / pitch
-                    support = sum(match is not None for match in matches)
-                    if support < 2 and (not window or support != 1):
-                        continue
-                    if support < 2 and abs(a - window[0]) + abs(b - window[1]) > pitch * .7:
-                        continue
-                    matched = [box for box in matches if box is not None]
-                    y1, y2 = min(box[1] for box in matched), max(box[3] for box in matched)
-                    margin = max(2, round(tall * .15))
-                    bounds = (a, max(0, y1 - margin), b, min(height, y2 + margin))
-                    edge_error = ((abs(a - window[0]) + abs(b - window[1])) / pitch) if window else 0
-                    score = support * 2 - residual - min(2.0, edge_error * .5)
-                    key = (round(a / 3), round(b / 3), round(y1 / 3))
-                    if key not in candidates or candidates[key][0] < score:
-                        candidates[key] = (score, bounds, grid, matches, pitch, light_digits, window)
+                matches = []
+                residual = 0.0
+                for x in grid:
+                    closest = min(nearby, key=lambda box: abs((box[0] + box[2]) / 2 - x))
+                    distance = abs((closest[0] + closest[2]) / 2 - x)
+                    match = closest if distance <= pitch * .40 else None
+                    matches.append(match)
+                    if match:
+                        residual += distance / pitch
+                if any(.55 * pitch <= distance <= 1.4 * pitch for x in centers
+                       for distance in (grid[0] - x, x - grid[-1])):
+                    continue
+                support = sum(match is not None for match in matches)
+                if support < 2 and (not window or support != 1):
+                    continue
+                if support < 2 and abs(a - window[0]) + abs(b - window[1]) > pitch * .7:
+                    continue
+                matched = [box for box in matches if box is not None]
+                y1, y2 = min(box[1] for box in matched), max(box[3] for box in matched)
+                margin = max(2, round(tall * .15))
+                bounds = (a, max(0, y1 - margin), b, min(height, y2 + margin))
+                edge_error = ((abs(a - window[0]) + abs(b - window[1])) / pitch) if window else 0
+                score = support * 2 - residual - min(2.0, edge_error * .5)
+                key = (round(a / 3), round(b / 3), round(y1 / 3))
+                if key not in candidates or candidates[key][0] < score:
+                    candidates[key] = (score, bounds, grid, matches, pitch, light_digits, window)
 
     result = []
     sx, sy = frame.width / width, frame.height / height

@@ -59,6 +59,14 @@ EN_UI = {
     "Der Rahmen ist lesbar. Die App wartet auf einen plausiblen Zähleranstieg.": "The crop is readable. Waiting for a plausible meter increase.",
     "Dieser Rahmen wurde auf dem aktuellen Bild bestätigt.": "This crop was confirmed on the current image.",
     "Die abschließende Gegenprobe war erfolgreich.": "The final cross-check succeeded.",
+    "Suchbereich im Kamerabild eingrenzen": "Limit the search area on the camera image",
+    "Ziehe einen Rahmen um das Ziffernfeld. Lass etwas Rand und spare die Seriennummer aus.":
+        "Draw around the digits. Leave a small margin and keep the serial number outside the box.",
+    "Kamerabild zur Auswahl des Suchbereichs": "Camera image for selecting the search area",
+    "Kamerabild fehlt. Starte eine Prüfung oder die Selbsteinrichtung, um ein Bild zu laden.":
+        "No camera image available. Run a check or start automatic setup to load one.",
+    "Im markierten Bereich suchen": "Search in the marked area",
+    "Markierung löschen": "Clear selection",
     "Bilder der Selbsteinrichtung": "Automatic setup images",
     "Kamerabild der Selbsteinrichtung": "Camera image used for automatic setup",
     "Aktuelles Kamerabild": "Current camera image",

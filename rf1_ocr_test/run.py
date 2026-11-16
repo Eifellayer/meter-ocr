@@ -846,7 +846,7 @@ def main():
     def calibration_configuration_now():
         return get_auto_rules(), get_source()
 
-    def control_calibration(action, limit):
+    def control_calibration(action, limit, region=None):
         nonlocal calibration, calibration_configuration, calibration_next
         with settings_lock:
             running = calibration is not None and calibration.state in ("waiting", "testing") and not calibration.expired(time.monotonic())
@@ -872,7 +872,7 @@ def main():
                 now = time.monotonic()
                 configuration = calibration_configuration_now()
                 if running and (action == "repair" or (
-                        calibration.limit == limit and configuration == calibration_configuration)):
+                        calibration.limit == limit and calibration.region == region and configuration == calibration_configuration)):
                     return
                 repair = action == "repair"
                 previous = (calibration.best if calibration and calibration_configuration[1][0] == source else None)
@@ -882,7 +882,7 @@ def main():
                 calibration = Calibration(limit=limit, started=now, automatic=repair,
                                           duration=GEOMETRY_REPAIR_SECONDS if repair else TIME_LIMIT,
                                           attempt_limit=GEOMETRY_REPAIR_LIMIT if repair else MAX_ATTEMPTS,
-                                          previous_layout=previous)
+                                          previous_layout=previous, region=region)
                 calibration_preview.clear()
                 calibration_images.clear()
                 calibration_configuration = configuration

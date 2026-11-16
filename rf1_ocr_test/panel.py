@@ -514,6 +514,8 @@ name: Zählerstand (OCR)</code></pre>
 </details>
 <div class="crop-actions">
 <button id="calibration-start" type="submit" name="action" value="start">Selbsteinrichtung starten</button>
+<button id="calibration-intensive" type="submit" name="action" value="intensive" {calibration_intensive_hidden}>Dritte Nachkommastelle intensiv suchen</button>
+<button id="calibration-manual-digit" type="button" {calibration_intensive_hidden}>Dritte Nachkommastelle manuell markieren</button>
 <button id="calibration-restore" type="submit" name="action" value="restore" formnovalidate {calibration_restore_hidden}>Gesicherten Ausschnitt wiederherstellen</button>
 <button id="calibration-cancel" type="submit" name="action" value="cancel" formnovalidate hidden>Selbsteinrichtung stoppen</button>
 </div>
@@ -570,7 +572,8 @@ name: Zählerstand (OCR)</code></pre>
 <label>Verglichen wird bis<select name="decimals">{wizard_decimal_options}</select></label>
 <div class="settings-note setup-help" data-precision-options {precision_hidden}>
 <p>Die letzte Stelle kann beim Weiterdrehen schwer lesbar sein. Das kann zu Fehlmeldungen führen.</p>
-<label class="check-option"><input type="checkbox" name="precision_mode" value="1" {precision_checked}> Präzisionsmodus: Alle drei Nachkommastellen müssen stimmen</label>
+<p {wizard_initial_hidden}>Die dritte Nachkommastelle ist bei Rollen oft schwer zu erkennen. „Ausschnitt und Drehung lernen“ bestätigt bei der Ersteinrichtung die ersten zwei Stellen. Die dritte bleibt unbestätigt und kann später intensiv gesucht oder im Kamerabild manuell markiert werden.</p>
+<label class="check-option" {wizard_precision_hidden}><input type="checkbox" name="precision_mode" value="1" {precision_checked} {wizard_precision_disabled}> Präzisionsmodus: Alle drei Nachkommastellen müssen stimmen</label>
 </div>
 <p class="settings-note setup-help">Die Vergleichsgenauigkeit darf kleiner sein als die angezeigte Stellenzahl. Kleine Zeiger werden nicht automatisch gelesen; bei Rollen und Zeigern bitte nur die Ziffernrollen einstellen.</p>
 <div class="setup-controls"><button type="button" class="setup-back">Zurück</button><span class="setup-count"></span><button type="button" class="setup-next">Weiter</button></div>
@@ -1540,7 +1543,10 @@ function refreshCalibration(status) {{
   const messages = {{
     waiting: 'Warte auf ein neues Kamerabild …',
     testing: 'Prüfe Ausschnitt und Drehung …',
-    saved: 'Erfolgreich eingerichtet. Ausschnitt und Drehung sind übernommen.',
+    saved: status.simplified ?
+      'Ausschnitt und Drehung gespeichert. Zwei Nachkommastellen bestätigt, die dritte bleibt unbestätigt.' :
+      status.intensive ? 'Dritte Nachkommastelle bestätigt. Die Ziffernrahmen sind übernommen.' :
+      'Erfolgreich eingerichtet. Ausschnitt und Drehung sind übernommen.',
     failed: 'Selbsteinrichtung fehlgeschlagen. Prüfe Bildausschnitt, Kamerawinkel und Beleuchtung.',
     image_timeout: 'Kein neues Kamerabild erhalten. Prüfe die Bildquelle.',
     timeout: status.automatic ? 'Nachjustierung nach vier Minuten beendet. Der bisherige Rahmen bleibt gültig.' :
@@ -1581,6 +1587,9 @@ function refreshCalibration(status) {{
   if (status.state === 'failed' && ['reference_mismatch', 'position_error'].includes(reason)) {{
     message = 'Der gelesene Bereich passt nicht zum Vergleichswert. Prüfe den Vergleichswert und markiere das Ziffernfeld.';
   }}
+  if (status.intensive && ['failed', 'timeout', 'image_timeout'].includes(status.state)) {{
+    message = 'Dritte Nachkommastelle bleibt unbestätigt. Du kannst später erneut suchen oder sie manuell markieren.';
+  }}
   const detail = 'Bilder geprüft: ' + status.tested +
     ' · Rahmen getestet: ' + status.attempts +
     ' · Bestätigungen: ' + status.confirmations + '/' + status.required +
@@ -1614,6 +1623,8 @@ function refreshCalibration(status) {{
   proposedCrop = status.proposal || null;
   calibrationProposal.hidden = !proposedCrop;
   document.querySelector('#calibration-start').hidden = active;
+  document.querySelector('#calibration-intensive').disabled = active;
+  document.querySelector('#calibration-manual-digit').disabled = active;
   document.querySelector('#calibration-cancel').hidden = !active;
 }}
 async function refreshTestStatus() {{
@@ -1757,6 +1768,13 @@ document.querySelector('#open-manual-settings').addEventListener('click', () => 
   manualTestArea.hidden = false;
   manualPanel.open = true;
   manualPanel.scrollIntoView({{block: 'nearest'}});
+}});
+document.querySelector('#calibration-manual-digit').addEventListener('click', () => {{
+  document.querySelector('#tab-overview').click();
+  document.querySelector('#open-manual-settings').click();
+  manualForm.elements.crop_mode.value = 'manual';
+  manualForm.elements.crop_mode.dispatchEvent(new Event('change'));
+  manualForm.querySelector('.digit-frame:last-child')?.focus();
 }});
 document.querySelector('#setup-image-test')?.addEventListener('click', () => {{
   document.querySelector('#open-manual-settings').click();
@@ -2481,6 +2499,10 @@ def start_panel(
                                           else CALIBRATION_PREVIEW_HTML),
                 calibration_saved_notice=auto_saved_notice if saved in ("setup-calibration", "crop-restored") else "",
                 calibration_hidden="" if control_calibration else "hidden",
+                calibration_intensive_hidden="" if auto_rules["fraction_digits"] == 3 else "hidden",
+                wizard_initial_hidden="" if setup_pending else "hidden",
+                wizard_precision_hidden="hidden" if setup_pending else "",
+                wizard_precision_disabled="disabled" if setup_pending else "",
                 geometry_warning_hidden="" if summary["geometry_warning"] else "hidden",
                 geometry_warning_text=html.escape(summary["geometry_warning"]),
                 calibration_restore_hidden="" if has_calibration_backup and has_calibration_backup() else "hidden",
@@ -2885,12 +2907,15 @@ def start_panel(
                             problem(409, "Setze die Automatik fort und starte dann die Selbsteinrichtung.",
                                     "Resume automatic checks before starting automatic setup.")
                             return
+                        initial_setup = get_source()[1]
+                        if initial_setup:
+                            rules_values["precision_mode"] = False
                         save_source(source_values)
                         with delivery_lock:
                             save_delivery(delivery_values)
                         save_auto_rules(rules_values)
                         if learn_crop:
-                            control_calibration("start", image_limit)
+                            control_calibration("setup" if initial_setup else "start", image_limit)
                 except (ValueError, TypeError):
                     problem(400, "Bitte prüfe Bildquelle, Ziffernaufteilung und Fallback-Wert.",
                             "Check the image source, digit layout and fallback reading.")
@@ -2988,10 +3013,11 @@ def start_panel(
                     return
                 try:
                     action = field("action")
-                    if action not in ("start", "cancel", "restore"):
+                    if action not in ("start", "intensive", "cancel", "restore"):
                         raise ValueError("Invalid calibration action")
-                    limit = int(field("image_limit", str(DEFAULT_LIMIT))) if action == "start" else 0
-                    if action == "start" and not MIN_IMAGE_LIMIT <= limit <= MAX_IMAGES:
+                    starting = action in ("start", "intensive")
+                    limit = int(field("image_limit", str(DEFAULT_LIMIT))) if starting else 0
+                    if starting and not MIN_IMAGE_LIMIT <= limit <= MAX_IMAGES:
                         raise ValueError("Invalid calibration image limit")
                     region = search_region(field("region")) if action == "start" else None
                     if region:

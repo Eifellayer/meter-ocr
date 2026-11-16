@@ -82,7 +82,8 @@ class IngressFixture(TestCase):
         self.setup_pending = False
 
     def control_calibration(self, action, limit, region=None):
-        self.calibration = {"state": "waiting" if action == "start" else "cancelled",
+        self.calibration = {"state": "waiting" if action in ("start", "setup", "intensive") else "cancelled",
+                            "action": action,
                             "limit": limit, "tested": 0, "confirmations": 0, "required": 3,
                             "seconds": 900, "duration": 900, "stage": "queued", "attempts": 0, "max_attempts": 100,
                             "region": region}
@@ -563,6 +564,7 @@ class IngressTests(IngressFixture):
         self.assertEqual((303, "./?saved=setup-calibration&ui=settings#calibration-settings"), (status, location))
         self.assertFalse(self.setup_pending)
         self.assertEqual("camera.meter", self.source["camera"])
+        self.assertEqual("setup", self.calibration["action"])
         self.assertEqual(24, self.calibration["limit"])
         self.assertEqual(("manual", "10,20,410,100", 270, -3),
                          tuple(self.rules[key] for key in ("crop_mode", "crop", "width", "rotation")))

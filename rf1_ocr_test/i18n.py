@@ -196,6 +196,16 @@ EN_UI = {
     "Test bestanden mit Hinweis": "Test passed with a note",
     "Letzte Nachkommastelle unsicher": "Last decimal digit uncertain",
     LAST_DIGIT_NOTICE: "Only the third decimal digit is unclear or differs.",
+    "Dritte Nachkommastelle intensiv suchen": "Run intensive search for the third decimal digit",
+    "Dritte Nachkommastelle manuell markieren": "Mark the third decimal digit manually",
+    "Ausschnitt und Drehung gespeichert. Zwei Nachkommastellen bestätigt, die dritte bleibt unbestätigt.":
+        "Crop and rotation saved. Two decimal digits confirmed. The third remains unconfirmed.",
+    "Die dritte Nachkommastelle ist bei Rollen oft schwer zu erkennen. „Ausschnitt und Drehung lernen“ bestätigt bei der Ersteinrichtung die ersten zwei Stellen. Die dritte bleibt unbestätigt und kann später intensiv gesucht oder im Kamerabild manuell markiert werden.":
+        "The third decimal digit on a roller can be hard to read. During initial setup, Learn crop and rotation confirms the first two decimal digits. The third remains unconfirmed. You can run an intensive search or mark it manually on the camera image later.",
+    "Dritte Nachkommastelle bestätigt. Die Ziffernrahmen sind übernommen.":
+        "Third decimal digit confirmed. The digit frames have been saved.",
+    "Dritte Nachkommastelle bleibt unbestätigt. Du kannst später erneut suchen oder sie manuell markieren.":
+        "The third decimal digit remains unconfirmed. Search again later or mark it manually.",
     LAST_DIGIT_PASS: "The first two decimal places match. The third digit remains unconfirmed.",
     "Für den Verbrauch verwendet die App den plausiblen Vergleichswert.": "The app uses the plausible reference reading to calculate consumption.",
     "Ablesung und Vergleichswert weichen ab": "Image reading and reference differ",

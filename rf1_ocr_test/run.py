@@ -37,7 +37,8 @@ from checks import (
     timestamp_epoch, track_reflection,
     valid_interval_minutes,
 )
-from calibration import Calibration, CAPTURE_INTERVAL, MIN_IMAGE_LIMIT, MAX_IMAGES, MAX_ATTEMPTS, TIME_LIMIT
+from calibration import (Calibration, CAPTURE_INTERVAL, MIN_IMAGE_LIMIT, MAX_IMAGES, MAX_ATTEMPTS,
+                         TIME_LIMIT, two_decimal_reading)
 from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, MAX_FLOW_LPH, ImplausibleReading,
                          accumulate_consumption, fallback_detail, format_cubic_metres)
 from layout import (MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, find_digit_row,
@@ -915,8 +916,15 @@ def main():
                     raise ValueError("Invalid calibration image limit")
                 now = time.monotonic()
                 configuration = calibration_configuration_now()
+                rules = configuration[0]
+                simplified = action == "setup" and rules["decimals"] == 3
+                intensive = action == "intensive"
+                if intensive and rules["fraction_digits"] != 3:
+                    raise ValueError("The meter must display three decimal digits")
                 if running and (action == "repair" or (
-                        calibration.limit == limit and calibration.region == region and configuration == calibration_configuration)):
+                        calibration.limit == limit and calibration.region == region
+                        and calibration.simplified == simplified and calibration.intensive == intensive
+                        and configuration == calibration_configuration)):
                     return
                 repair = action == "repair"
                 previous = (calibration.best if calibration and calibration_configuration[1][0] == source else None)
@@ -924,6 +932,7 @@ def main():
                     atomic_write(geometry_backup, json.dumps({"source": source, "rules": get_auto_rules()}).encode(),
                                  0o600)
                 calibration = Calibration(limit=limit, started=now, automatic=repair,
+                                          simplified=simplified, intensive=intensive,
                                           duration=GEOMETRY_REPAIR_SECONDS if repair else TIME_LIMIT,
                                           attempt_limit=GEOMETRY_REPAIR_LIMIT if repair else MAX_ATTEMPTS,
                                           previous_layout=previous, region=region)
@@ -976,6 +985,8 @@ def main():
             job.state = "testing"
             job.stage = "capture"
             attempt = deepcopy(job)
+        if attempt.intensive:
+            active_rules = {**active_rules, "decimals": 3}
         deadline = time.monotonic() + 30
 
         def stopped():
@@ -1021,6 +1032,10 @@ def main():
                 if captured is not None:
                     if mode == "slfork":
                         sample.update(slfork_reference(sample, captured, zone, history.get("last_slfork_match", {})))
+                    if attempt.simplified:
+                        sample = {**sample, **{key: two_decimal_reading(sample[key])
+                                              for key in ("raw_value", "actual_value") if key in sample}}
+                    precision = attempt.precision(active_rules, sample.get("reference_required") is not False)
                     baseline = history.get("consumption", {})
                     if baseline.get("source") == source_key and baseline.get("timestamp", 0) < captured:
                         baseline = {**baseline, "source": "calibration"}
@@ -1030,7 +1045,7 @@ def main():
                         stamp = timestamp_epoch(active_rules["fallback_time"], zone)
                         if stamp < captured:
                             baseline = accumulate_consumption(
-                                {}, "calibration", stamp, active_rules["fallback_value"], active_rules["decimals"],
+                                {}, "calibration", stamp, active_rules["fallback_value"], min(precision, configured_rules["decimals"]),
                                 active_rules["max_flow_lph"], active_rules["integer_digits"],
                             )
                     with Image.open(io.BytesIO(picture)) as frame:
@@ -1128,12 +1143,13 @@ def main():
                             )
 
                         def recognize(layout, profile, register, ocr_deadline=None):
-                            return read_visible_digits(
+                            value = read_visible_digits(
                                 *register[:4], options["helle_ziffern"], active_rules["polarity"], profile=profile,
-                                whole_digits=whole, fraction_digits=fraction,
+                                whole_digits=whole, fraction_digits=2 if attempt.simplified else fraction,
                                 deadline=deadline if ocr_deadline is None else ocr_deadline,
                                 prefer_boxes=bool(layout.digit_boxes), recognize=cached_digit,
                             )
+                            return two_decimal_reading(value) if attempt.simplified else value
 
                         def read(layout, profile):
                             nonlocal previous_layout

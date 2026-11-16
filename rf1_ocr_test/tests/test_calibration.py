@@ -172,6 +172,23 @@ class CalibrationTests(TestCase):
         self.assertEqual(3, self.job.status(104)["tested"])
         self.assertEqual(3, self.job.confirmations)
 
+    def test_initial_calibration_verifies_two_digits_when_the_third_is_open(self):
+        self.job.simplified = True
+        rules = {**RULES, "decimals": 3, "fraction_digits": 3, "attempts": 3}
+        reference = calibration.two_decimal_reading("12345.239")
+        sample = {"reference_time": 100, "raw_value": reference, "actual_value": reference}
+        read = lambda *_: "12345.23?"
+        for index in range(1, 4):
+            layout = self.job.examine(frame(index), None, sample, 100 + index, rules, read, lambda: False)
+        self.assertEqual(LAYOUT, layout)
+        self.assertEqual(LAYOUT, self.job.verify(frame(4), sample, 104, rules, read, lambda: False))
+        self.assertTrue(self.job.status(105)["simplified"])
+
+        strict = Calibration(5, 0)
+        strict.examine(frame(1), None, {**sample, "raw_value": "12345.239", "actual_value": "12345.239"},
+                       101, rules, read, lambda: False)
+        self.assertEqual(0, strict.confirmations)
+
     def test_changing_layout_cannot_reuse_confirmations(self):
         self.examine(1, 100)
         self.examine(2, 101)

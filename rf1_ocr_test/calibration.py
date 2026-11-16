@@ -637,9 +637,12 @@ class Calibration:
         self.last_stamp = stamp
         return True
 
+    def search_exhausted(self):
+        return self.attempts >= self.attempt_limit and not (self.followup and self.confirmations)
+
     def verify(self, frame, sample, stamp, rules, read, stop, on_image=None, on_decision=lambda reason: None):
         """Confirm the exact saved geometry with the regular OCR retry routine."""
-        if self.attempts >= self.attempt_limit or not self.remember_image(frame, stamp):
+        if self.search_exhausted() or not self.remember_image(frame, stamp):
             return None
         if on_image is not None:
             on_image()
@@ -647,7 +650,8 @@ class Calibration:
                 MIN_VERIFICATION_QUALITY * median(self.confirmed_quality)):
             on_decision("soft_image")
             return None
-        self.attempts += 1
+        if not self.followup:
+            self.attempts += 1
         has_reference = sample.get("reference_required") is not False
         precision = self.precision(rules, has_reference)
         digits = rules["integer_digits"]
@@ -702,7 +706,8 @@ class Calibration:
         precision = self.precision(rules, has_reference)
         digits = rules["integer_digits"]
         flow = rules["max_flow_lph"]
-        committed = self.confirmations >= 2
+        confirming_followup = self.followup and self.confirmations > 0
+        committed = self.confirmations >= 2 or confirming_followup
         preferred = (self.confirmations == 1 and self.rank_candidates
                      and self.shortlist.get(self.candidate, (0, 0))[-1] == 100)
         collecting = self.rank_candidates and not (committed or preferred or self.optimizing
@@ -741,7 +746,7 @@ class Calibration:
         for index, layout in enumerate(candidates, start=1):
             if stop():
                 return None
-            if self.attempts >= min(self.attempt_limit, frame_ceiling):
+            if not confirming_followup and self.attempts >= min(self.attempt_limit, frame_ceiling):
                 break
             if self.region_rejected(layout) or layout.box[2] > frame.width or layout.box[3] > frame.height:
                 continue
@@ -751,7 +756,8 @@ class Calibration:
                 continue
             tested.add(layout)
             examined = True
-            self.attempts += 1
+            if not confirming_followup:
+                self.attempts += 1
             if collecting:
                 self.coarse_attempts += 1
             if on_attempt is not None:

@@ -1316,7 +1316,7 @@ def main():
                         calibration_configuration = calibration_configuration_now()
                 except (OSError, ValueError):
                     attempt.state = "save_failed"
-            elif len(attempt.seen) >= attempt.limit or attempt.attempts >= attempt.attempt_limit:
+            elif len(attempt.seen) >= attempt.limit or attempt.search_exhausted():
                 attempt.state = "failed"
             else:
                 attempt.state = "waiting"

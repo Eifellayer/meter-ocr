@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.16 Stable
+
+- Nach dem ersten Treffer der Feinprüfung zählt das Variantenlimit nicht mehr gegen die Bestätigung desselben Rahmens auf frischen Bildern.
+
 ## 0.5.15 Stable
 
 - Die Übereinstimmung für den Wechsel von der Grobsuche zur Intensivprüfung ist einstellbar. Der Standardwert beträgt 80 Prozent.

@@ -1482,6 +1482,8 @@ function refreshCalibrationImages(preview) {{
     no_region: 'In diesem Bild wurde kein Ziffernbereich gefunden.',
     unreadable: 'Der Ausschnitt ließ sich nicht auswerten.',
     unclear: 'Mindestens eine benötigte Ziffer blieb unklar.',
+    soft_image: 'Der Ausschnitt ist deutlich weniger scharf oder kontrastreich als zuvor. Warte auf ein besseres Bild.',
+    collecting: 'Grobsuche läuft. Die besten Zwischenkandidaten werden gespeichert.',
     disagree: 'Die OCR-Versuche lieferten unterschiedliche Ziffern.',
     reference_unavailable: 'Kein gültiger Vergleichswert zu diesem Bild.',
     reference_mismatch: 'Der gelesene Stand weicht vom Vergleichswert ab.',
@@ -1556,9 +1558,12 @@ function refreshCalibration(status) {{
   }};
   const clock = Math.floor(status.seconds / 60) + ':' + String(status.seconds % 60).padStart(2, '0');
   const stages = {{
-    queued: 'Selbsteinrichtung startet, sobald die laufende Prüfung beendet ist …',
+    queued: status.followup ?
+      'Ausschnitt gespeichert. Suche jetzt gezielt nach der dritten Nachkommastelle …' :
+      'Selbsteinrichtung startet, sobald die laufende Prüfung beendet ist …',
     capture: 'Kamerabild wird abgerufen …',
     search: 'Grobkalibrierung: Suche nach der Ziffernreihe …',
+    shortlist: 'Intensivprüfung für Kandidat ' + status.variant + ' …',
     angle: 'Drehung wird geprüft. Der Winkel steht am Vorschaubild.',
     refine: status.preview?.weak_positions?.length ?
       'Einzelziffernsuche. Offene Stellen von links: ' + status.preview.weak_positions.join(', ') + '.' :
@@ -1572,16 +1577,26 @@ function refreshCalibration(status) {{
   const reason = status.preview?.reason;
   let message = active && stages[status.stage] ? stages[status.stage] : messages[status.state] || '';
   if (status.state === 'waiting' && status.stage !== 'queued') {{
-    if (reason === 'await_movement') {{
-      message = 'Ziffernfeld lesbar. Die App wartet auf einen höheren Zählerstand oder einen abgelesenen Startwert.';
+    if (reason === 'soft_image') {{
+      message = 'Gegenprobe wartet auf ein besseres Bild. Der bestätigte Rahmen bleibt ausgewählt.';
+    }} else if (reason === 'collecting') {{
+      message = 'Grobtests: ' + status.coarse_attempts + '/' + status.coarse_limit + '.';
+    }} else if (status.stage === 'verify_wait' && reason === 'accepted') {{
+      message = 'Treffer gesammelt. Warte auf ein frisches Bild für die Gegenprobe.';
+    }} else if (reason === 'reference_unavailable') {{
+      message = 'Grün bedeutet lesbar. Ein gültiger Vergleichswert für dieses Bild fehlt.';
+    }} else if (reason === 'reference_mismatch') {{
+      message = 'Grün bedeutet lesbar. Der abgelesene Stand passt noch nicht zum Vergleichswert.';
+    }} else if (reason === 'await_movement') {{
+      message = 'Ziffern sind lesbar. Ohne Vergleichswert wartet die App auf einen plausiblen Anstieg oder einen Startwert.';
+    }} else if (status.confirmations >= 2) {{
+      message = 'Prüfe denselben Rahmen mit dem nächsten neuen Bild weiter.';
     }} else if (status.confirmations > 0) {{
       message = 'Ziffernfeld bestätigt. Die App prüft mit dem nächsten neuen Bild weiter.';
     }} else if (reason === 'no_region') {{
       message = status.tested >= 2 ?
         'Ziffernfeld nicht gefunden. Grenze das Ziffernfeld im Kamerabild ein.' :
         'Noch kein Ziffernbereich gefunden. Warte auf ein neues Bild …';
-    }} else if (reason === 'reference_unavailable') {{
-      message = 'Kein gültiger Vergleichswert für dieses Bild. Die App wartet auf eine neue Messung.';
     }}
   }}
   if (status.state === 'failed' && ['reference_mismatch', 'position_error'].includes(reason)) {{
@@ -1593,6 +1608,8 @@ function refreshCalibration(status) {{
   const detail = 'Bilder geprüft: ' + status.tested +
     ' · Rahmen getestet: ' + status.attempts +
     ' · Bestätigungen: ' + status.confirmations + '/' + status.required +
+    (active && status.shortlist?.length ?
+      ' · Beste Kandidaten: ' + status.shortlist.map(percent => percent + '%').join(', ') : '') +
     (active ? ' · Rechenzeit übrig: ' + clock + ' min' : '');
   const tone = status.state === 'saved' ? 'ok' : ['failed', 'timeout', 'image_timeout', 'save_failed'].includes(status.state) ? 'error' : '';
   label.textContent = (status.automatic ? 'Automatische Nachjustierung · ' : '') + message + ' ' + detail;
@@ -1608,7 +1625,7 @@ function refreshCalibration(status) {{
     if (elapsed > 0) bar.value = elapsed;
     else bar.removeAttribute('value');
   }}
-  if (status.state === 'saved' && status.settings?.crop_revision &&
+  if (status.settings?.crop_revision &&
       manualForm.elements.crop_revision.value !== status.settings.crop_revision) {{
     const autoForm = document.querySelector('#auto-form');
     for (const form of [autoForm, manualForm]) {{

@@ -10,6 +10,8 @@ from itertools import product
 from pathlib import Path
 from statistics import median
 
+from PIL import Image, ImageChops, ImageStat
+
 from checks import OCR_PROFILES, compare_sample, crop_register, meter_prefix, read_with_retries
 from consumption import accumulate_consumption
 from layout import (crop_coordinates, digit_box_settings, find_digit_row, find_neighbour_digit_rows,
@@ -28,7 +30,10 @@ IMAGE_WAIT_LIMIT = 360
 CAPTURE_INTERVAL = 5
 ANGLES = (-3, 3, -1, 1, -2, 2, -4, 4, -6, 6, -9, 9, -12, 12, -18, 18, 90, -90, 180)
 SMALL_ANGLES = (0, -1, 1, -2, 2, -3, 3)
-MAX_LAYOUTS_PER_IMAGE = 4
+MAX_LAYOUTS_PER_IMAGE = 5
+COARSE_LIMIT = 50
+SHORTLIST_LIMIT = 5
+MIN_VERIFICATION_QUALITY = .65
 FRAME_ATTEMPT_LIMIT = 30
 
 
@@ -253,6 +258,34 @@ def two_decimal_reading(value):
     return f"{whole}.{fraction[:2]}?" if separator and len(fraction) >= 2 else value
 
 
+def crop_quality(frame, layout):
+    """Measure local contrast at a consistent scale for the same crop."""
+    image = crop_register(frame, layout.box).convert("L")
+    width, height = image.size
+    image = image.crop((width // 20, height // 10, width - width // 20, height - height // 10))
+    image = image.resize((160, 48), Image.Resampling.LANCZOS)
+    across = ImageChops.difference(image.crop((0, 0, 158, 48)), image.crop((2, 0, 160, 48)))
+    down = ImageChops.difference(image.crop((0, 0, 160, 46)), image.crop((0, 2, 160, 48)))
+    return (ImageStat.Stat(across).mean[0] + ImageStat.Stat(down).mean[0]) / 2
+
+
+def agreement_percent(readings, sample, precision, digits):
+    """Measure position agreement across profiles at the required precision."""
+    rows = []
+    for value in readings:
+        whole, _, fraction = str(value).replace(",", ".").partition(".")
+        rows.append((whole + fraction[:precision].ljust(precision, "?"))
+                    if len(whole) == digits else "?" * (digits + precision))
+    expected = meter_prefix(sample.get("actual_value"), precision, digits)
+    if expected is not None and sample.get("reference_required") is not False and not reference_rejection(
+            sample, compare_sample(sample, sample["actual_value"], precision, integer_digits=digits)[0]):
+        target = str(expected).zfill(digits + precision)
+        return round(100 * sum(a == b for row in rows for a, b in zip(row, target))
+                     / (len(rows) * len(target)))
+    return round(100 * sum(len(set(slot)) == 1 and slot[0].isdigit() for slot in zip(*rows))
+                 / (digits + precision))
+
+
 def reference_rejection(sample, status):
     if sample.get("reference_is_fallback") or not sample.get("reference_time"):
         return "reference_unavailable"
@@ -394,6 +427,13 @@ class Calibration:
     automatic: bool = False
     simplified: bool = False
     intensive: bool = False
+    followup: bool = False
+    followup_baseline: dict | None = None
+    rank_candidates: bool = False
+    coarse_attempts: int = 0
+    optimizing: bool = False
+    shortlist: dict = field(default_factory=dict)
+    confirmed_quality: list = field(default_factory=list)
     duration: int = TIME_LIMIT
     attempt_limit: int = MAX_ATTEMPTS
     previous_layout: Layout | None = None
@@ -463,7 +503,9 @@ class Calibration:
                 "tested": len(self.seen), "limit": self.limit, "duration": self.duration,
                 "attempts": self.attempts, "max_attempts": self.attempt_limit, "automatic": self.automatic,
                 "confirmations": self.confirmations, "required": MIN_IMAGES,
-                "simplified": self.simplified, "intensive": self.intensive,
+                "simplified": self.simplified, "intensive": self.intensive, "followup": self.followup,
+                "coarse_attempts": self.coarse_attempts, "coarse_limit": COARSE_LIMIT,
+                "shortlist": [score[0] for score in self.shortlist.values()],
                 "seconds": max(0, ceil(self.remaining(now)))}
 
     def refine(self, layout, readings, sample, rules, read, stop, on_attempt, tested, frame_ceiling):
@@ -550,9 +592,13 @@ class Calibration:
         """Confirm the exact saved geometry with the regular OCR retry routine."""
         if self.attempts >= self.attempt_limit or not self.remember_image(frame, stamp):
             return None
-        self.attempts += 1
         if on_image is not None:
             on_image()
+        if self.confirmed_quality and crop_quality(frame, self.candidate) < (
+                MIN_VERIFICATION_QUALITY * median(self.confirmed_quality)):
+            on_decision("soft_image")
+            return None
+        self.attempts += 1
         has_reference = sample.get("reference_required") is not False
         precision = self.precision(rules, has_reference)
         digits = rules["integer_digits"]
@@ -573,16 +619,28 @@ class Calibration:
                                    rules["max_flow_lph"], digits)
         except (OSError, ValueError, subprocess.SubprocessError):
             on_decision(rejection)
-            self.verification_pending = False
-            self.candidate, self.counter = None, {}
-            self.confirmations, self.anchored, self.advanced = 0, False, False
             return None
         on_decision("verified")
         return self.candidate
 
+    def record_intermediate(self, layout, readings, sample, precision, digits, frame):
+        percentage = agreement_percent(readings, sample, precision, digits)
+        if percentage:
+            self.shortlist[layout] = (percentage, round(crop_quality(frame, layout), 2))
+            self.shortlist = dict(sorted(self.shortlist.items(), key=lambda pair: pair[1], reverse=True)
+                                  [:SHORTLIST_LIMIT])
+
+    def region_rejected(self, layout):
+        return (self.confirmations < 2 and not self.followup
+                and any(same_digit_region(layout.box, old) for old in self.rejected_regions))
+
+    def reject_region(self, layout):
+        if self.confirmations < 2 and not self.followup:
+            self.rejected_regions = [*self.rejected_regions[-15:], layout.box]
+
     def examine(self, frame, overlay, sample, stamp, rules, read, stop, baseline=None, on_attempt=None,
                 on_image=None, on_decision=lambda reason: None, refine_read=None, on_refine=None, on_regions=None,
-                on_selected=None, angle_read=None, on_angle=None):
+                on_selected=None, angle_read=None, on_angle=None, on_shortlist=None):
         """Return a verified layout, checking two OCR profiles per distinct image."""
         if not self.remember_image(frame, stamp):
             return None
@@ -593,18 +651,21 @@ class Calibration:
         precision = self.precision(rules, has_reference)
         digits = rules["integer_digits"]
         flow = rules["max_flow_lph"]
-        seed = self.candidate or (self.previous_layout if self.automatic else None)
-        candidates = (guided_layouts(frame, overlay, rules, len(self.seen) - 1, seed, self.region)
-                      if self.region else layouts(frame, overlay, rules, len(self.seen) - 1, seed,
-                                                  prefer_configured=self.automatic or self.intensive, on_regions=on_regions))
-        # A geometry that produced a stable OCR string is a strong signal, even
-        # when it did not yet match the external reference. Stay focused on it
-        # for the next fresh image instead of spending attempts on rotations
-        # that are visibly worse. Alternatives are re-enabled after a real OCR
-        # failure or once the focused candidate is confirmed.
-        if self.focused:
-            candidates = ((self.candidate,) if self.candidate is not None else ())
+        committed = self.confirmations >= 2
+        collecting = self.rank_candidates and not (committed or self.optimizing)
+        if committed or self.focused:
+            candidates = (self.candidate,)
+        elif self.followup:
+            candidates = (self.candidate or self.previous_layout,)
+        elif self.rank_candidates and self.optimizing and self.shortlist:
+            candidates = tuple(self.shortlist)
         else:
+            seed = self.candidate or (next(iter(self.shortlist), None) if collecting else self.previous_layout)
+
+            candidates = (guided_layouts(frame, overlay, rules, len(self.seen) - 1, seed, self.region)
+                          if self.region else layouts(
+                              frame, overlay, rules, len(self.seen) - 1, seed,
+                              prefer_configured=self.automatic or self.intensive, on_regions=on_regions))
             candidates = skip_small_labels(list(candidates))
         examined = False
         tested = set()
@@ -615,13 +676,17 @@ class Calibration:
                 return None
             if self.attempts >= min(self.attempt_limit, frame_ceiling):
                 break
-            if any(same_digit_region(layout.box, old) for old in self.rejected_regions):
+            if self.region_rejected(layout) or layout.box[2] > frame.width or layout.box[3] > frame.height:
                 continue
+            if collecting and self.coarse_attempts >= COARSE_LIMIT:
+                break
             if layout in tested:
                 continue
             tested.add(layout)
             examined = True
             self.attempts += 1
+            if collecting:
+                self.coarse_attempts += 1
             if on_attempt is not None:
                 on_attempt(index, layout.rotation)
             try:
@@ -643,14 +708,52 @@ class Calibration:
             score = (reference_match, self.confirmations > 0 and layout == self.candidate,
                      (r - l) * (b - t), layout.method == "register_window", agreement)
             coarse.append((score, layout, readings))
-        coarse.sort(key=lambda item: item[0], reverse=True)
+        if self.rank_candidates and not committed:
+            for _, layout, readings in coarse:
+                self.record_intermediate(layout, readings, sample, precision, digits, frame)
+            coarse.sort(key=lambda item: self.shortlist.get(item[1], (0, 0)), reverse=True)
+            stable = [item for item in coarse if item[0][4]]
+            if collecting:
+                self.optimizing = (self.coarse_attempts >= COARSE_LIMIT
+                                   or any(score[0] if has_reference else score[4] for score, _, _ in coarse))
+                if self.coarse_attempts >= COARSE_LIMIT:
+                    # Re-read the full ranked list against the next image and its reference.
+                    return None
+            # Read stable crops immediately, including when this image has no usable reference.
+            intensive = coarse if self.optimizing else stable
+            for index, (_, layout, readings) in enumerate(intensive[:SHORTLIST_LIMIT], start=1):
+                if stop() or self.attempts >= min(self.attempt_limit, frame_ceiling):
+                    return None
+                self.attempts += 1
+                if on_shortlist is not None:
+                    on_shortlist(index, layout.rotation)
+                extras = []
+                for profile in OCR_PROFILES[2:3] if self.optimizing else OCR_PROFILES[2:5]:
+                    if stop():
+                        break
+                    try:
+                        extras.append(read(layout, profile))
+                    except (OSError, ValueError, subprocess.SubprocessError):
+                        continue
+                if extras:
+                    self.record_intermediate(layout, [*readings, *extras], sample, precision, digits, frame)
+            if not self.optimizing:
+                reason = "collecting"
+                if stable and has_reference:
+                    status, _ = compare_sample(sample, stable[0][2][0], precision, integer_digits=digits)
+                    reason = reference_rejection(sample, status) or reason
+                on_decision(reason)
+                return None
+            coarse.sort(key=lambda item: (item[0][0], self.shortlist.get(item[1], (0, 0)), item[0]), reverse=True)
+        else:
+            coarse.sort(key=lambda item: item[0], reverse=True)
         refined = False
         for score, layout, readings in coarse:
             if stop():
                 return None
-            if any(same_digit_region(layout.box, old) for old in self.rejected_regions):
+            if self.region_rejected(layout):
                 continue
-            if (not score[0] and not self.confirmations
+            if (not self.rank_candidates and not score[0] and not self.confirmations
                     and coarse[0][0][2] > 2.5 * score[2]):
                 continue
             if on_selected is not None:
@@ -658,7 +761,7 @@ class Calibration:
             rejection = "unreadable"
             try:
                 if has_reference and contradicts_reference(readings, sample, digits):
-                    self.rejected_regions = [*self.rejected_regions[-15:], layout.box]
+                    self.reject_region(layout)
                     on_decision("position_error" if position_error(readings[0], sample, precision, digits)
                                 else "reference_mismatch")
                     continue
@@ -670,7 +773,7 @@ class Calibration:
                             and expected is not None and prefix is not None
                             and sum(a == b for a, b in zip(str(expected).zfill(digits + precision),
                                                          str(prefix).zfill(digits + precision))) < digits / 2):
-                        self.rejected_regions = [*self.rejected_regions[-15:], layout.box]
+                        self.reject_region(layout)
                         on_decision("position_error" if position_error(readings[0], sample, precision, digits)
                                     else "reference_mismatch")
                         continue
@@ -679,11 +782,11 @@ class Calibration:
                 matches = agreement and (not has_reference or all(reference_rejection(
                     sample, compare_sample(sample, value, precision, integer_digits=digits)[0]) is None
                     for value in readings))
-                if (refine_read is not None and not refined and not matches
+                if (refine_read is not None and (not refined or self.rank_candidates) and not matches
                         and not self.confirmations and not self.focused):
                     refined = True
                     original = layout
-                    if angle_read is not None:
+                    if angle_read is not None and not self.followup:
                         layout, readings = self.sweep_angles(layout, readings, sample, rules, angle_read, stop,
                                                              on_angle, tested, frame_ceiling)
                     resolved = [meter_prefix(value, precision, digits) for value in readings]
@@ -707,10 +810,10 @@ class Calibration:
                     status, _ = compare_sample(sample, readings[0], precision, integer_digits=digits)
                     reason = reference_rejection(sample, status)
                     if reason == "reference_mismatch" and position_error(readings[0], sample, precision, digits):
-                        self.rejected_regions = [*self.rejected_regions[-15:], layout.box]
+                        self.reject_region(layout)
                         on_decision("position_error")
                         continue
-                    if reason and not self.focused and not self.intensive:
+                    if reason and not (self.focused or self.intensive or committed or self.rank_candidates):
                         # Keep a candidate with two agreeing OCR profiles as
                         # the preferred geometry. The reference may be stale
                         # or the meter may simply not have advanced yet.
@@ -720,7 +823,7 @@ class Calibration:
                         return None
                     if reason:
                         if reason == "reference_mismatch":
-                            self.rejected_regions = [*self.rejected_regions[-15:], layout.box]
+                            self.reject_region(layout)
                         on_decision(reason)
                         continue
                 rejection = "implausible"
@@ -731,6 +834,9 @@ class Calibration:
             except (OSError, ValueError, subprocess.SubprocessError):
                 on_decision(rejection)
                 continue
+            if self.rank_candidates:
+                self.record_intermediate(layout, readings, sample, precision, digits, frame)
+            self.confirmed_quality = (self.confirmed_quality if same else [])[-2:] + [crop_quality(frame, layout)]
             self.confirmations = self.confirmations + 1 if same else 1
             self.anchored = (same and self.anchored) or has_reference or bool(baseline)
             self.advanced = same and (self.advanced or (
@@ -748,7 +854,7 @@ class Calibration:
                 return layout
             # Preserve a reproducible candidate and test it on the next photograph.
             return None
-        if not stop():
+        if not committed and not stop():
             if not examined:
                 on_decision("no_region")
             self.candidate, self.counter = None, {}

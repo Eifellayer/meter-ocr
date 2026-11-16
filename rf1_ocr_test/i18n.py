@@ -206,6 +206,27 @@ EN_UI = {
         "Third decimal digit confirmed. The digit frames have been saved.",
     "Dritte Nachkommastelle bleibt unbestätigt. Du kannst später erneut suchen oder sie manuell markieren.":
         "The third decimal digit remains unconfirmed. Search again later or mark it manually.",
+    "Ausschnitt gespeichert. Suche jetzt gezielt nach der dritten Nachkommastelle …":
+        "Crop saved. Now searching specifically for the third decimal digit …",
+    "Prüfe denselben Rahmen mit dem nächsten neuen Bild weiter.":
+        "Continuing to check the same crop on the next new image.",
+    "Der Ausschnitt ist deutlich weniger scharf oder kontrastreich als zuvor. Warte auf ein besseres Bild.":
+        "The crop has noticeably less detail or contrast than before. Waiting for a better image.",
+    "Gegenprobe wartet auf ein besseres Bild. Der bestätigte Rahmen bleibt ausgewählt.":
+        "Waiting for a better image for verification. The confirmed crop remains selected.",
+    "Grobsuche läuft. Die besten Zwischenkandidaten werden gespeichert.":
+        "Coarse search in progress. Saving the highest-ranked candidates.",
+    "Intensivprüfung für Kandidat ": "Intensive check for candidate ",
+    "Grobtests: ": "Coarse attempts: ",
+    "Grün bedeutet lesbar. Ein gültiger Vergleichswert für dieses Bild fehlt.":
+        "Green means readable. This image has no valid reference reading.",
+    "Grün bedeutet lesbar. Der abgelesene Stand passt noch nicht zum Vergleichswert.":
+        "Green means readable. The reading does not match the reference yet.",
+    "Ziffern sind lesbar. Ohne Vergleichswert wartet die App auf einen plausiblen Anstieg oder einen Startwert.":
+        "The digits are readable. Without a reference, the app waits for a plausible increase or a starting reading.",
+    "Treffer gesammelt. Warte auf ein frisches Bild für die Gegenprobe.":
+        "Matches collected. Waiting for a fresh image for verification.",
+    " · Beste Kandidaten: ": " · Best candidates: ",
     LAST_DIGIT_PASS: "The first two decimal places match. The third digit remains unconfirmed.",
     "Für den Verbrauch verwendet die App den plausiblen Vergleichswert.": "The app uses the plausible reference reading to calculate consumption.",
     "Ablesung und Vergleichswert weichen ab": "Image reading and reference differ",

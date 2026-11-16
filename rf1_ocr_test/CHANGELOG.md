@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.13 Stable
+
+- Die Grobsuche endet bei einem verlässlichen Treffer oder nach 50 Versuchen. Bis zu fünf der besten Kandidaten werden gespeichert und intensiver geprüft.
+- Nach zwei Bestätigungen prüft die Selbsteinrichtung denselben Rahmen weiter und wiederholt bei Bedarf die Gegenprobe. Deutlich schlechtere Bilder werden dafür übersprungen.
+- Nach der vereinfachten Ersteinrichtung wird der bestätigte Ausschnitt gespeichert. Anschließend sucht die App die offene dritte Nachkommastelle im selben Ausschnitt.
+
 ## 0.5.12 Stable
 
 - Bei drei eingestellten Nachkommastellen kalibriert die Ersteinrichtung zunächst auf zwei bestätigte Stellen. Die dritte kann anschließend intensiv gesucht oder im Kamerabild manuell markiert werden.

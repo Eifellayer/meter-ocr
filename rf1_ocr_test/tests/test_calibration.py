@@ -428,8 +428,19 @@ class CalibrationTests(TestCase):
         self.job.examine(frame(1), None, sample, 101, rules, read, lambda: False,
                          on_shortlist=lambda number, _: checked.append(number))
         self.assertEqual([1], checked)
-        self.assertTrue(self.job.optimizing)
         self.assertEqual(0, self.job.confirmations)
+
+    def test_a_yellow_last_digit_keeps_the_visible_score_below_one_hundred(self):
+        self.job = Calibration(5, 0, rank_candidates=True, simplified=True)
+        rules = {**RULES, "decimals": 3, "fraction_digits": 3}
+        sample = {"reference_time": 100, "raw_value": "12345.23?", "actual_value": "12345.23?"}
+        for index in (1, 2):
+            self.job.examine(frame(index), None, sample, 100 + index, rules,
+                             lambda *_: "12345.23?", lambda: False)
+            status = self.job.status(100 + index)
+            self.assertEqual([88], status["shortlist"])
+            self.assertEqual(88, status["candidate_agreement"])
+            self.assertEqual(index, self.job.confirmations)
 
     def test_intensive_agreement_uses_the_configured_threshold(self):
         sample = {"reference_time": 100, "raw_value": "123456789.239", "actual_value": "123456789.239"}
@@ -438,10 +449,28 @@ class CalibrationTests(TestCase):
         for override, expected in (({}, True), ({"intensive_agreement": 90}, False)):
             with self.subTest(override=override):
                 job = Calibration(5, 0, rank_candidates=True)
-                job.examine(frame(1), None, sample, 101, {**rules, **override}, read, lambda: False)
+                checked = []
+                job.examine(frame(1), None, sample, 101, {**rules, **override}, read, lambda: False,
+                            on_shortlist=lambda number, _: checked.append(number))
                 self.assertEqual([83], job.status(101)["shortlist"])
-                self.assertEqual(expected, job.optimizing)
+                self.assertEqual(expected, bool(checked))
                 self.assertEqual(0, job.confirmations)
+
+    def test_unsuccessful_intensive_check_resumes_coarse_search_on_the_next_image(self):
+        self.job = Calibration(5, 0, rank_candidates=True)
+        sample = {"reference_time": 100, "raw_value": "12345", "actual_value": "12345"}
+        checked = []
+        self.job.examine(frame(1), None, sample, 101, RULES, lambda *_: "1234?", lambda: False,
+                         on_shortlist=lambda number, _: checked.append(number))
+        self.assertEqual([1], checked)
+        self.assertEqual(0, self.job.confirmations)
+        self.assertFalse(self.job.optimizing)
+
+        self.candidates.return_value = [OTHER_LAYOUT]
+        self.job.examine(frame(2), None, sample, 102, RULES, lambda *_: "12345", lambda: False)
+        self.assertEqual(2, self.job.coarse_attempts)
+        self.assertEqual(OTHER_LAYOUT, self.job.candidate)
+        self.assertEqual(1, self.job.confirmations)
 
     def test_only_one_open_required_slot_triggers_intensive_search(self):
         self.job = Calibration(5, 0, rank_candidates=True, simplified=True)

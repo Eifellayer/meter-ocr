@@ -3,6 +3,8 @@
 ## 0.5.15 Stable
 
 - Die Übereinstimmung für den Wechsel von der Grobsuche zur Intensivprüfung ist einstellbar. Der Standardwert beträgt 80 Prozent.
+- Der angezeigte Prozentwert berücksichtigt alle sichtbaren Ziffernpositionen. Bei einer offenen Stelle kann das Bild den Rahmen bestätigen, die Anzeige bleibt unter 100 Prozent.
+- Ergibt eine frühe Intensivprüfung keinen Treffer, setzt das nächste Bild die noch verfügbare Grobsuche fort.
 
 ## 0.5.14 Stable
 

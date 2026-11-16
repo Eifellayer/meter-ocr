@@ -909,8 +909,9 @@ def main():
             result = {}
             for item in saved["candidates"][:SHORTLIST_LIMIT]:
                 geometry, score = item["geometry"], item["score"]
-                if (len(score) != 2 or type(score[0]) is not int or not 0 < score[0] <= 100
-                        or type(score[1]) not in (int, float) or not 0 <= score[1] <= 255):
+                if (len(score) not in (2, 3) or type(score[0]) is not int or not 0 <= score[0] <= 100
+                        or type(score[1]) not in (int, float) or not 0 <= score[1] <= 255
+                        or (len(score) == 3 and (type(score[2]) is not int or not score[0] <= score[2] <= 100))):
                     continue
                 box = crop_coordinates(geometry["crop"], geometry["width"], geometry["rotation"])
                 boxes = digit_box_settings(geometry["digit_boxes"], rules["integer_digits"] + rules["fraction_digits"])

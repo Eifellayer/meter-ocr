@@ -509,14 +509,15 @@ class Calibration:
         return best[1], best[2]
 
     def status(self, now):
+        selected_score = self.shortlist.get(self.candidate, ())
         return {"state": self.state, "stage": self.stage, "rotation": self.rotation, "variant": self.variant,
                 "tested": len(self.seen), "limit": self.limit, "duration": self.duration,
                 "attempts": self.attempts, "max_attempts": self.attempt_limit, "automatic": self.automatic,
                 "confirmations": self.confirmations, "required": MIN_IMAGES,
                 "simplified": self.simplified, "intensive": self.intensive, "followup": self.followup,
                 "coarse_attempts": self.coarse_attempts, "coarse_limit": COARSE_LIMIT,
-                "shortlist": [score[0] for score in self.shortlist.values()],
-                "candidate_agreement": self.shortlist.get(self.candidate, (None, 0))[0],
+                "shortlist": [score[0] for score in self.shortlist.values() if len(score) == 3],
+                "candidate_agreement": selected_score[0] if len(selected_score) == 3 else None,
                 "seconds": max(0, ceil(self.remaining(now)))}
 
     def refine(self, layout, readings, sample, rules, read, stop, on_attempt, tested, frame_ceiling):
@@ -665,10 +666,12 @@ class Calibration:
         on_decision("verified")
         return self.candidate
 
-    def record_intermediate(self, layout, readings, sample, precision, digits, frame):
-        percentage = agreement_percent(readings, sample, precision, digits)
-        if percentage:
-            self.shortlist[layout] = (percentage, round(crop_quality(frame, layout), 2))
+    def record_intermediate(self, layout, readings, sample, precision, digits, fraction, frame):
+        required_agreement = agreement_percent(readings, sample, precision, digits)
+        readable_agreement = agreement_percent(readings, {"reference_required": False}, fraction, digits)
+        percentage = min(required_agreement, readable_agreement)
+        if required_agreement:
+            self.shortlist[layout] = (percentage, round(crop_quality(frame, layout), 2), required_agreement)
             self.shortlist = dict(sorted(self.shortlist.items(), key=lambda pair: pair[1], reverse=True)
                                   [:SHORTLIST_LIMIT])
 
@@ -695,7 +698,7 @@ class Calibration:
         flow = rules["max_flow_lph"]
         committed = self.confirmations >= 2
         preferred = (self.confirmations == 1 and self.rank_candidates
-                     and self.shortlist.get(self.candidate, (0, 0))[0] == 100)
+                     and self.shortlist.get(self.candidate, (0, 0))[-1] == 100)
         collecting = self.rank_candidates and not (committed or preferred or self.optimizing)
         if committed or preferred or self.focused:
             candidates = (self.candidate,)
@@ -775,7 +778,7 @@ class Calibration:
 
         if self.rank_candidates and not (committed or preferred):
             for _, layout, readings in coarse:
-                self.record_intermediate(layout, readings, sample, precision, digits, frame)
+                self.record_intermediate(layout, readings, sample, precision, digits, rules["fraction_digits"], frame)
             coarse.sort(key=lambda item: self.shortlist.get(item[1], (0, 0)), reverse=True)
             stable = [item for item in coarse if item[0][4]]
             if collecting:
@@ -785,10 +788,10 @@ class Calibration:
                 almost_complete = round(100 * (required_slots - 1) / required_slots)
 
                 def promising_candidate(layout, values):
-                    percentage = self.shortlist.get(layout, (0, 0))[0]
-                    if percentage >= threshold:
+                    score = self.shortlist.get(layout, (0, 0, 0))
+                    if score[0] >= threshold:
                         return True
-                    if required_slots < 2 or percentage < almost_complete:
+                    if required_slots < 2 or score[-1] < almost_complete:
                         return False
                     required_rows = [
                         str(value).replace(".", "").replace(",", "")[:required_slots] for value in values
@@ -818,7 +821,8 @@ class Calibration:
                     except (OSError, ValueError, subprocess.SubprocessError):
                         continue
                 if extras:
-                    self.record_intermediate(layout, [*readings, *extras], sample, precision, digits, frame)
+                    self.record_intermediate(layout, [*readings, *extras], sample, precision, digits,
+                                             rules["fraction_digits"], frame)
             if not self.optimizing:
                 reason = "collecting"
                 if stable and has_reference:
@@ -916,8 +920,9 @@ class Calibration:
             except (OSError, ValueError, subprocess.SubprocessError):
                 on_decision(rejection)
                 continue
-            if self.rank_candidates:
-                self.record_intermediate(layout, readings, sample, precision, digits, frame)
+            if self.rank_candidates and (committed or preferred
+                                         or all(layout != tested_layout for _, tested_layout, _ in coarse)):
+                self.record_intermediate(layout, readings, sample, precision, digits, rules["fraction_digits"], frame)
             self.confirmed_quality = (self.confirmed_quality if same else [])[-2:] + [crop_quality(frame, layout)]
             self.confirmations = self.confirmations + 1 if same else 1
             self.anchored = (same and self.anchored) or has_reference or bool(baseline)
@@ -942,4 +947,6 @@ class Calibration:
             self.candidate, self.counter = None, {}
             self.focused = False
             self.confirmations, self.anchored, self.advanced = 0, False, False
+            if self.rank_candidates and self.optimizing and self.coarse_attempts < COARSE_LIMIT:
+                self.optimizing = False
         return None

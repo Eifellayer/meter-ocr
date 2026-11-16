@@ -13,9 +13,9 @@ from statistics import median
 from checks import OCR_PROFILES, compare_sample, crop_register, meter_prefix, read_with_retries
 from consumption import accumulate_consumption
 from layout import (crop_coordinates, digit_box_settings, find_digit_row, find_neighbour_digit_rows,
-                    find_raw_digit_row, normalize_digit_boxes, rotated_width, turn_crop)
+                    find_raw_digit_rows, normalize_digit_boxes, rotated_width, same_digit_region, turn_crop)
 
-from meter_learning import propose_digit_boxes, widen_digit_boxes
+from meter_learning import propose_digit_boxes
 
 DEFAULT_LIMIT = 100
 MIN_IMAGES = 3
@@ -27,6 +27,7 @@ IMAGE_WAIT_LIMIT = 360
 CAPTURE_INTERVAL = 5
 ANGLES = (-3, 3, -1, 1, -2, 2, -4, 4, -6, 6, -9, 9, -12, 12, -18, 18, 90, -90, 180)
 MAX_LAYOUTS_PER_IMAGE = 4
+FRAME_ATTEMPT_LIMIT = 30
 
 
 @dataclass(frozen=True)
@@ -81,7 +82,7 @@ def neighbour_layout(frame, angle, detected, whole_digits, fraction_digits):
     return Layout(outer, angle, whole_width, tuple(map(tuple, normalized)), method="neighbours")
 
 
-def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False):
+def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False, on_regions=None):
     """Try a few geometry candidates per image, rotating the search across images."""
     emitted = set()
 
@@ -123,26 +124,37 @@ def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False
     # Reserve space for neighbour inference and, where possible, the regular crop.
     neighbour_limit = MAX_LAYOUTS_PER_IMAGE - int(configured is not None and not prefer_configured)
     raw_limit = neighbour_limit - 1
-    for angle in (ANGLES[first], 0, ANGLES[(first + 1) % len(ANGLES)]):
-        if len(emitted) >= raw_limit:
-            break
-        adjusted = turn_crop(frame, angle, expand=False)
-        detected = find_raw_digit_row(adjusted, rules["integer_digits"], rules["fraction_digits"])
-        if detected:
-            box = unrotate_box(detected[0], frame.size, angle)
+    angles = (ANGLES[first], 0, ANGLES[(first + 1) % len(ANGLES)])
+    if len(emitted) < raw_limit:
+        ranked = []
+        for angle in angles:
+            adjusted = turn_crop(frame, angle, expand=False)
+            for detected, score in find_raw_digit_rows(adjusted, rules["integer_digits"], rules["fraction_digits"]):
+                box = unrotate_box(detected[0], frame.size, angle)
+                ranked.append((score * (1.15 if angle == angles[0] else 1), angle, detected, box))
+        ranked.sort(key=lambda item: (-item[0], item[3][1], item[3][0]))
+        regions = []
+        for score, _, _, box in ranked:
+            if not regions or score >= regions[0][0] * .75:
+                if not any(same_digit_region(box, old) for _, old in regions):
+                    regions.append((score, box))
+        if on_regions is not None and len(regions) > 1:
+            on_regions([box for _, box in regions[:4]])
+        variants = []
+        for _, angle, detected, box in ranked:
+            if any(same_digit_region(box, item[0].box) for item in variants):
+                continue
             left, top, right, bottom = box
             frames = normalize_digit_boxes(detected[2], (right - left, bottom - top)) if angle == 0 else ()
             alternate = candidate(box, angle, padding=2)
             turned = turn_crop(crop_register(frame, alternate.box), angle)
             optimized = propose_digit_boxes(turned, [], alternate.width, rules["integer_digits"], rules["fraction_digits"])
-            variants = (Layout(box, angle, detected[1], frames),
-                        Layout(alternate.box, angle, alternate.width, tuple(map(tuple, optimized))))
-            if optimized:
-                widened = widen_digit_boxes(optimized, turned.size)
-                if widened and tuple(map(tuple, widened)) != tuple(map(tuple, optimized)):
-                    variants += (Layout(alternate.box, angle, alternate.width,
-                                        tuple(map(tuple, widened)), method="widened"),)
-            for layout in variants:
+            variants.append((Layout(box, angle, detected[1], frames),
+                             Layout(alternate.box, angle, alternate.width, tuple(map(tuple, optimized)))))
+            if len(variants) >= raw_limit:
+                break
+        for group in zip(*variants):
+            for layout in group:
                 if len(emitted) >= raw_limit:
                     break
                 if unique(layout):
@@ -319,6 +331,7 @@ class Calibration:
     searching_since: float | None = None
     last_image_at: float | None = None
     refinement_seen: set = field(default_factory=set)
+    rejected_regions: list = field(default_factory=list)
 
     def expired(self, now):
         return self.remaining(now) <= 0
@@ -336,7 +349,7 @@ class Calibration:
                 "confirmations": self.confirmations, "required": MIN_IMAGES,
                 "seconds": max(0, ceil(self.remaining(now)))}
 
-    def refine(self, layout, readings, sample, rules, read, stop, on_attempt, tested):
+    def refine(self, layout, readings, sample, rules, read, stop, on_attempt, tested, frame_ceiling):
         on_attempt = on_attempt or (lambda *_: None)
         whole, fraction = rules["integer_digits"], rules["fraction_digits"]
         has_reference = sample.get("reference_required") is not False
@@ -373,7 +386,7 @@ class Calibration:
         if best[0][-1] < min(2, whole):
             return layout, readings
         # Bound the work per image, leaving budget for independent confirmations.
-        budget = min(80, max(0, self.attempt_limit - self.attempts - MIN_IMAGES))
+        budget = min(12, max(0, min(frame_ceiling, self.attempt_limit - MIN_IMAGES) - self.attempts))
         variants = iter(refinement_layouts(layout, rules, readings))
         with ThreadPoolExecutor(max_workers=refinement_workers()) as pool:
             while budget and not stop():
@@ -444,7 +457,7 @@ class Calibration:
         return self.candidate
 
     def examine(self, frame, overlay, sample, stamp, rules, read, stop, baseline=None, on_attempt=None,
-                on_image=None, on_decision=lambda reason: None, refine_read=None, on_refine=None):
+                on_image=None, on_decision=lambda reason: None, refine_read=None, on_refine=None, on_regions=None):
         """Return a verified layout, checking two OCR profiles per distinct image."""
         if not self.remember_image(frame, stamp):
             return None
@@ -458,7 +471,7 @@ class Calibration:
         seed = self.candidate or self.previous_layout
         candidates = (guided_layouts(frame, overlay, rules, len(self.seen) - 1, seed, self.region)
                       if self.region else layouts(frame, overlay, rules, len(self.seen) - 1, seed,
-                                                  prefer_configured=self.automatic))
+                                                  prefer_configured=self.automatic, on_regions=on_regions))
         # A geometry that produced a stable OCR string is a strong signal, even
         # when it did not yet match the external reference. Stay focused on it
         # for the next fresh image instead of spending attempts on rotations
@@ -468,9 +481,12 @@ class Calibration:
             candidates = ((self.candidate,) if self.candidate is not None else ())
         examined = False
         tested = set()
+        frame_ceiling = self.attempts + FRAME_ATTEMPT_LIMIT
         for index, layout in enumerate(candidates, start=1):
-            if stop() or self.attempts >= self.attempt_limit:
+            if stop() or self.attempts >= min(self.attempt_limit, frame_ceiling):
                 return None
+            if any(same_digit_region(layout.box, old) for old in self.rejected_regions):
+                continue
             if layout in tested:
                 continue
             tested.add(layout)
@@ -484,9 +500,22 @@ class Calibration:
                 if stop():
                     return None
                 readings.append(read(layout, OCR_PROFILES[1]))
+                if has_reference and readings[0] == readings[1]:
+                    status = compare_sample(sample, readings[0], precision, integer_digits=digits)[0]
+                    expected = meter_prefix(sample.get("actual_value"), precision, digits)
+                    prefix = meter_prefix(readings[0], precision, digits)
+                    if (reference_rejection(sample, status) == "reference_mismatch"
+                            and expected is not None and prefix is not None
+                            and sum(a == b for a, b in zip(str(expected).zfill(digits + precision),
+                                                         str(prefix).zfill(digits + precision))) < digits / 2):
+                        self.rejected_regions = [*self.rejected_regions[-15:], layout.box]
+                        on_decision("position_error" if position_error(readings[0], sample, precision, digits)
+                                    else "reference_mismatch")
+                        continue
                 if refine_read is not None and not self.confirmations and not self.focused:
                     original = layout
-                    layout, readings = self.refine(layout, readings, sample, rules, refine_read, stop, on_refine, tested)
+                    layout, readings = self.refine(layout, readings, sample, rules, refine_read, stop, on_refine,
+                                                   tested, frame_ceiling)
                     if layout != original and not stop():
                         read(layout, OCR_PROFILES[0])
                 if stop():
@@ -502,6 +531,7 @@ class Calibration:
                     status, _ = compare_sample(sample, readings[0], precision, integer_digits=digits)
                     reason = reference_rejection(sample, status)
                     if reason == "reference_mismatch" and position_error(readings[0], sample, precision, digits):
+                        self.rejected_regions = [*self.rejected_regions[-15:], layout.box]
                         on_decision("position_error")
                         continue
                     if reason and not self.focused:
@@ -513,6 +543,8 @@ class Calibration:
                         on_decision(reason)
                         return None
                     if reason:
+                        if reason == "reference_mismatch":
+                            self.rejected_regions = [*self.rejected_regions[-15:], layout.box]
                         on_decision(reason)
                         continue
                 rejection = "implausible"

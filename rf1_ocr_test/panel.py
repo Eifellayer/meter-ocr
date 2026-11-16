@@ -491,12 +491,15 @@ name: Zählerstand (OCR)</code></pre>
 <input type="hidden" name="csrf" value="{csrf}">
 <label id="calibration-limit-label">Höchstens so viele unterschiedliche Bilder
 <input id="calibration-limit" name="image_limit" type="number" min="{calibration_min}" max="{calibration_max}" value="{calibration_limit}" required></label>
+<p id="calibration-region-hint" hidden>Mehrere Ziffernfelder gefunden.
+<button type="button" id="calibration-show-choices">Ziffernfelder ansehen</button></p>
 <details class="setup-help" id="calibration-region">
 <summary>Suchbereich im Kamerabild eingrenzen</summary>
 <p>Ziehe einen Rahmen um das Ziffernfeld. Lass etwas Rand und spare die Seriennummer aus.</p>
 <div class="crop-draw-image" id="calibration-region-picker" hidden>
 <img id="calibration-region-image" alt="Kamerabild zur Auswahl des Suchbereichs" draggable="false">
 <span class="crop-draw-outline" id="calibration-region-outline" hidden></span>
+<div id="calibration-region-choices"></div>
 </div>
 <p id="calibration-region-empty" hidden>Kamerabild fehlt. Starte eine Prüfung oder die Selbsteinrichtung, um ein Bild zu laden.</p>
 <input type="hidden" id="calibration-region-value" name="region">
@@ -1305,6 +1308,13 @@ const regionOutline = document.querySelector('#calibration-region-outline');
 const regionValue = document.querySelector('#calibration-region-value');
 const regionStartButton = document.querySelector('#calibration-guided-start');
 const regionEmpty = document.querySelector('#calibration-region-empty');
+const regionChoices = document.querySelector('#calibration-region-choices');
+const regionHint = document.querySelector('#calibration-region-hint');
+document.querySelector('#calibration-show-choices').addEventListener('click', () => {{
+  regionDetails.open = true;
+  showRegionPhoto();
+  regionChoices.querySelector('button')?.focus();
+}});
 let recentCalibrationImage = '';
 let recentCurrentImage = '';
 let regionDrag = null;
@@ -1332,6 +1342,32 @@ function paintRegion(box) {{
   const [l, t, r, b] = box;
   ['left', 'top', 'width', 'height'].forEach((key, i) => {{
     regionOutline.style[key] = [l, t, r - l, b - t][i] / 10 + '%';
+  }});
+}}
+function showRegionChoices(boxes) {{
+  const values = regionValue.value || regionDrag ? [] : boxes || [];
+  const key = JSON.stringify(values);
+  if (key === regionChoices.dataset.boxes) return;
+  regionChoices.dataset.boxes = key;
+  regionChoices.replaceChildren();
+  regionHint.hidden = !values.length;
+  values.forEach(([l, t, r, b], index) => {{
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = String(index + 1);
+    button.setAttribute('aria-label', 'Ziffernfeld auswählen ' + (index + 1));
+    button.style.cssText = 'position:absolute;padding:0;border:2px solid #48b6ff;background:#05142188;min-height:0';
+    Object.assign(button.style, {{left: l / 10 + '%', top: t / 10 + '%',
+      width: (r - l) / 10 + '%', height: (b - t) / 10 + '%'}});
+    button.addEventListener('pointerdown', event => event.stopPropagation());
+    button.addEventListener('click', () => {{
+      const box = [Math.max(0, l - 12), Math.max(0, t - 18), Math.min(1000, r + 12), Math.min(1000, b + 18)];
+      regionValue.value = box.join(',');
+      paintRegion(box);
+      regionStartButton.disabled = false;
+      regionStartButton.form.requestSubmit(regionStartButton);
+    }});
+    regionChoices.append(button);
   }});
 }}
 function selectedRegion(event) {{
@@ -1501,6 +1537,7 @@ async function refreshTestStatus() {{
     recentCalibrationImage = frameRevision ? 'lernvorschau.jpg?bild=frame&v=' + encodeURIComponent(frameRevision) : '';
     recentCurrentImage = job.current_image || '';
     showRegionPhoto();
+    showRegionChoices(job.calibration?.preview?.regions);
     refreshCalibration(job.calibration);
     const calibrating = ['waiting', 'testing'].includes(job.calibration?.state);
     document.querySelector('#calibration-restore').hidden = !job.calibration_backup || calibrating;

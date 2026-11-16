@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.5 Stable
+
+- Größere, gleichmäßige Ziffernreihen werden bei der Selbsteinrichtung bevorzugt. Ähnlich plausible Felder lassen sich im Kamerabild anklicken.
+- Klar unpassende Reihen werden im laufenden Suchlauf zurückgestellt. Pro Aufnahme werden höchstens 30 Rahmen geprüft.
+
 ## 0.5.4
 
 - Die Selbsteinrichtung trennt die Bildwartezeit von der Rechenzeit und beendet die Bildsuche bei ausbleibenden Aufnahmen nach sechs Minuten.

@@ -1066,6 +1066,13 @@ def main():
                                 if frame_ready and calibration is job and job.state == "testing":
                                     calibration_preview["reason"] = reason
 
+                        def report_regions(boxes):
+                            regions = [[round(1000 * value / size) for value, size in
+                                        zip(box, frame.size * 2)] for box in boxes]
+                            with settings_lock:
+                                if frame_ready and calibration is job and job.state == "testing":
+                                    calibration_preview["regions"] = regions
+
                         def register_for(layout):
                             return select_register(
                                 frame, None, layout.box, layout.width, layout.rotation, whole, fraction,
@@ -1103,6 +1110,7 @@ def main():
                                 on_image=on_image, on_decision=report_decision,
                                 refine_read=lambda layout, profile: recognize(layout, profile, register_for(layout)),
                                 on_refine=lambda variant, rotation: report_calibration("refine", variant, rotation),
+                                on_regions=report_regions,
                             )
                             attempt.verification_pending = candidate is not None
         except (OSError, ValueError, TypeError, Image.DecompressionBombError) as error:

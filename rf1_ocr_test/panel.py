@@ -1602,6 +1602,8 @@ function refreshCalibrationImages(preview) {{
     implausible: 'Der Stand passt zeitlich nicht zur letzten sicheren Ablesung.',
     await_movement: 'Der Rahmen ist lesbar. Die App wartet auf einen plausiblen Zähleranstieg.',
     accepted: 'Dieser Rahmen wurde auf dem aktuellen Bild bestätigt.',
+    accepted_geometry: 'Ziffern bis zur zweiten Nachkommastelle gelesen. Der Rahmen zählt vorläufig. Der Vergleichswert fehlt.',
+    accepted_partial: 'Bis zur zweiten Nachkommastelle bestätigt. Die dritte Stelle bleibt offen.',
     verified: 'Die abschließende Gegenprobe war erfolgreich.',
   }};
   for (const section of document.querySelectorAll('.calibration-photo-panel')) {{

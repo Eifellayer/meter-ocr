@@ -230,6 +230,65 @@ def find_dark_register(frame, count):
         best[1], (frame.width / width, frame.height / height) * 2))
 
 
+def dark_register_cells(register, count):
+    """Fit roller centers to visible strokes inside an already located dark window."""
+    image = register.convert("RGB")
+    image.thumbnail((720, 180), Image.Resampling.BILINEAR)
+    w, h = image.size
+    if count < 3 or w < count * 10 or h < 15:
+        return ()
+    estimate = w / count
+    best = None
+    for channel in ("G", "B", "L"):
+        gray = ImageOps.autocontrast(image.convert("L") if channel == "L" else image.getchannel(channel), cutoff=2)
+        for threshold in (105, 120, 140):
+            glyphs = [box for box in digit_components(gray, threshold, True)
+                      if w * .025 <= (box[0] + box[2]) / 2 <= w * .975
+                      and h * .20 <= box[3] - box[1] <= h * .60
+                      and box[2] - box[0] <= estimate * .66]
+            if not max(3, count - 2) <= len(glyphs) <= 2 * count + 4:
+                continue
+            centers = [(l + r) / 2 for l, _, r, _ in glyphs]
+            pitches = {round((right - left) / steps, 1)
+                       for i, left in enumerate(centers) for right in centers[i + 1:]
+                       for steps in (1, 2, 3)
+                       if estimate * .72 <= (right - left) / steps <= estimate * 1.12}
+            for pitch in sorted(pitches):
+                for anchor in centers:
+                    for slot in range(count):
+                        first = anchor - slot * pitch
+                        last = first + (count - 1) * pitch
+                        if first < .27 * pitch or last > w - .27 * pitch:
+                            continue
+                        grid = [first + i * pitch for i in range(count)]
+                        matches = [min(range(len(centers)), key=lambda i: abs(centers[i] - x)) for x in grid]
+                        matched = [(slot, index) for slot, (x, index) in enumerate(zip(grid, matches))
+                                   if abs(x - centers[index]) <= pitch * .28]
+                        if len(matched) < max(3, count - 2) or matched[-1][0] - matched[0][0] < count - 3:
+                            continue
+                        vertical = [(glyphs[index][1] + glyphs[index][3]) / 2 for _, index in matched]
+                        middle = median(vertical)
+                        if any(abs(center - middle) > h * .22 for center in vertical):
+                            continue
+                        error = sum(abs(grid[slot] - centers[index]) / pitch for slot, index in matched)
+                        error += sum(abs(center - middle) / h for center in vertical)
+                        score = len(matched), -error
+                        if best is not None and score <= best[0]:
+                            continue
+                        glyph_height = median(glyphs[index][3] - glyphs[index][1] for _, index in matched)
+                        boxes = []
+                        matched_centers = dict(matched)
+                        for slot, x in enumerate(grid):
+                            if slot in matched_centers:
+                                x = centers[matched_centers[slot]]
+                            top = max(0, round(middle - .73 * glyph_height))
+                            bottom = min(h, round(middle + .73 * glyph_height))
+                            boxes.append((max(0, round(x - pitch * .36)), top,
+                                          min(w, round(x + pitch * .36)), bottom))
+                        best = score, normalize_digit_boxes(boxes, image.size)
+    return () if best is None else best[1]
+
+
 def find_digit_row(overlay, whole_digits=5, fraction_digits=None):
     width, height = overlay.size
     # SLFork draws digit frames in green. Alignment markers use a different color.

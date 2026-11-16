@@ -1487,9 +1487,24 @@ function refreshCalibration(status) {{
     verify: 'Gefundenen Rahmen mit der normalen Prüfung gegenprüfen …',
     ocr: 'Prüfe Rahmen ' + status.variant + ' mit Drehung ' + status.rotation + '° …',
   }};
-  const waitingForRegion = status.state === 'waiting' && status.preview?.reason === 'no_region';
-  const message = waitingForRegion ? 'Noch kein Ziffernbereich gefunden. Warte auf ein neues Bild …' :
-    active && stages[status.stage] ? stages[status.stage] : messages[status.state] || '';
+  const reason = status.preview?.reason;
+  let message = active && stages[status.stage] ? stages[status.stage] : messages[status.state] || '';
+  if (status.state === 'waiting' && status.stage !== 'queued') {{
+    if (reason === 'await_movement') {{
+      message = 'Ziffernfeld lesbar. Die App wartet auf einen höheren Zählerstand oder einen abgelesenen Startwert.';
+    }} else if (status.confirmations > 0) {{
+      message = 'Ziffernfeld bestätigt. Die App prüft mit dem nächsten neuen Bild weiter.';
+    }} else if (reason === 'no_region') {{
+      message = status.tested >= 2 ?
+        'Ziffernfeld nicht gefunden. Grenze das Ziffernfeld im Kamerabild ein.' :
+        'Noch kein Ziffernbereich gefunden. Warte auf ein neues Bild …';
+    }} else if (reason === 'reference_unavailable') {{
+      message = 'Kein gültiger Vergleichswert für dieses Bild. Die App wartet auf eine neue Messung.';
+    }}
+  }}
+  if (status.state === 'failed' && ['reference_mismatch', 'position_error'].includes(reason)) {{
+    message = 'Der gelesene Bereich passt nicht zum Vergleichswert. Prüfe den Vergleichswert und markiere das Ziffernfeld.';
+  }}
   const detail = 'Bilder geprüft: ' + status.tested +
     ' · Rahmen getestet: ' + status.attempts +
     ' · Bestätigungen: ' + status.confirmations + '/' + status.required +

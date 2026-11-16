@@ -791,8 +791,14 @@ class BrowserTests(IngressFixture):
                                     preview={"frame": 15, "crop": 15, "reading": "12345.67?", "reason": "accepted"})
             overview.filter(has_text="Rahmen mit 100 % Übereinstimmung gefunden.").wait_for()
             display.get_by_text("Gelb mit ?: Stelle vermutet, Ziffer nicht lesbar.", exact=False).wait_for()
+            self.calibration.update(state="waiting", confirmations=3, awaiting_start_value=True,
+                                    preview={"frame": 15, "reason": "await_movement"})
+            overview.filter(has_text="auf einen plausiblen Anstieg oder einen Startwert").wait_for()
+            self.calibration.update(state="testing", stage="capture", preview={"frame": 15})
+            overview.filter(has_text="Kamerabild wird abgerufen").filter(
+                has_text="auf einen plausiblen Anstieg oder einen Startwert").wait_for()
             self.calibration.update(state="waiting", tested=1, attempts=0, confirmations=0,
-                                    preview={"frame": 15, "reason": "no_region"})
+                                    awaiting_start_value=False, preview={"frame": 15, "reason": "no_region"})
             page.locator("#calibration-overview-state").filter(has_text="Noch kein Ziffernbereich gefunden").wait_for()
             self.calibration["tested"] = 73
             page.locator("#calibration-overview-state").filter(has_text="Grenze das Ziffernfeld im Kamerabild ein").wait_for()

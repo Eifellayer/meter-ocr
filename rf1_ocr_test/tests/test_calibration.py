@@ -549,7 +549,11 @@ class CalibrationTests(TestCase):
         self.examine(1, 100, reference=False)
         self.examine(2, 101, reference=False)
         self.assertIsNone(self.examine(3, 102, reference=False))
+        self.assertTrue(self.job.status(102)["awaiting_start_value"])
+        self.job.state = "testing"
+        self.assertTrue(self.job.status(103)["awaiting_start_value"])
         self.assertEqual(LAYOUT, self.examine(4, 103, "12346", reference=False))
+        self.assertFalse(self.job.status(103)["awaiting_start_value"])
 
     def test_learning_tries_the_configured_crop_when_detection_finds_nothing(self):
         photo = frame(1)

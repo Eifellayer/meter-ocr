@@ -238,6 +238,9 @@ EN_UI = {
         "Green: read. Yellow: OCR attempts disagree. Yellow with ?: probable position, unreadable digit. Red: unclear.",
     "Rahmen mit 100 % Übereinstimmung gefunden. Die Intensivprüfung bleibt bei diesem Rahmen und wartet auf ein neues Bild.":
         "Crop found with 100% agreement. The intensive check keeps this crop and waits for a new image.",
+    "Ziffernfeld ist lesbar.": "The digit row is readable.",
+    " Ohne Vergleichswert wartet die App auf einen plausiblen Anstieg oder einen Startwert.":
+        " Without a reference, the app waits for a plausible increase or a starting reading.",
     LAST_DIGIT_PASS: "The first two decimal places match. The third digit remains unconfirmed.",
     "Für den Verbrauch verwendet die App den plausiblen Vergleichswert.": "The app uses the plausible reference reading to calculate consumption.",
     "Ablesung und Vergleichswert weichen ab": "Image reading and reference differ",

@@ -514,6 +514,7 @@ class Calibration:
                 "tested": len(self.seen), "limit": self.limit, "duration": self.duration,
                 "attempts": self.attempts, "max_attempts": self.attempt_limit, "automatic": self.automatic,
                 "confirmations": self.confirmations, "required": MIN_IMAGES,
+                "awaiting_start_value": self.confirmations >= MIN_IMAGES and not (self.anchored or self.advanced),
                 "simplified": self.simplified, "intensive": self.intensive, "followup": self.followup,
                 "coarse_attempts": self.coarse_attempts, "coarse_limit": COARSE_LIMIT,
                 "shortlist": [score[0] for score in self.shortlist.values() if len(score) == 3],

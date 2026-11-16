@@ -1,6 +1,7 @@
 """Home Assistant ingress panel for optical gas meter checks."""
 
 import html
+from io import BytesIO
 from email.parser import BytesParser
 from email.policy import default as email_policy
 import json
@@ -15,19 +16,22 @@ from threading import Lock, Thread
 from tempfile import NamedTemporaryFile
 from urllib.parse import parse_qs, urlsplit
 
+from PIL import Image
+
 from app_channel import APP_NAME, NAMESPACE
 from calibration import (
     DEFAULT_INTENSIVE_AGREEMENT, DEFAULT_LIMIT, MIN_IMAGE_LIMIT, MAX_IMAGES,
     search_region, valid_intensive_agreement,
 )
 from checks import (DEFAULT_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, WARNING_DETAIL_AFTER, meter_prefix,
-                    LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, REFLECTION_SUGGEST_AFTER, STANDALONE_PENDING, STANDALONE_REJECTED_NOTICE,
+                    crop_register, LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, REFLECTION_SUGGEST_AFTER, STANDALONE_PENDING, STANDALONE_REJECTED_NOTICE,
                     STANDALONE_VERIFIED_NOTICE, last_check_at, reschedule_next_check,
                     setup_deadlines, setup_source_id, stabilization_interval, valid_interval_minutes)
 from consumption import DEFAULT_FLOW_LPH, format_cubic_metres, parse_flow_limit
 from i18n import EN_UI, english_progress, english_result, translate_page
 from language import MODES, SUPPORTED, USER_ID, browser_locale, profile_script
-from layout import MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, digit_box_settings
+from layout import MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, digit_box_settings, turn_crop
+from meter_learning import suggest_single_digit_box
 from notification_settings import notification_rules
 from source_settings import source_rules
 
@@ -211,7 +215,14 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .digit-editor{{position:relative;display:table;max-width:100%;touch-action:none}}
 .digit-layer{{position:absolute;inset:0}}
 .digit-frame{{position:absolute;min-height:0;padding:0;border:1px solid #77d4cc;border-radius:0;background:#17383728;color:#fff;cursor:move;text-shadow:0 1px 3px #000}}
-.digit-frame[data-active="true"]{{border-width:2px;z-index:1}}
+.digit-frame[data-active="true"]{{border:2px solid #ffcf53;z-index:1}}
+.digit-correction{{width:min(46rem,calc(100% - 1.25rem));max-height:calc(100dvh - 1.25rem);overflow:auto}}
+.digit-adjustments{{display:grid;gap:.65rem;margin:.7rem 0}}
+.digit-adjustments select{{width:100%;margin-top:.25rem}}
+.digit-adjustments .crop-actions button{{min-height:2.75rem;min-width:2.75rem}}
+.digit-correction .digit-editor{{display:block;width:100%}}
+.digit-correction canvas{{width:100%}}
+.digit-correction .digit-frame span{{width:min(17px,46%);height:min(17px,48%)}}
 .digit-frame span{{display:block;position:absolute;right:0;bottom:0;width:min(12px,44%);height:min(12px,42%);background:#77d4cc;cursor:nwse-resize}}
 .crop-draw-outline{{position:absolute;box-sizing:border-box;border:3px solid #ffcf53;background:#ffcf5320;pointer-events:none}}
 .setup-help summary{{cursor:help;color:var(--muted);font-size:.88rem}}
@@ -307,6 +318,7 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <div class="check-card-heading"><h2>Automatische Kontrolle</h2>
 <div class="check-actions">
 <button type="button" id="open-calibration" {calibration_hidden}>Selbsteinrichtung</button>
+<button type="button" id="open-digit-correction" {digit_correction_hidden}>Ziffernrahmen korrigieren</button>
 <button type="button" id="open-manual-settings">Test einstellen</button>
 <button id="start-check" type="submit" form="manual-form">Test starten</button>
 </div></div>
@@ -319,6 +331,39 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <p>Die automatische Erkennung wird in den ersten 20 Minuten durch weitere Kontrollmessungen stabilisiert. Einzelne Messwerte können in dieser Zeit noch ungenau sein.</p>
 </div>
 <p id="calibration-complete-notice" class="settings-note" role="status" hidden></p>
+{digit_correction_notice}
+<dialog class="setup-dialog digit-correction" id="digit-correction" aria-labelledby="digit-correction-title">
+<div class="dialog-heading">
+<h2 id="digit-correction-title">Ziffernrahmen korrigieren</h2>
+<button type="button" id="close-digit-correction">Schließen</button>
+</div>
+<figure class="crop-live-preview" id="digit-correction-preview" hidden>
+<figcaption>Wähle eine Ziffer. Ziehe ihren Rahmen oder passe ihn mit den Tasten darunter an.</figcaption>
+<div class="digit-editor">
+<canvas role="img" aria-label="Zählerbild mit Ziffernrahmen"></canvas>
+<div class="digit-layer"></div>
+</div>
+<div class="digit-adjustments">
+<label>Position auf der Anzeige<select id="digit-correction-position"></select></label>
+<div class="crop-actions" role="group" aria-label="Rahmen verschieben">
+<button type="button" data-box-move="-1,0" aria-label="Nach links">←</button>
+<button type="button" data-box-move="0,-1" aria-label="Nach oben">↑</button>
+<button type="button" data-box-move="0,1" aria-label="Nach unten">↓</button>
+<button type="button" data-box-move="1,0" aria-label="Nach rechts">→</button>
+<button type="button" data-box-scale="-1">Kleiner</button>
+<button type="button" data-box-scale="1">Größer</button>
+</div>
+<div class="crop-actions">
+<button type="button" id="search-one-digit">Diese Ziffer suchen</button>
+<button type="button" id="undo-one-digit">Diesen Rahmen zurücksetzen</button>
+</div>
+</div>
+</figure>
+<p class="settings-note" id="digit-correction-status" role="status"></p>
+<div class="crop-actions">
+<button type="button" id="save-digit-correction" disabled>Ziffernrahmen speichern</button>
+</div>
+</dialog>
 <div id="calibration-overview" class="calibration-live" hidden>
 <p id="calibration-overview-state" role="status"></p>
 {calibration_skip_html}
@@ -1115,44 +1160,45 @@ function setTestActive(active) {{
 }}
 let lastManualCropResetTime = 0;
 
-function cropEditor(form, panel, fields, reset, save, emptyText) {{
-  const mode = form.elements.crop_mode;
-  const crop = form.elements.crop;
-  const rotation = form.elements.rotation;
-  const area = panel.querySelector('.crop-draw-image');
-  const image = area.querySelector('img');
-  const outline = area.querySelector('span');
-  const preview = panel.querySelector('.crop-live-preview');
-  const canvas = preview.querySelector('canvas');
-  const context = canvas.getContext('2d');
-  const frameLayer = preview.querySelector('.digit-layer');
-  const boxField = form.elements.digit_boxes;
-  const digitCount = {crop_digit_count};
-  let frameDrag = null;
-  let previewRequest = 0;
-  const status = panel.querySelector('[role="status"]');
-  const upload = form.elements.image;
-  let currentVersion = '';
-  let manualVersion = '';
-  let displayedUrl = '';
-  let drawnCrop = null;
-  let drag = null;
-
-  function updateWidth(box) {{
-    const [left, top, right, bottom] = box;
+function drawRegister(canvas, image, [left, top, right, bottom], rotation) {{
+    const angle = rotation * Math.PI / 180;
     const width = right - left;
     const height = bottom - top;
-    const angle = Math.abs(Number(rotation.value)) % 180;
-    const radians = angle * Math.PI / 180;
-    const span = width * Math.abs(Math.cos(radians)) + height * Math.abs(Math.sin(radians));
-    const turned = angle === 0 ? width : angle === 90 ? height :
-      Math.ceil((width + span) / 2) - Math.floor((width - span) / 2);
-    form.elements.width.value = Math.min(9999, Math.max(1, Math.round(turned * {crop_whole_ratio})));
+    const turnedWidth = Math.ceil(width * Math.abs(Math.cos(angle)) + height * Math.abs(Math.sin(angle)));
+    const turnedHeight = Math.ceil(width * Math.abs(Math.sin(angle)) + height * Math.abs(Math.cos(angle)));
+    const scale = Math.min(1, 700 / turnedWidth, 420 / turnedHeight);
+    canvas.width = Math.max(1, Math.round(scale * turnedWidth));
+    canvas.height = Math.max(1, Math.round(scale * turnedHeight));
+    canvas.dataset.rotation = rotation;
+    canvas.dataset.cropWidth = turnedWidth;
+    const context = canvas.getContext('2d');
+    context.translate(canvas.width / 2, canvas.height / 2);
+    context.rotate(angle);
+    context.drawImage(image, left, top, width, height,
+      -width * scale / 2, -height * scale / 2, width * scale, height * scale);
+}}
+function digitFrameEditor(preview, boxField, widthField, position = null) {{
+  const canvas = preview.querySelector('canvas');
+  const frameLayer = preview.querySelector('.digit-layer');
+  const digitCount = {crop_digit_count};
+  let frameDrag = null;
+  function select(index) {{
+    if (!position) return;
+    position.value = index;
+    frames.forEach((frame, i) => {{
+      frame.dataset.active = String(i === index);
+      frame.setAttribute('aria-pressed', String(i === index));
+    }});
+  }}
+  function setBoxes(boxes) {{
+    boxField.value = JSON.stringify(boxes);
+    paintDigitBoxes(boxes);
+    preview.dispatchEvent(new Event('digit-edit'));
   }}
   function currentDigitBoxes() {{
     const boxes = JSON.parse(boxField.value || '[]');
     if (boxes.length === digitCount) return boxes;
-    const width = Number(form.elements.width.value);
+    const width = Number(widthField.value);
     const total = Number(canvas.dataset.cropWidth);
     const edge = {crop_integer_digits};
     const whole = digitCount === edge ? 1000 : Math.max(edge * 12, Math.min(1000 - (digitCount - edge) * 12,
@@ -1175,7 +1221,8 @@ function cropEditor(form, panel, fields, reset, save, emptyText) {{
       event.preventDefault();
       frame.focus({{preventScroll: true}});
       frame.setPointerCapture(event.pointerId);
-      frame.dataset.active = 'true';
+      select(index);
+      if (!position) frame.dataset.active = 'true';
       const rect = frameLayer.getBoundingClientRect();
       frameDrag = {{id: event.pointerId, index, resize: event.target === handle,
         x: event.clientX, y: event.clientY, width: rect.width, height: rect.height,
@@ -1189,8 +1236,9 @@ function cropEditor(form, panel, fields, reset, save, emptyText) {{
     }});
     for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) frame.addEventListener(type, () => {{
       frameDrag = null;
-      frame.dataset.active = 'false';
+      if (!position) frame.dataset.active = 'false';
     }});
+    frame.addEventListener('click', () => select(index));
     frame.addEventListener('keydown', event => {{
       const arrows = {{ArrowLeft: [-10, 0], ArrowRight: [10, 0], ArrowUp: [0, -10], ArrowDown: [0, 10]}};
       const delta = arrows[event.key];
@@ -1221,28 +1269,57 @@ function cropEditor(form, panel, fields, reset, save, emptyText) {{
     if ((index && midpoint <= original[index - 1][0] + original[index - 1][2]) ||
         (index + 1 < digitCount && midpoint >= original[index + 1][0] + original[index + 1][2])) return;
     const boxes = original.map((item, position) => position === index ? next : item);
-    boxField.value = JSON.stringify(boxes);
-    paintDigitBoxes(boxes);
+    setBoxes(boxes);
   }}
+  function replace(index, box) {{
+    const boxes = currentDigitBoxes();
+    const midpoint = box[0] + box[2];
+    if ((index && midpoint <= boxes[index - 1][0] + boxes[index - 1][2]) ||
+        (index + 1 < digitCount && midpoint >= boxes[index + 1][0] + boxes[index + 1][2])) return false;
+    boxes[index] = box;
+    setBoxes(boxes);
+    return true;
+  }}
+  return {{paint: paintDigitBoxes, current: currentDigitBoxes, select, setBoxes, replace, edit: editDigitBox}};
+}}
+function cropEditor(form, panel, fields, reset, save, emptyText) {{
+  const mode = form.elements.crop_mode;
+  const crop = form.elements.crop;
+  const rotation = form.elements.rotation;
+  const area = panel.querySelector('.crop-draw-image');
+  const image = area.querySelector('img');
+  const outline = area.querySelector('span');
+  const preview = panel.querySelector('.crop-live-preview');
+  const canvas = preview.querySelector('canvas');
+  const boxField = form.elements.digit_boxes;
+  let previewRequest = 0;
+  const status = panel.querySelector('[role="status"]');
+  const upload = form.elements.image;
+  let currentVersion = '';
+  let manualVersion = '';
+  let displayedUrl = '';
+  let drawnCrop = null;
+  let drag = null;
+
+  function updateWidth(box) {{
+    const [left, top, right, bottom] = box;
+    const width = right - left;
+    const height = bottom - top;
+    const angle = Math.abs(Number(rotation.value)) % 180;
+    const radians = angle * Math.PI / 180;
+    const span = width * Math.abs(Math.cos(radians)) + height * Math.abs(Math.sin(radians));
+    const turned = angle === 0 ? width : angle === 90 ? height :
+      Math.ceil((width + span) / 2) - Math.floor((width - span) / 2);
+    form.elements.width.value = Math.min(9999, Math.max(1, Math.round(turned * {crop_whole_ratio})));
+  }}
+  const digitEditor = digitFrameEditor(preview, boxField, form.elements.width);
+  const {{paint: paintDigitBoxes, current: currentDigitBoxes}} = digitEditor;
   preview.querySelector('.clear-digit-boxes').addEventListener('click', () => {{
     boxField.value = '[]';
     paintDigitBoxes(currentDigitBoxes());
   }});
   function drawRotationPreview(left, top, right, bottom) {{
-    const angle = Number(rotation.value) * Math.PI / 180;
-    const width = right - left;
-    const height = bottom - top;
-    const turnedWidth = Math.ceil(width * Math.abs(Math.cos(angle)) + height * Math.abs(Math.sin(angle)));
-    const turnedHeight = Math.ceil(width * Math.abs(Math.sin(angle)) + height * Math.abs(Math.cos(angle)));
-    const scale = Math.min(1, 700 / turnedWidth, 420 / turnedHeight);
-    canvas.width = Math.max(1, Math.round(scale * turnedWidth));
-    canvas.height = Math.max(1, Math.round(scale * turnedHeight));
-    canvas.dataset.rotation = rotation.value || '0';
-    canvas.dataset.cropWidth = turnedWidth;
-    context.translate(canvas.width / 2, canvas.height / 2);
-    context.rotate(angle);
-    context.drawImage(image, left, top, width, height,
-      -width * scale / 2, -height * scale / 2, width * scale, height * scale);
+    drawRegister(canvas, image, [left, top, right, bottom], Number(rotation.value));
     paintDigitBoxes(currentDigitBoxes());
     preview.hidden = false;
   }}
@@ -1743,6 +1820,158 @@ function refreshCalibration(status) {{
   document.querySelector('#calibration-manual-digit').disabled = active;
   document.querySelector('#calibration-cancel').hidden = !active;
 }}
+const correctionDialog = document.querySelector('#digit-correction');
+const correctionPreview = document.querySelector('#digit-correction-preview');
+const correctionPosition = document.querySelector('#digit-correction-position');
+const correctionStatus = document.querySelector('#digit-correction-status');
+const correctionOpen = document.querySelector('#open-digit-correction');
+const correctionSearch = document.querySelector('#search-one-digit');
+const correctionSave = document.querySelector('#save-digit-correction');
+const correctionUndo = document.querySelector('#undo-one-digit');
+const correctionBoxes = {{value: '[]'}};
+const correctionWidth = {{value: ''}};
+const correctionEditor = digitFrameEditor(correctionPreview, correctionBoxes, correctionWidth, correctionPosition);
+const correctionImage = new Image();
+let correctionLayout = null;
+let correctionSource = null;
+let originalCorrection = [];
+let correctionBusy = false;
+
+function updateCorrectionControls() {{
+  const index = Number(correctionPosition.value);
+  const changed = correctionBoxes.value !== JSON.stringify(originalCorrection);
+  correctionSave.disabled = correctionBusy || !changed || correctionPreview.hidden;
+  correctionSearch.disabled = correctionBusy || correctionPreview.hidden;
+  correctionUndo.disabled = correctionPreview.hidden || JSON.stringify(correctionEditor.current()[index]) ===
+    JSON.stringify(originalCorrection[index]);
+}}
+async function openDigitCorrection(last = false) {{
+  if (correctionDialog.open) return;
+  correctionSource = null;
+  correctionDialog.showModal();
+  correctionPreview.hidden = true;
+  correctionSave.disabled = true;
+  correctionStatus.textContent = 'Kamerabild wird geladen …';
+  correctionBusy = true;
+  try {{
+    const response = await fetch('status?lang=' + lang, {{cache: 'no-store'}});
+    if (!response.ok) throw new Error();
+    const job = await response.json();
+    const layout = job.digit_correction;
+    if (!layout || layout.integer_digits + layout.fraction_digits !== {crop_digit_count} ||
+        ['waiting', 'testing'].includes(job.calibration?.state)) throw new Error();
+    const images = [];
+    if (job.digit_correction_image) images.push({{kind: 'current', version: job.digit_correction_image}});
+    if (job.calibration?.preview?.frame) images.push({{kind: 'calibration', version: job.calibration.preview.frame}});
+    if (!images.length) throw new Error();
+    for (const source of images) {{
+      const url = (source.kind === 'current' ? 'aktuell.jpg?v=' : 'lernvorschau.jpg?bild=frame&v=') +
+        encodeURIComponent(source.version);
+      correctionImage.src = url;
+      try {{
+        await correctionImage.decode();
+        correctionSource = source;
+        break;
+      }} catch {{ correctionSource = null; }}
+    }}
+    if (!correctionDialog.open || !correctionSource) throw new Error();
+    const crop = layout.crop.split(',').map(Number);
+    if (crop[0] < 0 || crop[1] < 0 || crop[2] > correctionImage.naturalWidth ||
+        crop[3] > correctionImage.naturalHeight) throw new Error();
+    correctionLayout = layout;
+    correctionWidth.value = layout.width;
+    correctionPosition.replaceChildren();
+    for (let i = 0; i < layout.integer_digits + layout.fraction_digits; i++) {{
+      const label = i < layout.integer_digits ? 'Vor dem Komma: ' + (i + 1) :
+        'Nach dem Komma: ' + (i - layout.integer_digits + 1);
+      correctionPosition.add(new Option(label, i));
+    }}
+    drawRegister(correctionPreview.querySelector('canvas'), correctionImage, crop, layout.rotation);
+    correctionBoxes.value = JSON.stringify(layout.digit_boxes || []);
+    originalCorrection = correctionEditor.current();
+    correctionEditor.setBoxes(originalCorrection);
+    correctionEditor.select(last ? correctionPosition.options.length - 1 : 0);
+    correctionPreview.hidden = false;
+    correctionStatus.textContent = '';
+    correctionPosition.focus();
+  }} catch {{
+    correctionStatus.textContent = 'Kein passendes Kamerabild verfügbar. Warte auf eine reguläre Prüfung.';
+  }} finally {{
+    correctionBusy = false;
+    updateCorrectionControls();
+  }}
+}}
+correctionOpen.addEventListener('click', () => openDigitCorrection());
+document.querySelector('#close-digit-correction').addEventListener('click', () => {{ if (!correctionBusy) correctionDialog.close(); }});
+correctionDialog.addEventListener('cancel', event => {{ if (correctionBusy) event.preventDefault(); }});
+correctionPosition.addEventListener('change', () => {{
+  correctionEditor.select(Number(correctionPosition.value));
+  correctionStatus.textContent = '';
+  updateCorrectionControls();
+}});
+correctionPreview.addEventListener('digit-edit', updateCorrectionControls);
+for (const button of correctionPreview.querySelectorAll('[data-box-move], [data-box-scale]')) {{
+  button.addEventListener('click', () => {{
+    const step = Number(button.dataset.boxScale || 0) * 10;
+    const [x, y] = (button.dataset.boxMove || '0,0').split(',').map(Number);
+    const index = Number(correctionPosition.value);
+    const boxes = correctionEditor.current();
+    const [left, top, right, bottom] = boxes[index];
+    if (step) {{
+      const resized = [Math.max(0, left - step), Math.max(0, top - step),
+        Math.min(1000, right + step), Math.min(1000, bottom + step)];
+      if (resized[2] - resized[0] >= 10 && resized[3] - resized[1] >= 25) correctionEditor.replace(index, resized);
+    }} else {{
+      correctionEditor.edit(boxes, index, x * 10, y * 10, false);
+    }}
+  }});
+}}
+correctionUndo.addEventListener('click', () => {{
+  const index = Number(correctionPosition.value);
+  correctionEditor.replace(index, originalCorrection[index]);
+  correctionStatus.textContent = '';
+}});
+async function submitDigitCorrection(action) {{
+  const index = Number(correctionPosition.value);
+  const sent = correctionBoxes.value;
+  correctionBusy = true;
+  correctionPreview.inert = action === 'save';
+  updateCorrectionControls();
+  correctionStatus.textContent = action === 'search' ? 'Die ausgewählte Ziffer wird gesucht …' : '';
+  const fields = new URLSearchParams({{
+    action, index, digit_boxes: sent, token: correctionLayout.token,
+    image_kind: correctionSource.kind, image_version: correctionSource.version,
+    csrf: document.querySelector('#auto-form input[name="csrf"]').value, lang,
+    mode: document.querySelector('#auto-form input[name="mode"]').value,
+  }});
+  try {{
+    const response = await fetch('ziffernrahmen', {{method: 'POST', body: fields}});
+    if (response.redirected && action === 'save') {{
+      location.assign(response.url);
+      return;
+    }}
+    if (response.status === 409) {{
+      correctionStatus.textContent = 'Bild oder Ausschnitt hat sich geändert. Öffne den Editor erneut.';
+      return;
+    }}
+    if (!response.ok) throw new Error();
+    const result = await response.json();
+    if (!correctionDialog.open || correctionBoxes.value !== sent || Number(correctionPosition.value) !== index) return;
+    if (result && correctionEditor.replace(index, result.box)) {{
+      correctionStatus.textContent = 'Vorgeschlagener Rahmen. Gelesene Ziffer: ' + result.digit;
+    }} else {{
+      correctionStatus.textContent = 'Kein sicherer Vorschlag. Du kannst den Rahmen von Hand verschieben.';
+    }}
+  }} catch {{
+    correctionStatus.textContent = 'Die Änderung konnte nicht verarbeitet werden.';
+  }} finally {{
+    correctionPreview.inert = false;
+    correctionBusy = false;
+    updateCorrectionControls();
+  }}
+}}
+correctionSearch.addEventListener('click', () => submitDigitCorrection('search'));
+correctionSave.addEventListener('click', () => submitDigitCorrection('save'));
 async function refreshTestStatus() {{
   if (statusPending || sendingCheck) return;
   statusPending = true;
@@ -1758,6 +1987,8 @@ async function refreshTestStatus() {{
     showRegionChoices(job.calibration?.preview?.regions);
     refreshCalibration(job.calibration);
     const calibrating = ['waiting', 'testing'].includes(job.calibration?.state);
+    correctionOpen.hidden = !job.digit_correction;
+    correctionOpen.disabled = calibrating;
     document.querySelector('#calibration-restore').hidden = !job.calibration_backup || calibrating;
     const bar = document.querySelector('#test-progress');
     const detail = document.querySelector('#test-result');
@@ -1885,13 +2116,7 @@ document.querySelector('#open-manual-settings').addEventListener('click', () => 
   manualPanel.open = true;
   manualPanel.scrollIntoView({{block: 'nearest'}});
 }});
-document.querySelector('#calibration-manual-digit').addEventListener('click', () => {{
-  document.querySelector('#tab-overview').click();
-  document.querySelector('#open-manual-settings').click();
-  manualForm.elements.crop_mode.value = 'manual';
-  manualForm.elements.crop_mode.dispatchEvent(new Event('change'));
-  manualForm.querySelector('.digit-frame:last-child')?.focus();
-}});
+document.querySelector('#calibration-manual-digit').addEventListener('click', () => openDigitCorrection(true));
 document.querySelector('#setup-image-test')?.addEventListener('click', () => {{
   document.querySelector('#open-manual-settings').click();
   manualForm.querySelector('[name="image"]').focus();
@@ -2124,9 +2349,19 @@ def start_panel(
     rules_lock = settings_lock if settings_lock is not None else Lock()
     delivery_lock = Lock()
     wizard_image_lock = Lock()
+    digit_search_lock = Lock()
     def read_auto_rules():
         return {"integer_digits": 5, "fraction_digits": 3, "meter_display": "rollers",
                 "fallback_value": "", "fallback_time": "", "digit_boxes": [], **get_auto_rules()}
+
+    def digit_correction_settings(rules, source):
+        if rules["crop_mode"] != "manual":
+            return None
+        layout = {key: rules.get(key) for key in ("crop", "width", "rotation", "digit_boxes",
+                                                   "integer_digits", "fraction_digits", "polarity")}
+        layout["rotation"] = layout["rotation"] or 0
+        layout["token"] = setup_source_id([source, layout, rules.get("crop_revision")])
+        return layout
 
     def load_manual_settings():
         try:
@@ -2470,6 +2705,9 @@ def start_panel(
                 snapshot["current_image"] = image_version(current_image)
                 snapshot["manual_source_image"] = image_version(test_source_image)
                 snapshot["calibration"] = get_calibration() if get_calibration else None
+                with rules_lock:
+                    snapshot["digit_correction"] = digit_correction_settings(read_auto_rules(), get_source()[0])
+                snapshot["digit_correction_image"] = str(snapshot["current_image"] or "")
                 snapshot["calibration_backup"] = bool(has_calibration_backup and has_calibration_backup())
                 if language == "en":
                     snapshot["message"] = english_progress(snapshot.get("message"))
@@ -2561,6 +2799,7 @@ def start_panel(
             settings_tab_active = (selected_tab == "settings" if selected_tab in ("settings", "overview") else
                                    saved in ("1", "crop", "notifications", "source", "setup-calibration") or setup_pending)
             saved_message = (
+                "Ziffernrahmen gespeichert." if saved == "digit-frames" else
                 "Ausschnitt und Drehung für manuelle Tests gespeichert." if saved == "manual-crop" else
                 "Einrichtung gespeichert." if saved in ("setup", "setup-calibration") else
                 "Gesicherter Ausschnitt wiederhergestellt." if saved == "crop-restored" else
@@ -2682,6 +2921,8 @@ def start_panel(
                     if saved == "setup" else ""
                 ),
                 manual_open="open" if test == "open" else "",
+                digit_correction_hidden="" if auto_rules["crop_mode"] == "manual" else "hidden",
+                digit_correction_notice=auto_saved_notice if saved == "digit-frames" else "",
                 manual_saved_notice=auto_saved_notice if saved == "manual-crop" else "",
                 test_hidden="" if test_visible or test in ("queued", "busy") else "hidden",
                 test_source_visible="" if test_visible else "hidden",
@@ -2779,7 +3020,7 @@ def start_panel(
             if path not in ("/pruefen", "/automatik", "/ausschnitt-uebernehmen", "/sprache",
                             "/benachrichtigungen", "/bildquelle", "/einrichtung", "/einrichtungsbild",
                             "/einrichtung-ueberspringen", "/werkreset", "/automatik-pause",
-                            "/spiegelungs-hinweis-ausblenden", "/ergaenzte-ziffer-bestaetigen", "/selbsteinrichtung", "/fallback"):
+                            "/spiegelungs-hinweis-ausblenden", "/ergaenzte-ziffer-bestaetigen", "/selbsteinrichtung", "/fallback", "/ziffernrahmen"):
                 self.send_error(404)
                 return
             fallback = browser_locale(self.headers.get("Accept-Language", ""))
@@ -3177,6 +3418,65 @@ def start_panel(
                 saved = "crop-restored" if action == "restore" else "calibration"
                 view = "overview" if action == "skip-verification" else "settings"
                 self.redirect(f"?saved={saved}&ui={view}" + keep_mode)
+                return
+            if path == "/ziffernrahmen":
+                action = field("action")
+                try:
+                    if action not in ("save", "search"):
+                        raise ValueError("Invalid digit action")
+                    with rules_lock:
+                        rules = read_auto_rules()
+                        source, _ = get_source()
+                        layout = digit_correction_settings(rules, source)
+                        active = get_calibration() if get_calibration else None
+                        if (not layout or field("token") != layout["token"]
+                                or active and active["state"] in ("waiting", "testing")):
+                            problem(409, "Der gespeicherte Ausschnitt hat sich geändert. Öffne den Editor erneut.",
+                                    "The saved crop has changed. Reopen the editor.")
+                            return
+                        count = layout["integer_digits"] + layout["fraction_digits"]
+                        boxes = digit_box_settings(json.loads(field("digit_boxes")), count)
+                        if not boxes:
+                            raise ValueError("Missing digit boxes")
+                        if action == "save":
+                            revision = str(time.time_ns())
+                            values = {**rules, "digit_boxes": boxes, "crop_revision": revision}
+                            old_revision = rules.get("crop_revision")
+                            if old_revision and rules.get("stationary_partial_scope") == setup_source_id([source, old_revision]):
+                                values["stationary_partial_scope"] = setup_source_id([source, revision])
+                            if boxes != rules["digit_boxes"]:
+                                save_auto_rules(values)
+                    if action == "save":
+                        self.redirect("?saved=digit-frames&ui=overview" + keep_mode)
+                        return
+                    index = int(field("index"))
+                    if not 0 <= index < count:
+                        raise ValueError("Invalid digit index")
+                    version = field("image_version")
+                    if field("image_kind") == "calibration":
+                        content = get_calibration_image("frame", version) if get_calibration_image else None
+                    else:
+                        with current_image.open("rb") as stream:
+                            content = stream.read() if str(os.fstat(stream.fileno()).st_mtime_ns) == version else None
+                    if not content:
+                        problem(409, "Ein neueres Kamerabild liegt vor. Öffne den Editor erneut.",
+                                "A newer camera image is available. Reopen the editor.")
+                        return
+                    if not digit_search_lock.acquire(blocking=False):
+                        problem(409, "Eine Ziffernsuche läuft bereits.", "A digit search is already running.")
+                        return
+                    try:
+                        crop = crop_coordinates(layout["crop"], layout["width"], layout["rotation"])
+                        with Image.open(BytesIO(content)) as frame:
+                            register = turn_crop(crop_register(frame, crop), layout["rotation"])
+                        proposal = suggest_single_digit_box(register, boxes, index, layout["polarity"])
+                    finally:
+                        digit_search_lock.release()
+                    self.reply(json.dumps(proposal).encode("utf-8"), "application/json; charset=utf-8")
+                except (TypeError, ValueError, Image.DecompressionBombError):
+                    problem(400)
+                except OSError:
+                    problem(503)
                 return
             if path == "/automatik":
                 if form.get("reset_crop") == ["1"]:

@@ -4,14 +4,27 @@ from pathlib import Path
 import sys
 from unittest import TestCase
 
+from PIL import Image
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from checks import provisional_digit_estimate
+from checks import OCR_PROFILES, lighting_ocr_profiles, provisional_digit_estimate
 from layout import digit_box_settings, scale_digit_boxes
 from meter_learning import alignment_rollback, observe_alignment, observe_flow, observe_geometry_failures, suggested_interval
 
 
 class MeterLearningTests(TestCase):
+    def test_shadow_profile_is_prioritized_for_dim_or_uneven_images(self):
+        dim = Image.new("L", (180, 40), 45)
+        self.assertEqual(OCR_PROFILES[2], lighting_ocr_profiles(dim)[1])
+        balanced = Image.new("L", (180, 40), 180)
+        for row in range(0, 40, 4):
+            balanced.paste(20, (0, row, 180, row + 2))
+        self.assertEqual(OCR_PROFILES, lighting_ocr_profiles(balanced))
+        uneven = balanced.copy()
+        uneven.paste(35, (0, 0, 90, 40))
+        self.assertEqual(OCR_PROFILES[2], lighting_ocr_profiles(uneven)[1])
+
     def test_inferred_digits_can_cross_rollover_but_do_not_guess_an_ambiguous_value(self):
         pattern = "0?.?0"
         self.assertEqual("10.00", provisional_digit_estimate(

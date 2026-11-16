@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.24 Stable
+
+- Die Übersicht öffnet nach gespeicherter Kalibrierung einen Editor für vorhandene Ziffernrahmen. Ein Rahmen lässt sich einzeln verschieben, skalieren und zurücksetzen.
+- „Diese Ziffer suchen“ prüft gezielt nur die ausgewählte Stelle. Der Vorschlag lässt sich prüfen und manuell speichern.
+- Dunkle oder ungleichmäßig beleuchtete Ausschnitte erhalten früher vorhandene OCR-Profile für Schattenkorrektur. Ein vollständiger 100-%-Treffer beendet die Grobsuche auf dem Bild und erhält gezielte Intensivprüfungen mit zeitversetzten Kontrollaufnahmen.
+
 ## 0.5.23 Stable
 
 - Eine automatische Rahmensuche startet pro Fehlerserie höchstens einmal und frühestens nach zwei Stunden anhaltender Erkennungsprobleme. Plausible Messungen beenden die Fehlerserie.

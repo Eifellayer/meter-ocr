@@ -575,15 +575,16 @@ class CalibrationTests(TestCase):
         self.assertEqual(-1, self.job.candidate.rotation)
         self.assertEqual(3, self.job.coarse_attempts)
 
-    def test_new_search_prefers_larger_display_and_checks_small_angles_even_on_a_match(self):
+    def test_new_search_prefers_larger_display_and_checks_small_angles_for_a_partial_match(self):
         small = Layout((0, 0, 35, 18), 0, 25)
         large = Layout((0, 8, 90, 29), 0, 65)
         self.candidates.return_value = [small, large]
-        self.job = Calibration(5, 0, rank_candidates=True)
+        self.job = Calibration(5, 0, rank_candidates=True, simplified=True)
         angles = []
-        sample = {"reference_time": 100, "raw_value": "12345", "actual_value": "12345"}
-        self.job.examine(frame(1), None, sample, 101, RULES, lambda *_: "12345", lambda: False,
-                         angle_read=lambda *_: "12345", on_angle=lambda _, angle: angles.append(angle))
+        rules = {**RULES, "decimals": 3, "fraction_digits": 3}
+        sample = {"reference_time": 100, "raw_value": "12345.23?", "actual_value": "12345.23?"}
+        self.job.examine(frame(1), None, sample, 101, rules, lambda *_: "12345.23?", lambda: False,
+                         angle_read=lambda *_: "12345.23?", on_angle=lambda _, angle: angles.append(angle))
         self.assertEqual([-1, 1, -2, 2, -3, 3], angles)
         self.assertEqual(large, self.job.candidate)
 
@@ -604,6 +605,21 @@ class CalibrationTests(TestCase):
                          on_shortlist=lambda number, _: checked.append(number))
         self.assertEqual([1], checked)
         self.assertEqual(0, self.job.confirmations)
+
+    def test_first_full_hit_checks_only_the_best_crop_on_that_image(self):
+        self.job = Calibration(5, 0, rank_candidates=True)
+        sample = {"reference_time": 100, "raw_value": "12345", "actual_value": "12345"}
+        self.candidates.return_value = [LAYOUT, OTHER_LAYOUT]
+        checks = []
+
+        def read(layout, profile):
+            checks.append((layout, profile))
+            return "12345"
+
+        self.job.examine(frame(1), None, sample, 101, RULES, read, lambda: False, angle_read=read)
+        self.assertEqual([(LAYOUT, profile) for profile in calibration.OCR_PROFILES[:5]], checks)
+        self.assertEqual(1, self.job.confirmations)
+        self.assertEqual([100], self.job.status(101)["shortlist"])
 
     def test_third_full_hit_triggers_intensive_profiles_before_verification(self):
         job = Calibration(5, 0, rank_candidates=True)

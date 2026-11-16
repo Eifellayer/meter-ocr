@@ -52,6 +52,17 @@ MAX_CONFIGURED_OCR_ATTEMPTS = 10
 MAX_OCR_ATTEMPTS = len(OCR_PROFILES)
 
 
+def lighting_ocr_profiles(picture):
+    """Try existing shadow-correction profiles sooner on dim or uneven images."""
+    gray = picture.convert("L").resize((64, 20), Image.Resampling.BILINEAR)
+    levels = sorted(gray.tobytes())
+    low, high = levels[len(levels) // 10], levels[len(levels) * 9 // 10]
+    zones = gray.resize((4, 2), Image.Resampling.BOX).tobytes()
+    if high < 75 or high - low < 45 or max(zones) - min(zones) >= 45:
+        return (OCR_PROFILES[0], OCR_PROFILES[2], OCR_PROFILES[1], *OCR_PROFILES[3:])
+    return OCR_PROFILES
+
+
 def crop_register(picture, crop):
     left, top, right, bottom = crop
     if not (0 <= left < right <= picture.width and 0 <= top < bottom <= picture.height):
@@ -221,7 +232,7 @@ def explain_uncertain_positions(readings, decimals, integer_digits=5):
 
 def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace=None, *, standalone=False,
                       integer_digits=5, stop_before_attempt=None, force_all_attempts=False,
-                      extra_attempts=0):
+                      extra_attempts=0, profiles=OCR_PROFILES):
     """Read one image up to max_attempts times; stop on the first valid agreement."""
     if type(max_attempts) is not int or not 1 <= max_attempts <= MAX_CONFIGURED_OCR_ATTEMPTS:
         raise ValueError("OCR-Versuche müssen zwischen 1 und 10 liegen")
@@ -229,7 +240,7 @@ def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace
         raise ValueError("Zusätzliche OCR-Versuche müssen zwischen 0 und 10 liegen")
     attempt_limit = min(MAX_OCR_ATTEMPTS, max_attempts + extra_attempts)
     readings = []
-    for index, profile in enumerate(OCR_PROFILES[:attempt_limit], start=1):
+    for index, profile in enumerate(profiles[:attempt_limit], start=1):
         if index > 1 and stop_before_attempt and stop_before_attempt():
             break
         if progress:

@@ -219,6 +219,37 @@ class IngressTests(IngressFixture):
         status = json.loads(self.request("/automatic")[0])
         self.assertIn("seit mindestens zwei Stunden gestört", status["geometry_warning"])
 
+    def test_one_digit_search_proposes_and_save_updates_only_boxes(self):
+        self.source_selected = True
+        self.setup_pending = False
+        self.rules.update(crop_mode="manual", crop="5,5,405,95", width=250,
+                          crop_revision="known", rotation=0, interval_minutes=45)
+        boxes = [[i * 125, 100, (i + 1) * 125, 900] for i in range(8)]
+        self.rules["digit_boxes"] = boxes
+        source = {**self.source, "selected": True}
+        self.rules["stationary_partial_scope"] = panel.setup_source_id([source, "known"])
+        Image.new("RGB", (460, 120), "gray").save(self.root / "current.jpg")
+        job = json.loads(self.request("/status")[0])
+        args = dict(csrf=self.csrf, token=job["digit_correction"]["token"], index="7", image_kind="current",
+                    image_version=job["digit_correction_image"], digit_boxes=json.dumps(boxes))
+        with patch.object(panel, "suggest_single_digit_box", return_value={"box": [880, 80, 995, 900], "digit": "8"}) as search:
+            proposal, status = self.request("/ziffernrahmen", data=dict(args, action="search"))
+        self.assertEqual(200, status)
+        self.assertEqual((400, 90), search.call_args.args[0].size)
+        self.assertEqual((boxes, 7, "auto"), search.call_args.args[1:])
+        self.assertEqual(boxes, self.rules["digit_boxes"])
+        proposed = [*boxes[:-1], json.loads(proposal)["box"]]
+        args["digit_boxes"] = json.dumps(proposed)
+        self.assertEqual((303, "./?saved=digit-frames&ui=overview"),
+                         self.submit("/ziffernrahmen", **{k: v for k, v in args.items() if k != "csrf"}, action="save"))
+        self.assertEqual(proposed, self.rules["digit_boxes"])
+        self.assertEqual(("5,5,405,95", 250, 0, 45), tuple(
+            self.rules[key] for key in ("crop", "width", "rotation", "interval_minutes")))
+        self.assertEqual(panel.setup_source_id([source, self.rules["crop_revision"]]),
+                         self.rules["stationary_partial_scope"])
+        self.assertEqual(409, self.submit("/ziffernrahmen", **{k: v for k, v in args.items() if k != "csrf"},
+                                          action="save")[0])
+
     def test_reset_automatic_crop_preserves_other_saved_settings(self):
         self.rules.update(crop_mode="manual", crop="10,10,290,100", width=150, rotation=-6,
                           attempts=8, interval_minutes=20, reflection_estimate_enabled=True)
@@ -702,6 +733,30 @@ class RedirectTests(TestCase):
 
 
 class BrowserTests(IngressFixture):
+    def test_digit_editor_moves_existing_box_and_saves_from_overview(self):
+        from playwright.sync_api import sync_playwright
+
+        self.setup_pending = False
+        self.source_selected = True
+        self.rules.update(crop_mode="manual", crop="10,15,410,105", width=250, rotation=0)
+        boxes = [[i * 125, 100, (i + 1) * 125, 900] for i in range(8)]
+        self.rules["digit_boxes"] = boxes
+        Image.new("RGB", (500, 180), "gray").save(self.root / "current.jpg")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(executable_path=os.getenv("RF1_CHROMIUM"))
+            page = browser.new_page(viewport={"width": 390, "height": 844}, locale="de-DE")
+            page.set_default_timeout(7000)
+            page.goto(self.base + "/")
+            page.locator("#open-digit-correction").click()
+            page.locator("#digit-correction-position").select_option("7")
+            page.locator('#digit-correction [data-box-move="-1,0"]').click()
+            self.assertEqual("true", page.locator("#digit-correction .digit-frame").last.get_attribute("aria-pressed"))
+            with page.expect_navigation():
+                page.locator("#save-digit-correction").click()
+            self.assertTrue(page.get_by_text("Ziffernrahmen gespeichert.").is_visible())
+            self.assertEqual([*boxes[:-1], [865, 100, 990, 900]], self.rules["digit_boxes"])
+            browser.close()
+
     def test_drawing_a_crop_sets_coordinates_for_the_manual_test(self):
         from playwright.sync_api import sync_playwright
 

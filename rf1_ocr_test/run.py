@@ -29,7 +29,7 @@ from checks import (
     DEFAULT_INTERVAL_MINUTES, FRESH_SAMPLE_AGE, RETRY_INTERVAL, REVIEW_AFTER, OCR_PROFILES,
     STANDALONE_PENDING, STANDALONE_PENDING_NOTICE, STANDALONE_REJECTED_NOTICE, STANDALONE_VERIFIED_NOTICE,
     STANDALONE_CACHED_CAPTURE_DELAY,
-    compare_sample, crop_register, read_register, read_with_retries, record_sample,
+    compare_sample, crop_register, lighting_ocr_profiles, read_register, read_with_retries, record_sample,
     automatic_interval_minutes, defer_duplicate_cycle,
     LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, LAST_DIGIT_RETRIES, SUCCESSFUL_CHECKS,
     differs_only_at_last_digit, last_digit_can_pass, explain_uncertain_positions,
@@ -38,7 +38,7 @@ from checks import (
     timestamp_epoch, track_reflection,
     setup_deadlines, setup_source_id, stabilization_interval, valid_interval_minutes,
 )
-from calibration import (Calibration, Layout, CAPTURE_INTERVAL, MIN_IMAGES, MIN_IMAGE_LIMIT, MAX_IMAGES, MAX_ATTEMPTS,
+from calibration import (Calibration, Layout, CAPTURE_INTERVAL, PERFECT_CONFIRMATION_INTERVAL, MIN_IMAGES, MIN_IMAGE_LIMIT, MAX_IMAGES, MAX_ATTEMPTS,
                          DEFAULT_INTENSIVE_AGREEMENT, SHORTLIST_LIMIT, TIME_LIMIT, LAST_DIGIT_CAPTURE_INTERVAL,
                          image_quality_hints, two_decimal_reading, valid_intensive_agreement)
 from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, MAX_FLOW_LPH, ImplausibleReading,
@@ -1502,7 +1502,9 @@ def main():
                 attempt.state = "waiting"
                 attempt.stage = "verify_wait" if attempt.verification_pending else "waiting"
             calibration = attempt
-            calibration_next = now + (LAST_DIGIT_CAPTURE_INTERVAL if attempt.intensive else CAPTURE_INTERVAL)
+            capture_interval = LAST_DIGIT_CAPTURE_INTERVAL if attempt.intensive else (
+                PERFECT_CONFIRMATION_INTERVAL if attempt.full_hits else CAPTURE_INTERVAL)
+            calibration_next = now + capture_interval
             wake_worker.set()
         return True
 
@@ -1974,6 +1976,7 @@ def main():
                             extra_attempts=regular_limit - regular_attempts,
                             stop_before_attempt=stop_ocr,
                             force_all_attempts=manual,
+                            profiles=lighting_ocr_profiles(register),
                         )
                         regular_status, _ = compare_sample(sample, ocr, comparison_decimals,
                                                            ocr_confirmed=ocr_confirmed, integer_digits=integer_digits)

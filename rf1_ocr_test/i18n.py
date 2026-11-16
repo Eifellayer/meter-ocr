@@ -231,6 +231,13 @@ EN_UI = {
         "Testing the estimated position of the last roller on this image …",
     " Vorschlag für die letzte Rolle gefunden. Warte auf Bestätigung mit einem neuen Bild.":
         " Candidate for the last roller found. Waiting for confirmation on a new image.",
+    " Für den Rahmen zählen die ersten zwei Nachkommastellen.":
+        " The first two decimal digits count toward crop confirmation.",
+    " · Feinprüfung der dritten Stelle: ": " · Third-digit verification: ",
+    "Grün: gelesen. Gelb: OCR-Versuche weichen ab. Gelb mit ?: Stelle vermutet, Ziffer nicht lesbar. Rot: unklar.":
+        "Green: read. Yellow: OCR attempts disagree. Yellow with ?: probable position, unreadable digit. Red: unclear.",
+    "Rahmen mit 100 % Übereinstimmung gefunden. Die Intensivprüfung bleibt bei diesem Rahmen und wartet auf ein neues Bild.":
+        "Crop found with 100% agreement. The intensive check keeps this crop and waits for a new image.",
     LAST_DIGIT_PASS: "The first two decimal places match. The third digit remains unconfirmed.",
     "Für den Verbrauch verwendet die App den plausiblen Vergleichswert.": "The app uses the plausible reference reading to calculate consumption.",
     "Ablesung und Vergleichswert weichen ab": "Image reading and reference differ",

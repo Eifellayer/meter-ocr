@@ -1526,7 +1526,7 @@ function refreshCalibrationImages(preview) {{
     reason.hidden = !reason.textContent;
     section.querySelector('.calibration-preview-help').textContent = !hasCrop ?
       (reason.hidden ? 'Die App sucht in diesem Bild nach der Ziffernreihe.' : '') : preview.reading ?
-      'Grün: gelesen. Gelb: OCR-Versuche weichen ab. Rot: unklar.' :
+      'Grün: gelesen. Gelb: OCR-Versuche weichen ab. Gelb mit ?: Stelle vermutet, Ziffer nicht lesbar. Rot: unklar.' :
       'Die blauen Rahmen zeigen, welche Stellen die App gerade prüft.';
     if (hasCrop && preview.method === 'neighbours') section.querySelector('.calibration-preview-help').append(
       ' Die Rahmen wurden aus sichtbaren Ziffern und ihren Abständen abgeleitet.');
@@ -1590,6 +1590,8 @@ function refreshCalibration(status) {{
       message = 'Grün bedeutet lesbar. Der abgelesene Stand passt noch nicht zum Vergleichswert.';
     }} else if (reason === 'await_movement') {{
       message = 'Ziffern sind lesbar. Ohne Vergleichswert wartet die App auf einen plausiblen Anstieg oder einen Startwert.';
+    }} else if (reason === 'accepted' && status.candidate_agreement === 100) {{
+      message = 'Rahmen mit 100 % Übereinstimmung gefunden. Die Intensivprüfung bleibt bei diesem Rahmen und wartet auf ein neues Bild.';
     }} else if (status.confirmations >= 2) {{
       message = 'Prüfe denselben Rahmen mit dem nächsten neuen Bild weiter.';
     }} else if (status.confirmations > 0) {{
@@ -1609,9 +1611,13 @@ function refreshCalibration(status) {{
   if (active && status.preview?.last_digit_hint) {{
     message += ' Vorschlag für die letzte Rolle gefunden. Warte auf Bestätigung mit einem neuen Bild.';
   }}
+  if (active && status.simplified) {{
+    message += ' Für den Rahmen zählen die ersten zwei Nachkommastellen.';
+  }}
+  const confirmationLabel = status.followup ? ' · Feinprüfung der dritten Stelle: ' : ' · Bestätigungen: ';
   const detail = 'Bilder geprüft: ' + status.tested +
     ' · Rahmen getestet: ' + status.attempts +
-    ' · Bestätigungen: ' + status.confirmations + '/' + status.required +
+    confirmationLabel + status.confirmations + '/' + status.required +
     (active && status.shortlist?.length ?
       ' · Beste Kandidaten: ' + status.shortlist.map(percent => percent + '%').join(', ') : '') +
     (active ? ' · Rechenzeit übrig: ' + clock + ' min' : '');

@@ -388,11 +388,11 @@ def calibration_jpeg(frame, max_size):
 
 
 def draw_test_preview(register, integer_width, whole_boxes, fraction_boxes, reading,
-                      whole_digits=5, fraction_digits=3, readings=None, composed=False, pending=False):
+                      whole_digits=5, fraction_digits=3, readings=None, composed=False, pending=False, suspected_slots=()):
     """Mark OCR digit regions and the actual read characters for manual diagnostics.
 
     Green: a digit was read without observed variation; yellow: attempts disagreed
-    or the final reading was composed; red: the position remains unclear.
+    or a digit position is suspected; red: the position remains unclear.
     The coordinates are approximate for manually configured crops without digit frames.
     They do NOT assert a match against the reference value.
     """
@@ -440,8 +440,12 @@ def draw_test_preview(register, integer_width, whole_boxes, fraction_boxes, read
         l, t, r, b = [int(coord) for coord in box]
         if not (0 <= l < r <= w and 0 <= t < b <= h):
             continue
-        color = ((71, 157, 194) if pending else (203, 65, 77) if not chars[idx].isdigit() else
-                 (241, 184, 54) if idx in uncertain else (36, 170, 92))
+        if pending:
+            color = (71, 157, 194)
+        elif idx in uncertain or idx in suspected_slots:
+            color = (241, 184, 54)
+        else:
+            color = (36, 170, 92) if chars[idx].isdigit() else (203, 65, 77)
         draw.rectangle((l, t, r - 1, b - 1), outline=color, width=stroke)
         # The label is drawn on a filled patch for contrast against the counter.
         label = str(idx + 1) if pending else chars[idx]
@@ -948,7 +952,8 @@ def main():
                 now = time.monotonic()
                 configuration = calibration_configuration_now()
                 rules = configuration[0]
-                simplified = action == "setup" and rules["decimals"] == 3
+                simplified = rules["decimals"] == 3 and (
+                    action == "setup" or action == "start" and not rules["precision_mode"])
                 intensive = action == "intensive"
                 if intensive and rules["fraction_digits"] != 3:
                     raise ValueError("The meter must display three decimal digits")
@@ -1148,8 +1153,14 @@ def main():
                             region = [box[0] / frame.width, box[1] / frame.height,
                                       (box[2] - box[0]) / frame.width, (box[3] - box[1]) / frame.height]
                             try:
+                                digits = (reading or "").replace(".", "")
+                                suspected = ()
+                                if len(digits) == whole + fraction and digits.count("?") == 1:
+                                    # One open slot between or next to otherwise readable digits.
+                                    suspected = (digits.index("?"),)
                                 preview = draw_test_preview(
                                     *register[:4], reading, whole, fraction, readings=readings, pending=reading is None,
+                                    suspected_slots=suspected,
                                 )
                                 report_image("crop", calibration_jpeg(preview, (820, 300)),
                                              region=region, reading=reading, angle=layout.rotation,

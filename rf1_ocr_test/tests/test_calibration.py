@@ -250,13 +250,13 @@ class CalibrationTests(TestCase):
         self.job = Calibration(100, 0, rank_candidates=True)
         self.candidates.return_value = [Layout((x, 0, x + 80, 20), 0, 80) for x in range(5)]
         sample = {"reference_time": 100, "raw_value": "12345", "actual_value": "12345"}
-        read = lambda *_: "1234?"
+        read = lambda *_: "123??"
         intensive = []
         for index in range(1, 11):
             self.job.examine(frame(index), None, sample, 100 + index, RULES, read, lambda: False,
                              on_shortlist=lambda number, _: intensive.append(number))
         self.assertEqual(50, self.job.coarse_attempts)
-        self.assertEqual([80] * 5, list(self.job.status(110)["shortlist"]))
+        self.assertEqual([60] * 5, list(self.job.status(110)["shortlist"]))
         self.assertEqual([], intensive)
         self.candidates.return_value = [OTHER_LAYOUT]
         self.job.examine(frame(11), None, sample, 111, RULES, read, lambda: False,
@@ -270,6 +270,13 @@ class CalibrationTests(TestCase):
         self.assertTrue(self.job.optimizing)
         self.assertEqual(1, self.job.coarse_attempts)
         self.assertEqual(1, self.job.confirmations)
+        self.assertEqual(100, self.job.status(100)["candidate_agreement"])
+        self.candidates.return_value = [OTHER_LAYOUT]
+        self.candidates.reset_mock()
+        self.assertIsNone(self.examine(2, 101))
+        self.candidates.assert_not_called()
+        self.assertEqual(LAYOUT, self.job.candidate)
+        self.assertEqual(2, self.job.confirmations)
 
     def test_green_reading_without_reference_gets_extra_profiles_but_no_confirmation(self):
         self.job = Calibration(5, 0, rank_candidates=True)
@@ -383,6 +390,56 @@ class CalibrationTests(TestCase):
 
         self.job.examine(frame(1), None, {"reference_required": False}, 100, RULES, read, lambda: False)
         self.assertEqual([register, register], seen)
+
+    def test_ranked_crop_tries_rotation_before_moving_to_the_next_box(self):
+        initial = Layout((0, 0, 80, 20), 0, 60)
+        self.candidates.return_value = [initial, OTHER_LAYOUT]
+        self.job = Calibration(5, 0, rank_candidates=True, simplified=True)
+        rules = {**RULES, "decimals": 3, "fraction_digits": 3}
+        sample = {"reference_time": 100, "raw_value": "12345.23?", "actual_value": "12345.23?"}
+        attempted = []
+        angles = []
+
+        def read(layout, profile):
+            attempted.append(layout.box)
+            return "12345.23?" if layout.rotation == -1 else "1234?.23?"
+
+        self.job.examine(frame(1), None, sample, 101, rules, read, lambda: False, angle_read=read,
+                         on_angle=lambda _, angle: angles.append(angle))
+        self.assertEqual([-1], angles)
+        self.assertEqual({initial.box}, set(attempted))
+        self.assertEqual(1, self.job.confirmations)
+        self.assertEqual(-1, self.job.candidate.rotation)
+        self.assertEqual(2, self.job.coarse_attempts)
+
+    def test_ranked_crop_enters_intensive_search_at_ninety_percent(self):
+        initial = Layout((0, 0, 80, 20), 0, 50)
+        self.candidates.return_value = [initial]
+        self.job = Calibration(5, 0, rank_candidates=True)
+        rules = {**RULES, "decimals": 3, "fraction_digits": 3}
+        sample = {"reference_time": 100, "raw_value": "12345.239", "actual_value": "12345.239"}
+        checked = []
+
+        def read(layout, profile):
+            return "12345.23?" if profile == calibration.OCR_PROFILES[0] else "12345.239"
+
+        initial_score = calibration.agreement_percent(["12345.23?", "12345.239"], sample, 3, 5)
+        self.assertEqual(94, initial_score)
+        self.job.examine(frame(1), None, sample, 101, rules, read, lambda: False,
+                         on_shortlist=lambda number, _: checked.append(number))
+        self.assertEqual([1], checked)
+        self.assertTrue(self.job.optimizing)
+        self.assertEqual(0, self.job.confirmations)
+
+    def test_only_one_open_required_slot_triggers_intensive_search(self):
+        self.job = Calibration(5, 0, rank_candidates=True, simplified=True)
+        rules = {**RULES, "decimals": 3, "fraction_digits": 3}
+        sample = {"reference_time": 100, "raw_value": "12345.23?", "actual_value": "12345.23?"}
+        checked = []
+        self.job.examine(frame(1), None, sample, 101, rules, lambda *_: "12345.2??", lambda: False,
+                         on_shortlist=lambda number, _: checked.append(number))
+        self.assertEqual([1], checked)
+        self.assertEqual(0, self.job.confirmations)
 
     def test_sweeps_in_one_degree_steps_then_refines_at_the_best_angle(self):
         base = Layout((0, 0, 90, 25), 0, 55, method="register_window")

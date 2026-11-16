@@ -33,6 +33,7 @@ SMALL_ANGLES = (0, -1, 1, -2, 2, -3, 3)
 MAX_LAYOUTS_PER_IMAGE = 5
 COARSE_LIMIT = 50
 SHORTLIST_LIMIT = 5
+INTENSIVE_AGREEMENT = 90
 MIN_VERIFICATION_QUALITY = .65
 FRAME_ATTEMPT_LIMIT = 30
 
@@ -459,7 +460,8 @@ class Calibration:
     def precision(self, rules, has_reference):
         return 2 if self.simplified else rules["decimals"] if has_reference else rules["fraction_digits"]
 
-    def sweep_angles(self, layout, readings, sample, rules, read, stop, report, tested, frame_ceiling):
+    def sweep_angles(self, layout, readings, sample, rules, read, stop, report, tested, frame_ceiling,
+                     *, accept_first=False):
         whole, fraction = rules["integer_digits"], rules["fraction_digits"]
         referenced = sample.get("reference_required") is not False
         precision = self.precision(rules, referenced)
@@ -469,7 +471,8 @@ class Calibration:
             agreement = prefixes[0] is not None and prefixes[0] == prefixes[1]
             match = referenced and agreement and all(reference_rejection(
                 sample, compare_sample(sample, value, precision, integer_digits=whole)[0]) is None for value in values)
-            return match, agreement, -len(uncertain_slots(values, whole + fraction)), -abs(candidate.rotation)
+            percentage = agreement_percent(values, sample, precision, whole)
+            return match, agreement, percentage, -len(uncertain_slots(values, whole + fraction)), -abs(candidate.rotation)
 
         best = score(layout, readings), layout, readings
         center = 0 if abs(layout.rotation) <= 3 else layout.rotation
@@ -497,6 +500,8 @@ class Calibration:
             rank = score(trial, values)
             if rank > best[0]:
                 best = rank, trial, values
+            if accept_first and (rank[0] if referenced else rank[1]):
+                break
         return best[1], best[2]
 
     def status(self, now):
@@ -507,6 +512,7 @@ class Calibration:
                 "simplified": self.simplified, "intensive": self.intensive, "followup": self.followup,
                 "coarse_attempts": self.coarse_attempts, "coarse_limit": COARSE_LIMIT,
                 "shortlist": [score[0] for score in self.shortlist.values()],
+                "candidate_agreement": self.shortlist.get(self.candidate, (None, 0))[0],
                 "seconds": max(0, ceil(self.remaining(now)))}
 
     def refine(self, layout, readings, sample, rules, read, stop, on_attempt, tested, frame_ceiling):
@@ -684,8 +690,10 @@ class Calibration:
         digits = rules["integer_digits"]
         flow = rules["max_flow_lph"]
         committed = self.confirmations >= 2
-        collecting = self.rank_candidates and not (committed or self.optimizing)
-        if committed or self.focused:
+        preferred = (self.confirmations == 1 and self.rank_candidates
+                     and self.shortlist.get(self.candidate, (0, 0))[0] == 100)
+        collecting = self.rank_candidates and not (committed or preferred or self.optimizing)
+        if committed or preferred or self.focused:
             candidates = (self.candidate,)
         elif self.followup:
             candidates = (self.candidate or self.previous_layout,)
@@ -703,6 +711,19 @@ class Calibration:
         tested = set()
         frame_ceiling = self.attempts + FRAME_ATTEMPT_LIMIT
         coarse = []
+        def score_layout(layout, readings):
+            prefixes = [meter_prefix(value, precision, digits) for value in readings]
+            agreement = prefixes[0] is not None and prefixes[0] == prefixes[1]
+            reference_match = has_reference and agreement and all(reference_rejection(
+                sample, compare_sample(sample, value, precision, integer_digits=digits)[0]) is None
+                for value in readings)
+            l, t, r, b = layout.box
+            return (reference_match, self.confirmations > 0 and layout == self.candidate,
+                    (r - l) * (b - t), layout.method == "register_window", agreement)
+
+        def reliable(score):
+            return score[0] if has_reference else score[4]
+
         for index, layout in enumerate(candidates, start=1):
             if stop():
                 return None
@@ -729,38 +750,62 @@ class Calibration:
             except (OSError, ValueError, subprocess.SubprocessError):
                 on_decision("unreadable")
                 continue
-            prefixes = [meter_prefix(value, precision, digits) for value in readings]
-            agreement = prefixes[0] is not None and prefixes[0] == prefixes[1]
-            reference_match = has_reference and agreement and all(reference_rejection(
-                sample, compare_sample(sample, value, precision, integer_digits=digits)[0]) is None
-                for value in readings)
-            l, t, r, b = layout.box
-            # Visual scale ranks partial candidates. An actual reference match
-            # and a frame already confirmed on previous images take priority.
-            score = (reference_match, self.confirmations > 0 and layout == self.candidate,
-                     (r - l) * (b - t), layout.method == "register_window", agreement)
+            score = score_layout(layout, readings)
+            if (self.rank_candidates and angle_read is not None and not (committed or self.confirmations)
+                    and not reliable(score)):
+                # Check the current crop's rotation before moving to the next candidate.
+                ceiling = frame_ceiling
+                if collecting:
+                    ceiling = min(ceiling, self.attempts + COARSE_LIMIT - self.coarse_attempts)
+                previous_attempts = self.attempts
+                layout, readings = self.sweep_angles(layout, readings, sample, rules, angle_read, stop,
+                                                      on_angle, tested, ceiling, accept_first=True)
+                if collecting:
+                    self.coarse_attempts += self.attempts - previous_attempts
+                score = score_layout(layout, readings)
+                if self.attempts > previous_attempts and on_selected is not None and not stop():
+                    on_selected(layout, readings)
             coarse.append((score, layout, readings))
-        if self.rank_candidates and not committed:
+            if self.rank_candidates and reliable(score) and (not self.confirmations or layout == self.candidate):
+                break
+
+        if self.rank_candidates and not (committed or preferred):
             for _, layout, readings in coarse:
                 self.record_intermediate(layout, readings, sample, precision, digits, frame)
             coarse.sort(key=lambda item: self.shortlist.get(item[1], (0, 0)), reverse=True)
             stable = [item for item in coarse if item[0][4]]
             if collecting:
-                self.optimizing = (self.coarse_attempts >= COARSE_LIMIT
-                                   or any(score[0] if has_reference else score[4] for score, _, _ in coarse))
-                if self.coarse_attempts >= COARSE_LIMIT:
+                found = any(reliable(score) for score, _, _ in coarse)
+                required_slots = digits + precision
+                almost_complete = round(100 * (required_slots - 1) / required_slots)
+
+                def promising_candidate(layout, values):
+                    percentage = self.shortlist.get(layout, (0, 0))[0]
+                    if percentage >= INTENSIVE_AGREEMENT:
+                        return True
+                    if required_slots < 2 or percentage < almost_complete:
+                        return False
+                    required_rows = [
+                        str(value).replace(".", "").replace(",", "")[:required_slots] for value in values
+                    ]
+                    return len(uncertain_slots(required_rows, required_slots)) == 1
+
+                promising = any(promising_candidate(layout, values) for _, layout, values in coarse)
+                self.optimizing = self.coarse_attempts >= COARSE_LIMIT or found or promising
+                if self.coarse_attempts >= COARSE_LIMIT and not found:
                     # Re-read the full ranked list against the next image and its reference.
                     return None
             # Read stable crops immediately, including when this image has no usable reference.
             intensive = coarse if self.optimizing else stable
-            for index, (_, layout, readings) in enumerate(intensive[:SHORTLIST_LIMIT], start=1):
+            for index, (score, layout, readings) in enumerate(intensive[:SHORTLIST_LIMIT], start=1):
                 if stop() or self.attempts >= min(self.attempt_limit, frame_ceiling):
                     return None
                 self.attempts += 1
                 if on_shortlist is not None:
                     on_shortlist(index, layout.rotation)
                 extras = []
-                for profile in OCR_PROFILES[2:3] if self.optimizing else OCR_PROFILES[2:5]:
+                profile_end = 5 if score[4] and not reliable(score) else 3
+                for profile in OCR_PROFILES[2:profile_end]:
                     if stop():
                         break
                     try:
@@ -818,7 +863,7 @@ class Calibration:
                         and not self.confirmations and not self.focused):
                     refined = True
                     original = layout
-                    if angle_read is not None and not self.followup:
+                    if angle_read is not None and not (self.followup or self.rank_candidates):
                         layout, readings = self.sweep_angles(layout, readings, sample, rules, angle_read, stop,
                                                              on_angle, tested, frame_ceiling)
                     resolved = [meter_prefix(value, precision, digits) for value in readings]

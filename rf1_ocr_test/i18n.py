@@ -248,6 +248,17 @@ EN_UI = {
     "Feinprüfung erfolgreich, Gegenprobe offen. Der beste Rahmen steht für den manuellen Test bereit.":
         "Fine check passed, independent verification pending. The best crop is available for the manual check.",
     " · Zeit für Gegenprobe: ": " · Verification time left: ",
+    "Hinweis zur Genauigkeit.": "Accuracy warning.",
+    " Ohne Gegenprobe kann der übernommene Rahmen spätere Ablesungen ungenauer machen.":
+        " Using this crop without verification can make future readings less accurate.",
+    "Gegenprobe überspringen und Rahmen übernehmen": "Skip verification and use this crop",
+    "Rahmen ohne Gegenprobe übernommen. Spätere Ablesungen können ungenauer sein.":
+        "Crop saved without verification. Future readings may be less accurate.",
+    "Hinweis zum Kamerabild. ": "Camera image note. ",
+    "Das Ziffernfeld wirkt dunkel.": "The digit area appears dark.",
+    "Das Ziffernfeld wirkt sehr hell.": "The digit area appears very bright.",
+    "Das Ziffernfeld hat wenig Kontrast.": "The digit area has low contrast.",
+    "Das Ziffernfeld wirkt unscharf.": "The digit area appears blurry.",
     LAST_DIGIT_PASS: "The first two decimal places match. The third digit remains unconfirmed.",
     "Für den Verbrauch verwendet die App den plausiblen Vergleichswert.": "The app uses the plausible reference reading to calculate consumption.",
     "Ablesung und Vergleichswert weichen ab": "Image reading and reference differ",

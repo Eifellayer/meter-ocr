@@ -211,6 +211,14 @@ class CalibrationTests(TestCase):
         self.assertEqual(2, self.job.confirmations)
         self.assertEqual(LAYOUT, self.examine(4, 103))
 
+    def test_initial_image_hints_detect_dark_low_contrast_and_soft_crops(self):
+        dark = Image.new("RGB", (100, 30), (20, 20, 20))
+        self.assertEqual(["dark", "low_contrast"], calibration.image_quality_hints(dark, LAYOUT))
+        bright = Image.new("RGB", (100, 30), (230, 230, 230))
+        self.assertEqual(["bright", "low_contrast"], calibration.image_quality_hints(bright, LAYOUT))
+        soft = Image.linear_gradient("L").rotate(90).resize((100, 30))
+        self.assertEqual(["soft"], calibration.image_quality_hints(soft, LAYOUT))
+
     def test_intensive_verification_has_its_own_deadline_after_the_third_hit(self):
         job = Calibration(20, 0, intensive=True, duration=240, spent=239, attempts=20, attempt_limit=20)
         self.assertEqual(1, job.remaining(300))

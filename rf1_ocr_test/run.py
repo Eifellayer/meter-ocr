@@ -28,6 +28,7 @@ from app_channel import APP_NAME, CHECK_ENTITY, LABEL_SUFFIX, NAMESPACE
 from checks import (
     DEFAULT_INTERVAL_MINUTES, FRESH_SAMPLE_AGE, RETRY_INTERVAL, REVIEW_AFTER, OCR_PROFILES,
     STANDALONE_PENDING, STANDALONE_PENDING_NOTICE, STANDALONE_REJECTED_NOTICE, STANDALONE_VERIFIED_NOTICE,
+    STANDALONE_CACHED_CAPTURE_DELAY,
     compare_sample, crop_register, read_register, read_with_retries, record_sample,
     automatic_interval_minutes, defer_duplicate_cycle,
     LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, LAST_DIGIT_RETRIES, SUCCESSFUL_CHECKS,
@@ -39,7 +40,7 @@ from checks import (
 )
 from calibration import (Calibration, Layout, CAPTURE_INTERVAL, MIN_IMAGES, MIN_IMAGE_LIMIT, MAX_IMAGES, MAX_ATTEMPTS,
                          DEFAULT_INTENSIVE_AGREEMENT, SHORTLIST_LIMIT, TIME_LIMIT,
-                         agreement_percent, two_decimal_reading, valid_intensive_agreement)
+                         agreement_percent, image_quality_hints, two_decimal_reading, valid_intensive_agreement)
 from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, MAX_FLOW_LPH, ImplausibleReading,
                          accumulate_consumption, fallback_detail, format_cubic_metres)
 from layout import (MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, find_digit_row,
@@ -470,6 +471,29 @@ def transfer_jpeg(picture):
     raise ValueError("JPEG lässt sich nicht auf die Übertragungsgröße verkleinern")
 
 
+def calibration_source_id(source):
+    return hashlib.sha256(json.dumps(source, sort_keys=True).encode()).hexdigest()
+
+
+def standalone_calibration_reference(rules, source, source_key, captured, previous):
+    """Use a recent reading from this meter until a newer automatic reading takes over."""
+    saved = rules.get("calibration_reference")
+    if not isinstance(saved, dict) or saved.get("source") != calibration_source_id(source):
+        return None
+    stamp, precision = saved.get("time"), saved.get("precision")
+    if (type(stamp) not in (int, float) or not 0 < captured - stamp <= FRESH_SAMPLE_AGE
+            or type(precision) is not int or not rules["decimals"] <= precision <= rules["fraction_digits"]
+            or saved.get("integer_digits") != rules["integer_digits"]
+            or (previous.get("source") == source_key and previous.get("timestamp", 0) >= stamp)):
+        return None
+    reading = saved.get("reading")
+    if meter_prefix(reading, precision, rules["integer_digits"]) is None:
+        return None
+    counter = accumulate_consumption({}, source_key, stamp, reading, precision,
+                                     rules["max_flow_lph"], rules["integer_digits"])
+    return {"counter": counter, "reading": reading, "image_id": saved.get("image_id")}
+
+
 def atomic_write(destination, content, mode):
     destination.parent.mkdir(parents=True, exist_ok=True)
     with NamedTemporaryFile(dir=destination.parent, delete=False) as handle:
@@ -718,6 +742,7 @@ def main():
                           "integer_digits": integer_digits, "fraction_digits": fraction_digits,
                           "meter_display": meter_display, "fallback_value": fallback_value,
                           "precision_mode": saved_rules.get("precision_mode") is True,
+                          "calibration_reference": saved_rules.get("calibration_reference"),
                           "intensive_agreement": intensive_agreement,
                           "fine_alignment_enabled": saved_rules.get("fine_alignment_enabled") is True,
                           "self_repair_enabled": saved_rules.get("self_repair_enabled") is True,
@@ -936,13 +961,36 @@ def main():
     def calibration_configuration_now():
         return get_auto_rules(), get_source()
 
-    def control_calibration(action, limit, region=None):
+    def save_calibration_layout(attempt, layout):
+        rules = get_auto_rules()
+        reference = None
+        if attempt.reference_reading is not None:
+            precision = {1: 3, 10: 2, 100: 1, 1000: 0}[attempt.counter["step_litres"]]
+            head, _, fraction = attempt.reference_reading.replace(",", ".").partition(".")
+            reading = f"{head}.{fraction[:precision]}" if precision else head
+            reference = {
+                "reading": reading, "time": attempt.counter["timestamp"], "precision": precision,
+                "source": calibration_source_id(get_source()[0]), "integer_digits": rules["integer_digits"],
+                "image_id": attempt.reference_image_id,
+            }
+        save_auto_rules({**rules, **layout.settings(), "crop_revision": str(time.time_ns()),
+                         "calibration_reference": reference})
+
+    def control_calibration(action, limit, region=None, *, verification_id=None):
         nonlocal calibration, calibration_configuration, calibration_next
         with settings_lock:
             running = calibration is not None and calibration.state in ("waiting", "testing") and not calibration.expired(time.monotonic())
             if action == "cancel":
                 if running:
                     calibration.state = "cancelled"
+            elif action == "skip-verification":
+                current_id = calibration.skippable_verification_id() if calibration else None
+                if (not current_id or verification_id != current_id
+                        or calibration_configuration_now() != calibration_configuration):
+                    raise ValueError("No matching fine-check verification to skip")
+                save_calibration_layout(calibration, calibration.candidate)
+                calibration.state = "saved_without_verification"
+                calibration.verification_pending = False
             elif action == "restore":
                 backup = read_geometry_backup()
                 if running or not backup:
@@ -1001,15 +1049,18 @@ def main():
                 status["state"] = "timeout"
             elif status["state"] == "waiting" and calibration.image_wait_expired(time.monotonic()):
                 status["state"] = "image_timeout"
-            saved_layout = calibration.candidate if status["state"] == "saved" else calibration.previous_layout
-            if saved_layout and (status["state"] == "saved" or (
-                    calibration.followup and calibration_configuration_now() == calibration_configuration)):
+            same_configuration = calibration_configuration_now() == calibration_configuration
+            saved = status["state"] in ("saved", "saved_without_verification")
+            saved_layout = calibration.candidate if saved else calibration.previous_layout
+            if saved_layout and (saved or (calibration.followup and same_configuration)):
                 status["settings"] = {**saved_layout.settings(), "crop_revision": auto_rules["crop_revision"]}
-            if status["state"] in ("failed", "timeout", "image_timeout"):
-                if calibration.best:
-                    status["proposal"] = calibration.best.settings()
-                if calibration.fine_evidence:
-                    status["preview"] = dict(calibration.fine_evidence[1])
+            if same_configuration:
+                status["skip_verification_id"] = calibration.skippable_verification_id()
+            if status["state"] in ("failed", "timeout", "image_timeout") and calibration.best:
+                status["proposal"] = calibration.best.settings()
+            if calibration.fine_evidence and status["state"] in (
+                    "failed", "timeout", "image_timeout", "saved_without_verification"):
+                status["preview"] = dict(calibration.fine_evidence[1])
             return status
 
     def calibration_image(kind, version):
@@ -1051,7 +1102,7 @@ def main():
         deadline = time.monotonic() + 30
 
         def stopped():
-            return time.monotonic() >= deadline or calibration is not job or job.state == "cancelled" or get_auto_paused()
+            return time.monotonic() >= deadline or calibration is not job or job.state != "testing" or get_auto_paused()
 
         def fetch(url, token=None, timeout=8):
             if stopped():
@@ -1170,6 +1221,15 @@ def main():
                             if not frame_ready:
                                 return
                             box = layout.box
+                            if attempt.image_hints is None:
+                                try:
+                                    hints = image_quality_hints(frame, layout)
+                                except ValueError:
+                                    hints = []
+                                attempt.image_hints = hints
+                                with settings_lock:
+                                    if calibration is job and job.state == "testing":
+                                        job.image_hints = hints
                             region = [box[0] / frame.width, box[1] / frame.height,
                                       (box[2] - box[0]) / frame.width, (box[3] - box[1]) / frame.height]
                             try:
@@ -1312,6 +1372,8 @@ def main():
                                     with settings_lock:
                                         if calibration is job and attempt.last_digit_proposal:
                                             calibration_preview["last_digit_hint"] = True
+                        if attempt.reference_reading is not None and attempt.counter.get("timestamp") == captured:
+                            attempt.reference_image_id = hashlib.sha256(picture).hexdigest()
         except (OSError, ValueError, TypeError, Image.DecompressionBombError) as error:
             print(f"Selbsteinrichtung konnte die Aufnahme nicht prüfen: {type(error).__name__}")
         with settings_lock:
@@ -1320,7 +1382,7 @@ def main():
                 attempt.spent += now - attempt.searching_since
                 attempt.searching_since = None
                 attempt.last_image_at = now
-            if calibration is not job or job.state == "cancelled":
+            if calibration is not job or job.state != "testing":
                 return True
             if (attempt.shortlist != job.shortlist and attempt.shortlist
                     and calibration_configuration_now() == calibration_configuration):
@@ -1336,15 +1398,14 @@ def main():
                 attempt.state = "cancelled"
             elif selected:
                 try:
-                    if not attempt.followup or selected != attempt.previous_layout:
-                        save_auto_rules({**get_auto_rules(), **selected.settings(), "crop_revision": str(time.time_ns())})
+                    save_calibration_layout(attempt, selected)
                     attempt.state = "saved"
                     if attempt.simplified:
                         # Commit the verified crop before checking the open digit on new photos.
                         attempt = Calibration(limit=attempt.limit, started=now, intensive=True, followup=True,
                                               previous_layout=selected, last_stamp=attempt.last_stamp,
                                               candidate=attempt.last_digit_proposal,
-                                              followup_baseline=attempt.counter,
+                                              followup_baseline=attempt.counter, image_hints=attempt.image_hints,
                                               duration=GEOMETRY_REPAIR_SECONDS, attempt_limit=GEOMETRY_REPAIR_LIMIT)
                         calibration_configuration = calibration_configuration_now()
                 except (OSError, ValueError):
@@ -1472,6 +1533,10 @@ def main():
                                         args=(active_rules, active_source, mode, base, camera, reference, source_key),
                                         daemon=True, name="meter-calibration")
             calibration_worker.start()
+        if (not manual and calibration is not None and not calibration.automatic
+                and calibration.state in ("waiting", "testing")):
+            wake_worker.wait(timeout=CAPTURE_INTERVAL)
+            continue
         if get_auto_paused() and not manual:
             set_activity("paused", "Automatik pausiert. Manuelle Tests bleiben verfügbar.")
             wake_worker.wait(timeout=15)
@@ -1558,6 +1623,8 @@ def main():
         sample = None
         raw_fallback = False
         duplicate_cycle = False
+        cached_standalone = False
+        image_id = None
         automatic_preview_ready = False
         live_deadline = (time.monotonic() + LIVE_CAPTURE_WINDOW_SECONDS
                          if active_source["mode"] == "camera" else None)
@@ -1615,7 +1682,21 @@ def main():
                 picture, overlay, sample = result
                 now = datetime.now(zone)
                 captured = sample_epoch(sample, zone, now)
-                if not manual and (captured is None or captured <= updated.get("last_epoch", 0)):
+                if not manual and standalone and captured is not None:
+                    image_id = hashlib.sha256(picture).hexdigest()
+                    pending = updated.get("standalone_candidate") or standalone_calibration_reference(
+                        active_rules, active_source, source_key, captured, history.get("consumption", {}),
+                    )
+                    if (pending and pending.get("image_id") == image_id
+                            and pending["counter"]["source"] == source_key
+                            and 0 <= captured - pending["counter"]["timestamp"] <= FRESH_SAMPLE_AGE):
+                        cached_standalone = True
+                        outcome = updated["status"] = STANDALONE_PENDING
+                        updated["source_connection_status"] = "stale"
+                        updated["source_connection_detail"] = "Home-Assistant-Kamera erreichbar; dieses Bild wurde bereits geprüft."
+                        updated["check_detail"] = STANDALONE_PENDING_NOTICE
+                        result = None
+                if result is not None and not manual and (captured is None or captured <= updated.get("last_epoch", 0)):
                     updated["source_connection_status"] = "stale"
                     if captured is None:
                         updated["source_connection_detail"] = (
@@ -1708,7 +1789,7 @@ def main():
                         read_state = {"register": register, "integer_width": integer_width,
                                       "whole_boxes": whole_boxes, "fraction_boxes": fraction_boxes,
                                       "source": source, "picture": picture, "captured": captured,
-                                      "attempts": 0}
+                                      "image_id": image_id, "attempts": 0}
                         live_source = live_deadline is not None
 
                         def read_layout(layout, profile):
@@ -1756,7 +1837,9 @@ def main():
                                                   integer_width=latest_integer_width,
                                                   whole_boxes=latest_whole, fraction_boxes=latest_fraction,
                                                   source=latest_source, picture=latest_picture,
-                                                  captured=latest_time)
+                                                  captured=latest_time,
+                                                  image_id=hashlib.sha256(latest_picture).hexdigest()
+                                                  if standalone and not manual else None)
                             read_state["attempts"] += 1
                             return read_layout((
                                 read_state["register"], read_state["integer_width"],
@@ -1850,6 +1933,7 @@ def main():
                         source = read_state["source"]
                         picture = read_state["picture"]
                         captured = read_state["captured"]
+                        image_id = read_state["image_id"]
                         image_time = captured if captured is not None else sample_timestamp(sample, zone)
                     except (OSError, ValueError, subprocess.SubprocessError) as error:
                         print(f"OCR-Bildprüfung fehlgeschlagen: {error}")
@@ -1890,14 +1974,31 @@ def main():
                                         "reading_litres": fallback_litres, "anchor_litres": fallback_litres,
                                         "step_litres": fallback_step, "total_litres": 0,
                                     }
+                                setup_reference = standalone_calibration_reference(
+                                    active_rules, active_source, source_key, captured, previous_consumption,
+                                ) if standalone else None
+                                if setup_reference and setup_reference.get("image_id") == image_id:
+                                    setup_reference = None
+                                if setup_reference:
+                                    setup_counter = setup_reference["counter"]
+                                    accumulate_consumption(
+                                        setup_counter, source_key, captured, ocr, decimals,
+                                        active_rules["max_flow_lph"], integer_digits,
+                                    )
+                                    if previous_consumption.get("source") != source_key:
+                                        previous_consumption = setup_counter
                                 new_consumption = accumulate_consumption(
                                     previous_consumption, source_key, captured,
                                     sample["actual_value"] if accept_reference else ocr, decimals,
                                     active_rules["max_flow_lph"], integer_digits,
                                 )
-                                if standalone:
+                                if setup_reference:
+                                    standalone_reference = setup_reference
+                                    updated.pop("standalone_candidate", None)
+                                elif standalone:
                                     candidate = updated.get("standalone_candidate")
                                     if (candidate and candidate.get("crop") == (rotation_key or custom_boxes)
+                                            and candidate.get("image_id") not in (None, image_id)
                                             and 0 < captured - candidate["counter"]["timestamp"] <= FRESH_SAMPLE_AGE):
                                         accumulate_consumption(
                                             candidate["counter"], source_key, captured, ocr, decimals,
@@ -1908,7 +2009,7 @@ def main():
                                     else:
                                         updated["standalone_candidate"] = {
                                             "counter": new_consumption, "reading": ocr, "crop": rotation_key or custom_boxes,
-                                            "rotation_adjustment": rotation_adjustment,
+                                            "rotation_adjustment": rotation_adjustment, "image_id": image_id,
                                         }
                                         new_standalone = new_consumption = None
                             except ImplausibleReading as error:
@@ -2196,10 +2297,14 @@ def main():
                             reference_is_fallback=manual_result.get("reference_is_fallback", False),
                             image_time=manual_result.get("image_time"))
             continue
-        if keep_schedule and data is None and history.get("next_check_at", 0) > now.timestamp():
+        if keep_schedule and not cached_standalone and data is None and history.get("next_check_at", 0) > now.timestamp():
             continue
         updated["slfork_diagnostics"] = diagnostics
-        if duplicate_cycle:
+        if cached_standalone:
+            updated["check_status"] = STANDALONE_PENDING
+            defer_duplicate_cycle(updated, now.timestamp(), interval_minutes)
+            updated["next_check_at"] = now.timestamp() + STANDALONE_CACHED_CAPTURE_DELAY
+        elif duplicate_cycle:
             defer_duplicate_cycle(updated, now.timestamp(), interval_minutes)
         else:
             schedule_next_check(updated, outcome, now.timestamp(), interval_minutes)

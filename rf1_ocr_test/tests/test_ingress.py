@@ -81,7 +81,12 @@ class IngressFixture(TestCase):
     def skip_setup(self):
         self.setup_pending = False
 
-    def control_calibration(self, action, limit, region=None):
+    def control_calibration(self, action, limit, region=None, *, verification_id=None):
+        if action == "skip-verification":
+            if not self.calibration or verification_id != self.calibration.get("skip_verification_id"):
+                raise ValueError("Verification is no longer pending")
+            self.calibration.update(state="saved_without_verification", skip_verification_id=None)
+            return
         self.calibration = {"state": "waiting" if action in ("start", "setup", "intensive") else "cancelled",
                             "action": action,
                             "limit": limit, "tested": 0, "confirmations": 0, "required": 3,
@@ -166,6 +171,18 @@ class IngressTests(IngressFixture):
         self.assertEqual("waiting", status["state"])
         self.assertEqual(303, self.submit("/selbsteinrichtung", action="cancel")[0])
         self.assertEqual("cancelled", self.calibration["state"])
+
+    def test_skipping_verification_requires_the_current_verification_id(self):
+        self.control_calibration("intensive", 24)
+        self.calibration.update(skip_verification_id="current")
+        for form in ({}, {"verification_id": "old"}):
+            self.assertEqual(409, self.submit("/selbsteinrichtung", action="skip-verification", **form)[0])
+            self.assertEqual("waiting", self.calibration["state"])
+        self.assertEqual(303, self.submit("/selbsteinrichtung", action="skip-verification",
+                                          verification_id="current")[0])
+        status = json.loads(self.request("/status")[0])["calibration"]
+        self.assertEqual("saved_without_verification", status["state"])
+        self.assertIsNone(status["skip_verification_id"])
 
     def test_calibration_image_endpoint_uses_versioned_images_and_existing_ingress_access(self):
         with BytesIO() as stream:
@@ -725,6 +742,39 @@ class BrowserTests(IngressFixture):
             self.assertEqual(990, job["digit_boxes"][0][3])
             self.assertEqual(1000, job["digit_boxes"][1][3])
             self.assertAlmostEqual(207, job["width"], delta=2)
+            browser.close()
+
+    def test_fine_verification_skip_shows_an_accuracy_warning_before_saving(self):
+        from playwright.sync_api import sync_playwright
+
+        self.setup_pending = False
+        self.source_selected = True
+        self.control_calibration("intensive", 24)
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(executable_path=os.getenv("RF1_CHROMIUM"))
+            page = browser.new_page(locale="de-DE")
+            page.set_default_timeout(7000)
+            page.goto(self.base)
+            form = page.locator("#calibration-overview .calibration-skip")
+            page.locator("#calibration-overview-state").filter(has_text="Selbsteinrichtung startet").wait_for()
+            self.assertFalse(form.is_visible())
+            self.calibration.update(state="timeout", stage="verify_wait", intensive=True, confirmations=3,
+                                    skip_verification_id="current")
+            form.get_by_text("Ohne Gegenprobe kann der übernommene Rahmen spätere Ablesungen ungenauer machen.",
+                             exact=False).wait_for()
+            form.get_by_role("button", name="Gegenprobe überspringen und Rahmen übernehmen").click()
+            notice = page.locator("#calibration-complete-notice")
+            notice.filter(has_text="Rahmen ohne Gegenprobe übernommen.").wait_for()
+            self.assertFalse(page.locator("#calibration-overview").is_visible())
+
+            page.locator("#tab-settings").click()
+            self.calibration.update(state="testing", stage="search", image_hints=["dark", "low_contrast"])
+            hint = page.locator("#calibration-settings .calibration-image-hint")
+            hint.filter(has_text="Das Ziffernfeld wirkt dunkel.").filter(has_text="wenig Kontrast").wait_for()
+            self.calibration.update(state="saved")
+            notice.filter(has_text="Dritte Nachkommastelle bestätigt.").wait_for()
+            self.assertEqual("true", page.locator("#tab-overview").get_attribute("aria-selected"))
+            self.assertFalse(page.locator("#calibration-overview").is_visible())
             browser.close()
 
     def test_selecting_a_discovered_meter_prefills_the_wizard(self):

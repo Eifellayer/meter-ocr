@@ -392,6 +392,37 @@ class StateTests(TestCase):
         access["control"]("start", 4)
         self.assertFalse(access["status"]()["simplified"])
 
+        layout = run.Layout((120, 160, 525, 315), 1, 280)
+        fine = run.Calibration(limit=4, started=0, intensive=True, candidate=layout, confirmations=2)
+        with patch.object(run, "Calibration", return_value=fine):
+            access["control"]("intensive", 4)
+        self.assertIsNone(access["status"]()["skip_verification_id"])
+        fine.confirmations = 3
+        fine.counter = {"step_litres": 1, "timestamp": 100}
+        fine.reference_reading = "12345.239"
+        fine.begin_verification(1)
+        fine.state = "timeout"
+        verification_id = access["status"]()["skip_verification_id"]
+        self.assertTrue(verification_id)
+        with self.assertRaises(ValueError):
+            access["control"]("skip-verification", 0, verification_id="stale")
+        self.assertNotEqual(layout.settings()["crop"], access["rules"]()["crop"])
+        with patch.object(run, "atomic_write", side_effect=OSError):
+            with self.assertRaises(OSError):
+                access["control"]("skip-verification", 0, verification_id=verification_id)
+        self.assertEqual(verification_id, access["status"]()["skip_verification_id"])
+        access["control"]("skip-verification", 0, verification_id=verification_id)
+        status = access["status"]()
+        self.assertEqual("saved_without_verification", status["state"])
+        self.assertIsNone(status.get("skip_verification_id"))
+        self.assertEqual(layout.settings()["crop"], status["settings"]["crop"])
+        stored_rules = json.loads(files["AUTO_RULES"].read_text())
+        self.assertEqual(layout.settings()["crop"], stored_rules["crop"])
+        self.assertEqual("12345.239", stored_rules["calibration_reference"]["reading"])
+        self.assertEqual(100, stored_rules["calibration_reference"]["time"])
+        with self.assertRaises(ValueError):
+            access["control"]("skip-verification", 0, verification_id=verification_id)
+
     def test_edge_camera_only_publishes_local_ocr_without_the_esp_reading(self):
         class StopLoop(Exception):
             pass
@@ -429,10 +460,16 @@ class StateTests(TestCase):
         self.assertEqual("standalone_pending", history["check_status"])
         self.assertIsNone(history["last_reference"])
         self.assertNotIn("consumption", history)
-        self.assertAlmostEqual(300, history["next_check_at"] - history["last_epoch"], delta=5)
+        self.assertAlmostEqual(5, history["next_check_at"] - history["last_epoch"], delta=1)
 
         history["next_check_at"] = 0
         files["HISTORY"].write_text(json.dumps(history))
+        with Image.open(BytesIO(fetch.return_value)) as source:
+            fresh = source.convert("RGB")
+            fresh.paste("white", (0, 0, 12, 12))
+            with BytesIO() as stream:
+                fresh.save(stream, "JPEG")
+                fetch.return_value = stream.getvalue()
         recognize.reset_mock()
         recognize.side_effect = lambda frame, *_, **__: "12345.???" if frame.width > 500 else "?????.???"
         with self.assertRaises(StopLoop):
@@ -780,8 +817,18 @@ class StateTests(TestCase):
 
         self.enterContext(patch.object(run, "publish_consumption", finish_run))
 
-        def check(ocr):
+        snapshots = 0
+
+        def check(ocr, *, cached=False):
+            nonlocal snapshots
             recognize.return_value = ocr
+            if not cached:
+                snapshots += 1
+                fresh = synthetic_meter().convert("RGB")
+                fresh.putpixel((0, 0), (snapshots, 0, 0))
+                with BytesIO() as stream:
+                    fresh.save(stream, "PNG")
+                    fetch.return_value = stream.getvalue()
             if files["HISTORY"].exists():
                 history = json.loads(files["HISTORY"].read_text())
                 history["next_check_at"] = 0
@@ -796,6 +843,12 @@ class StateTests(TestCase):
         self.assertEqual("standalone_pending", pending["check_status"])
         self.assertEqual("unavailable", published[run.OCR_ENTITY]["state"])
         self.assertNotIn(run.CONSUMPTION_ENTITY, published)
+        self.assertAlmostEqual(5, pending["next_check_at"] - pending["last_epoch"], delta=1)
+        recognize.reset_mock()
+        still_pending = check("12345.???", cached=True)
+        self.assertEqual("standalone_pending", still_pending["check_status"])
+        self.assertEqual(pending["last_epoch"], still_pending["last_epoch"])
+        recognize.assert_not_called()
         initial = check("12345.???")
         self.assertEqual("12345", published[run.OCR_ENTITY]["state"])
         self.assertEqual("ocr_only", published[run.CHECK_ENTITY]["state"])
@@ -824,6 +877,20 @@ class StateTests(TestCase):
         self.assertIn(EXCESSIVE_INCREASE, rejected["check_detail"])
         self.assertIn("zweite Aufnahme", rejected["check_detail"])
         self.assertEqual(second["consumption"], rejected["consumption"])
+
+        files["HISTORY"].unlink()
+        source = {**run.source_rules(json.loads(files["SOURCE_SETTINGS"].read_text())), "selected": True}
+        files["AUTO_RULES"].write_text(json.dumps({
+            "decimals": 0, "attempts": 1, "calibration_reference": {
+                "source": run.calibration_source_id(source), "integer_digits": 5, "precision": 0,
+                "reading": "12346", "time": datetime.now(timezone.utc).timestamp() - 10,
+            },
+        }))
+        started = check("12346.???")
+        self.assertEqual("ocr_only", started["check_status"])
+        self.assertEqual("12346", started["last_reference"])
+        self.assertNotIn("standalone_candidate", started)
+        self.assertEqual("standalone_pending", check("12346.???")["check_status"])
 
     def test_main_keeps_manual_run_separate_from_automated_entities_and_history(self):
         class StopLoop(Exception):

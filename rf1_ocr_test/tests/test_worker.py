@@ -287,6 +287,18 @@ class StateTests(TestCase):
         self.assertEqual({"time": 220, "value": 12345120}, history["reflection_anchor"])
         self.assertNotIn("reflection_pending", history)
 
+    def test_existing_calibration_seed_requires_a_verified_matching_crop_revision(self):
+        rules = {"crop_mode": "manual", "crop": "0,0,400,90", "width": 250, "rotation": 0,
+                 "integer_digits": 5, "fraction_digits": 3, "crop_revision": "123"}
+        source = ["camera", "camera.meter", ""]
+        history = {"check_status": "ocr_only", "last_epoch": 100,
+                   "geometry_recovery": {"key": run.geometry_check_key(rules, source), "stamp": 100, "failures": 0}}
+        self.assertEqual(rules, run.last_verified_configured_geometry(history, rules, source))
+        self.assertIsNone(run.last_verified_configured_geometry(history, {**rules, "crop_revision": "124"}, source))
+        self.assertIsNone(run.last_verified_configured_geometry(history, rules, ["camera", "camera.other", ""]))
+        self.assertIsNone(run.last_verified_configured_geometry(
+            {**history, "check_status": "standalone_pending"}, rules, source))
+
     def test_calibration_preview_shows_real_ocr_on_a_rotated_synthetic_camera_image(self):
         from threading import Event
 
@@ -881,7 +893,8 @@ class StateTests(TestCase):
         files["HISTORY"].unlink()
         source = {**run.source_rules(json.loads(files["SOURCE_SETTINGS"].read_text())), "selected": True}
         files["AUTO_RULES"].write_text(json.dumps({
-            "decimals": 0, "attempts": 1, "calibration_reference": {
+            "decimals": 0, "attempts": 1, "crop_mode": "manual",
+            "crop": "0,0,500,100", "width": 350, "calibration_reference": {
                 "source": run.calibration_source_id(source), "integer_digits": 5, "precision": 0,
                 "reading": "12346", "time": datetime.now(timezone.utc).timestamp() - 10,
             },
@@ -890,6 +903,8 @@ class StateTests(TestCase):
         self.assertEqual("ocr_only", started["check_status"])
         self.assertEqual("12346", started["last_reference"])
         self.assertNotIn("standalone_candidate", started)
+        saved = json.loads(files["HISTORY"].with_name("known-good-geometry.json").read_text())
+        self.assertEqual("0,0,500,100", saved["geometry"]["crop"])
         self.assertEqual("standalone_pending", check("12346.???")["check_status"])
 
     def test_main_keeps_manual_run_separate_from_automated_entities_and_history(self):

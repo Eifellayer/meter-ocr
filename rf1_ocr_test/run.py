@@ -471,6 +471,24 @@ def transfer_jpeg(picture):
     raise ValueError("JPEG lässt sich nicht auf die Übertragungsgröße verkleinern")
 
 
+def geometry_check_key(rules, source_key):
+    return [source_key, rules["crop_mode"], rules["crop"], rules["rotation"], rules["width"],
+            rules["integer_digits"], rules["fraction_digits"], rules["crop_revision"]]
+
+
+def last_verified_configured_geometry(history, rules, source_key):
+    """Recover an existing saved crop only when history corroborates its revision."""
+    recorded = history.get("geometry_recovery", {})
+    if (rules["crop_mode"] == "manual" and rules["crop_revision"]
+            and history.get("check_status") in ("match", "ocr_only")
+            and not history.get("ocr_rotation_adjustment")
+            and recorded.get("key") == geometry_check_key(rules, source_key)
+            and recorded.get("stamp") == history.get("last_epoch")
+            and recorded.get("failures") == 0):
+        return rules
+    return None
+
+
 def calibration_source_id(source):
     return hashlib.sha256(json.dumps(source, sort_keys=True).encode()).hexdigest()
 
@@ -919,6 +937,34 @@ def main():
     calibration_preview_version = 0
     geometry_backup = HISTORY.with_name("geometry-backup.json")
     calibration_candidates_path = HISTORY.with_name("calibration-candidates.json")
+    known_good_geometry_path = HISTORY.with_name("known-good-geometry.json")
+
+    def known_good_scope(rules, source):
+        format_keys = ("integer_digits", "fraction_digits", "meter_display", "polarity")
+        return calibration_source_id([source, [rules[key] for key in format_keys]])
+
+    def geometry_layout(geometry, rules):
+        box = crop_coordinates(geometry["crop"], geometry["width"], geometry["rotation"])
+        boxes = digit_box_settings(geometry["digit_boxes"], rules["integer_digits"] + rules["fraction_digits"])
+        return Layout(box, geometry["rotation"], geometry["width"], tuple(map(tuple, boxes)))
+
+    def load_known_good_layout(rules, source):
+        try:
+            saved = json.loads(known_good_geometry_path.read_text(encoding="utf-8"))
+            if saved["scope"] == known_good_scope(rules, source):
+                return geometry_layout(saved["geometry"], rules)
+        except (OSError, ValueError, TypeError, KeyError):
+            pass
+        return None
+
+    def remember_known_good_layout(rules, source, layout):
+        if layout == load_known_good_layout(rules, source):
+            return
+        saved = {"scope": known_good_scope(rules, source), "geometry": layout.settings()}
+        try:
+            atomic_write(known_good_geometry_path, json.dumps(saved).encode(), 0o600)
+        except OSError:
+            print("Der bestätigte Rahmen konnte nicht als Ausgangspunkt gespeichert werden.")
 
     def candidate_scope(configuration, region, simplified, intensive):
         rules, source = configuration
@@ -938,10 +984,7 @@ def main():
                         or type(score[1]) not in (int, float) or not 0 <= score[1] <= 255
                         or (len(score) == 3 and (type(score[2]) is not int or not score[0] <= score[2] <= 100))):
                     continue
-                box = crop_coordinates(geometry["crop"], geometry["width"], geometry["rotation"])
-                boxes = digit_box_settings(geometry["digit_boxes"], rules["integer_digits"] + rules["fraction_digits"])
-                layout = Layout(box, geometry["rotation"], geometry["width"], tuple(map(tuple, boxes)))
-                result[layout] = tuple(score)
+                result[geometry_layout(geometry, rules)] = tuple(score)
             return result
         except (OSError, ValueError, TypeError, KeyError):
             return {}
@@ -1027,12 +1070,21 @@ def main():
                                  0o600)
                 scope = candidate_scope(configuration, region, simplified, intensive)
                 shortlist = {} if repair else load_calibration_candidates(scope, rules)
+                known_good = load_known_good_layout(rules, source)
+                if known_good is None:
+                    camera = source["camera"] if source["mode"] not in ESP_ADDRESS_MODES else ""
+                    source_key = [source["mode"], camera or source["url"].rstrip("/"),
+                                  source["reference"] if source["mode"] == "camera" else ""]
+                    verified_geometry = last_verified_configured_geometry(history, rules, source_key)
+                    if verified_geometry:
+                        known_good = geometry_layout(verified_geometry, rules)
                 calibration = Calibration(limit=limit, started=now, automatic=repair,
                                           rank_candidates=not repair, shortlist=shortlist,
                                           simplified=simplified, intensive=intensive,
                                           duration=GEOMETRY_REPAIR_SECONDS if repair else TIME_LIMIT,
                                           attempt_limit=GEOMETRY_REPAIR_LIMIT if repair else MAX_ATTEMPTS,
-                                          previous_layout=previous, region=region)
+                                          previous_layout=previous, region=region,
+                                          known_good_layout=known_good)
                 calibration_preview.clear()
                 calibration_images.clear()
                 calibration_configuration = configuration
@@ -1399,6 +1451,7 @@ def main():
             elif selected:
                 try:
                     save_calibration_layout(attempt, selected)
+                    remember_known_good_layout(get_auto_rules(), active_source, selected)
                     attempt.state = "saved"
                     if attempt.simplified:
                         # Commit the verified crop before checking the open digit on new photos.
@@ -1450,7 +1503,7 @@ def main():
                 HISTORY, AUTO_RULES, SOURCE_SETTINGS, NOTIFICATIONS, LANGUAGE_MODES,
                 HISTORY.with_name("manual-test-settings.json"), DESTINATION, GOOD_IMAGE,
                 TEST_IMAGE, TEST_SOURCE_IMAGE, AUTOMATIC_PREVIEW, AUTO_PAUSED, geometry_backup,
-                calibration_candidates_path,
+                calibration_candidates_path, known_good_geometry_path,
             )
             for path in paths:
                 path.unlink(missing_ok=True)
@@ -2176,6 +2229,12 @@ def main():
                         enabled=active_rules["reflection_estimate_enabled"], manual_anchor=manual_anchor,
                     )
                     verified = outcome == "match" or standalone_reference is not None and outcome == "ocr_only"
+                    if (verified and source == "manual" and active_rules["crop_mode"] == "manual"
+                            and not rotation_adjustment and not raw_fallback):
+                        with settings_lock:
+                            if get_auto_rules() == active_rules and get_source()[0] == active_source:
+                                remember_known_good_layout(active_rules, active_source,
+                                                           geometry_layout(active_rules, active_rules))
                     if adaptive and outcome == "match" and not raw_fallback:
                         flow = updated.setdefault("adaptive_flow", {})
                         reference_value = sample["actual_value"]
@@ -2226,9 +2285,7 @@ def main():
                                     learning, key, image_time, digits, ocr or "", previous_boxes, candidate_boxes, trial,
                                 )
                     if not raw_fallback:
-                        geometry_key = [source_key, active_rules["crop_mode"], active_rules["crop"],
-                                        active_rules["rotation"], active_rules["width"], integer_digits,
-                                        fraction_digits, active_rules["crop_revision"]]
+                        geometry_key = geometry_check_key(active_rules, source_key)
                         recovery = updated.setdefault("geometry_recovery", {})
                         geometry_warning = observe_geometry_failures(
                             recovery, geometry_key, image_time, outcome,

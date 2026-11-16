@@ -611,6 +611,11 @@ name: Zählerstand (OCR)</code></pre>
 <label class="check-option"><input type="checkbox" name="self_repair_enabled" value="1" {wizard_self_repair_checked}> Selbstreparatur bei wiederholten Fehlmessungen</label>
 <p class="settings-note">Nach zehn unterschiedlichen Fehlmessungen sichert die App den bisherigen Rahmen und versucht einmal, ihn zu verbessern. Ohne sichere Gegenprobe bleibt der bisherige Rahmen gültig.</p>
 </div>
+<div class="setup-help">
+<input type="hidden" name="reflection_option_present" value="1">
+<label class="check-option"><input type="checkbox" name="reflection_estimate_enabled" value="1" {reflection_enabled_checked}> Verdeckte Ziffern ergänzen</label>
+<p class="settings-note">Bei Spiegelungen hilfreich. Die App schätzt verdeckte Stellen nur, wenn Zählerstände und Durchfluss genau eine Ergänzung zulassen. Geschätzte Ziffern bleiben gelb.</p>
+</div>
 <label>OCR-Versuche pro Bild<select name="attempts">{auto_attempt_options}</select></label>
 <label>Ziffernfarbe<select name="polarity">{auto_polarity_options}</select></label>
 <label>Prüfintervall (Minuten)<input type="number" name="interval_minutes" min="5" max="1440" value="{interval_minutes}" required></label>
@@ -1504,6 +1509,7 @@ function refreshCalibrationImages(preview) {{
     no_region: 'In diesem Bild wurde kein Ziffernbereich gefunden.',
     unreadable: 'Der Ausschnitt ließ sich nicht auswerten.',
     unclear: 'Mindestens eine benötigte Ziffer blieb unklar.',
+    penultimate_unclear: 'Die letzte Rolle war lesbar. Die vorletzte blieb trotz gezielter Prüfung offen.',
     soft_image: 'Der Ausschnitt ist deutlich weniger scharf oder kontrastreich als zuvor. Warte auf ein besseres Bild.',
     collecting: 'Grobsuche läuft. Die besten Zwischenkandidaten werden gespeichert.',
     disagree: 'Die OCR-Versuche lieferten unterschiedliche Ziffern.',
@@ -1590,6 +1596,7 @@ function refreshCalibration(status) {{
   const stages = {{
     queued: status.followup ?
       'Ausschnitt gespeichert. Suche jetzt gezielt nach der dritten Nachkommastelle …' :
+      status.known_good_available ? 'Die App prüft zuerst den zuletzt bestätigten Rahmen.' :
       'Selbsteinrichtung startet, sobald die laufende Prüfung beendet ist …',
     capture: 'Kamerabild wird abgerufen …',
     search: 'Grobkalibrierung: Suche nach der Ziffernreihe …',
@@ -2991,6 +2998,9 @@ def start_panel(
                         ) else [], "max_flow_lph": max_flow,
                         "precision_mode": field("precision_mode") == "1",
                         "self_repair_enabled": field("self_repair_enabled") == "1",
+                        "reflection_estimate_enabled": (field("reflection_estimate_enabled") == "1"
+                                                        if field("reflection_option_present") == "1"
+                                                        else old_rules.get("reflection_estimate_enabled", False)),
                         "interval_minutes": interval_minutes, "integer_digits": integer_digits,
                         "fraction_digits": fraction_digits, "meter_display": meter_display,
                         "fallback_value": fallback_value, "fallback_time": fallback_time,

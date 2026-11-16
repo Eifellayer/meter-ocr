@@ -354,6 +354,28 @@ def uncertain_slots(readings, count):
     return [index for index, slot in enumerate(zip(*rows)) if len(set(slot)) != 1 or not slot[0].isdigit()]
 
 
+def penultimate_issue(readings, sample, whole):
+    """Identify a weak second decimal digit while the rest of the row agrees."""
+    count, slot = whole + 3, whole + 1
+    rows = [str(value).replace(".", "").replace(",", "") for value in readings]
+    if any(len(row) != count for row in rows):
+        return None
+    unaffected = rows[0][:slot] + rows[0][slot + 1:]
+    if not unaffected.isdigit() or any(row[:slot] + row[slot + 1:] != unaffected for row in rows[1:]):
+        return None
+    if uncertain_slots(readings, count) == [slot]:
+        return slot, unaffected
+    if sample.get("reference_required") is not False:
+        reference = sample.get("actual_value")
+        status, _ = compare_sample(sample, reference, 3, integer_digits=whole)
+        expected = meter_prefix(reference, 3, whole)
+        if expected is not None and reference_rejection(sample, status) is None:
+            target = str(expected).zfill(count)
+            if unaffected == target[:slot] + target[slot + 1:] and rows[0][slot] != target[slot]:
+                return slot, unaffected
+    return None
+
+
 def skip_small_labels(candidates):
     """Skip small rows separated vertically from a detected register window."""
     windows = [layout.box for layout in candidates if layout.method == "register_window"]
@@ -469,6 +491,7 @@ class Calibration:
     duration: int = TIME_LIMIT
     attempt_limit: int = MAX_ATTEMPTS
     previous_layout: Layout | None = None
+    known_good_layout: Layout | None = None
     region: tuple | None = None
     focused: bool = False
     best_score: tuple = ()
@@ -558,6 +581,7 @@ class Calibration:
                 "confirmations": self.confirmations, "required": MIN_IMAGES,
                 "full_hits": self.full_hits,
                 "image_hints": self.image_hints,
+                "known_good_available": self.known_good_layout is not None and self.region is None,
                 "stress_weak_slots": self.stress_weak_slots,
                 "coarse_complete": self.full_hits >= MIN_IMAGES,
                 "awaiting_start_value": self.confirmations >= MIN_IMAGES and not (self.anchored or self.advanced),
@@ -639,6 +663,58 @@ class Calibration:
         if best[0] > self.best_score and not self.best_confirmations:
             self.best_score, self.best = best[0], best[1]
         return best[1], best[2]
+
+    def retry_penultimate(self, layout, issue, rules, read, stop, on_attempt, accepts):
+        """Try extra OCR and small changes to the second decimal digit only."""
+        slot, unaffected = issue
+
+        def retry(trial, profiles):
+            values = []
+            try:
+                for profile in profiles:
+                    if stop():
+                        return None
+                    values.append(read(trial, profile))
+            except (OSError, ValueError, subprocess.SubprocessError):
+                return None
+            rows = [str(value).replace(".", "").replace(",", "") for value in values]
+            if accepts(values) and all(row[:slot] + row[slot + 1:] == unaffected for row in rows):
+                return trial, values
+            return None
+
+        if on_attempt is not None:
+            on_attempt(self.attempts, layout.rotation, [slot + 1])
+        reading = retry(layout, OCR_PROFILES[2:4])
+        if reading:
+            return reading
+
+        def variants():
+            known = self.known_good_layout or (self.previous_layout if self.followup else None)
+            if (known and known.box == layout.box and known.rotation == layout.rotation
+                    and known.width == layout.width and known.digit_boxes and layout.digit_boxes):
+                boxes = list(layout.digit_boxes)
+                boxes[slot] = known.digit_boxes[slot]
+                try:
+                    count = rules["integer_digits"] + rules["fraction_digits"]
+                    valid = digit_box_settings(boxes, count)
+                    yield replace(layout, digit_boxes=tuple(map(tuple, valid)), method="refined")
+                except ValueError:
+                    pass
+            masked = unaffected[:slot] + "?" + unaffected[slot:]
+            yield from refinement_layouts(layout, rules, [masked, masked])
+
+        attempts = 0
+        for trial in variants():
+            if stop() or attempts >= 4:
+                break
+            if trial == layout or trial in self.refinement_seen:
+                continue
+            self.refinement_seen.add(trial)
+            attempts += 1
+            reading = retry(trial, OCR_PROFILES[:2])
+            if reading:
+                return reading
+        return None
 
     def probe_open_digit(self, layout, sample, rules, read, stop, on_attempt):
         """Try the last slot on this image without adding an independent hit."""
@@ -771,11 +847,26 @@ class Calibration:
         else:
             seed = self.candidate or (next(iter(self.shortlist), None) if collecting else self.previous_layout)
 
-            candidates = (guided_layouts(frame, overlay, rules, len(self.seen) - 1, seed, self.region)
-                          if self.region else layouts(
-                              frame, overlay, rules, len(self.seen) - 1, seed,
-                              prefer_configured=self.automatic or self.intensive, on_regions=on_regions))
-            candidates = skip_small_labels(list(candidates))
+            def search_candidates():
+                known = self.known_good_layout
+                if known is not None and not self.confirmations:
+                    if self.region:
+                        left, top, right, bottom = (
+                            round(value * size / 1000)
+                            for value, size in zip(self.region, frame.size * 2)
+                        )
+                    else:
+                        left, top, right, bottom = 0, 0, frame.width, frame.height
+                    a, b, c, d = known.box
+                    if left <= a < c <= right and top <= b < d <= bottom:
+                        yield known
+                detected = (guided_layouts(frame, overlay, rules, len(self.seen) - 1, seed, self.region)
+                            if self.region else layouts(
+                                frame, overlay, rules, len(self.seen) - 1, seed,
+                                prefer_configured=self.automatic or self.intensive, on_regions=on_regions))
+                yield from skip_small_labels(list(detected))
+
+            candidates = search_candidates()
         examined = False
         tested = set()
         frame_ceiling = self.attempts + FRAME_ATTEMPT_LIMIT
@@ -821,23 +912,31 @@ class Calibration:
                 on_decision("unreadable")
                 continue
             score = score_layout(layout, readings)
-            if (self.rank_candidates and angle_read is not None and not (committed or self.confirmations)
-                    and not reliable(score)):
-                # Check the current crop's rotation before moving to the next candidate.
-                ceiling = frame_ceiling
-                if collecting:
-                    ceiling = min(ceiling, self.attempts + COARSE_LIMIT - self.coarse_attempts)
-                previous_attempts = self.attempts
-                layout, readings = self.sweep_angles(layout, readings, sample, rules, angle_read, stop,
-                                                      on_angle, tested, ceiling, accept_first=True)
-                if collecting:
-                    self.coarse_attempts += self.attempts - previous_attempts
-                score = score_layout(layout, readings)
-                if self.attempts > previous_attempts and on_selected is not None and not stop():
-                    on_selected(layout, readings)
             coarse.append((score, layout, readings))
-            if self.rank_candidates and reliable(score) and (not self.confirmations or layout == self.candidate):
+            if reliable(score) and layout in (self.known_good_layout, self.candidate):
                 break
+
+        def ranked_crop(item):
+            score, layout, readings = item
+            return (reliable(score), score[1], score[3], score[2],
+                    agreement_percent(readings, sample, precision, digits))
+
+        if (coarse and self.rank_candidates and angle_read is not None and not self.confirmations
+                and not any(layout == self.known_good_layout and reliable(score) for score, layout, _ in coarse)):
+            # Compare regions first and spend the angle budget on the strongest candidate.
+            index = max(range(len(coarse)), key=lambda position: ranked_crop(coarse[position]))
+            score, layout, readings = coarse[index]
+            ceiling = frame_ceiling
+            if collecting:
+                ceiling = min(ceiling, self.attempts + COARSE_LIMIT - self.coarse_attempts)
+            previous_attempts = self.attempts
+            trial, values = self.sweep_angles(layout, readings, sample, rules, angle_read, stop,
+                                              on_angle, tested, ceiling, accept_first=not reliable(score))
+            if collecting:
+                self.coarse_attempts += self.attempts - previous_attempts
+            coarse[index] = score_layout(trial, values), trial, values
+            if self.attempts > previous_attempts and on_selected is not None and not stop():
+                on_selected(trial, values)
 
         if self.rank_candidates and not (committed or preferred):
             for _, layout, readings in coarse:
@@ -893,7 +992,7 @@ class Calibration:
                     reason = reference_rejection(sample, status) or reason
                 on_decision(reason)
                 return None
-            coarse.sort(key=lambda item: (item[0][0], self.shortlist.get(item[1], (0, 0)), item[0]), reverse=True)
+            coarse.sort(key=lambda item: (ranked_crop(item), self.shortlist.get(item[1], (0, 0))), reverse=True)
         else:
             coarse.sort(key=lambda item: item[0], reverse=True)
         refined = False
@@ -931,6 +1030,22 @@ class Calibration:
                 matches = agreement and (not has_reference or all(reference_rejection(
                     sample, compare_sample(sample, value, precision, integer_digits=digits)[0]) is None
                     for value in readings))
+                recovered_slot = False
+                if (refine_read is not None and self.intensive and precision == 3
+                        and self.confirmations >= 2 and not matches):
+                    issue = penultimate_issue(readings, sample, digits)
+                    if issue is not None:
+                        recovery = self.retry_penultimate(
+                            layout, issue, rules, refine_read, stop, on_refine,
+                            lambda values: reliable(score_layout(layout, values)),
+                        )
+                        if not recovery:
+                            on_decision("penultimate_unclear")
+                            continue
+                        layout, readings = recovery
+                        recovered_slot = True
+                        if on_selected is not None:
+                            on_selected(layout, readings)
                 if (refine_read is not None and (not refined or self.rank_candidates) and not matches
                         and not self.confirmations and not self.focused):
                     refined = True
@@ -977,7 +1092,7 @@ class Calibration:
                         continue
                 rejection = "implausible"
                 same = layout == self.candidate
-                anchor = self.counter if same else baseline or {}
+                anchor = self.counter if same or recovered_slot else baseline or {}
                 counter = accumulate_consumption(anchor, "calibration", stamp, readings[0], precision,
                                                 flow, digits)
             except (OSError, ValueError, subprocess.SubprocessError):
@@ -1015,7 +1130,7 @@ class Calibration:
                                                  rules["fraction_digits"], frame)
             self.confirmed_quality = (self.confirmed_quality if same else [])[-2:] + [crop_quality(frame, layout)]
             self.confirmations = self.confirmations + 1 if same else 1
-            self.anchored = (same and self.anchored) or has_reference or bool(baseline)
+            self.anchored = ((same or recovered_slot) and self.anchored) or has_reference or bool(baseline)
             self.advanced = same and (self.advanced or (
                 "reading_litres" in anchor and
                 counter["reading_litres"] > anchor["reading_litres"]))

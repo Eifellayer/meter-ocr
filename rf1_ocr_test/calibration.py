@@ -429,6 +429,7 @@ class Calibration:
     intensive: bool = False
     followup: bool = False
     followup_baseline: dict | None = None
+    last_digit_proposal: Layout | None = None
     rank_candidates: bool = False
     coarse_attempts: int = 0
     optimizing: bool = False
@@ -579,6 +580,37 @@ class Calibration:
         if best[0] > self.best_score and not self.best_confirmations:
             self.best_score, self.best = best[0], best[1]
         return best[1], best[2]
+
+    def probe_open_digit(self, layout, sample, rules, read, stop, on_attempt):
+        """Try the last slot on this image without adding an independent hit."""
+        digits = rules["integer_digits"]
+        has_reference = sample.get("reference_required") is not False
+
+        def matches(values):
+            prefixes = [meter_prefix(value, 3, digits) for value in values]
+            return prefixes[0] is not None and prefixes[0] == prefixes[1] and (
+                not has_reference or all(reference_rejection(
+                    sample, compare_sample(sample, value, 3, integer_digits=digits)[0]) is None
+                    for value in values))
+
+        readings = []
+        try:
+            for profile in OCR_PROFILES[:2]:
+                if stop():
+                    return None
+                readings.append(read(layout, profile))
+        except (OSError, ValueError, subprocess.SubprocessError):
+            return None
+        prefix = meter_prefix(readings[0], 2, digits)
+        if prefix is None or prefix != meter_prefix(readings[1], 2, digits):
+            return None
+        if has_reference and prefix != meter_prefix(sample.get("actual_value"), 2, digits):
+            return None
+        if matches(readings):
+            return layout
+        trial, readings = self.refine(layout, readings, sample, rules, read, stop, on_attempt,
+                                      {layout}, self.attempt_limit)
+        return trial if matches(readings) else None
 
     def remember_image(self, frame, stamp):
         digest = sha256(frame.convert("RGB").tobytes()).digest()

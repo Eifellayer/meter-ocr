@@ -231,6 +231,21 @@ class CalibrationTests(TestCase):
         self.assertEqual(1, self.job.confirmations)
         self.assertEqual(LAYOUT.box, self.job.candidate.box)
 
+    def test_probe_uses_the_reference_digit_without_adding_confirmations(self):
+        saved = Layout(LAYOUT.box, LAYOUT.rotation, 50)
+        probe = Calibration(0, 0, intensive=True, followup=True, attempt_limit=9)
+        sample = {"reference_time": 100, "raw_value": "12345.239", "actual_value": "12345.239"}
+        rules = {**RULES, "decimals": 3, "fraction_digits": 3}
+
+        def read(trial, profile):
+            return "12345.239" if trial.digit_boxes else "12345.232"
+
+        proposal = probe.probe_open_digit(saved, sample, rules, read, lambda: False, lambda *_: None)
+        self.assertTrue(proposal.digit_boxes)
+        self.assertEqual(saved.box, proposal.box)
+        self.assertEqual(0, probe.confirmations)
+        self.assertEqual(set(), probe.seen)
+
     def test_fifty_coarse_tests_then_only_the_five_ranked_candidates(self):
         self.job = Calibration(100, 0, rank_candidates=True)
         self.candidates.return_value = [Layout((x, 0, x + 80, 20), 0, 80) for x in range(5)]

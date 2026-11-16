@@ -37,7 +37,7 @@ from checks import (
     timestamp_epoch, track_reflection,
     valid_interval_minutes,
 )
-from calibration import (Calibration, Layout, CAPTURE_INTERVAL, MIN_IMAGE_LIMIT, MAX_IMAGES, MAX_ATTEMPTS,
+from calibration import (Calibration, Layout, CAPTURE_INTERVAL, MIN_IMAGES, MIN_IMAGE_LIMIT, MAX_IMAGES, MAX_ATTEMPTS,
                          SHORTLIST_LIMIT, TIME_LIMIT, two_decimal_reading)
 from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, MAX_FLOW_LPH, ImplausibleReading,
                          accumulate_consumption, fallback_detail, format_cubic_metres)
@@ -1068,6 +1068,7 @@ def main():
                 if captured is not None:
                     if mode == "slfork":
                         sample.update(slfork_reference(sample, captured, zone, history.get("last_slfork_match", {})))
+                    full_sample = sample
                     if attempt.simplified:
                         sample = {**sample, **{key: two_decimal_reading(sample[key])
                                               for key in ("raw_value", "actual_value") if key in sample}}
@@ -1180,14 +1181,15 @@ def main():
                                 digit_boxes=layout.digit_boxes,
                             )
 
-                        def recognize(layout, profile, register, ocr_deadline=None):
+                        def recognize(layout, profile, register, ocr_deadline=None, *, full_precision=False):
+                            reduced = attempt.simplified and not full_precision
                             value = read_visible_digits(
                                 *register[:4], options["helle_ziffern"], active_rules["polarity"], profile=profile,
-                                whole_digits=whole, fraction_digits=2 if attempt.simplified else fraction,
+                                whole_digits=whole, fraction_digits=2 if reduced else fraction,
                                 deadline=deadline if ocr_deadline is None else ocr_deadline,
                                 prefer_boxes=bool(layout.digit_boxes), recognize=cached_digit,
                             )
-                            return two_decimal_reading(value) if attempt.simplified else value
+                            return two_decimal_reading(value) if reduced else value
 
                         def read(layout, profile):
                             nonlocal previous_layout
@@ -1230,6 +1232,32 @@ def main():
                                     "shortlist", variant, rotation),
                             )
                             attempt.verification_pending = candidate is not None
+                            if attempt.simplified and attempt.candidate:
+                                if attempt.candidate != job.candidate:
+                                    attempt.last_digit_proposal = None
+                                accepted_new_hit = (attempt.candidate != job.candidate
+                                                    or attempt.confirmations > job.confirmations)
+                                reserved = max(1, MIN_IMAGES + 1 - attempt.confirmations)
+                                spare_attempts = attempt.attempt_limit - attempt.attempts - reserved
+                                if (accepted_new_hit and attempt.confirmations and not attempt.last_digit_proposal
+                                        and spare_attempts > 0 and attempt.remaining(time.monotonic()) > 15
+                                        and not stopped()):
+                                    probe_deadline = min(deadline, time.monotonic() + 12)
+                                    probe = Calibration(limit=0, started=time.monotonic(),
+                                                        intensive=True, followup=True,
+                                                        attempt_limit=min(9, spare_attempts + 2))
+                                    report_calibration("digit_probe")
+                                    attempt.last_digit_proposal = probe.probe_open_digit(
+                                        attempt.candidate, full_sample, active_rules,
+                                        lambda layout, profile: recognize(
+                                            layout, profile, register_for(layout), probe_deadline, full_precision=True),
+                                        lambda: stopped() or time.monotonic() >= probe_deadline,
+                                        lambda *_: None,
+                                    )
+                                    attempt.attempts += 1 + probe.attempts
+                                    with settings_lock:
+                                        if calibration is job and attempt.last_digit_proposal:
+                                            calibration_preview["last_digit_hint"] = True
         except (OSError, ValueError, TypeError, Image.DecompressionBombError) as error:
             print(f"Selbsteinrichtung konnte die Aufnahme nicht prüfen: {type(error).__name__}")
         with settings_lock:
@@ -1261,6 +1289,7 @@ def main():
                         # Commit the verified crop before checking the open digit on new photos.
                         attempt = Calibration(limit=attempt.limit, started=now, intensive=True, followup=True,
                                               previous_layout=selected, last_stamp=attempt.last_stamp,
+                                              candidate=attempt.last_digit_proposal,
                                               followup_baseline=attempt.counter,
                                               duration=GEOMETRY_REPAIR_SECONDS, attempt_limit=GEOMETRY_REPAIR_LIMIT)
                         calibration_configuration = calibration_configuration_now()

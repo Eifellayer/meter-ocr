@@ -227,6 +227,10 @@ EN_UI = {
     "Treffer gesammelt. Warte auf ein frisches Bild für die Gegenprobe.":
         "Matches collected. Waiting for a fresh image for verification.",
     " · Beste Kandidaten: ": " · Best candidates: ",
+    "Teste die vermutete Position der letzten Rolle auf diesem Bild …":
+        "Testing the estimated position of the last roller on this image …",
+    " Vorschlag für die letzte Rolle gefunden. Warte auf Bestätigung mit einem neuen Bild.":
+        " Candidate for the last roller found. Waiting for confirmation on a new image.",
     LAST_DIGIT_PASS: "The first two decimal places match. The third digit remains unconfirmed.",
     "Für den Verbrauch verwendet die App den plausiblen Vergleichswert.": "The app uses the plausible reference reading to calculate consumption.",
     "Ablesung und Vergleichswert weichen ab": "Image reading and reference differ",

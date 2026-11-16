@@ -1564,6 +1564,7 @@ function refreshCalibration(status) {{
     capture: 'Kamerabild wird abgerufen …',
     search: 'Grobkalibrierung: Suche nach der Ziffernreihe …',
     shortlist: 'Intensivprüfung für Kandidat ' + status.variant + ' …',
+    digit_probe: 'Teste die vermutete Position der letzten Rolle auf diesem Bild …',
     angle: 'Drehung wird geprüft. Der Winkel steht am Vorschaubild.',
     refine: status.preview?.weak_positions?.length ?
       'Einzelziffernsuche. Offene Stellen von links: ' + status.preview.weak_positions.join(', ') + '.' :
@@ -1604,6 +1605,9 @@ function refreshCalibration(status) {{
   }}
   if (status.intensive && ['failed', 'timeout', 'image_timeout'].includes(status.state)) {{
     message = 'Dritte Nachkommastelle bleibt unbestätigt. Du kannst später erneut suchen oder sie manuell markieren.';
+  }}
+  if (active && status.preview?.last_digit_hint) {{
+    message += ' Vorschlag für die letzte Rolle gefunden. Warte auf Bestätigung mit einem neuen Bild.';
   }}
   const detail = 'Bilder geprüft: ' + status.tested +
     ' · Rahmen getestet: ' + status.attempts +

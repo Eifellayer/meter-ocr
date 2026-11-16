@@ -208,7 +208,7 @@ class CalibrationTests(TestCase):
         self.assertEqual(0, self.job.confirmations)
 
     def test_coarse_search_compares_small_label_and_wide_register_before_refining(self):
-        label = Layout((8, 19, 38, 29), 0, 30)
+        label = Layout((8, 13, 38, 28), 0, 30)
         register = Layout((4, 0, 94, 17), 0, 90, method="register_window")
         self.candidates.return_value = [label, register]
         events = []
@@ -227,6 +227,19 @@ class CalibrationTests(TestCase):
         self.assertTrue(events[4:])
         self.assertTrue(all(item == ("fine", register.box) for item in events[4:]))
         self.assertEqual(1, self.job.confirmations)
+
+    def test_small_label_outside_detected_register_is_never_read(self):
+        label = Layout((57, 19, 90, 29), 0, 33)
+        register = Layout((4, 0, 94, 17), 0, 90, method="register_window")
+        self.candidates.return_value = [label, register]
+        seen = []
+
+        def read(layout, profile):
+            seen.append(layout)
+            return "12345"
+
+        self.job.examine(frame(1), None, {"reference_required": False}, 100, RULES, read, lambda: False)
+        self.assertEqual([register, register], seen)
 
     def test_sweeps_in_one_degree_steps_then_refines_at_the_best_angle(self):
         base = Layout((0, 0, 90, 25), 0, 55, method="register_window")

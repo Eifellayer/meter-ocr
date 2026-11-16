@@ -284,6 +284,20 @@ def uncertain_slots(readings, count):
     return [index for index, (a, b) in enumerate(zip(*rows)) if a != b or a not in "0123456789"]
 
 
+def skip_small_labels(candidates):
+    """Skip small rows separated vertically from a detected register window."""
+    windows = [layout.box for layout in candidates if layout.method == "register_window"]
+    if not windows:
+        return candidates
+    left, top, right, bottom = max(windows, key=lambda box: (box[2] - box[0]) * (box[3] - box[1]))
+    width, height = right - left, bottom - top
+    return [layout for layout in candidates
+            if layout.method == "register_window"
+            or not ((layout.box[1] >= bottom or layout.box[3] <= top)
+                    and layout.box[2] - layout.box[0] <= width * .60
+                    and layout.box[3] - layout.box[1] <= height * .80)]
+
+
 def refinement_workers():
     cores = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count() or 1
     try:
@@ -565,6 +579,8 @@ class Calibration:
         # failure or once the focused candidate is confirmed.
         if self.focused:
             candidates = ((self.candidate,) if self.candidate is not None else ())
+        else:
+            candidates = skip_small_labels(list(candidates))
         examined = False
         tested = set()
         frame_ceiling = self.attempts + FRAME_ATTEMPT_LIMIT

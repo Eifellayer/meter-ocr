@@ -3,6 +3,7 @@
 ## 0.5.9 Stable
 
 - Die Vorschau zeigt beim Winkeltest den gedrehten Ausschnitt und das OCR-Ergebnis. Danach kehrt sie zum besten Winkel zurück.
+- Neben einem klar erkannten Zählfenster werden deutlich kleinere, getrennte Beschriftungen vor der OCR ausgefiltert.
 
 ## 0.5.8 Stable
 

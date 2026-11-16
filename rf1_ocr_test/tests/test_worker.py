@@ -460,10 +460,16 @@ class StateTests(TestCase):
         self.assertEqual("standalone_pending", history["check_status"])
         self.assertIsNone(history["last_reference"])
         self.assertNotIn("consumption", history)
-        self.assertAlmostEqual(300, history["next_check_at"] - history["last_epoch"], delta=5)
+        self.assertAlmostEqual(5, history["next_check_at"] - history["last_epoch"], delta=1)
 
         history["next_check_at"] = 0
         files["HISTORY"].write_text(json.dumps(history))
+        with Image.open(BytesIO(fetch.return_value)) as source:
+            fresh = source.convert("RGB")
+            fresh.paste("white", (0, 0, 12, 12))
+            with BytesIO() as stream:
+                fresh.save(stream, "JPEG")
+                fetch.return_value = stream.getvalue()
         recognize.reset_mock()
         recognize.side_effect = lambda frame, *_, **__: "12345.???" if frame.width > 500 else "?????.???"
         with self.assertRaises(StopLoop):
@@ -811,8 +817,18 @@ class StateTests(TestCase):
 
         self.enterContext(patch.object(run, "publish_consumption", finish_run))
 
-        def check(ocr):
+        snapshots = 0
+
+        def check(ocr, *, cached=False):
+            nonlocal snapshots
             recognize.return_value = ocr
+            if not cached:
+                snapshots += 1
+                fresh = synthetic_meter().convert("RGB")
+                fresh.putpixel((0, 0), (snapshots, 0, 0))
+                with BytesIO() as stream:
+                    fresh.save(stream, "PNG")
+                    fetch.return_value = stream.getvalue()
             if files["HISTORY"].exists():
                 history = json.loads(files["HISTORY"].read_text())
                 history["next_check_at"] = 0
@@ -827,6 +843,12 @@ class StateTests(TestCase):
         self.assertEqual("standalone_pending", pending["check_status"])
         self.assertEqual("unavailable", published[run.OCR_ENTITY]["state"])
         self.assertNotIn(run.CONSUMPTION_ENTITY, published)
+        self.assertAlmostEqual(5, pending["next_check_at"] - pending["last_epoch"], delta=1)
+        recognize.reset_mock()
+        still_pending = check("12345.???", cached=True)
+        self.assertEqual("standalone_pending", still_pending["check_status"])
+        self.assertEqual(pending["last_epoch"], still_pending["last_epoch"])
+        recognize.assert_not_called()
         initial = check("12345.???")
         self.assertEqual("12345", published[run.OCR_ENTITY]["state"])
         self.assertEqual("ocr_only", published[run.CHECK_ENTITY]["state"])

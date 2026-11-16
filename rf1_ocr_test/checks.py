@@ -16,6 +16,8 @@ DEFAULT_INTERVAL_MINUTES = 60
 MAX_INTERVAL_MINUTES = 24 * 60
 NORMAL_INTERVAL = DEFAULT_INTERVAL_MINUTES * 60
 RETRY_INTERVAL = 5 * 60
+STANDALONE_SECOND_CAPTURE_DELAY = 5
+STANDALONE_CACHED_CAPTURE_DELAY = 15
 FAILURE_RETRY_LIMIT = 3
 FAILURE_COOLDOWN_INTERVAL = 60 * 60
 WARNING_DETAIL_AFTER = 60 * 60
@@ -589,7 +591,7 @@ def defer_duplicate_cycle(history, fetched_at, interval_minutes):
 def _check_delay(outcome, interval_minutes, retry_suppressed=False):
     interval = interval_minutes * 60
     if outcome == STANDALONE_PENDING:
-        return RETRY_INTERVAL
+        return STANDALONE_SECOND_CAPTURE_DELAY
     if outcome in SUCCESSFUL_CHECKS:
         return interval
     return FAILURE_COOLDOWN_INTERVAL if retry_suppressed else min(interval, RETRY_INTERVAL)

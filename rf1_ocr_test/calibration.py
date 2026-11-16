@@ -448,6 +448,7 @@ class Calibration:
     anchored: bool = False
     advanced: bool = False
     reference_reading: str | None = None
+    reference_image_id: str | None = None
     verification_pending: bool = False
     verification_deadline: float | None = None
     automatic: bool = False

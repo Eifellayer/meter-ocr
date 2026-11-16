@@ -28,6 +28,7 @@ from app_channel import APP_NAME, CHECK_ENTITY, LABEL_SUFFIX, NAMESPACE
 from checks import (
     DEFAULT_INTERVAL_MINUTES, FRESH_SAMPLE_AGE, RETRY_INTERVAL, REVIEW_AFTER, OCR_PROFILES,
     STANDALONE_PENDING, STANDALONE_PENDING_NOTICE, STANDALONE_REJECTED_NOTICE, STANDALONE_VERIFIED_NOTICE,
+    STANDALONE_CACHED_CAPTURE_DELAY,
     compare_sample, crop_register, read_register, read_with_retries, record_sample,
     automatic_interval_minutes, defer_duplicate_cycle,
     LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, LAST_DIGIT_RETRIES, SUCCESSFUL_CHECKS,
@@ -490,7 +491,7 @@ def standalone_calibration_reference(rules, source, source_key, captured, previo
         return None
     counter = accumulate_consumption({}, source_key, stamp, reading, precision,
                                      rules["max_flow_lph"], rules["integer_digits"])
-    return {"counter": counter, "reading": reading}
+    return {"counter": counter, "reading": reading, "image_id": saved.get("image_id")}
 
 
 def atomic_write(destination, content, mode):
@@ -970,6 +971,7 @@ def main():
             reference = {
                 "reading": reading, "time": attempt.counter["timestamp"], "precision": precision,
                 "source": calibration_source_id(get_source()[0]), "integer_digits": rules["integer_digits"],
+                "image_id": attempt.reference_image_id,
             }
         save_auto_rules({**rules, **layout.settings(), "crop_revision": str(time.time_ns()),
                          "calibration_reference": reference})
@@ -1370,6 +1372,8 @@ def main():
                                     with settings_lock:
                                         if calibration is job and attempt.last_digit_proposal:
                                             calibration_preview["last_digit_hint"] = True
+                        if attempt.reference_reading is not None and attempt.counter.get("timestamp") == captured:
+                            attempt.reference_image_id = hashlib.sha256(picture).hexdigest()
         except (OSError, ValueError, TypeError, Image.DecompressionBombError) as error:
             print(f"Selbsteinrichtung konnte die Aufnahme nicht prüfen: {type(error).__name__}")
         with settings_lock:
@@ -1619,6 +1623,8 @@ def main():
         sample = None
         raw_fallback = False
         duplicate_cycle = False
+        cached_standalone = False
+        image_id = None
         automatic_preview_ready = False
         live_deadline = (time.monotonic() + LIVE_CAPTURE_WINDOW_SECONDS
                          if active_source["mode"] == "camera" else None)
@@ -1676,7 +1682,21 @@ def main():
                 picture, overlay, sample = result
                 now = datetime.now(zone)
                 captured = sample_epoch(sample, zone, now)
-                if not manual and (captured is None or captured <= updated.get("last_epoch", 0)):
+                if not manual and standalone and captured is not None:
+                    image_id = hashlib.sha256(picture).hexdigest()
+                    pending = updated.get("standalone_candidate") or standalone_calibration_reference(
+                        active_rules, active_source, source_key, captured, history.get("consumption", {}),
+                    )
+                    if (pending and pending.get("image_id") == image_id
+                            and pending["counter"]["source"] == source_key
+                            and 0 <= captured - pending["counter"]["timestamp"] <= FRESH_SAMPLE_AGE):
+                        cached_standalone = True
+                        outcome = updated["status"] = STANDALONE_PENDING
+                        updated["source_connection_status"] = "stale"
+                        updated["source_connection_detail"] = "Home-Assistant-Kamera erreichbar; dieses Bild wurde bereits geprüft."
+                        updated["check_detail"] = STANDALONE_PENDING_NOTICE
+                        result = None
+                if result is not None and not manual and (captured is None or captured <= updated.get("last_epoch", 0)):
                     updated["source_connection_status"] = "stale"
                     if captured is None:
                         updated["source_connection_detail"] = (
@@ -1769,7 +1789,7 @@ def main():
                         read_state = {"register": register, "integer_width": integer_width,
                                       "whole_boxes": whole_boxes, "fraction_boxes": fraction_boxes,
                                       "source": source, "picture": picture, "captured": captured,
-                                      "attempts": 0}
+                                      "image_id": image_id, "attempts": 0}
                         live_source = live_deadline is not None
 
                         def read_layout(layout, profile):
@@ -1817,7 +1837,9 @@ def main():
                                                   integer_width=latest_integer_width,
                                                   whole_boxes=latest_whole, fraction_boxes=latest_fraction,
                                                   source=latest_source, picture=latest_picture,
-                                                  captured=latest_time)
+                                                  captured=latest_time,
+                                                  image_id=hashlib.sha256(latest_picture).hexdigest()
+                                                  if standalone and not manual else None)
                             read_state["attempts"] += 1
                             return read_layout((
                                 read_state["register"], read_state["integer_width"],
@@ -1911,6 +1933,7 @@ def main():
                         source = read_state["source"]
                         picture = read_state["picture"]
                         captured = read_state["captured"]
+                        image_id = read_state["image_id"]
                         image_time = captured if captured is not None else sample_timestamp(sample, zone)
                     except (OSError, ValueError, subprocess.SubprocessError) as error:
                         print(f"OCR-Bildprüfung fehlgeschlagen: {error}")
@@ -1954,6 +1977,8 @@ def main():
                                 setup_reference = standalone_calibration_reference(
                                     active_rules, active_source, source_key, captured, previous_consumption,
                                 ) if standalone else None
+                                if setup_reference and setup_reference.get("image_id") == image_id:
+                                    setup_reference = None
                                 if setup_reference:
                                     setup_counter = setup_reference["counter"]
                                     accumulate_consumption(
@@ -1973,6 +1998,7 @@ def main():
                                 elif standalone:
                                     candidate = updated.get("standalone_candidate")
                                     if (candidate and candidate.get("crop") == (rotation_key or custom_boxes)
+                                            and candidate.get("image_id") not in (None, image_id)
                                             and 0 < captured - candidate["counter"]["timestamp"] <= FRESH_SAMPLE_AGE):
                                         accumulate_consumption(
                                             candidate["counter"], source_key, captured, ocr, decimals,
@@ -1983,7 +2009,7 @@ def main():
                                     else:
                                         updated["standalone_candidate"] = {
                                             "counter": new_consumption, "reading": ocr, "crop": rotation_key or custom_boxes,
-                                            "rotation_adjustment": rotation_adjustment,
+                                            "rotation_adjustment": rotation_adjustment, "image_id": image_id,
                                         }
                                         new_standalone = new_consumption = None
                             except ImplausibleReading as error:
@@ -2271,10 +2297,14 @@ def main():
                             reference_is_fallback=manual_result.get("reference_is_fallback", False),
                             image_time=manual_result.get("image_time"))
             continue
-        if keep_schedule and data is None and history.get("next_check_at", 0) > now.timestamp():
+        if keep_schedule and not cached_standalone and data is None and history.get("next_check_at", 0) > now.timestamp():
             continue
         updated["slfork_diagnostics"] = diagnostics
-        if duplicate_cycle:
+        if cached_standalone:
+            updated["check_status"] = STANDALONE_PENDING
+            defer_duplicate_cycle(updated, now.timestamp(), interval_minutes)
+            updated["next_check_at"] = now.timestamp() + STANDALONE_CACHED_CAPTURE_DELAY
+        elif duplicate_cycle:
             defer_duplicate_cycle(updated, now.timestamp(), interval_minutes)
         else:
             schedule_next_check(updated, outcome, now.timestamp(), interval_minutes)

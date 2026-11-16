@@ -259,6 +259,7 @@ EN_UI = {
     "Das Ziffernfeld wirkt sehr hell.": "The digit area appears very bright.",
     "Das Ziffernfeld hat wenig Kontrast.": "The digit area has low contrast.",
     "Das Ziffernfeld wirkt unscharf.": "The digit area appears blurry.",
+    "Die App prüft zuerst den zuletzt bestätigten Rahmen.": "The app checks the last verified crop first.",
     LAST_DIGIT_PASS: "The first two decimal places match. The third digit remains unconfirmed.",
     "Für den Verbrauch verwendet die App den plausiblen Vergleichswert.": "The app uses the plausible reference reading to calculate consumption.",
     "Ablesung und Vergleichswert weichen ab": "Image reading and reference differ",

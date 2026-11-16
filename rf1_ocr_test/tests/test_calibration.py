@@ -172,6 +172,35 @@ class CalibrationTests(TestCase):
         self.assertEqual(3, self.job.status(104)["tested"])
         self.assertEqual(3, self.job.confirmations)
 
+    def test_known_good_crop_is_tried_before_detection_and_still_needs_fresh_hits(self):
+        self.job = Calibration(5, 0, rank_candidates=True, known_good_layout=OTHER_LAYOUT)
+        sample = {"reference_time": 100, "raw_value": "12345", "actual_value": "12345"}
+        attempted = []
+
+        def read(layout, profile):
+            attempted.append(layout)
+            return "12345"
+
+        self.assertIsNone(self.job.examine(frame(1), None, sample, 101, RULES, read, lambda: False))
+        self.assertEqual({OTHER_LAYOUT}, set(attempted))
+        self.assertEqual(1, self.job.confirmations)
+        self.candidates.assert_not_called()
+        self.assertTrue(self.job.status(101)["known_good_available"])
+
+    def test_search_resumes_when_the_known_good_crop_no_longer_reads(self):
+        self.job = Calibration(5, 0, rank_candidates=True, known_good_layout=OTHER_LAYOUT)
+        sample = {"reference_time": 100, "raw_value": "12345", "actual_value": "12345"}
+        attempted = []
+
+        def read(layout, profile):
+            attempted.append(layout)
+            return "?????" if layout == OTHER_LAYOUT else "12345"
+
+        self.assertIsNone(self.job.examine(frame(1), None, sample, 101, RULES, read, lambda: False))
+        self.assertEqual([OTHER_LAYOUT, OTHER_LAYOUT, LAYOUT], attempted[:3])
+        self.candidates.assert_called_once()
+        self.assertEqual(LAYOUT, self.job.candidate)
+
     def test_initial_calibration_verifies_two_digits_when_the_third_is_open(self):
         self.job.simplified = True
         rules = {**RULES, "decimals": 3, "fraction_digits": 3, "attempts": 3}

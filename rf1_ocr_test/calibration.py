@@ -469,6 +469,7 @@ class Calibration:
     duration: int = TIME_LIMIT
     attempt_limit: int = MAX_ATTEMPTS
     previous_layout: Layout | None = None
+    known_good_layout: Layout | None = None
     region: tuple | None = None
     focused: bool = False
     best_score: tuple = ()
@@ -558,6 +559,7 @@ class Calibration:
                 "confirmations": self.confirmations, "required": MIN_IMAGES,
                 "full_hits": self.full_hits,
                 "image_hints": self.image_hints,
+                "known_good_available": self.known_good_layout is not None and self.region is None,
                 "stress_weak_slots": self.stress_weak_slots,
                 "coarse_complete": self.full_hits >= MIN_IMAGES,
                 "awaiting_start_value": self.confirmations >= MIN_IMAGES and not (self.anchored or self.advanced),
@@ -771,11 +773,26 @@ class Calibration:
         else:
             seed = self.candidate or (next(iter(self.shortlist), None) if collecting else self.previous_layout)
 
-            candidates = (guided_layouts(frame, overlay, rules, len(self.seen) - 1, seed, self.region)
-                          if self.region else layouts(
-                              frame, overlay, rules, len(self.seen) - 1, seed,
-                              prefer_configured=self.automatic or self.intensive, on_regions=on_regions))
-            candidates = skip_small_labels(list(candidates))
+            def search_candidates():
+                known = self.known_good_layout
+                if known is not None and not self.confirmations:
+                    if self.region:
+                        left, top, right, bottom = (
+                            round(value * size / 1000)
+                            for value, size in zip(self.region, frame.size * 2)
+                        )
+                    else:
+                        left, top, right, bottom = 0, 0, frame.width, frame.height
+                    a, b, c, d = known.box
+                    if left <= a < c <= right and top <= b < d <= bottom:
+                        yield known
+                detected = (guided_layouts(frame, overlay, rules, len(self.seen) - 1, seed, self.region)
+                            if self.region else layouts(
+                                frame, overlay, rules, len(self.seen) - 1, seed,
+                                prefer_configured=self.automatic or self.intensive, on_regions=on_regions))
+                yield from skip_small_labels(list(detected))
+
+            candidates = search_candidates()
         examined = False
         tested = set()
         frame_ceiling = self.attempts + FRAME_ATTEMPT_LIMIT
@@ -836,7 +853,8 @@ class Calibration:
                 if self.attempts > previous_attempts and on_selected is not None and not stop():
                     on_selected(layout, readings)
             coarse.append((score, layout, readings))
-            if self.rank_candidates and reliable(score) and (not self.confirmations or layout == self.candidate):
+            if reliable(score) and (layout == self.known_good_layout
+                                    or self.rank_candidates and (not self.confirmations or layout == self.candidate)):
                 break
 
         if self.rank_candidates and not (committed or preferred):

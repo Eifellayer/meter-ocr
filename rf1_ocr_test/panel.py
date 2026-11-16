@@ -1590,6 +1590,7 @@ function refreshCalibration(status) {{
   const stages = {{
     queued: status.followup ?
       'Ausschnitt gespeichert. Suche jetzt gezielt nach der dritten Nachkommastelle …' :
+      status.known_good_available ? 'Die App prüft zuerst den zuletzt bestätigten Rahmen.' :
       'Selbsteinrichtung startet, sobald die laufende Prüfung beendet ist …',
     capture: 'Kamerabild wird abgerufen …',
     search: 'Grobkalibrierung: Suche nach der Ziffernreihe …',

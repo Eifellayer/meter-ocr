@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.19 Stable
+
+- Die Selbsteinrichtung prüft zuerst den zuletzt bestätigten Rahmen derselben Bildquelle und Ziffernaufteilung. Erst wenn er nicht mehr passt, beginnt die weitere Rahmensuche.
+
 ## 0.5.18 Stable
 
 - Nach 3/3 Treffern kann die Gegenprobe der Feinprüfung bewusst übersprungen werden. Die App warnt vor möglichen ungenaueren Ablesungen und kennzeichnet den übernommenen Rahmen als ohne Gegenprobe gespeichert.

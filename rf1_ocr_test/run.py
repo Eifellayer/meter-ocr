@@ -1086,10 +1086,11 @@ def main():
                                 digit_boxes=layout.digit_boxes,
                             )
 
-                        def recognize(layout, profile, register):
+                        def recognize(layout, profile, register, ocr_deadline=None):
                             return read_visible_digits(
                                 *register[:4], options["helle_ziffern"], active_rules["polarity"], profile=profile,
-                                whole_digits=whole, fraction_digits=fraction, deadline=deadline,
+                                whole_digits=whole, fraction_digits=fraction,
+                                deadline=deadline if ocr_deadline is None else ocr_deadline,
                                 prefer_boxes=bool(layout.digit_boxes), recognize=cached_digit,
                             )
 
@@ -1105,6 +1106,14 @@ def main():
                             report_crop(layout, register, reading)
                             return reading
 
+                        fine_deadline = None
+
+                        def report_fine(variant, rotation, positions):
+                            nonlocal fine_deadline
+                            if fine_deadline is None:
+                                fine_deadline = min(deadline, time.monotonic() + 12)
+                            report_calibration("refine", variant, rotation, positions)
+
                         if attempt.verification_pending:
                             report_calibration("verify", rotation=attempt.candidate.rotation)
                             selected = attempt.verify(frame, sample, captured, active_rules, read, stopped,
@@ -1115,11 +1124,13 @@ def main():
                                 frame, overlay, sample, captured, active_rules, read, stopped, baseline,
                                 on_attempt=lambda variant, rotation: report_calibration("ocr", variant, rotation),
                                 on_image=on_image, on_decision=report_decision,
-                                refine_read=lambda layout, profile: recognize(layout, profile, register_for(layout)),
-                                on_refine=lambda variant, rotation, positions: report_calibration(
-                                    "refine", variant, rotation, positions),
+                                refine_read=lambda layout, profile: recognize(
+                                    layout, profile, register_for(layout), fine_deadline),
+                                on_refine=report_fine,
                                 on_regions=report_regions,
                                 on_selected=show_selected,
+                                angle_read=lambda layout, profile: recognize(layout, profile, register_for(layout)),
+                                on_angle=lambda variant, rotation: report_calibration("angle", variant, rotation),
                             )
                             attempt.verification_pending = candidate is not None
         except (OSError, ValueError, TypeError, Image.DecompressionBombError) as error:

@@ -24,7 +24,7 @@ from checks import (DEFAULT_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, WARNING_DETA
 from consumption import DEFAULT_FLOW_LPH, format_cubic_metres, parse_flow_limit
 from i18n import EN_UI, english_progress, english_result, translate_page
 from language import MODES, SUPPORTED, USER_ID, browser_locale, profile_script
-from layout import MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates
+from layout import MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, digit_box_settings
 from notification_settings import notification_rules
 from source_settings import source_rules
 
@@ -158,6 +158,14 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .crop-reset{{background:transparent}}
 .crop-draw-image{{position:relative;max-width:700px;touch-action:none;user-select:none;cursor:crosshair}}
 .crop-draw-image img{{display:block;width:100%;height:auto;pointer-events:none}}
+.crop-live-preview{{margin:.85rem 0 0}}
+.crop-live-preview figcaption{{margin:0 0 .4rem;color:var(--muted);font-size:.85rem}}
+.crop-live-preview canvas{{display:block;max-width:100%;height:auto;border-radius:.5rem;background:#10161b}}
+.digit-editor{{position:relative;display:table;max-width:100%;touch-action:none}}
+.digit-layer{{position:absolute;inset:0}}
+.digit-frame{{position:absolute;min-height:0;padding:0;border:1px solid #77d4cc;border-radius:0;background:#17383728;color:#fff;cursor:move;text-shadow:0 1px 3px #000}}
+.digit-frame[data-active="true"]{{border-width:2px;z-index:1}}
+.digit-frame span{{display:block;position:absolute;right:0;bottom:0;width:min(12px,44%);height:min(12px,42%);background:#77d4cc;cursor:nwse-resize}}
 .crop-draw-outline{{position:absolute;box-sizing:border-box;border:3px solid #ffcf53;background:#ffcf5320;pointer-events:none}}
 .setup-help summary{{cursor:help;color:var(--muted);font-size:.88rem}}
 .setup-help p{{margin:.4rem 0 0;color:var(--muted);font-size:.88rem}}
@@ -287,6 +295,10 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <dt>Letzter bestätigter Abgleich</dt><dd id="automatic-last-match" class="stamp" data-epoch="{last_match}">–</dd>
 <dt>Nächste Prüfung</dt><dd id="countdown">–</dd></dl>
 <p class="failure-recovery" id="automatic-recovery" data-state="retrying" {recovery_hidden}>{recovery_notice}</p>
+<p class="failure-recovery" id="reflection-live" hidden>
+<strong>Vorläufig ergänzt</strong> <span id="reflection-live-reading"></span>
+<small>Gelb markierte Ziffern sind berechnet. Der Wert dient der Orientierung.</small>
+</p>
 <div id="reflection-estimate" class="reflection-estimate" {reflection_estimate_hidden}>
 <strong>Eindeutig ergänzter Zwischenstand</strong>
 <p><span id="reflection-value-left">{reflection_left}</span><mark id="reflection-value-digit" title="Berechnete Ziffer">{reflection_digit}</mark><span id="reflection-value-right">{reflection_right}</span>
@@ -392,9 +404,19 @@ name: Zählerstand (OCR)</code></pre>
 <img alt="Originalbild zum Einstellen des Ausschnitts" draggable="false">
 <span class="crop-draw-outline" hidden></span>
 </div>
+<figure class="crop-live-preview" hidden>
+<figcaption>Vorschau mit Bilddrehung</figcaption>
+<div class="digit-editor">
+<canvas role="img" aria-label="Vorschau mit Bilddrehung"></canvas>
+<div class="digit-layer"></div>
+</div>
+<p class="settings-note">Rahmen einzeln ziehen oder an der unteren Ecke vergrößern. Mit den Pfeiltasten verschieben, mit Umschalt und Pfeiltaste skalieren.</p>
+<button type="button" class="clear-digit-boxes">Einzelrahmen zurücksetzen</button>
+</figure>
 <p class="settings-note" role="status">Kamerabild wird geladen …</p>
 </div>
 <div class="crop-fields" id="crop-fields" hidden>
+<input type="hidden" name="digit_boxes" value="{manual_digit_boxes}">
 <label>Manueller Ausschnitt (links, oben, rechts, unten)
 <input name="crop" type="text" value="{crop_value}" maxlength="30" placeholder="52,56,564,132"></label>
 <label>Bilddrehung (°)
@@ -423,10 +445,11 @@ name: Zählerstand (OCR)</code></pre>
 {reset_notice}
 <section class="panel calibration-card" id="calibration-settings" aria-labelledby="calibration-title" {calibration_hidden}>
 <h2 id="calibration-title" tabindex="-1">Selbsteinrichtung für Ausschnitt und Drehung</h2>
-<p>Die App tastet sich mit unterschiedlichen Bildern an einen passenden Rahmen und Winkel heran. Nach drei bestätigten Ablesungen prüft sie den gefundenen Rahmen mit einem weiteren Bild und übernimmt ihn dann. Nach fünf Minuten endet der Versuch automatisch.</p>
+<p>Die App tastet sich mit unterschiedlichen Bildern an einen passenden Rahmen und Winkel heran. Nach drei bestätigten Ablesungen prüft sie den gefundenen Rahmen mit einem weiteren Bild und übernimmt ihn dann. Nach 15 Minuten endet der Versuch automatisch.</p>
 <p>Ohne externen Vergleichswert hilft ein von Hand abgelesener Startwert. Ohne Startwert wartet die App zusätzlich auf einen plausiblen Zähleranstieg.</p>
 {calibration_saved_notice}
 <p id="calibration-state" role="status" hidden></p>
+<button type="button" id="calibration-proposal" hidden>Gefundenen Rahmen im Test prüfen</button>
 <progress id="calibration-progress" aria-label="Verstrichene Zeit der Selbsteinrichtung" hidden></progress>
 <form method="post" action="selbsteinrichtung">
 <input type="hidden" name="lang" value="{language}">
@@ -497,7 +520,7 @@ name: Zählerstand (OCR)</code></pre>
 <div id="wizard-calibration-options" class="setup-help" hidden>
 <label>Höchstens so viele unterschiedliche Bilder
 <input name="image_limit" type="number" min="{calibration_min}" max="{calibration_max}" value="{calibration_limit}" required disabled></label>
-<p class="settings-note">Startet nach dem Speichern und endet spätestens nach fünf Minuten. Die App übernimmt den Rahmen nach drei Bestätigungen und einer abschließenden Gegenprüfung.</p>
+<p class="settings-note">Startet nach dem Speichern und endet spätestens nach 15 Minuten. Die App übernimmt den Rahmen nach drei Bestätigungen und einer abschließenden Gegenprüfung.</p>
 </div>
 <label>OCR-Versuche pro Bild<select name="attempts">{auto_attempt_options}</select></label>
 <label>Ziffernfarbe<select name="polarity">{auto_polarity_options}</select></label>
@@ -579,18 +602,24 @@ name: Zählerstand (OCR)</code></pre>
 <label class="check-option"><input type="checkbox" name="precision_mode" value="1" {precision_checked}> Präzisionsmodus: Alle drei Nachkommastellen müssen stimmen</label>
 </div>
 <label title="Nach einer unklaren Ablesung folgt ein zusätzlicher Versuch nach fünf Minuten. Schlägt auch der fehl, gilt wieder dieses Intervall.">Prüfintervall (Minuten)
-<input name="interval_minutes" type="number" min="1" max="{max_interval_minutes}" value="{interval_minutes}" required></label>
+<input name="interval_minutes" type="number" min="1" max="{max_interval_minutes}" value="{interval_minutes}" required>
+<small {slfork_interval_hidden}>Bei AI on the Edge / SLFork liegen reguläre Prüfungen mindestens fünf Minuten auseinander.</small></label>
 <label>Max. OCR-Versuche
 <select name="attempts">{auto_attempt_options}</select></label>
 <label title="Qmax steht auf deinem Zähler. Die Vorgabe für einen G4 beträgt 6 m³/h.">Maximaler Durchfluss (m³/h)
 <input name="max_flow" type="text" inputmode="decimal" maxlength="10" value="{max_flow}" required></label>
 <label>Ziffernfarbe
 <select name="polarity">{auto_polarity_options}</select></label>
+<details class="help setup-help">
+<summary>ⓘ Automatik im Hintergrund verbessern</summary>
+<label class="check-option"><input type="checkbox" name="fine_alignment_enabled" value="1" {fine_alignment_checked}> Ziffernrahmen langfristig feinjustieren</label>
+<label class="check-option"><input type="checkbox" name="adaptive_interval_enabled" value="1" {adaptive_interval_checked}> Prüfintervall bei erwarteten Rollenwechseln verkürzen (SLFork)</label>
+</details>
 <div class="reflection-settings setup-help" id="reflection-settings">
-<label class="check-option"><input type="checkbox" name="reflection_estimate_enabled" value="1" {reflection_enabled_checked}> Einzelne verdeckte Ziffer ergänzen</label>
+<label class="check-option"><input type="checkbox" name="reflection_estimate_enabled" value="1" {reflection_enabled_checked}> Verdeckte Ziffern ergänzen</label>
 <details class="help" id="reflection-settings-help">
 <summary>ⓘ Spiegelungen und verdeckte Ziffern</summary>
-<p>Die App ergänzt eine Ziffer nur, wenn zwischen zwei sicheren Ständen genau ein Wert plausibel ist. Die berechnete Ziffer bleibt gelb. Ein manuell eingetragener Startwert mit Ablesezeit kann als erster Vergleichswert dienen.</p>
+<p>Die App kann je eine verdeckte Stelle vor und nach dem Komma ergänzen, wenn nur ein Ergebnis zum bisherigen Stand und zum maximalen Durchfluss passt. Berechnete Ziffern bleiben gelb. Ein datierter Startwert kann als erster Vergleichswert dienen.</p>
 <label class="check-option"><input type="checkbox" name="reflection_suggestion_hidden" value="1" {reflection_hide_checked}> Vorschlag bei wiederholt unlesbarer Ziffer ausblenden</label>
 </details>
 </div>
@@ -602,9 +631,19 @@ name: Zählerstand (OCR)</code></pre>
 <img alt="Originalbild zum Einstellen des Ausschnitts" draggable="false">
 <span class="crop-draw-outline" hidden></span>
 </div>
+<figure class="crop-live-preview" hidden>
+<figcaption>Vorschau mit Bilddrehung</figcaption>
+<div class="digit-editor">
+<canvas role="img" aria-label="Vorschau mit Bilddrehung"></canvas>
+<div class="digit-layer"></div>
+</div>
+<p class="settings-note">Rahmen einzeln ziehen oder an der unteren Ecke vergrößern. Mit den Pfeiltasten verschieben, mit Umschalt und Pfeiltaste skalieren.</p>
+<button type="button" class="clear-digit-boxes">Einzelrahmen zurücksetzen</button>
+</figure>
 <p class="settings-note" role="status">Kamerabild wird geladen …</p>
 </div>
 <div class="crop-fields" id="auto-crop-fields" hidden>
+<input type="hidden" name="digit_boxes" value="{automatic_digit_boxes}">
 <label>Bildbereich (links, oben, rechts, unten)
 <input name="crop" type="text" value="{auto_crop_value}" maxlength="30" placeholder="52,56,564,132"></label>
 <label>Bilddrehung (°)
@@ -624,6 +663,19 @@ name: Zählerstand (OCR)</code></pre>
 <input type="hidden" name="mode" value="{language_mode}">
 <input type="hidden" name="csrf" value="{csrf}">
 </form>
+<div class="manual-content">
+<h3>Fallback-Zählerstand</h3>
+<p class="settings-note">Trage den selbst abgelesenen Stand und die Ablesezeit ein. Die App nutzt ihn als Startwert, solange noch keine sichere automatische Ablesung vorliegt.</p>
+<form method="post" action="fallback" id="fallback-form">
+<input type="hidden" name="lang" value="{language}">
+<input type="hidden" name="mode" value="{language_mode}">
+<input type="hidden" name="csrf" value="{csrf}">
+<label>Fallback-Zählerstand (optional)<input name="fallback_value" value="{fallback_value}" inputmode="decimal" maxlength="16"></label>
+<label>Stand abgelesen am<input name="fallback_time" type="datetime-local" value="{fallback_time}"></label>
+<button type="submit">Fallback-Wert speichern</button>
+</form>
+{fallback_saved_notice}
+</div>
 <p class="settings-note">Nach zwei Fehlprüfungen mit kurzem Abstand gilt wieder dein eingestelltes Prüfintervall. Bei geänderter Vergleichsgenauigkeit beginnt die Trefferzählung neu.</p>
 </div></details>
 {auto_saved_notice}
@@ -677,8 +729,8 @@ Bei anhaltenden Problemen benachrichtigen
 </div>
 </main>
 
-<footer class="page-footer">Kostenloses Hobbyprojekt
-<details class="about-project"><summary>Über AI Meter Reader</summary><p><a href="https://github.com/Eifellayer" target="_blank" rel="noopener noreferrer">Projekt von EifelLayer auf GitHub</a></p><p>KI-unterstützt entwickelt. Keine geeichte Messung oder Gewähr für OCR-Ergebnisse. Bitte Zählerstände bei Bedarf direkt am Gerät prüfen.</p><p><a href="https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8" target="_blank" rel="noopener noreferrer">Freiwillig mit PayPal unterstützen</a></p></details></footer>
+<footer class="page-footer">Kostenloses Hobbyprojekt · <a href="https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8" target="_blank" rel="noopener noreferrer">Freiwillig mit PayPal unterstützen</a>
+<details class="about-project"><summary>Über AI Meter Reader</summary><p><a href="https://github.com/Eifellayer" target="_blank" rel="noopener noreferrer">Projekt von EifelLayer auf GitHub</a></p><p>KI-unterstützt entwickelt. Keine geeichte Messung oder Gewähr für OCR-Ergebnisse. Bitte Zählerstände bei Bedarf direkt am Gerät prüfen.</p></details></footer>
 <script>
 let next = {next_check};
 const lang = '{language}';
@@ -913,6 +965,14 @@ function cropEditor(form, panel, fields, reset, save, emptyText) {{
   const area = panel.querySelector('.crop-draw-image');
   const image = area.querySelector('img');
   const outline = area.querySelector('span');
+  const preview = panel.querySelector('.crop-live-preview');
+  const canvas = preview.querySelector('canvas');
+  const context = canvas.getContext('2d');
+  const frameLayer = preview.querySelector('.digit-layer');
+  const boxField = form.elements.digit_boxes;
+  const digitCount = {crop_digit_count};
+  let frameDrag = null;
+  let previewRequest = 0;
   const status = panel.querySelector('[role="status"]');
   const upload = form.elements.image;
   let currentVersion = '';
@@ -932,13 +992,112 @@ function cropEditor(form, panel, fields, reset, save, emptyText) {{
       Math.ceil((width + span) / 2) - Math.floor((width - span) / 2);
     form.elements.width.value = Math.min(9999, Math.max(1, Math.round(turned * {crop_whole_ratio})));
   }}
+  function currentDigitBoxes() {{
+    const boxes = JSON.parse(boxField.value || '[]');
+    if (boxes.length === digitCount) return boxes;
+    const width = Number(form.elements.width.value);
+    const total = Number(canvas.dataset.cropWidth);
+    const edge = {crop_integer_digits};
+    const whole = digitCount === edge ? 1000 : Math.max(edge * 12, Math.min(1000 - (digitCount - edge) * 12,
+      Math.round(1000 * width / total)));
+    const ends = Array.from({{length: digitCount + 1}}, (_, index) => index <= edge ?
+      Math.round(whole * index / edge) : Math.round(whole + (1000 - whole) * (index - edge) / (digitCount - edge)));
+    return ends.slice(1).map((right, index) => [ends[index], 0, right, 1000]);
+  }}
+  const frames = Array.from({{length: digitCount}}, (_, index) => {{
+    const frame = document.createElement('button');
+    frame.type = 'button';
+    frame.className = 'digit-frame';
+    frame.setAttribute('aria-label', 'Ziffernrahmen ' + (index + 1));
+    frame.textContent = index + 1;
+    const handle = document.createElement('span');
+    handle.setAttribute('aria-hidden', 'true');
+    frame.append(handle);
+    frame.addEventListener('pointerdown', event => {{
+      if (event.button !== 0 || frameDrag) return;
+      event.preventDefault();
+      frame.focus({{preventScroll: true}});
+      frame.setPointerCapture(event.pointerId);
+      frame.dataset.active = 'true';
+      const rect = frameLayer.getBoundingClientRect();
+      frameDrag = {{id: event.pointerId, index, resize: event.target === handle,
+        x: event.clientX, y: event.clientY, width: rect.width, height: rect.height,
+        original: currentDigitBoxes()}};
+    }});
+    frame.addEventListener('pointermove', event => {{
+      if (frameDrag?.id !== event.pointerId) return;
+      editDigitBox(frameDrag.original, index,
+        Math.round((event.clientX - frameDrag.x) * 1000 / frameDrag.width),
+        Math.round((event.clientY - frameDrag.y) * 1000 / frameDrag.height), frameDrag.resize);
+    }});
+    for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) frame.addEventListener(type, () => {{
+      frameDrag = null;
+      frame.dataset.active = 'false';
+    }});
+    frame.addEventListener('keydown', event => {{
+      const arrows = {{ArrowLeft: [-10, 0], ArrowRight: [10, 0], ArrowUp: [0, -10], ArrowDown: [0, 10]}};
+      const delta = arrows[event.key];
+      if (!delta) return;
+      event.preventDefault();
+      editDigitBox(currentDigitBoxes(), index, ...delta, event.shiftKey);
+    }});
+    frameLayer.append(frame);
+    return frame;
+  }});
+  function paintDigitBoxes(boxes) {{
+    boxes.forEach(([left, top, right, bottom], index) => {{
+      const style = frames[index].style;
+      style.left = left / 10 + '%';
+      style.top = top / 10 + '%';
+      style.width = (right - left) / 10 + '%';
+      style.height = (bottom - top) / 10 + '%';
+    }});
+  }}
+  function editDigitBox(original, index, dx, dy, resize) {{
+    const box = original[index];
+    const [left, top, right, bottom] = box;
+    const bound = (value, low, high) => Math.max(low, Math.min(high, value));
+    const x = bound(dx, resize ? 10 - (right - left) : -left, 1000 - right);
+    const y = bound(dy, resize ? 25 - (bottom - top) : -top, 1000 - bottom);
+    const next = resize ? [left, top, right + x, bottom + y] : [left + x, top + y, right + x, bottom + y];
+    const midpoint = next[0] + next[2];
+    if ((index && midpoint <= original[index - 1][0] + original[index - 1][2]) ||
+        (index + 1 < digitCount && midpoint >= original[index + 1][0] + original[index + 1][2])) return;
+    const boxes = original.map((item, position) => position === index ? next : item);
+    boxField.value = JSON.stringify(boxes);
+    paintDigitBoxes(boxes);
+  }}
+  preview.querySelector('.clear-digit-boxes').addEventListener('click', () => {{
+    boxField.value = '[]';
+    paintDigitBoxes(currentDigitBoxes());
+  }});
+  function drawRotationPreview(left, top, right, bottom) {{
+    const angle = Number(rotation.value) * Math.PI / 180;
+    const width = right - left;
+    const height = bottom - top;
+    const turnedWidth = Math.ceil(width * Math.abs(Math.cos(angle)) + height * Math.abs(Math.sin(angle)));
+    const turnedHeight = Math.ceil(width * Math.abs(Math.sin(angle)) + height * Math.abs(Math.cos(angle)));
+    const scale = Math.min(1, 700 / turnedWidth, 420 / turnedHeight);
+    canvas.width = Math.max(1, Math.round(scale * turnedWidth));
+    canvas.height = Math.max(1, Math.round(scale * turnedHeight));
+    canvas.dataset.rotation = rotation.value || '0';
+    canvas.dataset.cropWidth = turnedWidth;
+    context.translate(canvas.width / 2, canvas.height / 2);
+    context.rotate(angle);
+    context.drawImage(image, left, top, width, height,
+      -width * scale / 2, -height * scale / 2, width * scale, height * scale);
+    paintDigitBoxes(currentDigitBoxes());
+    preview.hidden = false;
+  }}
   function paint(box) {{
     const [left, top, right, bottom] = box;
     const w = image.naturalWidth;
     const h = image.naturalHeight;
     outline.hidden = !w || !h || box.length !== 4 || !box.every(Number.isFinite) ||
       left < 0 || top < 0 || left >= right || top >= bottom || right > w || bottom > h;
-    if (outline.hidden) return;
+    cancelAnimationFrame(previewRequest);
+    if (outline.hidden) {{ preview.hidden = true; return; }}
+    previewRequest = requestAnimationFrame(() => drawRotationPreview(left, top, right, bottom));
     outline.style.left = left / w * 100 + '%';
     outline.style.top = top / h * 100 + '%';
     outline.style.width = (right - left) / w * 100 + '%';
@@ -950,6 +1109,8 @@ function cropEditor(form, panel, fields, reset, save, emptyText) {{
     const file = upload?.files[0];
     displayedUrl = file ? URL.createObjectURL(file) : 'aktuell.jpg?v=' + encodeURIComponent(currentVersion || Date.now());
     area.hidden = true;
+    preview.hidden = true;
+    cancelAnimationFrame(previewRequest);
     status.hidden = false;
     status.textContent = 'Kamerabild wird geladen …';
     image.src = displayedUrl;
@@ -1006,10 +1167,12 @@ function cropEditor(form, panel, fields, reset, save, emptyText) {{
     paintSaved();
   }});
   area.addEventListener('pointercancel', () => {{ drag = null; paintSaved(); }});
-  rotation.addEventListener('change', () => {{
+  rotation.addEventListener('input', () => {{
     if (drawnCrop && crop.value === drawnCrop.join(',')) updateWidth(drawnCrop);
+    paintSaved();
   }});
-  crop.addEventListener('change', paintSaved);
+  crop.addEventListener('input', paintSaved);
+  form.elements.width.addEventListener('input', paintSaved);
   upload?.addEventListener('change', () => {{ if (!panel.hidden) loadImage(); }});
   mode.addEventListener('change', syncMode);
   if (!save) reset.addEventListener('click', () => {{
@@ -1019,6 +1182,7 @@ function cropEditor(form, panel, fields, reset, save, emptyText) {{
     crop.value = reset.dataset.defaultCrop;
     form.elements.width.value = reset.dataset.defaultWidth;
     rotation.value = '0';
+    boxField.value = '[]';
     mode.value = 'auto';
     syncMode();
     mode.focus();
@@ -1068,6 +1232,17 @@ function renderAttempts(details, readings, decimals) {{
   }});
   body.dataset.values = key;
 }}
+const calibrationProposal = document.querySelector('#calibration-proposal');
+let proposedCrop = null;
+calibrationProposal.addEventListener('click', () => {{
+  if (!proposedCrop) return;
+  for (const name of ['crop_mode', 'crop', 'width', 'rotation']) manualForm.elements[name].value = proposedCrop[name];
+  manualForm.elements.digit_boxes.value = JSON.stringify(proposedCrop.digit_boxes || []);
+  manualForm.elements.crop_mode.dispatchEvent(new Event('change'));
+  activateTab('overview');
+  document.querySelector('#open-manual-settings').click();
+}});
+
 function refreshCalibration(status) {{
   if (!status) return;
   const active = status.state === 'waiting' || status.state === 'testing';
@@ -1079,7 +1254,7 @@ function refreshCalibration(status) {{
     testing: 'Prüfe Ausschnitt und Drehung …',
     saved: 'Erfolgreich eingerichtet. Ausschnitt und Drehung sind übernommen.',
     failed: 'Selbsteinrichtung fehlgeschlagen. Prüfe Bildausschnitt, Kamerawinkel und Beleuchtung.',
-    timeout: 'Selbsteinrichtung nach fünf Minuten beendet. Keine Einstellung sicher bestätigt.',
+    timeout: 'Selbsteinrichtung nach 15 Minuten beendet. Keine Einstellung sicher bestätigt.',
     cancelled: 'Selbsteinrichtung gestoppt.',
     save_failed: 'Ausschnitt und Drehung konnten nicht gespeichert werden.',
   }};
@@ -1094,6 +1269,7 @@ function refreshCalibration(status) {{
   }};
   const message = active && stages[status.stage] ? stages[status.stage] : messages[status.state] || '';
   const detail = 'Bilder: ' + status.tested + '/' + status.limit +
+    ' · Rahmenversuche: ' + status.attempts + '/' + status.max_attempts +
     ' · Bestätigungen: ' + status.confirmations + '/' + status.required +
     (active ? ' · Noch ' + clock + ' min' : '');
   const tone = status.state === 'saved' ? 'ok' : ['failed', 'timeout', 'save_failed'].includes(status.state) ? 'error' : '';
@@ -1115,12 +1291,15 @@ function refreshCalibration(status) {{
     const autoForm = document.querySelector('#auto-form');
     for (const form of [autoForm, manualForm]) {{
       for (const name of ['crop_mode', 'crop', 'width', 'rotation']) form.elements[name].value = status.settings[name];
+      form.elements.digit_boxes.value = JSON.stringify(status.settings.digit_boxes || []);
       if (form === autoForm) form.dataset.savedCropMode = status.settings.crop_mode;
       form.elements.crop_mode.dispatchEvent(new Event('change'));
     }}
     manualForm.elements.crop_revision.value = status.settings.crop_revision;
   }}
   document.querySelector('#calibration-limit-label').hidden = active;
+  proposedCrop = status.proposal || null;
+  calibrationProposal.hidden = !proposedCrop;
   document.querySelector('#calibration-start').hidden = active;
   document.querySelector('#calibration-cancel').hidden = !active;
 }}
@@ -1360,6 +1539,17 @@ async function refreshAutomatic() {{
     recovery.hidden = !sample.failure_attempts;
     recovery.dataset.state = sample.retry_suppressed ? 'waiting' : 'retrying';
     recovery.textContent = sample.recovery_notice;
+    const live = sample.reflection_live_estimate;
+    document.querySelector('#reflection-live').hidden = !live;
+    if (live) {{
+      const reading = document.querySelector('#reflection-live-reading');
+      reading.replaceChildren(...Array.from(live.reading, (digit, index) => {{
+        if (!live.positions.includes(index)) return document.createTextNode(digit);
+        const mark = document.createElement('mark');
+        mark.textContent = digit;
+        return mark;
+      }}));
+    }}
     const estimate = sample.reflection_estimate;
     const pendingEstimate = estimate && !estimate.confirmed;
     const approvalId = document.querySelector('#reflection-approval-id');
@@ -1431,6 +1621,19 @@ def select_options(choices, chosen):
     )
 
 
+def fallback_options(value, stamp, decimals, integer_digits, fraction_digits):
+    value, stamp = value.strip(), stamp.strip()
+    if not value:
+        return "", ""
+    reading = re.fullmatch(r"([0-9]{1,9})(?:[.,]([0-9]{1,3}))?", value)
+    if (not reading or len(reading[2] or "") > fraction_digits
+            or meter_prefix(value, decimals, integer_digits) is None
+            or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}", stamp)):
+        raise ValueError("Fallback-Wert und Ablesezeit passen nicht zur Zähleranzeige.")
+    datetime.fromisoformat(stamp)
+    return value, stamp
+
+
 def radio_options(name, choices, chosen):
     return "".join(
         f'<label><input type="radio" name="{name}" value="{value}"'
@@ -1462,7 +1665,7 @@ def start_panel(
     delivery_lock = Lock()
     def read_auto_rules():
         return {"integer_digits": 5, "fraction_digits": 3, "meter_display": "rollers",
-                "fallback_value": "", "fallback_time": "", **get_auto_rules()}
+                "fallback_value": "", "fallback_time": "", "digit_boxes": [], **get_auto_rules()}
 
     def load_manual_settings():
         try:
@@ -1701,6 +1904,8 @@ def start_panel(
             "retry_suppressed": retry_suppressed,
             "recovery_notice": recovery_notice,
             "reflection_estimate": reflection_estimate,
+            "reflection_live_estimate": (history.get("reflection_live_estimate")
+                                        if auto_rules.get("reflection_estimate_enabled") else None),
             "reflection_suggestion": reflection_suggestion,
             "activity": activity.get("detail", "Wartet auf die nächste automatische Prüfung."),
             "activity_state": activity.get("state", "waiting"),
@@ -1833,7 +2038,12 @@ def start_panel(
             crop_revision = auto_rules.get("crop_revision", "")
             manual_crop = {**history.get("manual_result", {}).get("settings", {}), **manual_saved}
             if crop_revision and manual_crop.get("crop_revision") != crop_revision:
-                settings.update({key: auto_rules[key] for key in ("crop_mode", "crop", "width", "rotation")})
+                settings.update({key: auto_rules[key] for key in ("crop_mode", "crop", "width", "rotation", "digit_boxes")})
+            try:
+                manual_boxes = digit_box_settings(settings.get("digit_boxes"),
+                                                  auto_rules["integer_digits"] + auto_rules["fraction_digits"])
+            except ValueError:
+                manual_boxes = []
             decimals_by_language = DECIMALS_EN if language == "en" else DECIMALS
             comparable_decimals = {key: label for key, label in decimals_by_language.items()
                                    if int(key) <= auto_rules["fraction_digits"]}
@@ -1861,6 +2071,7 @@ def start_panel(
             saved_message = (
                 "Ausschnitt und Drehung für manuelle Tests gespeichert." if saved == "manual-crop" else
                 "Einrichtung gespeichert." if saved in ("setup", "setup-calibration") else
+                "Fallback-Wert gespeichert." if saved == "fallback" else
                 "Automatische Prüfregeln gespeichert." if saved == "1" else
                 "Getesteten Bildausschnitt für die Automatik übernommen." if saved == "crop" else
                 "Ausschnitt zurückgesetzt. Die Automatik sucht die Ziffernreihe wieder selbst." if saved == "crop-reset" else
@@ -1910,7 +2121,8 @@ def start_panel(
                 overview_hidden="hidden" if settings_tab_active else "",
                 settings_hidden="" if settings_tab_active else "hidden",
                 language_options=select_options({"auto": automatic, "de": "Deutsch", "en": "English"}, mode),
-                settings_open="open" if saved in ("1", "crop", "crop-reset") else "",
+                settings_open="open" if saved in ("1", "crop", "crop-reset", "fallback") else "",
+                fallback_saved_notice=auto_saved_notice if saved == "fallback" else "",
                 calibration_saved_notice=auto_saved_notice if saved == "setup-calibration" else "",
                 calibration_hidden="" if control_calibration else "hidden",
                 calibration_min=MIN_IMAGE_LIMIT, calibration_max=MAX_IMAGES,
@@ -1919,6 +2131,8 @@ def start_panel(
                 precision_hidden="" if auto_rules["decimals"] == 3 else "hidden",
                 precision_checked="checked" if auto_rules.get("precision_mode") else "",
                 reflection_enabled_checked="checked" if auto_rules.get("reflection_estimate_enabled") else "",
+                fine_alignment_checked="checked" if auto_rules.get("fine_alignment_enabled") else "",
+                adaptive_interval_checked="checked" if auto_rules.get("adaptive_interval_enabled") else "",
                 reflection_hide_checked="checked" if auto_rules.get("reflection_suggestion_hidden") else "",
                 reflection_suggestion_hidden="" if summary["reflection_suggestion"] else "hidden",
                 reflection_estimate_hidden="" if estimate.get("confirmed") else "hidden",
@@ -2002,6 +2216,7 @@ def start_panel(
                 auto_width_value=auto_rules["width"],
                 max_flow=format_cubic_metres(auto_rules.get("max_flow_lph", DEFAULT_FLOW_LPH)),
                 max_interval_minutes=MAX_INTERVAL_MINUTES,
+                slfork_interval_hidden="" if source["mode"] == "slfork" else "hidden",
                 interval_minutes=auto_rules.get("interval_minutes", DEFAULT_INTERVAL_MINUTES),
                 auto_rotation_value=editable_rotation(auto_rules),
                 auto_saved_notice=auto_saved_notice if saved in ("1", "crop", "crop-reset") else "",
@@ -2026,6 +2241,10 @@ def start_panel(
                 manual_crop_revision=html.escape(crop_revision, quote=True),
                 default_crop_value=html.escape(default_crop, quote=True),
                 default_crop_width=default_width,
+                manual_digit_boxes=html.escape(json.dumps(manual_boxes), quote=True),
+                automatic_digit_boxes=html.escape(json.dumps(auto_rules["digit_boxes"]), quote=True),
+                crop_integer_digits=auto_rules["integer_digits"],
+                crop_digit_count=auto_rules["integer_digits"] + auto_rules["fraction_digits"],
                 crop_whole_ratio=auto_rules["integer_digits"] /
                     (auto_rules["integer_digits"] + auto_rules["fraction_digits"]),
                 width_value=int(settings.get("width", default_width)),
@@ -2052,7 +2271,7 @@ def start_panel(
             if path not in ("/pruefen", "/automatik", "/ausschnitt-uebernehmen", "/sprache",
                             "/benachrichtigungen", "/bildquelle", "/einrichtung",
                             "/einrichtung-ueberspringen", "/werkreset", "/automatik-pause",
-                            "/spiegelungs-hinweis-ausblenden", "/ergaenzte-ziffer-bestaetigen", "/selbsteinrichtung"):
+                            "/spiegelungs-hinweis-ausblenden", "/ergaenzte-ziffer-bestaetigen", "/selbsteinrichtung", "/fallback"):
                 self.send_error(404)
                 return
             fallback = browser_locale(self.headers.get("Accept-Language", ""))
@@ -2256,17 +2475,9 @@ def start_panel(
                         rotation = int(field("rotation", str(rotation)))
                         crop_coordinates(crop, width, rotation)
                     max_flow = parse_flow_limit(field("max_flow"))
-                    fallback_value = field("fallback_value").strip()
-                    fallback_time = field("fallback_time").strip()
-                    if fallback_value:
-                        reading = re.fullmatch(r"([0-9]{1,9})(?:[.,]([0-9]{1,3}))?", fallback_value)
-                        if (not reading or len(reading[2] or "") > fraction_digits
-                                or meter_prefix(fallback_value, decimals, integer_digits) is None
-                                or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}", fallback_time)):
-                            raise ValueError("Fallback-Wert und Ablesezeit passen nicht zur Zähleranzeige.")
-                        datetime.fromisoformat(fallback_time)
-                    else:
-                        fallback_time = ""
+                    fallback_value, fallback_time = fallback_options(
+                        field("fallback_value"), field("fallback_time"), decimals, integer_digits, fraction_digits,
+                    )
                     enabled = field("notifications_enabled") == "1"
                     delivery_values = notification_rules({
                         "enabled": enabled, "review_minutes": int(field("review_minutes")),
@@ -2276,7 +2487,12 @@ def start_panel(
                     rules_values = {
                         **old_rules, "decimals": decimals, "attempts": attempts,
                         "polarity": polarity, "crop_mode": crop_mode, "crop": crop,
-                        "width": width, "rotation": rotation, "max_flow_lph": max_flow,
+                        "width": width, "rotation": rotation,
+                        "digit_boxes": old_rules["digit_boxes"] if (
+                            crop_mode == old_rules["crop_mode"] and crop == old_rules["crop"]
+                            and rotation == old_rules.get("rotation", 0) and width == old_rules["width"]
+                            and integer_digits == old_rules["integer_digits"] and fraction_digits == old_rules["fraction_digits"]
+                        ) else [], "max_flow_lph": max_flow,
                         "precision_mode": field("precision_mode") == "1",
                         "interval_minutes": interval_minutes, "integer_digits": integer_digits,
                         "fraction_digits": fraction_digits, "meter_display": meter_display,
@@ -2359,13 +2575,30 @@ def start_panel(
                             return
                         current = read_auto_rules()
                         current.update(crop_mode="manual", crop=settings["crop"], width=settings["width"],
-                                       rotation=settings.get("rotation", 0))
+                                       rotation=settings.get("rotation", 0), digit_boxes=settings.get("digit_boxes", []))
                         save_auto_rules(current)
                 except (OSError, ValueError, KeyError, TypeError):
                     problem(503, "Der Ausschnitt konnte nicht gespeichert werden.",
                             "Could not save the image crop.")
                     return
                 self.redirect("?saved=crop&ui=settings" + keep_mode)
+                return
+            if path == "/fallback":
+                try:
+                    with rules_lock:
+                        rules = read_auto_rules()
+                        value, stamp = fallback_options(
+                            field("fallback_value"), field("fallback_time"), rules["decimals"],
+                            rules["integer_digits"], rules["fraction_digits"],
+                        )
+                        save_auto_rules({**rules, "fallback_value": value, "fallback_time": stamp})
+                except ValueError:
+                    problem(400, "Bitte Zählerstand und Ablesezeit prüfen.", "Check the meter reading and its time.")
+                    return
+                except OSError:
+                    problem(503)
+                    return
+                self.redirect("?saved=fallback&ui=settings" + keep_mode + "#fallback-form")
                 return
             if path == "/selbsteinrichtung":
                 if control_calibration is None:
@@ -2415,8 +2648,11 @@ def start_panel(
                         crop = old_rules["crop"]
                         width = old_rules["width"]
                         rotation = old_rules.get("rotation", 0)
+                        boxes = []
                         if crop_mode[0] == "manual":
                             crop = field("crop", crop)
+                            boxes = digit_box_settings(json.loads(field("digit_boxes", "[]")),
+                                                      old_rules["integer_digits"] + old_rules["fraction_digits"])
                             width = int(field("width", str(width)))
                             rotation = int(field("rotation", str(rotation)))
                             crop_coordinates(crop, width, rotation)
@@ -2431,9 +2667,11 @@ def start_panel(
                         save_auto_rules({"decimals": int(decimals[0]), "attempts": int(attempts[0]),
                                          "precision_mode": field("precision_mode") == "1",
                                          "reflection_estimate_enabled": field("reflection_estimate_enabled") == "1",
+                                         "fine_alignment_enabled": field("fine_alignment_enabled") == "1",
+                                         "adaptive_interval_enabled": field("adaptive_interval_enabled") == "1",
                                          "reflection_suggestion_hidden": field("reflection_suggestion_hidden") == "1",
                                          "polarity": polarity[0], "crop_mode": crop_mode[0],
-                                         "crop": crop, "width": width, "rotation": rotation,
+                                         "crop": crop, "width": width, "rotation": rotation, "digit_boxes": boxes,
                                          "max_flow_lph": max_flow, "interval_minutes": interval_minutes})
                 except ValueError:
                     problem(400, "Bitte Prüfintervall, Bildbereich und Durchfluss prüfen.",
@@ -2463,15 +2701,19 @@ def start_panel(
             crop_value = default_crop
             width_value = default_width
             rotation = 0
+            boxes = []
             crop_revision = auto_rules.get("crop_revision", "")
             if crop_revision and field("crop_revision") != crop_revision:
                 crop_mode = [auto_rules["crop_mode"]]
                 crop_value, width_value, rotation = auto_rules["crop"], auto_rules["width"], auto_rules["rotation"]
+                boxes = auto_rules["digit_boxes"]
             elif crop_mode[0] == "manual":
                 try:
                     crop_value = field("crop", default_crop)
                     width_value = int(field("width", str(default_width)))
                     rotation = int(field("rotation", "0"))
+                    boxes = digit_box_settings(json.loads(field("digit_boxes", "[]")),
+                                              auto_rules["integer_digits"] + auto_rules["fraction_digits"])
                     boundaries = crop_coordinates(crop_value, width_value, rotation)
                     crop_value = ",".join(map(str, boundaries))
                 except ValueError:
@@ -2479,7 +2721,7 @@ def start_panel(
                     return
             settings = {"polarity": polarity[0], "decimals": int(decimals[0]),
                         "attempts": int(attempts[0]), "crop_mode": crop_mode[0],
-                        "crop": crop_value, "width": width_value, "rotation": rotation}
+                        "crop": crop_value, "width": width_value, "rotation": rotation, "digit_boxes": boxes}
             if crop_revision:
                 settings["crop_revision"] = crop_revision
             manual_reference = field("manual_reference").strip()

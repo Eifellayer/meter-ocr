@@ -82,7 +82,7 @@ class IngressFixture(TestCase):
     def control_calibration(self, action, limit):
         self.calibration = {"state": "waiting" if action == "start" else "cancelled",
                             "limit": limit, "tested": 0, "confirmations": 0, "required": 3,
-                            "seconds": 300, "duration": 300, "stage": "queued"}
+                            "seconds": 900, "duration": 900, "stage": "queued", "attempts": 0, "max_attempts": 100}
 
     def start_panel(self):
         def request_reset():
@@ -129,7 +129,7 @@ class IngressFixture(TestCase):
 
 class IngressTests(IngressFixture):
     def test_calibration_uses_the_selected_image_limit_and_can_be_stopped(self):
-        for invalid in ("2", "3", "51", "x"):
+        for invalid in ("2", "3", "101", "x"):
             self.assertEqual(400, self.submit("/selbsteinrichtung", action="start", image_limit=invalid)[0])
         self.assertIsNone(self.calibration)
         self.assertEqual((303, "./?saved=calibration&ui=settings"),
@@ -452,6 +452,19 @@ class IngressTests(IngressFixture):
         self.assertEqual("slfork_camera", self.source["mode"])
         self.assertEqual("http://meter", self.source["url"])
 
+    def test_fallback_can_be_saved_and_cleared_without_rerunning_setup(self):
+        original = dict(self.rules)
+        self.assertEqual(400, self.submit("/fallback", fallback_value="12345.6", fallback_time="")[0])
+        self.assertEqual(original, self.rules)
+        stamp = "2026-11-16T08:00"
+        self.assertEqual((303, "./?saved=fallback&ui=settings#fallback-form"),
+                         self.submit("/fallback", fallback_value="12345.6", fallback_time=stamp))
+        self.assertEqual(("12345.6", stamp), (self.rules["fallback_value"], self.rules["fallback_time"]))
+        self.assertEqual(original["crop"], self.rules["crop"])
+        self.assertTrue(self.setup_pending)
+        self.assertEqual(303, self.submit("/fallback", fallback_value="", fallback_time=stamp)[0])
+        self.assertEqual(("", ""), (self.rules["fallback_value"], self.rules["fallback_time"]))
+
     def test_manual_test_picks_up_a_new_learned_crop_once(self):
         path = self.root / "manual-test-settings.json"
         path.write_text(json.dumps({"crop_mode": "manual", "crop": "0,0,250,50", "width": 150,
@@ -477,7 +490,7 @@ class IngressTests(IngressFixture):
             "polarity": "auto", "crop_mode": "learn", "crop": "ignored", "interval_minutes": 60,
             "max_flow": "6", "review_minutes": 240, "delivery_hours": 24,
         }
-        self.assertEqual(400, self.submit("/einrichtung", image_limit=51, **values)[0])
+        self.assertEqual(400, self.submit("/einrichtung", image_limit=101, **values)[0])
         self.assertTrue(self.setup_pending)
         self.assertIsNone(self.calibration)
         self.paused = True
@@ -618,6 +631,10 @@ class BrowserTests(IngressFixture):
             self.assertEqual("manual", page.locator("#crop-mode").input_value())
             rotation = page.locator("#manual-form input[name=rotation]")
             rotation.fill("-6")
+            page.locator('#crop-draw canvas[data-rotation="-6"]').wait_for(state="visible")
+            frame = page.get_by_role("button", name="Ziffernrahmen 1", exact=True)
+            frame.press("Shift+ArrowUp")
+            self.assertTrue(json.loads(page.locator("#manual-form input[name=digit_boxes]").input_value()))
             rotation.press("Tab")
             page.locator("#save-manual-crop").click()
             page.get_by_text("Ausschnitt und Drehung für manuelle Tests gespeichert.", exact=True).wait_for()
@@ -629,6 +646,8 @@ class BrowserTests(IngressFixture):
             for actual, expected in zip(map(int, job["crop"].split(",")), (160, 120, 480, 240)):
                 self.assertAlmostEqual(expected, actual, delta=2)
             self.assertEqual(-6, job["rotation"])
+            self.assertEqual(990, job["digit_boxes"][0][3])
+            self.assertEqual(1000, job["digit_boxes"][1][3])
             self.assertAlmostEqual(207, job["width"], delta=2)
             browser.close()
 
@@ -663,7 +682,7 @@ class BrowserTests(IngressFixture):
             page.locator('#setup-form button[type="submit"]').click()
             page.get_by_text("Einrichtung gespeichert.", exact=True).wait_for()
             self.assertEqual(18, self.calibration["limit"])
-            self.calibration.update(state="testing", stage="ocr", rotation=-6, variant=2, seconds=280)
+            self.calibration.update(state="testing", stage="ocr", rotation=-6, variant=2, seconds=880)
             page.locator("#calibration-state").filter(has_text="Prüfe Rahmen 2 mit Drehung -6°").wait_for()
             self.assertEqual("20", page.locator("#calibration-progress").get_attribute("value"))
             page.locator("#tab-overview").click()
@@ -831,7 +850,7 @@ class BrowserTests(IngressFixture):
             frame.locator("#view-settings").wait_for(state="visible")
             self.assertEqual("manual", self.rules["crop_mode"])
             self.assertEqual(90, self.rules["rotation"])
-            frame.get_by_role("checkbox", name="Einzelne verdeckte Ziffer ergänzen").wait_for(state="visible")
+            frame.get_by_role("checkbox", name="Verdeckte Ziffern ergänzen").wait_for(state="visible")
             Image.new("RGB", (640, 480), "white").save(self.root / "current.jpg", "JPEG")
             frame.locator("#auto-crop-draw-area").wait_for(state="visible")
             frame.locator("#auto-form select[name=decimals]").select_option("2")

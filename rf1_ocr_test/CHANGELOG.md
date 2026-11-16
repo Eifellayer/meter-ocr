@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0 Stable
+
+- Echtzeitvorschau für Bilddrehung und einzeln verschiebbare Ziffernrahmen im manuellen Test und in der Automatik.
+- Grobeinrichtung mit bis zu 100 Rahmenversuchen, 100 unterschiedlichen Bildern und höchstens 15 Minuten Laufzeit. Auf Wunsch lässt sich ein noch nicht bestätigter Rahmen im manuellen Test korrigieren.
+- Reguläre SLFork-Prüfungen liegen mindestens fünf Minuten auseinander. Identische Messzyklen zählen bei Bestätigungen und Fehlprüfungen nur einmal.
+- Optionale Langzeit-Feinjustierung und adaptive SLFork-Prüfintervalle als zuschaltbare Funktionen für die Langzeiterprobung.
+- Vorläufige Ergänzung einer fehlenden Stelle je Zählerseite, wenn nur ein Messwert plausibel ist. Der Verbrauchszähler erhält weiterhin nur bestätigte Werte.
+- Eigene Speichern-Schaltfläche für den Fallback-Startwert und sichtbarer Spendenlink am Seitenende.
+
 ## 0.4.10 Alpha
 
 - „Ausschnitt und Drehung lernen“ ist im Einrichtungsassistenten auswählbar und startet nach dem Speichern.

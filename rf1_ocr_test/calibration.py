@@ -7,13 +7,17 @@ import subprocess
 
 from checks import OCR_PROFILES, compare_sample, meter_prefix, read_with_retries
 from consumption import accumulate_consumption
-from layout import crop_coordinates, find_digit_row, find_raw_digit_row, rotated_width, turn_crop
+from checks import crop_register
+from layout import crop_coordinates, find_digit_row, find_raw_digit_row, normalize_digit_boxes, rotated_width, turn_crop
 
-DEFAULT_LIMIT = 50
+from meter_learning import propose_digit_boxes
+
+DEFAULT_LIMIT = 100
 MIN_IMAGES = 3
 MIN_IMAGE_LIMIT = MIN_IMAGES + 1
-MAX_IMAGES = 50
-TIME_LIMIT = 300
+MAX_IMAGES = 100
+MAX_ATTEMPTS = 100
+TIME_LIMIT = 15 * 60
 CAPTURE_INTERVAL = 5
 ANGLES = (-3, 3, -6, 6, -12, 12, -18, 18, 90, -90, 180)
 MAX_LAYOUTS_PER_IMAGE = 4
@@ -24,10 +28,11 @@ class Layout:
     box: tuple[int, int, int, int]
     rotation: int
     width: int
+    digit_boxes: tuple = ()
 
     def settings(self):
         return {"crop_mode": "manual", "crop": ",".join(map(str, self.box)),
-                "rotation": self.rotation, "width": self.width}
+                "rotation": self.rotation, "width": self.width, "digit_boxes": list(self.digit_boxes)}
 
 
 def unrotate_box(box, size, angle):
@@ -69,7 +74,9 @@ def layouts(frame, overlay, rules, offset, current=None):
     if overlay is not None and overlay.size == frame.size:
         found = find_digit_row(overlay, rules["integer_digits"], rules["fraction_digits"])
         if found:
-            layout = Layout(found[0], 0, found[1])
+            left, top, right, bottom = found[0]
+            layout = Layout(found[0], 0, found[1],
+                            normalize_digit_boxes(found[2], (right - left, bottom - top)))
             if unique(layout):
                 yield layout
     for angle in (ANGLES[first], 0, ANGLES[(first + 1) % len(ANGLES)]):
@@ -79,7 +86,13 @@ def layouts(frame, overlay, rules, offset, current=None):
         detected = find_raw_digit_row(adjusted, rules["integer_digits"], rules["fraction_digits"])
         if detected:
             box = unrotate_box(detected[0], frame.size, angle)
-            variants = (Layout(box, angle, detected[1]), candidate(box, angle, padding=2))
+            left, top, right, bottom = box
+            frames = normalize_digit_boxes(detected[2], (right - left, bottom - top)) if angle == 0 else ()
+            alternate = candidate(box, angle, padding=2)
+            turned = turn_crop(crop_register(frame, alternate.box), angle)
+            optimized = propose_digit_boxes(turned, [], alternate.width, rules["integer_digits"], rules["fraction_digits"])
+            variants = (Layout(box, angle, detected[1], frames),
+                        Layout(alternate.box, angle, alternate.width, tuple(map(tuple, optimized))))
             for layout in variants:
                 if len(emitted) >= MAX_LAYOUTS_PER_IMAGE:
                     return
@@ -105,6 +118,9 @@ class Calibration:
     candidate: Layout | None = None
     counter: dict = field(default_factory=dict)
     confirmations: int = 0
+    attempts: int = 0
+    best: Layout | None = None
+    best_confirmations: int = 0
     anchored: bool = False
     advanced: bool = False
     verification_pending: bool = False
@@ -115,6 +131,7 @@ class Calibration:
     def status(self, now):
         return {"state": self.state, "stage": self.stage, "rotation": self.rotation, "variant": self.variant,
                 "tested": len(self.seen), "limit": self.limit, "duration": TIME_LIMIT,
+                "attempts": self.attempts, "max_attempts": MAX_ATTEMPTS,
                 "confirmations": self.confirmations, "required": MIN_IMAGES,
                 "seconds": max(0, ceil(TIME_LIMIT - (now - self.started)))}
 
@@ -128,8 +145,9 @@ class Calibration:
 
     def verify(self, frame, sample, stamp, rules, read, stop):
         """Confirm the exact saved geometry with the regular OCR retry routine."""
-        if not self.remember_image(frame, stamp):
+        if self.attempts >= MAX_ATTEMPTS or not self.remember_image(frame, stamp):
             return None
+        self.attempts += 1
         has_reference = sample.get("reference_required") is not False
         precision = rules["decimals"] if has_reference else rules["fraction_digits"]
         digits = rules["integer_digits"]
@@ -162,8 +180,9 @@ class Calibration:
         flow = rules["max_flow_lph"]
         candidates = layouts(frame, overlay, rules, len(self.seen) - 1, self.candidate)
         for index, layout in enumerate(candidates, start=1):
-            if stop():
+            if stop() or self.attempts >= MAX_ATTEMPTS:
                 return None
+            self.attempts += 1
             if on_attempt is not None:
                 on_attempt(index, layout.rotation)
             try:
@@ -189,6 +208,8 @@ class Calibration:
             self.anchored = (same and self.anchored) or has_reference or bool(baseline)
             self.advanced = same and (self.advanced or counter["reading_litres"] > anchor["reading_litres"])
             self.candidate, self.counter = layout, counter
+            if self.confirmations > self.best_confirmations:
+                self.best, self.best_confirmations = layout, self.confirmations
             if self.confirmations >= MIN_IMAGES and (self.anchored or self.advanced):
                 return layout
             # Preserve a reproducible candidate and test it on the next photograph.

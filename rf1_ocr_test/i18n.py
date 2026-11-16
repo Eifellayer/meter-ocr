@@ -33,6 +33,31 @@ EN_UI = {
     RAW_ROW_UNCLEAR: "Could not find a clear digit row. Set the crop in the manual test.",
     MANUAL_ROW_UNCLEAR: "The digits are hard to read. Check the image rotation, camera angle, focus and lighting.",
     "Selbsteinrichtung": "Automatic setup",
+    "ⓘ Automatik im Hintergrund verbessern": "ⓘ Improve automatic checks in the background",
+    "Ziffernrahmen langfristig feinjustieren": "Fine-tune digit boxes over time",
+    "Prüfintervall bei erwarteten Rollenwechseln verkürzen (SLFork)":
+        "Check sooner when a digit is expected to roll over (SLFork)",
+    "Vorläufig ergänzt": "Provisionally reconstructed",
+    "Gelb markierte Ziffern sind berechnet. Der Wert dient der Orientierung.":
+        "Yellow digits are calculated. The reading is for guidance.",
+    "Verdeckte Ziffern ergänzen": "Reconstruct obscured digits",
+    "Die App kann je eine verdeckte Stelle vor und nach dem Komma ergänzen, wenn nur ein Ergebnis zum bisherigen Stand und zum maximalen Durchfluss passt. Berechnete Ziffern bleiben gelb. Ein datierter Startwert kann als erster Vergleichswert dienen.":
+        "The app can reconstruct one whole digit and one decimal digit when only one reading fits the preceding reading and maximum flow. Calculated digits stay yellow. A dated starting reading can serve as the first reference.",
+    "Vorschau mit Bilddrehung": "Preview with rotation",
+    "Rahmen einzeln ziehen oder an der unteren Ecke vergrößern. Mit den Pfeiltasten verschieben, mit Umschalt und Pfeiltaste skalieren.":
+        "Drag each box or resize it using the bottom corner. Use the arrow keys to move it, or hold Shift and use the arrow keys to resize.",
+    "Einzelrahmen zurücksetzen": "Reset digit boxes",
+    "Ziffernrahmen ": "Digit box ",
+    "Bei AI on the Edge / SLFork liegen reguläre Prüfungen mindestens fünf Minuten auseinander.":
+        "Regular AI on the Edge / SLFork checks are at least five minutes apart.",
+    "Trage den selbst abgelesenen Stand und die Ablesezeit ein. Die App nutzt ihn als Startwert, solange noch keine sichere automatische Ablesung vorliegt.":
+        "Enter the meter reading you observed and when you read it. The app uses it as a starting reading until it has a reliable automatic reading.",
+    "Fallback-Zählerstand": "Fallback reading",
+    "Fallback-Wert speichern": "Save fallback reading",
+    "Fallback-Wert gespeichert.": "Fallback reading saved.",
+    "Gefundenen Rahmen im Test prüfen": "Review the suggested crop in a manual test",
+    " · Rahmenversuche: ": " · Crop attempts: ",
+    "Warte auf einen neuen Messzyklus vom ESP …": "Waiting for a new ESP measurement cycle …",
     "Verstrichene Zeit der Selbsteinrichtung": "Elapsed automatic setup time",
     "Selbsteinrichtung startet, sobald die laufende Prüfung beendet ist …":
         "Automatic setup will start once the current check finishes …",
@@ -41,13 +66,13 @@ EN_UI = {
     "Prüfe Rahmen ": "Checking frame ",
     " mit Drehung ": " at a rotation of ",
     "Selbsteinrichtung für Ausschnitt und Drehung": "Automatic setup for crop and rotation",
-    "Die App tastet sich mit unterschiedlichen Bildern an einen passenden Rahmen und Winkel heran. Nach drei bestätigten Ablesungen prüft sie den gefundenen Rahmen mit einem weiteren Bild und übernimmt ihn dann. Nach fünf Minuten endet der Versuch automatisch.":
-        "The app searches for a suitable crop and rotation using different images. After three confirmed readings, it checks the result on one more image before saving. The search automatically ends after five minutes.",
+    "Die App tastet sich mit unterschiedlichen Bildern an einen passenden Rahmen und Winkel heran. Nach drei bestätigten Ablesungen prüft sie den gefundenen Rahmen mit einem weiteren Bild und übernimmt ihn dann. Nach 15 Minuten endet der Versuch automatisch.":
+        "The app searches for a suitable crop and rotation using different images. After three confirmed readings, it checks the result on one more image before saving. The search automatically ends after 15 minutes.",
     "Ohne externen Vergleichswert hilft ein von Hand abgelesener Startwert. Ohne Startwert wartet die App zusätzlich auf einen plausiblen Zähleranstieg.":
         "A manually entered starting reading helps if there is no external reference. Without either, the app also waits for a plausible increase.",
     "Geprüfte Bilder der Selbsteinrichtung": "Images checked during automatic setup",
-    "Startet nach dem Speichern und endet spätestens nach fünf Minuten. Die App übernimmt den Rahmen nach drei Bestätigungen und einer abschließenden Gegenprüfung.":
-        "Starts after saving and ends within five minutes. The app saves the crop after three confirmations and a final check.",
+    "Startet nach dem Speichern und endet spätestens nach 15 Minuten. Die App übernimmt den Rahmen nach drei Bestätigungen und einer abschließenden Gegenprüfung.":
+        "Starts after saving and ends within 15 minutes. The app saves the crop after three confirmations and a final check.",
     "Höchstens so viele unterschiedliche Bilder": "Maximum number of distinct images",
     "Selbsteinrichtung starten": "Start automatic setup",
     "Selbsteinrichtung stoppen": "Stop automatic setup",
@@ -59,8 +84,8 @@ EN_UI = {
     "Gefundenen Rahmen mit der normalen Prüfung gegenprüfen …": "Cross-checking the crop with the regular OCR check …",
     "Selbsteinrichtung fehlgeschlagen. Prüfe Bildausschnitt, Kamerawinkel und Beleuchtung.":
         "Automatic setup failed. Check the crop, camera angle and lighting.",
-    "Selbsteinrichtung nach fünf Minuten beendet. Keine Einstellung sicher bestätigt.":
-        "Automatic setup ended after five minutes without finding a reliable crop and rotation.",
+    "Selbsteinrichtung nach 15 Minuten beendet. Keine Einstellung sicher bestätigt.":
+        "Automatic setup ended after 15 minutes without finding a reliable crop and rotation.",
     "Selbsteinrichtung gestoppt.": "Automatic setup stopped.",
     "Ausschnitt und Drehung konnten nicht gespeichert werden.": "Could not save the crop and rotation.",
     "Bilder: ": "Images: ",

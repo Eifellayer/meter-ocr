@@ -238,3 +238,36 @@ def find_digit_row(overlay, whole_digits=5, fraction_digits=None):
                 if fraction_digits else right - left)
     digit_boxes = [(a - left, b - top, c - left, d - top) for a, b, c, d in row]
     return (left, top, right, bottom), boundary - left, digit_boxes
+
+
+def digit_box_settings(boxes, count):
+    """Validate optional thousandths of the rotated crop, ordered left to right."""
+    if boxes in (None, []):
+        return []
+    if not isinstance(boxes, (tuple, list)) or len(boxes) != count:
+        raise ValueError("Die Anzahl der Ziffernrahmen passt nicht zur Zähleranzeige.")
+    result = []
+    for box in boxes:
+        if not isinstance(box, (list, tuple)) or len(box) != 4 or any(type(v) is not int for v in box):
+            raise ValueError("Ungültiger Ziffernrahmen.")
+        left, top, right, bottom = box
+        if not (0 <= left < right <= 1000 and 0 <= top < bottom <= 1000
+                and right - left >= 10 and bottom - top >= 25):
+            raise ValueError("Ungültiger Ziffernrahmen.")
+        if result and left + right <= result[-1][0] + result[-1][2]:
+            raise ValueError("Ziffernrahmen müssen von links nach rechts angeordnet sein.")
+        result.append([left, top, right, bottom])
+    return result
+
+
+def scale_digit_boxes(boxes, size):
+    width, height = size
+    return [(left * width // 1000, top * height // 1000,
+             ceil(right * width / 1000), ceil(bottom * height / 1000)) for left, top, right, bottom in boxes]
+
+
+def normalize_digit_boxes(boxes, size):
+    width, height = size
+    return tuple((round(left * 1000 / width), round(top * 1000 / height),
+                  round(right * 1000 / width), round(bottom * 1000 / height))
+                 for left, top, right, bottom in boxes)

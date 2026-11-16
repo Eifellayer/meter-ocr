@@ -2630,7 +2630,7 @@ def start_panel(
                 return
             path = urlsplit(self.path).path
             if path not in ("/pruefen", "/automatik", "/ausschnitt-uebernehmen", "/sprache",
-                            "/benachrichtigungen", "/bildquelle", "/einrichtung",
+                            "/benachrichtigungen", "/bildquelle", "/einrichtung", "/einrichtungsbild",
                             "/einrichtung-ueberspringen", "/werkreset", "/automatik-pause",
                             "/spiegelungs-hinweis-ausblenden", "/ergaenzte-ziffer-bestaetigen", "/selbsteinrichtung", "/fallback"):
                 self.send_error(404)

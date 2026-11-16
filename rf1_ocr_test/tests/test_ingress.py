@@ -139,6 +139,21 @@ class IngressFixture(TestCase):
 
 
 class IngressTests(IngressFixture):
+    def test_wizard_image_uses_unsaved_camera_with_csrf_and_keeps_setup_pending(self):
+        fields = dict(source_mode="esphome", camera="camera.unsaved")
+        with self.assertRaises(HTTPError) as error:
+            self.request("/einrichtungsbild", data=fields)
+        self.assertEqual(403, error.exception.code)
+        request = Request(self.base + "/einrichtungsbild",
+                          data=urlencode({**fields, "csrf": self.csrf}).encode(),
+                          headers={"Content-Type": "application/x-www-form-urlencoded"})
+        with open_core(request) as response:
+            self.assertEqual("image/jpeg", response.headers.get_content_type())
+            with Image.open(BytesIO(response.read())) as picture:
+                self.assertEqual((80, 40), picture.size)
+        self.assertEqual("camera.unsaved", self.wizard_image_sources[-1]["camera"])
+        self.assertTrue(self.setup_pending)
+
     def test_calibration_uses_the_selected_image_limit_and_can_be_stopped(self):
         for invalid in ("2", "3", "101", "x"):
             self.assertEqual(400, self.submit("/selbsteinrichtung", action="start", image_limit=invalid)[0])

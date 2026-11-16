@@ -13,7 +13,7 @@ from statistics import median
 from checks import OCR_PROFILES, compare_sample, crop_register, meter_prefix, read_with_retries
 from consumption import accumulate_consumption
 from layout import (crop_coordinates, digit_box_settings, find_digit_row, find_neighbour_digit_rows,
-                    find_raw_digit_rows, normalize_digit_boxes, rotated_width, same_digit_region, turn_crop)
+                    find_dark_register, find_raw_digit_rows, normalize_digit_boxes, rotated_width, same_digit_region, turn_crop)
 
 from meter_learning import propose_digit_boxes
 
@@ -125,6 +125,34 @@ def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False
                 box = unrotate_box(detected[0], frame.size, angle)
                 ranked.append((score * (1.15 if angle == angles[0] else 1), angle, detected, box))
         ranked.sort(key=lambda item: (-item[0], item[3][1], item[3][0]))
+        whole, fraction = rules["integer_digits"], rules["fraction_digits"]
+        windows = []
+        for angle in dict.fromkeys((0, ANGLES[first] if abs(ANGLES[first]) <= 12 else 0, -3, 3)):
+            window = find_dark_register(turn_crop(frame, angle, expand=False), whole + fraction)
+            if window and (not ranked or window[2] - window[0] > 1.25 * (ranked[0][3][2] - ranked[0][3][0])):
+                l, t, r, b = window
+                edges = [round((r - l) * i / (whole + fraction)) for i in range(whole + fraction + 1)]
+                cells = [(a, 0, z, b - t) for a, z in zip(edges, edges[1:])]
+                proposal = neighbour_layout(frame, angle, (window, edges[whole], cells), whole, fraction)
+                if proposal is not None:
+                    windows.append(((r - l) * (b - t), proposal))
+        if windows:
+            proposal = max(windows, key=lambda row: row[0])[1]
+            if unique(proposal):
+                yield replace(proposal, method="register_window")
+        if ranked:
+            _, _, (small, _, _), _ = ranked[0]
+            sw, sh = small[2] - small[0], small[3] - small[1]
+            # A small complete row can be a label alongside a larger display
+            # whose moving or partly obscured digits did not pass the strict scan.
+            for detected in find_neighbour_digit_rows(frame, whole, fraction, min_support=min(3, whole + fraction)):
+                box = detected[0]
+                if box[2] - box[0] < sw * 1.35 or box[3] - box[1] < sh * 1.45:
+                    continue
+                larger = neighbour_layout(frame, 0, detected, whole, fraction)
+                if larger is not None and unique(larger):
+                    yield larger
+                    break
         regions = []
         for score, _, _, box in ranked:
             if not regions or score >= regions[0][0] * .75:
@@ -398,6 +426,10 @@ class Calibration:
         best = (score(readings), layout, readings)
         if best[0][-1] < min(2, whole):
             return layout, readings
+        rows = [str(value).replace(".", "").replace(",", "") for value in readings]
+        weak = [index + 1 for index in range(whole + fraction)
+                if len({row[index:index + 1] for row in rows}) != 1
+                or rows[0][index:index + 1] not in tuple("0123456789")]
         # Bound the work per image, leaving budget for independent confirmations.
         budget = min(12, max(0, min(frame_ceiling, self.attempt_limit - MIN_IMAGES) - self.attempts))
         variants = iter(refinement_layouts(layout, rules, readings))
@@ -417,7 +449,7 @@ class Calibration:
                     break
                 budget -= len(batch)
                 self.attempts += len(batch)
-                on_attempt(self.attempts, best[1].rotation)
+                on_attempt(self.attempts, best[1].rotation, weak)
                 for result in pool.map(evaluate, batch):
                     if result and result[0] > best[0]:
                         best = result

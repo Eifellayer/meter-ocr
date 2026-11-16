@@ -51,6 +51,7 @@ EN_UI = {
     " · Rechenzeit übrig: ": " · Processing time left: ",
     "Mehrere Ziffernfelder gefunden.": "Multiple digit rows found.",
     "Ziffernfelder ansehen": "Show digit rows",
+    "Einzelziffernsuche. Offene Stellen von links: ": "Individual digit search. Uncertain positions from the left: ",
     "Ziffernfeld lesbar. Die App wartet auf einen höheren Zählerstand oder einen abgelesenen Startwert.": "The digit row is readable. The app is waiting for a higher reading or a starting reading you enter.",
     "Ziffernfeld bestätigt. Die App prüft mit dem nächsten neuen Bild weiter.": "Digit row confirmed on this image. The app will check again with the next new image.",
     "Ziffernfeld nicht gefunden. Grenze das Ziffernfeld im Kamerabild ein.": "Digit row not found. Mark the digit row in the camera image.",

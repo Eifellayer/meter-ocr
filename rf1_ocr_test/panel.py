@@ -1482,7 +1482,9 @@ function refreshCalibration(status) {{
     queued: 'Selbsteinrichtung startet, sobald die laufende Prüfung beendet ist …',
     capture: 'Kamerabild wird abgerufen …',
     search: 'Grobkalibrierung: Suche nach der Ziffernreihe …',
-    refine: 'Feinkalibrierung: Prüfe Rahmen und Drehung am vorhandenen Bild …',
+    refine: status.preview?.weak_positions?.length ?
+      'Einzelziffernsuche. Offene Stellen von links: ' + status.preview.weak_positions.join(', ') + '.' :
+      'Feinkalibrierung: Prüfe Rahmen und Drehung am vorhandenen Bild …',
     verify_wait: 'Rahmen gefunden. Warte auf ein frisches Bild zur Gegenprüfung …',
     verify: 'Gefundenen Rahmen mit der normalen Prüfung gegenprüfen …',
     ocr: 'Prüfe Rahmen ' + status.variant + ' mit Drehung ' + status.rotation + '° …',

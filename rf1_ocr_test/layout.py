@@ -175,6 +175,61 @@ def find_raw_digit_row(frame, whole_digits, fraction_digits):
     return rows[0][0]
 
 
+def find_dark_register(frame, count):
+    """Find a wide, contrasting dark window even when individual glyphs are incomplete."""
+    from PIL import ImageFilter
+
+    if count < 3:
+        return None
+    image = frame.convert("L")
+    image.thumbnail((320, 240))
+    image = ImageOps.autocontrast(image, cutoff=2)
+    width, height = image.size
+    # Close bright strokes inside the dark strip, leaving the outside edges intact.
+    dark = image.filter(ImageFilter.MinFilter(5)).filter(ImageFilter.MaxFilter(5))
+    minimum = max(24, width // 4)
+    best = None
+    for threshold in (48, 75):
+        previous = []
+        for y in range(height + 1):
+            row = dark.crop((0, y, width, y + 1)).tobytes() if y < height else b""
+            runs = []
+            start = None
+            for x, value in enumerate((*row, 255)):
+                if value < threshold:
+                    if start is None:
+                        start = x
+                elif start is not None:
+                    if x - start >= minimum:
+                        runs.append((start, x))
+                    start = None
+            current = []
+            for left, right in runs:
+                parent = next((item for item in previous if abs(item[0] - left) <= 5
+                               and abs(item[1] - right) <= 5), None)
+                current.append((left, right, parent[2] if parent else y))
+            for left, right, top in previous:
+                if any(t == top and abs(l - left) <= 5 and abs(r - right) <= 5 for l, r, t in current):
+                    continue
+                span, tall = right - left, y - top
+                if tall < 8 or not count * .55 <= span / tall <= count * 2:
+                    continue
+                if left < 2 or right > width - 2 or top < 2 or y + 3 >= height:
+                    continue
+                inside = ImageStat.Stat(image.crop((left, top, right, y))).median[0]
+                outside = ImageStat.Stat(image.crop((left, y + 1, right, min(height, y + max(4, tall // 2))))).median[0]
+                if outside - inside < 28:
+                    continue
+                score = span * tall * (outside - inside)
+                if best is None or score > best[0]:
+                    best = score, (left, top, right, y)
+            previous = current
+    if best is None:
+        return None
+    return tuple(round(value * scale) for value, scale in zip(
+        best[1], (frame.width / width, frame.height / height) * 2))
+
+
 def find_digit_row(overlay, whole_digits=5, fraction_digits=None):
     width, height = overlay.size
     # SLFork draws digit frames in green. Alignment markers use a different color.
@@ -316,7 +371,7 @@ def _meter_window(image, seed, count):
     return None
 
 
-def find_neighbour_digit_rows(frame, whole_digits, fraction_digits, limit=2):
+def find_neighbour_digit_rows(frame, whole_digits, fraction_digits, limit=2, min_support=1):
     """Propose bounded digit grids from visible glyphs, including gaps in their middle."""
     count = whole_digits + fraction_digits
     image = frame.convert("L")
@@ -380,7 +435,7 @@ def find_neighbour_digit_rows(frame, whole_digits, fraction_digits, limit=2):
                        for distance in (grid[0] - x, x - grid[-1])):
                     continue
                 support = sum(match is not None for match in matches)
-                if support < 2 and (not window or support != 1):
+                if support < min_support or support < 2 and (not window or support != 1):
                     continue
                 if support < 2 and abs(a - window[0]) + abs(b - window[1]) > pitch * .7:
                     continue

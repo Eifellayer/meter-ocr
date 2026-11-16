@@ -12,9 +12,9 @@ Die ausführliche Einführung, Voraussetzungen, Installation und Konfiguration f
 
 ## Installation
 
-**AI Meter Reader (Alpha)** ist in Version 0.4.10 der reguläre Testkanal. Ab 0.5 liegt der Schwerpunkt auf stabiler OCR, Grobeinrichtung und Bildbearbeitung. Die Arbeit am Pulszähler folgt frühestens ab 0.6.
+**AI Meter Reader 0.5.0** ist auf Stable. Die optionalen Langzeitfunktionen können in den Einstellungen aktiviert werden. Die Arbeit am Pulszähler folgt frühestens ab 0.6.
 
-Über **Einstellungen → Apps → App installieren → ⋮ → Repositories** den [Stable-Link](https://github.com/Eifellayer/meter-ocr#stable) hinzufügen und **AI Meter Reader** installieren. Version 0.4.10 ist die Alpha-Testversion. Im SLFork-Modus die `esp_url` eintragen, starten und die Weboberfläche öffnen.
+Über **Einstellungen → Apps → App installieren → ⋮ → Repositories** den [Stable-Link](https://github.com/Eifellayer/meter-ocr#stable) hinzufügen und **AI Meter Reader** installieren. Im SLFork-Modus die `esp_url` eintragen, starten und die Weboberfläche öffnen.
 
 ## Sprache wählen
 

@@ -154,7 +154,7 @@ story += [Spacer(1,7*mm), Image(str(LOGO),width=49*mm,height=49*mm), Spacer(1,3*
           TipBox('Kamera rein. Zählerstand im Blick.', 'AI Meter Reader liest Zählerbilder in Home Assistant und prüft den erkannten Stand - je nach Bildquelle mit oder ohne Referenzwert.', GREEN_BG, GREEN),
           Spacer(1,7*mm), AppStatusMock(), Spacer(1,4*mm),
           p('Diese Anleitung erklärt die Einrichtung, den ersten Bildtest und die wichtigsten Hinweise im Statusbereich. Die Abbildungen zeigen typische Bedienelemente; einzelne Texte können je nach gewählter Sprache und Einrichtung abweichen.', 'BodyCustom'),
-          p('<b>Bedienungsanleitung für 0.5 Beta.</b> Die App ist ein privates Hobbyprojekt und keine geeichte Messeinrichtung. Vor Abrechnungen bitte den Zählerstand direkt am Gerät prüfen.', 'SmallCustom'),
+          p('<b>Bedienungsanleitung für 0.5.</b> Die App ist ein privates Hobbyprojekt und keine geeichte Messeinrichtung. Vor Abrechnungen bitte den Zählerstand direkt am Gerät prüfen.', 'SmallCustom'),
           PageBreak()]
 # Page 2
 story += [p('1. Einrichten','H1Custom'),
@@ -212,7 +212,7 @@ story += [t,Spacer(1,5*mm),
           TipBox('Kein neues Bild, aber noch nicht alt?', 'Das ist zunächst ein Quellenhinweis: Die Verbindung kann bestehen und das vorhandene Bild noch innerhalb der zulässigen Altersgrenze liegen. Die App kennzeichnet es deshalb nicht automatisch als kritischen Fehler. Wenn die Lesung weiter unsicher ist, prüfe Beleuchtung, Abstand und Fokus.', YELLOW_BG, YELLOW),
           PageBreak()]
 story += [p('5. Automatik im Hintergrund verbessern','H1Custom'),
-          p('Die folgenden Funktionen sind für den Langzeittest in 0.5 Beta vorgesehen. Öffne dafür <b>Einstellungen → Automatische Prüfung</b>.', 'BodyCustom'),
+          p('Die folgenden Funktionen sind zuschaltbar und werden am Zähler langfristig erprobt. Öffne dafür <b>Einstellungen → Automatische Prüfung</b>.', 'BodyCustom'),
           p('Rahmen langfristig feinjustieren','H2Custom'),
           p('Die App sammelt auf bestätigten Bildern unterschiedliche Ziffernstellungen. Ein vorgeschlagener Rahmen wird erst nach mehreren erfolgreichen Gegenproben übernommen. Scheitern danach mehrere neue OCR-Prüfungen, stellt sie den vorherigen Rahmen wieder her.', 'BodyCustom'),
           p('Kürzer prüfen, wenn sich eine Ziffer dreht','H2Custom'),

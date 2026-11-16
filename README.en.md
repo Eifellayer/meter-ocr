@@ -8,11 +8,11 @@
 
 📘 [German illustrated user guide (PDF)](docs/Bedienungsanleitung-AI-Meter-Reader.pdf) · [App documentation](rf1_ocr_test/DOCS.md)
 
-**Current version: 0.4.10 Alpha.** This release remains on the regular test channel. Version 0.5 focuses on OCR stability, automatic setup and image editing. Pulse sensor work resumes in 0.6 or later.
+**Current version: 0.5.0 Stable.** This release focuses on OCR stability, automatic setup and image editing. Pulse sensor work resumes in 0.6 or later.
 
 ## Beta testers wanted
 
-Do you use Home Assistant with a gas, water, or other meter? We are looking for testers with different cameras, crops, and lighting conditions. Version 0.4.10 remains on the regular Alpha test channel. Version 0.5 focuses on OCR stability, automatic setup and image editing. Pulse sensor work resumes in 0.6 or later. I use AI on the Edge for real-world checks; other sources and meter types have so far been tested with simulations only. To help, report your app version, meter type, and image source through [GitHub Issues](https://github.com/Eifellayer/meter-ocr/issues). Please do not post credentials or unredacted photos containing personal information.
+Do you use Home Assistant with a gas, water, or other meter? We are looking for testers with different cameras, crops, and lighting conditions. Optional fine-tuning and adaptive intervals need real long-term testing. I use AI on the Edge for real-world checks; other sources and meter types have so far been tested with simulations only. To help, report your app version, meter type, and image source through [GitHub Issues](https://github.com/Eifellayer/meter-ocr/issues). Please do not post credentials or unredacted photos containing personal information.
 
 AI Meter Reader reads camera images with **local Tesseract OCR**. It can provide its own reading from an ESPHome or Home Assistant camera, or double-check an existing reading from AI on the Edge / SLFork or a reference sensor.
 
@@ -34,8 +34,8 @@ For an uncertain automatic reading, the app can run up to ten additional image-p
 
 ## Install
 
-1. In Home Assistant, open **Settings → Apps → Install app → ⋮ → Repositories** and add **Add-ons by Eifellayer** using the [Stable link](https://github.com/Eifellayer/meter-ocr#stable). Version 0.4.10 is the Alpha test build; pulse sensor work resumes in 0.6 or later.
-2. Install **AI Meter Reader (Alpha)**. Releases below 0.5 are Alpha and use the same regular app as their test channel.
+1. In Home Assistant, open **Settings → Apps → Install app → ⋮ → Repositories** and add **Add-ons by Eifellayer** using the [Stable link](https://github.com/Eifellayer/meter-ocr#stable).
+2. Install **AI Meter Reader**. Upgrades retain the app ID, entities and saved settings.
 3. Configure `esp_url` for the SLFork ESP, for example `http://esp-gaszaehler.local`. Alternatively configure `kamera_entitaet` and optionally `referenz_entitaet`.
 4. Start the app and open its web interface.
 

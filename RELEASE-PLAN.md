@@ -22,7 +22,7 @@
 
 Einmal möglichst automatisch einrichten. Danach prüft die App eigenständig, übernimmt nur belegte Verbesserungen und zeigt Unsicherheit sichtbar an. Ein errechneter Zwischenstand verändert keine bestätigten Messwerte oder Verbrauchszähler.
 
-## 0.5 Beta – Abnahme in dieser Reihenfolge
+## 0.5 – Abnahme in dieser Reihenfolge
 
 | Priorität | Arbeit | Abnahme |
 | --- | --- | --- |
@@ -30,7 +30,7 @@ Einmal möglichst automatisch einrichten. Danach prüft die App eigenständig, �
 | P1 | Live-Bildbearbeitung | Bildausschnitt, Drehung und einzelne Ziffernrahmen stimmen zwischen Vorschau, manuellem Test und Automatik überein. Rot, Gelb und Grün behalten ihre Bedeutung. |
 | P1 | Grobeinrichtung | Höchstens 100 Rahmenversuche, 100 unterschiedliche Aufnahmen und 15 Minuten Laufzeit. Geprüfte Rahmen vergleichen und vor der Übernahme auf einem weiteren Bild bestätigen. Den besten brauchbaren Versuch bei Bedarf zur Korrektur anbieten. |
 | P1 | Bedienung und Anleitung | Ergebnisse auf der Übersicht, Fallback mit Speichern, sichtbare optionale Ziffernergänzung und dezenter Spendenlink. Bebilderte Anleitung mit synthetischen Beispielen. |
-| P2 | Automatische Verbesserungen | Feinjustierung, Ziffernrekonstruktion und adaptive SLFork-Frequenz sind zuschaltbar. Langzeittests am echten Zähler bleiben Teil der Beta. Saisonprofile brauchen beobachtete Verbräuche aus den betreffenden Monaten. |
+| P2 | Automatische Verbesserungen | Feinjustierung, Ziffernrekonstruktion und adaptive SLFork-Frequenz sind zuschaltbar. Langzeittests am echten Zähler stehen für diese Funktionen noch aus. Saisonprofile brauchen beobachtete Verbräuche aus den betreffenden Monaten. |
 
 ## Geplante Langzeit-Abnahme
 

@@ -29,6 +29,7 @@ TIME_LIMIT = 15 * 60
 IMAGE_WAIT_LIMIT = 360
 INTENSIVE_VERIFICATION_SECONDS = 4 * 60
 CAPTURE_INTERVAL = 5
+LAST_DIGIT_CAPTURE_INTERVAL = 2
 ANGLES = (-3, 3, -1, 1, -2, 2, -4, 4, -6, 6, -9, 9, -12, 12, -18, 18, 90, -90, 180)
 SMALL_ANGLES = (0, -1, 1, -2, 2, -3, 3)
 MAX_LAYOUTS_PER_IMAGE = 5
@@ -478,7 +479,6 @@ class Calibration:
     intensive: bool = False
     followup: bool = False
     followup_baseline: dict | None = None
-    last_digit_proposal: Layout | None = None
     rank_candidates: bool = False
     coarse_attempts: int = 0
     optimizing: bool = False
@@ -766,8 +766,57 @@ class Calibration:
             self.fine_evidence = rank, {**preview, "best_fine_score": score}, images
 
     def search_exhausted(self):
-        confirming = (self.followup and self.confirmations) or (self.intensive and self.verification_pending)
+        confirming = self.intensive and (self.confirmations or self.verification_pending)
         return self.attempts >= self.attempt_limit and not confirming
+
+    def check_last_digit(self, frame, sample, stamp, layout, digits, read, stop, on_image, on_decision):
+        if self.search_exhausted() or not self.remember_image(frame, stamp):
+            return None
+        on_image()
+        expected = None
+        if sample.get("reference_required") is not False:
+            value = sample.get("actual_value")
+            status, _ = compare_sample(sample, value, 3, integer_digits=digits)
+            target = meter_prefix(value, 3, digits)
+            if target is None or reference_rejection(sample, status):
+                on_decision("reference_unavailable")
+                return None
+            expected = str(target % 10)
+        candidates = [layout]
+        if not self.verification_pending:
+            left, top, right, bottom = layout.digit_boxes[-1]
+            dx, dy = max(1, (right - left) // 12), max(1, (bottom - top) // 16)
+            for x, y in ((-dx, 0), (dx, 0), (0, -dy), (0, dy)):
+                box = (left + x, top + y, right + x, bottom + y)
+                if min(box) < 0 or max(box) > 1000:
+                    continue
+                boxes = (*layout.digit_boxes[:-1], box)
+                try:
+                    digit_box_settings(boxes, len(boxes))
+                except ValueError:
+                    continue
+                candidates.append(replace(layout, digit_boxes=boxes, method="refined"))
+        for trial in candidates:
+            if stop() or self.search_exhausted():
+                return None
+            if not self.confirmations:
+                self.attempts += 1
+            first = read(trial, OCR_PROFILES[0])
+            if stop() or first not in tuple("0123456789") or (expected is not None and first != expected):
+                continue
+            if read(trial, OCR_PROFILES[1]) != first:
+                continue
+            if self.verification_pending:
+                on_decision("verified")
+                return trial
+            self.confirmations = self.confirmations + 1 if trial == self.candidate else 1
+            self.candidate = trial
+            if self.confirmations > self.best_confirmations:
+                self.best, self.best_confirmations = trial, self.confirmations
+            on_decision("accepted")
+            return trial if self.confirmations >= MIN_IMAGES else None
+        on_decision("unclear")
+        return None
 
     def verify(self, frame, sample, stamp, rules, read, stop, on_image=None, on_decision=lambda reason: None):
         """Confirm the exact saved geometry with the regular OCR retry routine."""

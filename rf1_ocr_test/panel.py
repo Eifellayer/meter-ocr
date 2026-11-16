@@ -1549,8 +1549,9 @@ function refreshCalibrationImages(preview) {{
       }});
     }}
     section.querySelector('.calibration-preview-angle').textContent = hasCrop ? ' · ' + preview.angle + '°' : '';
-    section.querySelector('.calibration-preview-reading').textContent = preview.reading ?
-      'OCR gelesen: ' + preview.reading : 'Ziffern werden gelesen …';
+    section.querySelector('.calibration-preview-reading').textContent = preview.last_digit_only ?
+      (preview.reading ? 'Letzte Rolle: ' + preview.reading : 'Letzte Rolle wird gelesen …') :
+      preview.reading ? 'OCR gelesen: ' + preview.reading : 'Ziffern werden gelesen …';
     const reason = section.querySelector('.calibration-preview-reason');
     reason.textContent = reasons[preview.reason] || '';
     reason.hidden = !reason.textContent;
@@ -1604,10 +1605,12 @@ function refreshCalibration(status) {{
     shortlist: 'Intensivprüfung für Kandidat ' + status.variant + ' …',
     digit_probe: 'Teste die vermutete Position der letzten Rolle auf diesem Bild …',
     angle: 'Drehung wird geprüft. Der Winkel steht am Vorschaubild.',
+    last_digit: 'Prüfe nur die letzte Rolle im gespeicherten Ausschnitt …',
     refine: status.preview?.weak_positions?.length ?
       'Einzelziffernsuche. Offene Stellen von links: ' + status.preview.weak_positions.join(', ') + '.' :
       'Feinkalibrierung: Prüfe Rahmen und Drehung am vorhandenen Bild …',
-    verify_wait: 'Rahmen gefunden. Warte auf ein frisches Bild zur Gegenprüfung …',
+    verify_wait: status.intensive ? 'Letzte Rolle gefunden. Warte auf ein frisches Bild zur Gegenprobe …' :
+      'Rahmen gefunden. Warte auf ein frisches Bild zur Gegenprüfung …',
     verify: 'Gefundenen Rahmen mit der normalen Prüfung gegenprüfen …',
     ocr: status.preview?.crop && status.preview.angle !== status.rotation ?
       'Prüfe den nächsten Rahmen …' :
@@ -3137,6 +3140,10 @@ def start_panel(
                     if action == "skip-verification":
                         problem(409, "Die Gegenprobe für diesen Rahmen ist nicht mehr offen.",
                                 "Verification for this crop is no longer pending.")
+                        return
+                    if action == "intensive":
+                        problem(400, "Für die Feinprüfung muss ein Ziffernrahmen gespeichert und die Automatik aktiv sein.",
+                                "The fine check needs a saved digit crop and enabled automatic checks.")
                         return
                     problem(400, "Bitte Bildquelle einrichten, die Automatik fortsetzen und das Bildlimit prüfen.",
                             "Set up an image source, resume automatic checks and check the image limit.")

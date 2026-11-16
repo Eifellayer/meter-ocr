@@ -266,6 +266,11 @@ EN_UI = {
         "Helpful with reflections. The app estimates obscured digits only if the readings and flow allow exactly one possibility. Estimated digits stay yellow.",
     "Ausschnitt vorläufig gespeichert. Die Automatik prüft die sieben lesbaren Stellen. Die dritte Nachkommastelle bleibt vorerst offen.":
         "Crop saved provisionally. The automatic check uses the seven readable digits. The third decimal digit remains open for now.",
+    "Letzte Rolle: ": "Last roller: ",
+    "Letzte Rolle wird gelesen …": "Reading the last roller …",
+    "Prüfe nur die letzte Rolle im gespeicherten Ausschnitt …": "Checking only the last roller in the saved crop …",
+    "Letzte Rolle gefunden. Warte auf ein frisches Bild zur Gegenprobe …":
+        "Last roller found. Waiting for a fresh verification image …",
     LAST_DIGIT_PASS: "The first two decimal places match. The third digit remains unconfirmed.",
     "Für den Verbrauch verwendet die App den plausiblen Vergleichswert.": "The app uses the plausible reference reading to calculate consumption.",
     "Ablesung und Vergleichswert weichen ab": "Image reading and reference differ",

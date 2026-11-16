@@ -39,12 +39,12 @@ from checks import (
     valid_interval_minutes,
 )
 from calibration import (Calibration, Layout, CAPTURE_INTERVAL, MIN_IMAGES, MIN_IMAGE_LIMIT, MAX_IMAGES, MAX_ATTEMPTS,
-                         DEFAULT_INTENSIVE_AGREEMENT, SHORTLIST_LIMIT, TIME_LIMIT,
-                         agreement_percent, image_quality_hints, two_decimal_reading, valid_intensive_agreement)
+                         DEFAULT_INTENSIVE_AGREEMENT, SHORTLIST_LIMIT, TIME_LIMIT, LAST_DIGIT_CAPTURE_INTERVAL,
+                         image_quality_hints, two_decimal_reading, valid_intensive_agreement)
 from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, MAX_FLOW_LPH, ImplausibleReading,
                          accumulate_consumption, fallback_detail, format_cubic_metres)
 from layout import (MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, find_digit_row,
-                    digit_box_settings, find_raw_digit_row, rotated_width, scale_digit_boxes, turn_crop)
+                    digit_box_settings, find_raw_digit_row, normalize_digit_boxes, rotated_width, scale_digit_boxes, turn_crop)
 from meter_learning import (GEOMETRY_REPAIR_LIMIT, GEOMETRY_REPAIR_SECONDS, alignment_rollback, observe_alignment, observe_flow,
                             observe_geometry_failures, propose_digit_boxes, suggested_interval)
 from reminder import Reminder
@@ -390,7 +390,7 @@ def calibration_jpeg(frame, max_size):
 
 
 def draw_test_preview(register, integer_width, whole_boxes, fraction_boxes, reading,
-                      whole_digits=5, fraction_digits=3, readings=None, composed=False, pending=False, suspected_slots=()):
+                      whole_digits=5, fraction_digits=3, readings=None, composed=False, pending=False, suspected_slots=(), visible_slots=None):
     """Mark OCR digit regions and the actual read characters for manual diagnostics.
 
     Green: a digit was read without observed variation; yellow: attempts disagreed
@@ -439,6 +439,8 @@ def draw_test_preview(register, integer_width, whole_boxes, fraction_boxes, read
     for idx, box in enumerate(boxes + fraction):
         if idx >= len(chars):
             break
+        if visible_slots is not None and idx not in visible_slots:
+            continue
         l, t, r, b = [int(coord) for coord in box]
         if not (0 <= l < r <= w and 0 <= t < b <= h):
             continue
@@ -1013,7 +1015,7 @@ def main():
 
     def save_calibration_layout(attempt, layout, *, provisional=False):
         rules = get_auto_rules()
-        reference = None
+        reference = rules.get("calibration_reference") if attempt.intensive else None
         if not provisional and attempt.reference_reading is not None:
             precision = {1: 3, 10: 2, 100: 1, 1000: 0}[attempt.counter["step_litres"]]
             head, _, fraction = attempt.reference_reading.replace(",", ".").partition(".")
@@ -1102,8 +1104,12 @@ def main():
                     verified_geometry = last_verified_configured_geometry(history, rules, source_key)
                     if verified_geometry:
                         known_good = geometry_layout(verified_geometry, rules)
+                if intensive:
+                    previous = geometry_layout(rules, rules) if rules["crop_mode"] == "manual" else known_good
+                    if previous is None:
+                        raise ValueError("A saved crop is required for the last digit")
                 calibration = Calibration(limit=limit, started=now, automatic=repair,
-                                          rank_candidates=not repair, shortlist=shortlist,
+                                          rank_candidates=not (repair or intensive), shortlist=shortlist,
                                           simplified=simplified, intensive=intensive,
                                           duration=GEOMETRY_REPAIR_SECONDS if repair else TIME_LIMIT,
                                           attempt_limit=GEOMETRY_REPAIR_LIMIT if repair else MAX_ATTEMPTS,
@@ -1221,7 +1227,6 @@ def main():
                 if captured is not None:
                     if mode == "slfork":
                         sample.update(slfork_reference(sample, captured, zone, history.get("last_slfork_match", {})))
-                    full_sample = sample
                     if attempt.simplified:
                         sample = {**sample, **{key: two_decimal_reading(sample[key])
                                               for key in ("raw_value", "actual_value") if key in sample}}
@@ -1294,7 +1299,7 @@ def main():
                             except (OSError, ValueError):
                                 pass
 
-                        def report_crop(layout, register, reading):
+                        def report_crop(layout, register, reading, *, last_only=False):
                             if not frame_ready:
                                 return
                             box = layout.box
@@ -1315,24 +1320,22 @@ def main():
                                 if len(digits) == whole + fraction and digits.count("?") == 1:
                                     # One open slot between or next to otherwise readable digits.
                                     suspected = (digits.index("?"),)
+                                painted = "?" * whole + ".??" + (reading or "?") if last_only else reading
                                 preview = draw_test_preview(
-                                    *register[:4], reading, whole, fraction, readings=readings, pending=reading is None,
-                                    suspected_slots=suspected,
+                                    *register[:4], painted, whole, fraction,
+                                    readings=None if last_only else readings, pending=reading is None,
+                                    suspected_slots=(whole + 2,) if last_only and reading == "?" else suspected,
+                                    visible_slots=(whole + 2,) if last_only else None,
                                 )
                                 report_image("crop", calibration_jpeg(preview, (820, 300)),
-                                             region=region, reading=reading, angle=layout.rotation,
+                                             region=region, reading=reading, angle=layout.rotation, last_digit_only=last_only,
                                              approximate=not bool(layout.digit_boxes), method=layout.method, reason=None)
                             except (OSError, ValueError):
                                 pass
 
                         def retain_preview(accepted=False):
-                            if not (attempt.intensive and readings):
+                            if not (attempt.intensive and accepted and readings and readings[-1].isdigit()):
                                 return
-                            score = agreement_percent(readings, sample, fraction, whole)
-                            # One profile can supply a preview, but a disagreement lowers its score.
-                            if len(readings) > 1:
-                                score = min(score, agreement_percent(
-                                    readings, {"reference_required": False}, fraction, whole))
                             with settings_lock:
                                 if calibration is not job or job.state != "testing":
                                     return
@@ -1343,7 +1346,7 @@ def main():
                                     if content is None:
                                         return
                                     images[kind] = content
-                                attempt.retain_fine_evidence(score, accepted, calibration_preview, images)
+                                attempt.retain_fine_evidence(100, True, calibration_preview, images)
 
                         def report_decision(reason):
                             with settings_lock:
@@ -1401,7 +1404,40 @@ def main():
                                 fine_deadline = min(deadline, time.monotonic() + 12)
                             report_calibration("refine", variant, rotation, positions)
 
-                        if attempt.verification_pending:
+                        if attempt.intensive:
+                            layout = attempt.candidate or attempt.previous_layout
+                            if layout and not layout.digit_boxes:
+                                register, _, whole_boxes, fraction_boxes, _ = register_for(layout)
+                                boxes = normalize_digit_boxes([*whole_boxes, *fraction_boxes], register.size)
+                                if len(boxes) == whole + fraction:
+                                    layout = Layout(layout.box, layout.rotation, layout.width, boxes)
+                            if layout and len(layout.digit_boxes) == whole + fraction:
+                                def read_last(trial, profile):
+                                    nonlocal previous_layout
+                                    register = register_for(trial)
+                                    if trial != previous_layout:
+                                        readings.clear()
+                                        previous_layout = trial
+                                        report_crop(trial, register, None, last_only=True)
+                                    polarity = active_rules["polarity"]
+                                    digit = read_digit(register[0], register[3][-1], lambda picture, digits: cached_digit(
+                                        picture, options["helle_ziffern"] if polarity == "auto" else polarity == "light",
+                                        digits, profile=profile, force_polarity=polarity != "auto", deadline=deadline))
+                                    readings.append(digit)
+                                    report_crop(trial, register, digit, last_only=True)
+                                    return digit
+
+                                report_calibration("last_digit", rotation=layout.rotation)
+                                result_layout = attempt.check_last_digit(
+                                    frame, sample, captured, layout, whole, read_last, stopped,
+                                    on_image, report_decision,
+                                )
+                                if result_layout is not None:
+                                    if attempt.verification_pending:
+                                        selected = result_layout
+                                    else:
+                                        attempt.begin_verification(time.monotonic())
+                        elif attempt.verification_pending:
                             report_calibration("verify", rotation=attempt.candidate.rotation)
                             selected = attempt.verify(frame, sample, captured, active_rules, read, stopped,
                                                       on_image=on_image, on_decision=report_decision)
@@ -1426,32 +1462,6 @@ def main():
                             elif attempt.stationary_crop_ready():
                                 selected = attempt.candidate
                                 provisional = True
-                            if attempt.simplified and attempt.candidate and (attempt.anchored or attempt.advanced):
-                                if attempt.candidate != job.candidate:
-                                    attempt.last_digit_proposal = None
-                                accepted_new_hit = (attempt.candidate != job.candidate
-                                                    or attempt.confirmations > job.confirmations)
-                                reserved = max(1, MIN_IMAGES + 1 - attempt.confirmations)
-                                spare_attempts = attempt.attempt_limit - attempt.attempts - reserved
-                                if (accepted_new_hit and attempt.confirmations and not attempt.last_digit_proposal
-                                        and spare_attempts > 0 and attempt.remaining(time.monotonic()) > 15
-                                        and not stopped()):
-                                    probe_deadline = min(deadline, time.monotonic() + 12)
-                                    probe = Calibration(limit=0, started=time.monotonic(),
-                                                        intensive=True, followup=True,
-                                                        attempt_limit=min(9, spare_attempts + 2))
-                                    report_calibration("digit_probe")
-                                    attempt.last_digit_proposal = probe.probe_open_digit(
-                                        attempt.candidate, full_sample, active_rules,
-                                        lambda layout, profile: recognize(
-                                            layout, profile, register_for(layout), probe_deadline, full_precision=True),
-                                        lambda: stopped() or time.monotonic() >= probe_deadline,
-                                        lambda *_: None,
-                                    )
-                                    attempt.attempts += 1 + probe.attempts
-                                    with settings_lock:
-                                        if calibration is job and attempt.last_digit_proposal:
-                                            calibration_preview["last_digit_hint"] = True
                         if attempt.reference_reading is not None and attempt.counter.get("timestamp") == captured:
                             attempt.reference_image_id = hashlib.sha256(picture).hexdigest()
         except (OSError, ValueError, TypeError, Image.DecompressionBombError) as error:
@@ -1479,14 +1489,13 @@ def main():
             elif selected:
                 try:
                     save_calibration_layout(attempt, selected, provisional=provisional)
-                    if not provisional:
+                    if not provisional and not attempt.intensive:
                         remember_known_good_layout(get_auto_rules(), active_source, selected)
                     attempt.state = "saved_stationary" if provisional else "saved"
                     if attempt.simplified and not provisional:
                         # Commit the verified crop before checking the open digit on new photos.
                         attempt = Calibration(limit=attempt.limit, started=now, intensive=True, followup=True,
                                               previous_layout=selected, last_stamp=attempt.last_stamp,
-                                              candidate=attempt.last_digit_proposal,
                                               followup_baseline=attempt.counter, image_hints=attempt.image_hints,
                                               duration=GEOMETRY_REPAIR_SECONDS, attempt_limit=GEOMETRY_REPAIR_LIMIT)
                         calibration_configuration = calibration_configuration_now()
@@ -1498,7 +1507,7 @@ def main():
                 attempt.state = "waiting"
                 attempt.stage = "verify_wait" if attempt.verification_pending else "waiting"
             calibration = attempt
-            calibration_next = now + CAPTURE_INTERVAL
+            calibration_next = now + (LAST_DIGIT_CAPTURE_INTERVAL if attempt.intensive else CAPTURE_INTERVAL)
             wake_worker.set()
         return True
 
@@ -1618,7 +1627,7 @@ def main():
             calibration_worker.start()
         if (not manual and calibration is not None and not calibration.automatic
                 and calibration.state in ("waiting", "testing")):
-            wake_worker.wait(timeout=CAPTURE_INTERVAL)
+            wake_worker.wait(timeout=LAST_DIGIT_CAPTURE_INTERVAL if calibration.intensive else CAPTURE_INTERVAL)
             continue
         if get_auto_paused() and not manual:
             set_activity("paused", "Automatik pausiert. Manuelle Tests bleiben verfügbar.")
@@ -1950,7 +1959,8 @@ def main():
                         if live_source:
                             ocr_limit = min(ocr_limit, LIVE_CAPTURE_MAX_ATTEMPTS)
                         reserve_for_rotation = (2 * len(INTENSIVE_ROTATIONS)
-                                                if extra_attempts and source != "auto" and not custom_boxes else 0)
+                                                if extra_attempts and source != "auto" and not custom_boxes
+                                                and not stationary_partial else 0)
                         regular_limit = ocr_limit - reserve_for_rotation
                         regular_attempts = min(configured_attempts, regular_limit)
                         comparison_decimals = manual_options["decimals"] if manual else decimals

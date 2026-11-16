@@ -774,7 +774,12 @@ class BrowserTests(IngressFixture):
             overview.filter(has_text="Grün bedeutet lesbar. Ein gültiger Vergleichswert").wait_for()
             self.assertIn("Bestätigungen: 0/3", overview.inner_text())
             self.assertIn("Beste Kandidaten: 100%, 87%", overview.inner_text())
-            self.calibration.update(state="waiting", tested=1, attempts=0, preview={"frame": 15, "reason": "no_region"})
+            self.calibration.update(confirmations=1, candidate_agreement=100,
+                                    preview={"frame": 15, "crop": 15, "reading": "12345.67?", "reason": "accepted"})
+            overview.filter(has_text="Rahmen mit 100 % Übereinstimmung gefunden.").wait_for()
+            display.get_by_text("Gelb mit ?: Stelle vermutet, Ziffer nicht lesbar.", exact=False).wait_for()
+            self.calibration.update(state="waiting", tested=1, attempts=0, confirmations=0,
+                                    preview={"frame": 15, "reason": "no_region"})
             page.locator("#calibration-overview-state").filter(has_text="Noch kein Ziffernbereich gefunden").wait_for()
             self.calibration["tested"] = 73
             page.locator("#calibration-overview-state").filter(has_text="Grenze das Ziffernfeld im Kamerabild ein").wait_for()

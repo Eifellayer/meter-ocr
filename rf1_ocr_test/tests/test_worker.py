@@ -382,6 +382,16 @@ class StateTests(TestCase):
         self.assertEqual(backup["rules"]["width"], access["rules"]()["width"])
         self.assertEqual(75, access["rules"]()["interval_minutes"])
 
+        access["save"]({**access["rules"](), "decimals": 3, "fraction_digits": 3})
+        access["control"]("start", 4)
+        self.assertTrue(access["status"]()["simplified"])
+        access["control"]("intensive", 4)
+        self.assertFalse(access["status"]()["simplified"])
+        self.assertTrue(access["status"]()["intensive"])
+        access["save"]({**access["rules"](), "precision_mode": True})
+        access["control"]("start", 4)
+        self.assertFalse(access["status"]()["simplified"])
+
     def test_edge_camera_only_publishes_local_ocr_without_the_esp_reading(self):
         class StopLoop(Exception):
             pass

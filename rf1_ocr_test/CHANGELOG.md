@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.14 Stable
+
+- Ab 90 Prozent Übereinstimmung beginnt die Intensivprüfung. Bei verlässlichen 100 Prozent bleibt die Prüfung beim gefundenen Rahmen.
+- Eine einzelne vermutete Ziffernposition ohne lesbare Ziffer erscheint gelb mit einem Fragezeichen.
+- Sobald ein Ziffernrahmen vorliegt, werden Drehwinkel bereits in der Grobsuche und bei gespeicherten Zwischenkandidaten geprüft.
+- Bei drei eingestellten Nachkommastellen und ausgeschaltetem Präzisionsmodus genügen die ersten zwei Stellen auch beim erneuten Start der Selbsteinrichtung. Die Feinprüfung der dritten Stelle zeigt einen eigenen Zähler.
+
 ## 0.5.13 Stable
 
 - Die Grobsuche endet bei einem verlässlichen Treffer oder nach 50 Versuchen. Bis zu fünf der besten Kandidaten werden gespeichert und intensiver geprüft.

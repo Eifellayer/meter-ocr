@@ -30,7 +30,7 @@ class AppIdentityTests(unittest.TestCase):
     def test_release_metadata_preserves_stable_app_identity(self):
         config = yaml.safe_load((APP / "config.yaml").read_text(encoding="utf-8"))
         repository = yaml.safe_load((APP.parent / "repository.yaml").read_text(encoding="utf-8"))
-        self.assertEqual("0.5.13", config["version"])
+        self.assertEqual("0.5.14", config["version"])
         self.assertEqual("rf1_ocr_test", config["slug"])
         self.assertEqual("AI Meter Reader", config["name"])
         self.assertNotIn("stage", config)
@@ -261,6 +261,11 @@ class PanelTests(unittest.TestCase):
         preview = draw_test_preview(source, 400, [], [], "1234?.?21")
         self.assertEqual((36, 170, 92), preview.getpixel((1, 3)))
         self.assertEqual((203, 65, 77), preview.getpixel((321, 3)))
+
+    def test_overlay_marks_suspected_unreadable_position_yellow(self):
+        source = Image.new("RGB", (500, 100), "white")
+        preview = draw_test_preview(source, 500, [], [], "1234?", 5, 0, suspected_slots=(4,))
+        self.assertEqual((241, 184, 54), preview.getpixel((401, 3)))
 
     def test_overlay_marks_variable_or_composed_digits_yellow(self):
         source = Image.new("RGB", (500, 100), "white")

@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -191,10 +191,125 @@ class CalibrationTests(TestCase):
 
     def test_changing_layout_cannot_reuse_confirmations(self):
         self.examine(1, 100)
+        self.candidates.return_value = [OTHER_LAYOUT]
+        self.assertIsNone(self.examine(2, 101))
+        self.assertEqual(1, self.job.confirmations)
+
+    def test_two_hits_keep_the_same_crop_through_an_unreadable_image(self):
+        self.examine(1, 100)
         self.examine(2, 101)
         self.candidates.return_value = [OTHER_LAYOUT]
-        self.assertIsNone(self.examine(3, 102))
+        attempted = []
+
+        def read(layout, profile):
+            attempted.append(layout)
+            return "12?45" if layout == LAYOUT else "12345"
+
+        sample = {"reference_time": 102, "raw_value": "12345", "actual_value": "12345"}
+        self.assertIsNone(self.job.examine(frame(3), None, sample, 102, RULES, read, lambda: False))
+        self.assertEqual([LAYOUT, LAYOUT], attempted)
+        self.assertEqual(2, self.job.confirmations)
+        self.assertEqual(LAYOUT, self.examine(4, 103))
+
+    def test_followup_tries_only_the_saved_crop_and_refines_the_last_digit(self):
+        saved = Layout(LAYOUT.box, LAYOUT.rotation, 50)
+        self.job = Calibration(5, 0, intensive=True, followup=True, previous_layout=saved)
+        self.candidates.return_value = [OTHER_LAYOUT]
+        sample = {"reference_time": 100, "raw_value": "12345.239", "actual_value": "12345.239"}
+        rules = {**RULES, "decimals": 3, "fraction_digits": 3}
+        positions = []
+
+        def read(trial, profile):
+            self.assertEqual(LAYOUT.box, trial.box)
+            self.assertEqual(LAYOUT.rotation, trial.rotation)
+            return "12345.239" if trial.digit_boxes else "12345.23?"
+
+        self.job.examine(frame(1), None, sample, 101, rules, read, lambda: False, refine_read=read,
+                         on_refine=lambda _, __, weak: positions.append(weak))
+        self.candidates.assert_not_called()
+        self.assertEqual([8], positions[0])
         self.assertEqual(1, self.job.confirmations)
+        self.assertEqual(LAYOUT.box, self.job.candidate.box)
+
+    def test_probe_uses_the_reference_digit_without_adding_confirmations(self):
+        saved = Layout(LAYOUT.box, LAYOUT.rotation, 50)
+        probe = Calibration(0, 0, intensive=True, followup=True, attempt_limit=9)
+        sample = {"reference_time": 100, "raw_value": "12345.239", "actual_value": "12345.239"}
+        rules = {**RULES, "decimals": 3, "fraction_digits": 3}
+
+        def read(trial, profile):
+            return "12345.239" if trial.digit_boxes else "12345.232"
+
+        proposal = probe.probe_open_digit(saved, sample, rules, read, lambda: False, lambda *_: None)
+        self.assertTrue(proposal.digit_boxes)
+        self.assertEqual(saved.box, proposal.box)
+        self.assertEqual(0, probe.confirmations)
+        self.assertEqual(set(), probe.seen)
+
+    def test_fifty_coarse_tests_then_only_the_five_ranked_candidates(self):
+        self.job = Calibration(100, 0, rank_candidates=True)
+        self.candidates.return_value = [Layout((x, 0, x + 80, 20), 0, 80) for x in range(5)]
+        sample = {"reference_time": 100, "raw_value": "12345", "actual_value": "12345"}
+        read = lambda *_: "1234?"
+        intensive = []
+        for index in range(1, 11):
+            self.job.examine(frame(index), None, sample, 100 + index, RULES, read, lambda: False,
+                             on_shortlist=lambda number, _: intensive.append(number))
+        self.assertEqual(50, self.job.coarse_attempts)
+        self.assertEqual([80] * 5, list(self.job.status(110)["shortlist"]))
+        self.assertEqual([], intensive)
+        self.candidates.return_value = [OTHER_LAYOUT]
+        self.job.examine(frame(11), None, sample, 111, RULES, read, lambda: False,
+                         on_shortlist=lambda number, _: intensive.append(number))
+        self.assertEqual([1, 2, 3, 4, 5], intensive)
+        self.assertEqual(50, self.job.coarse_attempts)
+
+    def test_matching_first_photo_ends_coarse_search_without_skipping_confirmations(self):
+        self.job = Calibration(5, 0, rank_candidates=True)
+        self.assertIsNone(self.examine(1, 100))
+        self.assertTrue(self.job.optimizing)
+        self.assertEqual(1, self.job.coarse_attempts)
+        self.assertEqual(1, self.job.confirmations)
+
+    def test_green_reading_without_reference_gets_extra_profiles_but_no_confirmation(self):
+        self.job = Calibration(5, 0, rank_candidates=True)
+        sample = {"reference_time": None, "raw_value": "12345", "actual_value": "12345"}
+        profiles, reasons = [], []
+
+        def read(layout, profile):
+            profiles.append(profile)
+            return "12345"
+
+        self.job.examine(frame(1), None, sample, 100, RULES, read, lambda: False, on_decision=reasons.append)
+        self.assertEqual(list(calibration.OCR_PROFILES[:5]), profiles)
+        self.assertEqual(["reference_unavailable"], reasons)
+        self.assertEqual(0, self.job.confirmations)
+        self.assertEqual(1, len(self.job.seen))
+
+    def test_blurred_verification_image_is_skipped_even_if_ocr_could_match(self):
+        rules = {**RULES, "attempts": 3}
+        sample = {"reference_time": 100, "raw_value": "12345", "actual_value": "12345"}
+
+        def photo(marker):
+            image = frame(marker)
+            draw = ImageDraw.Draw(image)
+            for x in range(8, 80, 8):
+                draw.rectangle((x, 5, x + 2, 15), fill="white")
+            return image
+
+        read = lambda *_: "12345"
+        for index in range(1, 4):
+            self.job.examine(photo(index), None, sample, 100 + index, rules, read, lambda: False)
+        self.job.verification_pending = True
+        reasons = []
+        attempts = self.job.attempts
+        blurry = photo(4).filter(ImageFilter.GaussianBlur(4))
+        self.assertIsNone(self.job.verify(blurry, sample, 104, rules, read, lambda: False,
+                                          on_decision=reasons.append))
+        self.assertEqual(["soft_image"], reasons)
+        self.assertEqual(attempts, self.job.attempts)
+        self.assertEqual(3, self.job.confirmations)
+        self.assertEqual(LAYOUT, self.job.verify(photo(5), sample, 105, rules, read, lambda: False))
 
     def test_fallback_is_not_live_confirmation(self):
         self.examine(1, 100, fallback=True)
@@ -391,8 +506,9 @@ class CalibrationTests(TestCase):
         self.assertIsNone(self.job.verify(frame(3), sample, 103, rules, lambda *_: "12345", lambda: False))
         self.assertTrue(self.job.verification_pending)
         self.assertIsNone(self.job.verify(frame(4), sample, 104, rules, lambda *_: "?????", lambda: False))
-        self.assertFalse(self.job.verification_pending)
-        self.assertEqual(0, self.job.confirmations)
+        self.assertTrue(self.job.verification_pending)
+        self.assertEqual(3, self.job.confirmations)
+        self.assertEqual(LAYOUT, self.job.verify(frame(5), sample, 105, rules, lambda *_: "12345", lambda: False))
 
     def test_boxes_transform_back_to_the_original_image(self):
         self.assertEqual((30, 10, 50, 20), unrotate_box((60, 10, 70, 30), (100, 60), 90))

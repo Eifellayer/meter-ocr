@@ -767,6 +767,13 @@ class BrowserTests(IngressFixture):
             self.calibration["preview"] = {"frame": 15}
             display = page.locator("#calibration-overview .calibration-photo-panel")
             display.get_by_text("Die App sucht in diesem Bild nach der Ziffernreihe.").wait_for()
+            self.calibration.update(state="waiting", tested=1, attempts=5, shortlist=[100, 87],
+                                    preview={"frame": 15, "crop": 15, "reading": "12345.678",
+                                             "reason": "reference_unavailable"})
+            overview = page.locator("#calibration-overview-state")
+            overview.filter(has_text="Grün bedeutet lesbar. Ein gültiger Vergleichswert").wait_for()
+            self.assertIn("Bestätigungen: 0/3", overview.inner_text())
+            self.assertIn("Beste Kandidaten: 100%, 87%", overview.inner_text())
             self.calibration.update(state="waiting", tested=1, attempts=0, preview={"frame": 15, "reason": "no_region"})
             page.locator("#calibration-overview-state").filter(has_text="Noch kein Ziffernbereich gefunden").wait_for()
             self.calibration["tested"] = 73

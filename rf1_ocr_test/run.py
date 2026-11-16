@@ -37,8 +37,8 @@ from checks import (
     timestamp_epoch, track_reflection,
     valid_interval_minutes,
 )
-from calibration import (Calibration, CAPTURE_INTERVAL, MIN_IMAGE_LIMIT, MAX_IMAGES, MAX_ATTEMPTS,
-                         TIME_LIMIT, two_decimal_reading)
+from calibration import (Calibration, Layout, CAPTURE_INTERVAL, MIN_IMAGES, MIN_IMAGE_LIMIT, MAX_IMAGES, MAX_ATTEMPTS,
+                         SHORTLIST_LIMIT, TIME_LIMIT, two_decimal_reading)
 from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, MAX_FLOW_LPH, ImplausibleReading,
                          accumulate_consumption, fallback_detail, format_cubic_metres)
 from layout import (MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, find_digit_row,
@@ -880,6 +880,37 @@ def main():
     calibration_images = {}
     calibration_preview_version = 0
     geometry_backup = HISTORY.with_name("geometry-backup.json")
+    calibration_candidates_path = HISTORY.with_name("calibration-candidates.json")
+
+    def candidate_scope(configuration, region, simplified, intensive):
+        rules, source = configuration
+        relevant = ("integer_digits", "fraction_digits", "decimals", "polarity", "meter_display")
+        key = [source, [rules[name] for name in relevant], region, simplified, intensive]
+        return hashlib.sha256(json.dumps(key, sort_keys=True).encode()).hexdigest()
+
+    def load_calibration_candidates(scope, rules):
+        try:
+            saved = json.loads(calibration_candidates_path.read_text(encoding="utf-8"))
+            if saved["scope"] != scope:
+                return {}
+            result = {}
+            for item in saved["candidates"][:SHORTLIST_LIMIT]:
+                geometry, score = item["geometry"], item["score"]
+                if (len(score) != 2 or type(score[0]) is not int or not 0 < score[0] <= 100
+                        or type(score[1]) not in (int, float) or not 0 <= score[1] <= 255):
+                    continue
+                box = crop_coordinates(geometry["crop"], geometry["width"], geometry["rotation"])
+                boxes = digit_box_settings(geometry["digit_boxes"], rules["integer_digits"] + rules["fraction_digits"])
+                layout = Layout(box, geometry["rotation"], geometry["width"], tuple(map(tuple, boxes)))
+                result[layout] = tuple(score)
+            return result
+        except (OSError, ValueError, TypeError, KeyError):
+            return {}
+
+    def save_calibration_candidates(scope, shortlist):
+        candidates = [{"geometry": layout.settings(), "score": score} for layout, score in shortlist.items()]
+        atomic_write(calibration_candidates_path,
+                     json.dumps({"scope": scope, "candidates": candidates}).encode(), 0o600)
 
     def read_geometry_backup():
         try:
@@ -931,7 +962,10 @@ def main():
                 if repair:
                     atomic_write(geometry_backup, json.dumps({"source": source, "rules": get_auto_rules()}).encode(),
                                  0o600)
+                scope = candidate_scope(configuration, region, simplified, intensive)
+                shortlist = {} if repair else load_calibration_candidates(scope, rules)
                 calibration = Calibration(limit=limit, started=now, automatic=repair,
+                                          rank_candidates=not repair, shortlist=shortlist,
                                           simplified=simplified, intensive=intensive,
                                           duration=GEOMETRY_REPAIR_SECONDS if repair else TIME_LIMIT,
                                           attempt_limit=GEOMETRY_REPAIR_LIMIT if repair else MAX_ATTEMPTS,
@@ -952,9 +986,11 @@ def main():
                 status["state"] = "timeout"
             elif status["state"] == "waiting" and calibration.image_wait_expired(time.monotonic()):
                 status["state"] = "image_timeout"
-            if status["state"] == "saved":
-                status["settings"] = {**calibration.candidate.settings(), "crop_revision": auto_rules["crop_revision"]}
-            elif status["state"] in ("failed", "timeout", "image_timeout") and calibration.best:
+            saved_layout = calibration.candidate if status["state"] == "saved" else calibration.previous_layout
+            if saved_layout and (status["state"] == "saved" or (
+                    calibration.followup and calibration_configuration_now() == calibration_configuration)):
+                status["settings"] = {**saved_layout.settings(), "crop_revision": auto_rules["crop_revision"]}
+            if status["state"] in ("failed", "timeout", "image_timeout") and calibration.best:
                 status["proposal"] = calibration.best.settings()
             return status
 
@@ -964,7 +1000,7 @@ def main():
                          if str(revision) == version), None)
 
     def run_calibration(active_rules, active_source, mode, base, camera, reference, source_key):
-        nonlocal calibration, calibration_next, calibration_preview_version
+        nonlocal calibration, calibration_configuration, calibration_next, calibration_preview_version
         with settings_lock:
             now = time.monotonic()
             job = calibration
@@ -1032,6 +1068,7 @@ def main():
                 if captured is not None:
                     if mode == "slfork":
                         sample.update(slfork_reference(sample, captured, zone, history.get("last_slfork_match", {})))
+                    full_sample = sample
                     if attempt.simplified:
                         sample = {**sample, **{key: two_decimal_reading(sample[key])
                                               for key in ("raw_value", "actual_value") if key in sample}}
@@ -1041,6 +1078,8 @@ def main():
                         baseline = {**baseline, "source": "calibration"}
                     else:
                         baseline = None
+                    if baseline is None and attempt.followup_baseline:
+                        baseline = attempt.followup_baseline
                     if baseline is None and active_rules["fallback_value"] and active_rules["fallback_time"]:
                         stamp = timestamp_epoch(active_rules["fallback_time"], zone)
                         if stamp < captured:
@@ -1142,14 +1181,15 @@ def main():
                                 digit_boxes=layout.digit_boxes,
                             )
 
-                        def recognize(layout, profile, register, ocr_deadline=None):
+                        def recognize(layout, profile, register, ocr_deadline=None, *, full_precision=False):
+                            reduced = attempt.simplified and not full_precision
                             value = read_visible_digits(
                                 *register[:4], options["helle_ziffern"], active_rules["polarity"], profile=profile,
-                                whole_digits=whole, fraction_digits=2 if attempt.simplified else fraction,
+                                whole_digits=whole, fraction_digits=2 if reduced else fraction,
                                 deadline=deadline if ocr_deadline is None else ocr_deadline,
                                 prefer_boxes=bool(layout.digit_boxes), recognize=cached_digit,
                             )
-                            return two_decimal_reading(value) if attempt.simplified else value
+                            return two_decimal_reading(value) if reduced else value
 
                         def read(layout, profile):
                             nonlocal previous_layout
@@ -1188,8 +1228,36 @@ def main():
                                 on_selected=show_selected,
                                 angle_read=read,
                                 on_angle=lambda variant, rotation: report_calibration("angle", variant, rotation),
+                                on_shortlist=lambda variant, rotation: report_calibration(
+                                    "shortlist", variant, rotation),
                             )
                             attempt.verification_pending = candidate is not None
+                            if attempt.simplified and attempt.candidate:
+                                if attempt.candidate != job.candidate:
+                                    attempt.last_digit_proposal = None
+                                accepted_new_hit = (attempt.candidate != job.candidate
+                                                    or attempt.confirmations > job.confirmations)
+                                reserved = max(1, MIN_IMAGES + 1 - attempt.confirmations)
+                                spare_attempts = attempt.attempt_limit - attempt.attempts - reserved
+                                if (accepted_new_hit and attempt.confirmations and not attempt.last_digit_proposal
+                                        and spare_attempts > 0 and attempt.remaining(time.monotonic()) > 15
+                                        and not stopped()):
+                                    probe_deadline = min(deadline, time.monotonic() + 12)
+                                    probe = Calibration(limit=0, started=time.monotonic(),
+                                                        intensive=True, followup=True,
+                                                        attempt_limit=min(9, spare_attempts + 2))
+                                    report_calibration("digit_probe")
+                                    attempt.last_digit_proposal = probe.probe_open_digit(
+                                        attempt.candidate, full_sample, active_rules,
+                                        lambda layout, profile: recognize(
+                                            layout, profile, register_for(layout), probe_deadline, full_precision=True),
+                                        lambda: stopped() or time.monotonic() >= probe_deadline,
+                                        lambda *_: None,
+                                    )
+                                    attempt.attempts += 1 + probe.attempts
+                                    with settings_lock:
+                                        if calibration is job and attempt.last_digit_proposal:
+                                            calibration_preview["last_digit_hint"] = True
         except (OSError, ValueError, TypeError, Image.DecompressionBombError) as error:
             print(f"Selbsteinrichtung konnte die Aufnahme nicht prüfen: {type(error).__name__}")
         with settings_lock:
@@ -1200,14 +1268,31 @@ def main():
                 attempt.last_image_at = now
             if calibration is not job or job.state == "cancelled":
                 return True
+            if (attempt.shortlist != job.shortlist and attempt.shortlist
+                    and calibration_configuration_now() == calibration_configuration):
+                try:
+                    scope = candidate_scope(calibration_configuration, attempt.region,
+                                            attempt.simplified, attempt.intensive)
+                    save_calibration_candidates(scope, attempt.shortlist)
+                except OSError:
+                    print("Zwischenkandidaten konnten nicht gespeichert werden.")
             if attempt.expired(now):
                 attempt.state = "timeout"
             elif calibration_configuration_now() != calibration_configuration or get_auto_paused():
                 attempt.state = "cancelled"
             elif selected:
                 try:
-                    save_auto_rules({**get_auto_rules(), **selected.settings(), "crop_revision": str(time.time_ns())})
+                    if not attempt.followup or selected != attempt.previous_layout:
+                        save_auto_rules({**get_auto_rules(), **selected.settings(), "crop_revision": str(time.time_ns())})
                     attempt.state = "saved"
+                    if attempt.simplified:
+                        # Commit the verified crop before checking the open digit on new photos.
+                        attempt = Calibration(limit=attempt.limit, started=now, intensive=True, followup=True,
+                                              previous_layout=selected, last_stamp=attempt.last_stamp,
+                                              candidate=attempt.last_digit_proposal,
+                                              followup_baseline=attempt.counter,
+                                              duration=GEOMETRY_REPAIR_SECONDS, attempt_limit=GEOMETRY_REPAIR_LIMIT)
+                        calibration_configuration = calibration_configuration_now()
                 except (OSError, ValueError):
                     attempt.state = "save_failed"
             elif len(attempt.seen) >= attempt.limit or attempt.attempts >= attempt.attempt_limit:
@@ -1250,6 +1335,7 @@ def main():
                 HISTORY, AUTO_RULES, SOURCE_SETTINGS, NOTIFICATIONS, LANGUAGE_MODES,
                 HISTORY.with_name("manual-test-settings.json"), DESTINATION, GOOD_IMAGE,
                 TEST_IMAGE, TEST_SOURCE_IMAGE, AUTOMATIC_PREVIEW, AUTO_PAUSED, geometry_backup,
+                calibration_candidates_path,
             )
             for path in paths:
                 path.unlink(missing_ok=True)

@@ -1,4 +1,4 @@
-"""Validate crop settings and locate digit frames in the SLFork overlay."""
+"""Validate crop settings and locate meter digits in camera images and SLFork overlays."""
 
 from itertools import pairwise
 from math import ceil, cos, floor, radians, sin
@@ -271,3 +271,135 @@ def normalize_digit_boxes(boxes, size):
     return tuple((round(left * 1000 / width), round(top * 1000 / height),
                   round(right * 1000 / width), round(bottom * 1000 / height))
                  for left, top, right, bottom in boxes)
+
+
+def _meter_window(image, seed, count):
+    """Estimate horizontal window edges beside the glyph, if the background has a boundary."""
+    left, top, right, bottom = seed
+    height = bottom - top
+    margin = max(2, height // 9)
+    if top < margin or bottom + margin >= image.height:
+        return None
+    width = image.width
+    upper = image.crop((0, top - margin, width, top)).resize((width, 1), Image.Resampling.BOX).tobytes()
+    lower = image.crop((0, bottom, width, bottom + margin)).resize((width, 1), Image.Resampling.BOX).tobytes()
+    center = (left + right) // 2
+    tones = [(a + b) // 2 for a, b in zip(upper, lower)]
+    background = tones[center]
+    start, end = center, center + 1
+    while start > 0 and abs(tones[start - 1] - background) <= 30:
+        start -= 1
+    while end < width and abs(tones[end] - background) <= 30:
+        end += 1
+    if 0 < start < end < width and count * height * .45 <= end - start <= count * height * 1.75:
+        return start, end
+    return None
+
+
+def find_neighbour_digit_rows(frame, whole_digits, fraction_digits, limit=2):
+    """Propose bounded digit grids from visible glyphs, including gaps in their middle."""
+    count = whole_digits + fraction_digits
+    image = frame.convert("L")
+    image.thumbnail((400, 300), Image.Resampling.BILINEAR)
+    image = ImageOps.autocontrast(image, cutoff=2)
+    width, height = image.size
+    if count < 2:
+        return []
+    candidates = {}
+    for threshold in (90, 150):
+        for light_digits in (True, False):
+            boxes = digit_components(image, threshold, light_digits)
+            seeds = sorted(boxes, key=lambda box: box[3] - box[1], reverse=True)[:14]
+            for seed in seeds:
+                left, top, right, bottom = seed
+                tall = bottom - top
+                center = (left + right) / 2
+                nearby = [box for box in boxes if abs((box[0] + box[2]) / 2 - center) <= count * tall * 1.7
+                          and abs((box[1] + box[3]) - (top + bottom)) <= tall * .65
+                          and tall * .55 <= box[3] - box[1] <= tall * 1.48]
+                centers = [(box[0] + box[2]) / 2 for box in nearby]
+                window = _meter_window(image, seed, count)
+                if len(nearby) < 2 and window is None:
+                    continue
+                pitches = {round(tall * factor) for factor in (.68, .85, 1.05, 1.25)}
+                for other in sorted(centers, key=lambda x: abs(x - center))[:8]:
+                    for skips in range(1, min(count, 4)):
+                        pitch = abs(other - center) / skips
+                        if .48 * tall <= pitch <= 1.7 * tall:
+                            pitches.add(round(pitch))
+                hypotheses = [(center - pitch * slot - (gap if slot >= whole_digits else 0), pitch, gap)
+                              for pitch in sorted(pitches) if pitch >= 5
+                              for gap in ((0, round(pitch * .35)) if fraction_digits else (0,))
+                              for slot in range(count)]
+                if window:
+                    start, end = window
+                    pitch = (end - start) / count
+                    hypotheses.append((start + pitch / 2, pitch, 0))
+                for start, pitch, gap in hypotheses:
+                    grid = [start + i * pitch + (gap if i >= whole_digits else 0) for i in range(count)]
+                    a, b = round(grid[0] - pitch / 2), round(grid[-1] + pitch / 2)
+                    if not (0 <= a < b <= width):
+                        continue
+                    matches = []
+                    residual = 0.0
+                    for x in grid:
+                        closest = min(nearby, key=lambda box: abs((box[0] + box[2]) / 2 - x))
+                        distance = abs((closest[0] + closest[2]) / 2 - x)
+                        match = closest if distance <= pitch * .40 else None
+                        matches.append(match)
+                        if match:
+                            residual += distance / pitch
+                    support = sum(match is not None for match in matches)
+                    if support < 2 and (not window or support != 1):
+                        continue
+                    if support < 2 and abs(a - window[0]) + abs(b - window[1]) > pitch * .7:
+                        continue
+                    matched = [box for box in matches if box is not None]
+                    y1, y2 = min(box[1] for box in matched), max(box[3] for box in matched)
+                    margin = max(2, round(tall * .15))
+                    bounds = (a, max(0, y1 - margin), b, min(height, y2 + margin))
+                    edge_error = ((abs(a - window[0]) + abs(b - window[1])) / pitch) if window else 0
+                    score = support * 2 - residual - min(2.0, edge_error * .5)
+                    key = (round(a / 3), round(b / 3), round(y1 / 3))
+                    if key not in candidates or candidates[key][0] < score:
+                        candidates[key] = (score, bounds, grid, matches, pitch, light_digits, window)
+
+    result = []
+    sx, sy = frame.width / width, frame.height / height
+    for _, bounds, grid, matches, pitch, light_digits, window in sorted(
+            candidates.values(), key=lambda item: item[0], reverse=True)[:16]:
+        left, top, right, bottom = bounds
+        inside = ImageStat.Stat(image.crop(bounds)).median[0]
+        span = max(5, (bottom - top) // 2)
+        strips = [(left, max(0, top - span), right, top), (left, bottom, right, min(height, bottom + span))]
+        if window:
+            start, end = window
+            strips += [(max(0, start - 5), top, start, bottom), (end, top, min(width, end + 5), bottom)]
+        surrounding = [ImageStat.Stat(image.crop(strip)).median[0] for strip in strips
+                       if strip[0] < strip[2] and strip[1] < strip[3]]
+        contrast = max(((value - inside) * (1 if light_digits else -1) for value in surrounding), default=0)
+        if contrast < 12:
+            continue
+        crop = tuple(round(value * scale) for value, scale in zip(bounds, (sx, sy, sx, sy)))
+        if any(abs(crop[0] - old[0][0]) < pitch * sx * .35 and abs(crop[2] - old[0][2]) < pitch * sx * .35
+               and abs(crop[1] - old[0][1]) < (crop[3] - crop[1]) * .25 for old in result):
+            continue
+        inferred = [(x + (match[0] + match[2]) / 2) / 2 if match else x
+                    for x, match in zip(grid, matches)]
+        boundaries = [left, *(round((a + b) / 2) for a, b in pairwise(inferred)), right]
+        digit_boxes = []
+        for index, (x, match) in enumerate(zip(inferred, matches)):
+            # Allow the roller to move inside the cell while keeping neighbouring cells apart.
+            left_edge, right_edge = floor(x - pitch * .5), ceil(x + pitch * .5)
+            if match:
+                stroke_margin = max(1, round(pitch * .08))
+                left_edge = min(left_edge, match[0] - stroke_margin)
+                right_edge = max(right_edge, match[2] + stroke_margin)
+            l = max(boundaries[index], left_edge)
+            r = min(boundaries[index + 1], right_edge)
+            digit_boxes.append((round(l * sx) - crop[0], 0, round(r * sx) - crop[0], crop[3] - crop[1]))
+        whole_width = round(boundaries[whole_digits] * sx) - crop[0]
+        result.append((crop, whole_width, digit_boxes))
+        if len(result) >= limit:
+            break
+    return result

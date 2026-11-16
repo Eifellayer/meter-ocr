@@ -8,7 +8,7 @@
 
 📘 [German illustrated user guide (PDF)](docs/Bedienungsanleitung-AI-Meter-Reader.pdf) · [App documentation](rf1_ocr_test/DOCS.md)
 
-**Current version: 0.5.0 Stable.** This release focuses on OCR stability, automatic setup and image editing. Pulse sensor work resumes in 0.6 or later.
+**Current version: 0.5.1 Stable.** This release focuses on OCR stability, automatic setup and image editing. Pulse sensor work resumes in 0.6 or later.
 
 ## Beta testers wanted
 
@@ -77,7 +77,7 @@ The [photo test report (German)](METER-PHOTO-TESTS.md) documents simulated OCR r
 
 ### Automatic crop and rotation setup
 
-In the setup wizard, select **Learn crop and rotation** under **Image region**. The search starts after saving. You can also start it at any time under **Overview → Automatic setup**. The app shows the remaining time, number of images and rotation being tested. Choose the maximum number of distinct images to check (4 to 100, default 100). The app tries different crops and angles and saves a setting after three confirmations on distinct images and a final regular OCR check on one more fresh image. Without an external reference or a manually entered starting reading, the meter must show a plausible increase. The search ends after 15 minutes, 100 crop attempts, or when it reaches the image limit. If unsuccessful, it keeps your existing settings. You can stop the search at any time.
+In the setup wizard, select **Learn crop and rotation** under **Image region**. The search starts after saving. You can also start it at any time under **Overview → Automatic setup**. The app shows the remaining time, number of images and rotation being tested. **Automatic setup images** shows the camera frame, highlighted region, rotated crop and OCR reading. A question mark indicates an unclear digit. Choose the maximum number of distinct images to check (4 to 100, default 100). The app tries different crops and angles and saves a setting after three confirmations on distinct images and a final regular OCR check on one more fresh image. Without an external reference or a manually entered starting reading, the meter must show a plausible increase. The search ends after 15 minutes, 100 crop attempts, or when it reaches the image limit. If unsuccessful, it keeps your existing settings. You can stop the search at any time.
 
 ## Plausibility check and Energy dashboard
 

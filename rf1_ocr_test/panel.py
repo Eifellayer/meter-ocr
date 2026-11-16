@@ -17,6 +17,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from app_channel import APP_NAME, NAMESPACE
 from calibration import DEFAULT_LIMIT, MIN_IMAGE_LIMIT, MAX_IMAGES
+from meter_learning import GEOMETRY_REPAIR_FAILURES
 from checks import (DEFAULT_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, WARNING_DETAIL_AFTER, meter_prefix,
                     LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, REFLECTION_SUGGEST_AFTER, STANDALONE_PENDING, STANDALONE_REJECTED_NOTICE,
                     STANDALONE_VERIFIED_NOTICE, last_check_at, reschedule_next_check,
@@ -31,6 +32,26 @@ from source_settings import source_rules
 SUPERVISOR_ADDRESS = "172.30.32.2"
 MAX_MANUAL_IMAGE_BYTES = 3_000_000
 MAX_MULTIPART_OVERHEAD = 16_384
+
+CALIBRATION_PREVIEW_HTML = """<details class="calibration-photo-panel" open hidden>
+<summary>Bilder der Selbsteinrichtung</summary>
+<div class="calibration-photo-grid">
+<figure>
+<div class="calibration-photo-frame">
+<img data-image="frame" alt="Kamerabild der Selbsteinrichtung" decoding="async">
+<span class="calibration-crop-region" hidden></span>
+</div>
+<figcaption>Aktuelles Kamerabild</figcaption>
+</figure>
+<figure class="calibration-crop-figure" hidden>
+<img data-image="crop" alt="Geprüfter Bildausschnitt mit einzelnen Ziffernrahmen" decoding="async">
+<figcaption>Geprüfter Ausschnitt <span class="calibration-preview-angle"></span></figcaption>
+<p class="calibration-preview-reading"></p>
+</figure>
+</div>
+<p class="calibration-preview-reason" hidden></p>
+<p class="calibration-preview-help">Die App sucht in diesem Bild nach der Ziffernreihe.</p>
+</details>"""
 
 PAGE = """<!doctype html>
 <html lang="{language}"><meta charset="utf-8"><meta name="viewport" content="width=device-width">
@@ -149,6 +170,16 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .calibration-live[data-tone="error"],#calibration-state[data-tone="error"]{{color:light-dark(#86272d,#ffb6bb);background:light-dark(#fff0f0,#46252b);font-size:1.12rem;font-weight:750}}
 .calibration-live progress,.calibration-card progress{{display:block;width:100%;margin:.55rem 0;accent-color:#bb861b}}
 .calibration-card form{{margin-top:.75rem}}
+.calibration-photo-panel{{margin:.75rem 0 0;color:light-dark(#243b4b,#e5edf5);font-size:.9rem;font-weight:400}}
+.calibration-photo-panel summary{{cursor:pointer;font-weight:650}}
+.calibration-photo-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,17rem),1fr));gap:.8rem;margin:.7rem 0}}
+.calibration-photo-grid figure{{margin:0;min-width:0}}
+.calibration-photo-grid img{{display:block;max-width:100%;height:auto;border-radius:.4rem}}
+.calibration-photo-frame{{position:relative;width:fit-content;max-width:100%}}
+.calibration-crop-region{{position:absolute;border:2px solid #ffcd60;border-radius:.1rem;box-shadow:0 0 0 1px #151c23;pointer-events:none}}
+.calibration-photo-grid figcaption{{margin-top:.35rem;color:var(--muted)}}
+.calibration-photo-panel .calibration-preview-help{{font-size:.83rem;color:var(--muted);margin:.35rem 0 0}}
+.calibration-photo-panel .calibration-preview-reading{{overflow-wrap:anywhere;font-weight:650;font-variant-numeric:tabular-nums;margin:.25rem 0 0}}
 .source-mode-guide{{grid-column:1/-1;display:grid;gap:.75rem;grid-template-columns:repeat(auto-fit,minmax(min(100%,14rem),1fr))}}
 .source-mode-guide ul{{padding-inline-start:1.25rem;margin:0}}
 .source-mode-guide li + li{{margin-top:.35rem}}
@@ -270,6 +301,7 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <div id="calibration-overview" class="calibration-live" hidden>
 <p id="calibration-overview-state" role="status"></p>
 <progress id="calibration-overview-progress" aria-label="Verstrichene Zeit der Selbsteinrichtung"></progress>
+{calibration_preview_html}
 </div>
 {wizard_saved_notice}
 <div class="paused-notice" id="paused-notice" {paused_notice_hidden} role="status" aria-live="polite"><strong>Automatik pausiert</strong><p>Es starten keine neuen automatischen Prüfungen. Ein bereits laufender Durchlauf darf noch enden. Manuelle Tests bleiben verfügbar.</p><form method="post" action="automatik-pause" id="resume-auto-form"><input type="hidden" name="lang" value="{language}"><input type="hidden" name="mode" value="{language_mode}"><input type="hidden" name="csrf" value="{csrf}"><input type="hidden" name="paused" value="0"><button type="submit">Automatik fortsetzen</button></form></div>
@@ -294,6 +326,7 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <dt>Letzte Prüfung</dt><dd id="automatic-last-check" class="stamp" data-epoch="{last_check}">–</dd>
 <dt>Letzter bestätigter Abgleich</dt><dd id="automatic-last-match" class="stamp" data-epoch="{last_match}">–</dd>
 <dt>Nächste Prüfung</dt><dd id="countdown">–</dd></dl>
+<p class="failure-recovery" id="geometry-repair-warning" {geometry_warning_hidden}>{geometry_warning_text}</p>
 <p class="failure-recovery" id="automatic-recovery" data-state="retrying" {recovery_hidden}>{recovery_notice}</p>
 <p class="failure-recovery" id="reflection-live" hidden>
 <strong>Vorläufig ergänzt</strong> <span id="reflection-live-reading"></span>
@@ -451,6 +484,7 @@ name: Zählerstand (OCR)</code></pre>
 <p id="calibration-state" role="status" hidden></p>
 <button type="button" id="calibration-proposal" hidden>Gefundenen Rahmen im Test prüfen</button>
 <progress id="calibration-progress" aria-label="Verstrichene Zeit der Selbsteinrichtung" hidden></progress>
+{calibration_preview_html}
 <form method="post" action="selbsteinrichtung">
 <input type="hidden" name="lang" value="{language}">
 <input type="hidden" name="mode" value="{language_mode}">
@@ -459,6 +493,7 @@ name: Zählerstand (OCR)</code></pre>
 <input id="calibration-limit" name="image_limit" type="number" min="{calibration_min}" max="{calibration_max}" value="{calibration_limit}" required></label>
 <div class="crop-actions">
 <button id="calibration-start" type="submit" name="action" value="start">Selbsteinrichtung starten</button>
+<button id="calibration-restore" type="submit" name="action" value="restore" formnovalidate {calibration_restore_hidden}>Gesicherten Ausschnitt wiederherstellen</button>
 <button id="calibration-cancel" type="submit" name="action" value="cancel" formnovalidate hidden>Selbsteinrichtung stoppen</button>
 </div>
 </form>
@@ -521,6 +556,10 @@ name: Zählerstand (OCR)</code></pre>
 <label>Höchstens so viele unterschiedliche Bilder
 <input name="image_limit" type="number" min="{calibration_min}" max="{calibration_max}" value="{calibration_limit}" required disabled></label>
 <p class="settings-note">Startet nach dem Speichern und endet spätestens nach 15 Minuten. Die App übernimmt den Rahmen nach drei Bestätigungen und einer abschließenden Gegenprüfung.</p>
+</div>
+<div class="setup-help">
+<label class="check-option"><input type="checkbox" name="self_repair_enabled" value="1" {wizard_self_repair_checked}> Selbstreparatur bei wiederholten Fehlmessungen</label>
+<p class="settings-note">Nach zehn unterschiedlichen Fehlmessungen sichert die App den bisherigen Rahmen und versucht einmal, ihn zu verbessern. Ohne sichere Gegenprobe bleibt der bisherige Rahmen gültig.</p>
 </div>
 <label>OCR-Versuche pro Bild<select name="attempts">{auto_attempt_options}</select></label>
 <label>Ziffernfarbe<select name="polarity">{auto_polarity_options}</select></label>
@@ -613,6 +652,8 @@ name: Zählerstand (OCR)</code></pre>
 <details class="help setup-help">
 <summary>ⓘ Automatik im Hintergrund verbessern</summary>
 <label class="check-option"><input type="checkbox" name="fine_alignment_enabled" value="1" {fine_alignment_checked}> Ziffernrahmen langfristig feinjustieren</label>
+<label class="check-option"><input type="checkbox" name="self_repair_enabled" value="1" {self_repair_checked}> Selbstreparatur bei wiederholten Fehlmessungen</label>
+<p>Nach zehn unterschiedlichen Fehlmessungen sichert die App den bisherigen Rahmen und versucht einmal, ihn zu verbessern. Ohne sichere Gegenprobe bleibt der bisherige Rahmen gültig.</p>
 <label class="check-option"><input type="checkbox" name="adaptive_interval_enabled" value="1" {adaptive_interval_checked}> Prüfintervall bei erwarteten Rollenwechseln verkürzen (SLFork)</label>
 </details>
 <div class="reflection-settings setup-help" id="reflection-settings">
@@ -1243,7 +1284,63 @@ calibrationProposal.addEventListener('click', () => {{
   document.querySelector('#open-manual-settings').click();
 }});
 
+function refreshCalibrationImages(preview) {{
+  const reasons = {{
+    no_region: 'In diesem Bild wurde kein Ziffernbereich gefunden.',
+    unreadable: 'Der Ausschnitt ließ sich nicht auswerten.',
+    unclear: 'Mindestens eine benötigte Ziffer blieb unklar.',
+    disagree: 'Die OCR-Versuche lieferten unterschiedliche Ziffern.',
+    reference_unavailable: 'Kein gültiger Vergleichswert zu diesem Bild.',
+    reference_mismatch: 'Der gelesene Stand weicht vom Vergleichswert ab.',
+    implausible: 'Der Stand passt zeitlich nicht zur letzten sicheren Ablesung.',
+    await_movement: 'Der Rahmen ist lesbar. Die App wartet auf einen plausiblen Zähleranstieg.',
+    accepted: 'Dieser Rahmen wurde auf dem aktuellen Bild bestätigt.',
+    verified: 'Die abschließende Gegenprobe war erfolgreich.',
+  }};
+  for (const section of document.querySelectorAll('.calibration-photo-panel')) {{
+    section.hidden = !preview?.frame;
+    if (section.hidden) continue;
+    const frame = section.querySelector('[data-image="frame"]');
+    const crop = section.querySelector('[data-image="crop"]');
+    const region = section.querySelector('.calibration-crop-region');
+    const hasCrop = Boolean(preview.crop);
+    section.querySelector('.calibration-crop-figure').hidden = !hasCrop;
+    for (const [kind, img] of [['frame', frame], ['crop', crop]]) {{
+      const revision = preview[kind];
+      if (!revision) continue;
+      const url = 'lernvorschau.jpg?bild=' + kind + '&v=' + encodeURIComponent(revision);
+      if (img.getAttribute('src') !== url) {{
+        img.hidden = true;
+        img.onload = () => {{ img.hidden = false; }};
+        img.onerror = () => {{ img.hidden = true; img.removeAttribute('src'); }};
+        img.src = url;
+      }}
+    }}
+    region.hidden = !hasCrop || !Array.isArray(preview.region);
+    if (!region.hidden) {{
+      ['left', 'top', 'width', 'height'].forEach((part, index) => {{
+        region.style[part] = preview.region[index] * 100 + '%';
+      }});
+    }}
+    section.querySelector('.calibration-preview-angle').textContent = hasCrop ? ' · ' + preview.angle + '°' : '';
+    section.querySelector('.calibration-preview-reading').textContent = preview.reading ?
+      'OCR gelesen: ' + preview.reading : 'Ziffern werden gelesen …';
+    const reason = section.querySelector('.calibration-preview-reason');
+    reason.textContent = reasons[preview.reason] || '';
+    reason.hidden = !reason.textContent;
+    section.querySelector('.calibration-preview-help').textContent = !hasCrop ?
+      (reason.hidden ? 'Die App sucht in diesem Bild nach der Ziffernreihe.' : '') : preview.reading ?
+      'Grün: gelesen. Gelb: OCR-Versuche weichen ab. Rot: unklar.' :
+      'Die blauen Rahmen zeigen, welche Stellen die App gerade prüft.';
+    if (hasCrop && preview.method === 'neighbours') section.querySelector('.calibration-preview-help').append(
+      ' Die Rahmen wurden aus sichtbaren Ziffern und ihren Abständen abgeleitet.');
+    else if (hasCrop && preview.approximate) section.querySelector('.calibration-preview-help').append(
+      ' Die Position der Ziffernrahmen ist angenähert.');
+  }}
+}}
+
 function refreshCalibration(status) {{
+  refreshCalibrationImages(status?.preview);
   if (!status) return;
   const active = status.state === 'waiting' || status.state === 'testing';
   const label = document.querySelector('#calibration-state');
@@ -1254,7 +1351,8 @@ function refreshCalibration(status) {{
     testing: 'Prüfe Ausschnitt und Drehung …',
     saved: 'Erfolgreich eingerichtet. Ausschnitt und Drehung sind übernommen.',
     failed: 'Selbsteinrichtung fehlgeschlagen. Prüfe Bildausschnitt, Kamerawinkel und Beleuchtung.',
-    timeout: 'Selbsteinrichtung nach 15 Minuten beendet. Keine Einstellung sicher bestätigt.',
+    timeout: status.automatic ? 'Nachjustierung nach vier Minuten beendet. Der bisherige Rahmen bleibt gültig.' :
+      'Selbsteinrichtung nach 15 Minuten beendet. Keine Einstellung sicher bestätigt.',
     cancelled: 'Selbsteinrichtung gestoppt.',
     save_failed: 'Ausschnitt und Drehung konnten nicht gespeichert werden.',
   }};
@@ -1267,13 +1365,15 @@ function refreshCalibration(status) {{
     verify: 'Gefundenen Rahmen mit der normalen Prüfung gegenprüfen …',
     ocr: 'Prüfe Rahmen ' + status.variant + ' mit Drehung ' + status.rotation + '° …',
   }};
-  const message = active && stages[status.stage] ? stages[status.stage] : messages[status.state] || '';
-  const detail = 'Bilder: ' + status.tested + '/' + status.limit +
-    ' · Rahmenversuche: ' + status.attempts + '/' + status.max_attempts +
+  const waitingForRegion = status.state === 'waiting' && status.preview?.reason === 'no_region';
+  const message = waitingForRegion ? 'Noch kein Ziffernbereich gefunden. Warte auf ein neues Bild …' :
+    active && stages[status.stage] ? stages[status.stage] : messages[status.state] || '';
+  const detail = 'Bilder geprüft: ' + status.tested +
+    ' · Rahmen getestet: ' + status.attempts +
     ' · Bestätigungen: ' + status.confirmations + '/' + status.required +
-    (active ? ' · Noch ' + clock + ' min' : '');
+    (active ? ' · Restzeit: ' + clock + ' min' : '');
   const tone = status.state === 'saved' ? 'ok' : ['failed', 'timeout', 'save_failed'].includes(status.state) ? 'error' : '';
-  label.textContent = message + ' ' + detail;
+  label.textContent = (status.automatic ? 'Automatische Nachjustierung · ' : '') + message + ' ' + detail;
   label.dataset.tone = tone;
   document.querySelector('#calibration-overview').dataset.tone = tone;
   document.querySelector('#calibration-overview').hidden = false;
@@ -1312,6 +1412,8 @@ async function refreshTestStatus() {{
     const job = await response.json();
     if (sendingCheck) return;
     refreshCalibration(job.calibration);
+    const calibrating = ['waiting', 'testing'].includes(job.calibration?.state);
+    document.querySelector('#calibration-restore').hidden = !job.calibration_backup || calibrating;
     const bar = document.querySelector('#test-progress');
     const detail = document.querySelector('#test-result');
     const preview = document.querySelector('#test-preview');
@@ -1535,6 +1637,9 @@ async function refreshAutomatic() {{
     }} else if (!sample.paused && next) {{
       refreshDelay = Math.min(15000, Math.max(1000, next * 1000 - Date.now()));
     }}
+    const geometryStatus = document.querySelector('#geometry-repair-warning');
+    geometryStatus.hidden = !sample.geometry_warning;
+    geometryStatus.textContent = sample.geometry_warning;
     const recovery = document.querySelector('#automatic-recovery');
     recovery.hidden = !sample.failure_attempts;
     recovery.dataset.state = sample.retry_suppressed ? 'waiting' : 'retrying';
@@ -1649,7 +1754,8 @@ def start_panel(
     wake_worker=None, *, address=("0.0.0.0", 8099), test_source_image=None, automatic_preview=None,
     request_factory_reset=None, get_reset_status=None, skip_setup=None, get_activity=None,
     get_auto_paused=None, save_auto_paused=None, discover_sources=None,
-    settings_lock=None, get_calibration=None, control_calibration=None,
+    settings_lock=None, get_calibration=None, control_calibration=None, get_calibration_image=None,
+    has_calibration_backup=None,
 ):
     images = {"/aktuell.jpg": current_image, "/treffer.jpg": good_image,
               "/testvorschau.jpg": test_image}
@@ -1766,6 +1872,22 @@ def start_panel(
             return None
         estimate_id = f"{estimate['time']}:{estimate['left']}{estimate['digit']}{estimate['right']}"
         return {**estimate, "id": estimate_id, "confirmed": auto_rules.get("reflection_confirmed_id") == estimate_id}
+
+    def geometry_warning(history, auto_rules, language):
+        recovery = history.get("geometry_recovery", {})
+        if recovery.get("scheduled_at"):
+            message = "Zehn Fehlmessungen. Bitte Bildausschnitt prüfen."
+            return EN_UI[message] if language == "en" else message
+        failures = recovery.get("failures", 0)
+        if not failures:
+            return ""
+        if not auto_rules.get("self_repair_enabled"):
+            message = "Automatische Neukalibrierung ist ausgeschaltet."
+            return EN_UI[message] if language == "en" else message
+        remaining = GEOMETRY_REPAIR_FAILURES - failures
+        if language == "en":
+            return f"Automatic recalibration after {remaining} more failed readings." if remaining != 1 else "Automatic recalibration after one more failed reading."
+        return f"Neukalibrierung nach {remaining} weiteren Fehlmessungen." if remaining != 1 else "Neukalibrierung nach einer weiteren Fehlmessung."
 
     def automatic_summary(history, language, auto_rules):
         reschedule_next_check(history, auto_rules.get("interval_minutes", DEFAULT_INTERVAL_MINUTES))
@@ -1903,6 +2025,7 @@ def start_panel(
             "failure_attempts": failure_attempts,
             "retry_suppressed": retry_suppressed,
             "recovery_notice": recovery_notice,
+            "geometry_warning": geometry_warning(history, auto_rules, language),
             "reflection_estimate": reflection_estimate,
             "reflection_live_estimate": (history.get("reflection_live_estimate")
                                         if auto_rules.get("reflection_estimate_enabled") else None),
@@ -1965,6 +2088,16 @@ def start_panel(
                 else:
                     self.reply(content, "image/jpeg")
                 return
+            if path == "/lernvorschau.jpg":
+                kind = query.get("bild", [""])[0]
+                version = query.get("v", [""])[0]
+                content = (get_calibration_image(kind, version)
+                           if get_calibration_image is not None and kind in ("frame", "crop") else None)
+                if content is None:
+                    self.send_error(404)
+                else:
+                    self.reply(content, "image/jpeg")
+                return
             if path == "/bildquellen":
                 sources = discover_sources() if discover_sources else []
                 self.reply(json.dumps(sources).encode("utf-8"), "application/json; charset=utf-8")
@@ -1979,6 +2112,7 @@ def start_panel(
                 snapshot["current_image"] = image_version(current_image)
                 snapshot["manual_source_image"] = image_version(test_source_image)
                 snapshot["calibration"] = get_calibration() if get_calibration else None
+                snapshot["calibration_backup"] = bool(has_calibration_backup and has_calibration_backup())
                 if language == "en":
                     snapshot["message"] = english_progress(snapshot.get("message"))
                     if snapshot.get("detail"):
@@ -2071,6 +2205,7 @@ def start_panel(
             saved_message = (
                 "Ausschnitt und Drehung für manuelle Tests gespeichert." if saved == "manual-crop" else
                 "Einrichtung gespeichert." if saved in ("setup", "setup-calibration") else
+                "Gesicherter Ausschnitt wiederhergestellt." if saved == "crop-restored" else
                 "Fallback-Wert gespeichert." if saved == "fallback" else
                 "Automatische Prüfregeln gespeichert." if saved == "1" else
                 "Getesteten Bildausschnitt für die Automatik übernommen." if saved == "crop" else
@@ -2123,8 +2258,15 @@ def start_panel(
                 language_options=select_options({"auto": automatic, "de": "Deutsch", "en": "English"}, mode),
                 settings_open="open" if saved in ("1", "crop", "crop-reset", "fallback") else "",
                 fallback_saved_notice=auto_saved_notice if saved == "fallback" else "",
-                calibration_saved_notice=auto_saved_notice if saved == "setup-calibration" else "",
+                calibration_preview_html=(translate_page(CALIBRATION_PREVIEW_HTML) if language == "en"
+                                          else CALIBRATION_PREVIEW_HTML),
+                calibration_saved_notice=auto_saved_notice if saved in ("setup-calibration", "crop-restored") else "",
                 calibration_hidden="" if control_calibration else "hidden",
+                geometry_warning_hidden="" if summary["geometry_warning"] else "hidden",
+                geometry_warning_text=html.escape(summary["geometry_warning"]),
+                calibration_restore_hidden="" if has_calibration_backup and has_calibration_backup() else "hidden",
+                self_repair_checked="checked" if auto_rules.get("self_repair_enabled") else "",
+                wizard_self_repair_checked="checked" if setup_pending or auto_rules.get("self_repair_enabled") else "",
                 calibration_min=MIN_IMAGE_LIMIT, calibration_max=MAX_IMAGES,
                 calibration_limit=calibration["limit"] if calibration else DEFAULT_LIMIT,
                 setup_first_run=str(bool(setup_pending or reset_state == "done")).lower(),
@@ -2494,6 +2636,7 @@ def start_panel(
                             and integer_digits == old_rules["integer_digits"] and fraction_digits == old_rules["fraction_digits"]
                         ) else [], "max_flow_lph": max_flow,
                         "precision_mode": field("precision_mode") == "1",
+                        "self_repair_enabled": field("self_repair_enabled") == "1",
                         "interval_minutes": interval_minutes, "integer_digits": integer_digits,
                         "fraction_digits": fraction_digits, "meter_display": meter_display,
                         "fallback_value": fallback_value, "fallback_time": fallback_time,
@@ -2606,7 +2749,7 @@ def start_panel(
                     return
                 try:
                     action = field("action")
-                    if action not in ("start", "cancel"):
+                    if action not in ("start", "cancel", "restore"):
                         raise ValueError("Invalid calibration action")
                     limit = int(field("image_limit", str(DEFAULT_LIMIT))) if action == "start" else 0
                     if action == "start" and not MIN_IMAGE_LIMIT <= limit <= MAX_IMAGES:
@@ -2616,7 +2759,11 @@ def start_panel(
                     problem(400, "Bitte Bildquelle einrichten, die Automatik fortsetzen und das Bildlimit prüfen.",
                             "Set up an image source, resume automatic checks and check the image limit.")
                     return
-                self.redirect("?saved=calibration&ui=settings" + keep_mode)
+                except OSError:
+                    problem(503)
+                    return
+                saved = "crop-restored" if action == "restore" else "calibration"
+                self.redirect(f"?saved={saved}&ui=settings" + keep_mode)
                 return
             if path == "/automatik":
                 if form.get("reset_crop") == ["1"]:
@@ -2668,6 +2815,7 @@ def start_panel(
                                          "precision_mode": field("precision_mode") == "1",
                                          "reflection_estimate_enabled": field("reflection_estimate_enabled") == "1",
                                          "fine_alignment_enabled": field("fine_alignment_enabled") == "1",
+                                         "self_repair_enabled": field("self_repair_enabled") == "1",
                                          "adaptive_interval_enabled": field("adaptive_interval_enabled") == "1",
                                          "reflection_suggestion_hidden": field("reflection_suggestion_hidden") == "1",
                                          "polarity": polarity[0], "crop_mode": crop_mode[0],

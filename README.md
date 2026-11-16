@@ -4,7 +4,7 @@
 
 📘 [Bebilderte Bedienungsanleitung (PDF)](docs/Bedienungsanleitung-AI-Meter-Reader.pdf) · [App-Dokumentation](rf1_ocr_test/DOCS.md)
 
-**Aktueller Stand: 0.5.0 Stable.** Der Schwerpunkt liegt auf stabiler OCR, Grobeinrichtung und Bildbearbeitung. Die Arbeit am Pulszähler folgt frühestens ab 0.6.
+**Aktueller Stand: 0.5.1 Stable.** Der Schwerpunkt liegt auf stabiler OCR, Grobeinrichtung und Bildbearbeitung. Die Arbeit am Pulszähler folgt frühestens ab 0.6.
 
 **Zählerstände direkt in Home Assistant aus Kamerabildern lesen und prüfen.**
 
@@ -78,7 +78,7 @@ Unter **Automatische Prüfung → Spiegelungen und verdeckte Ziffern** kannst du
 
 ### Selbsteinrichtung für Ausschnitt und Drehung
 
-Wähle im Einrichtungsassistenten unter **Bildbereich** die Option **Ausschnitt und Drehung lernen**. Nach dem Speichern startet die Suche. Du kannst sie auch jederzeit über **Übersicht → Selbsteinrichtung** starten. Währenddessen zeigt die App Restzeit, Bildanzahl und den gerade geprüften Winkel. Wähle, wie viele unterschiedliche Bilder die App prüfen darf (4 bis 100, Vorgabe 100). Die App probiert passende Rahmen und Winkel und speichert eine Einstellung nach drei Bestätigungen mit unterschiedlichen Bildern und einer zusätzlichen normalen OCR-Gegenprüfung auf einem weiteren frischen Bild. Ohne externen Vergleichswert oder einen von Hand abgelesenen Startwert muss sich der Zähler plausibel weiterdrehen. War die Suche nach 15 Minuten, 100 Rahmenversuchen oder beim Erreichen des Bildlimits erfolglos, endet sie und die vorherige Einstellung gilt weiter. Die Suche lässt sich jederzeit stoppen.
+Wähle im Einrichtungsassistenten unter **Bildbereich** die Option **Ausschnitt und Drehung lernen**. Nach dem Speichern startet die Suche. Du kannst sie auch jederzeit über **Übersicht → Selbsteinrichtung** starten. Währenddessen zeigt die App Restzeit, Bildanzahl und den gerade geprüften Winkel. Unter **Bilder der Selbsteinrichtung** siehst du das aktuelle Kamerabild mit dem markierten Bereich, den gedrehten Ausschnitt und die bisher gelesenen Ziffern. Ein Fragezeichen steht für eine unklare Stelle. Wähle, wie viele unterschiedliche Bilder die App prüfen darf (4 bis 100, Vorgabe 100). Die App probiert passende Rahmen und Winkel und speichert eine Einstellung nach drei Bestätigungen mit unterschiedlichen Bildern und einer zusätzlichen normalen OCR-Gegenprüfung auf einem weiteren frischen Bild. Ohne externen Vergleichswert oder einen von Hand abgelesenen Startwert muss sich der Zähler plausibel weiterdrehen. War die Suche nach 15 Minuten, 100 Rahmenversuchen oder beim Erreichen des Bildlimits erfolglos, endet sie und die vorherige Einstellung gilt weiter. Die Suche lässt sich jederzeit stoppen.
 
 ## Plausibilitätsprüfung und Energie-Dashboard
 

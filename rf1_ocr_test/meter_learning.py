@@ -141,3 +141,29 @@ def suggested_interval(configured, state, source, month):
     remaining = boundary - state["litres"] % boundary
     minutes = remaining * 60 / rate
     return min(configured, max(RETRY_INTERVAL // 60, int(minutes)))
+
+
+GEOMETRY_REPAIR_FAILURES = 10
+GEOMETRY_REPAIR_SECONDS = 4 * 60
+GEOMETRY_REPAIR_LIMIT = 20
+
+
+def observe_geometry_failures(state, key, stamp, outcome, *, reading_problem):
+    """Request one bounded recalibration after distinct unreadable frames."""
+    if state.get("key") != key:
+        state.clear()
+        state.update(key=key, failures=0)
+    if stamp <= state.get("stamp", 0):
+        return False
+    state["stamp"] = stamp
+    if outcome in ("match", "match_with_warning", "ocr_only"):
+        state["failures"] = 0
+        state.pop("scheduled_at", None)
+    elif reading_problem and outcome in ("ocr_unclear", "difference"):
+        state["failures"] = min(GEOMETRY_REPAIR_FAILURES, state["failures"] + 1)
+    else:
+        return False
+    if state["failures"] < GEOMETRY_REPAIR_FAILURES or state.get("scheduled_at"):
+        return False
+    state["scheduled_at"] = stamp
+    return True

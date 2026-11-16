@@ -182,6 +182,27 @@ class CalibrationTests(TestCase):
         self.assertEqual(1, len(self.job.seen))
         self.assertEqual(0, self.job.confirmations)
 
+    def test_confirmed_whole_digits_skip_fine_search_despite_uncertain_decimals(self):
+        from unittest.mock import Mock
+
+        refine = Mock(side_effect=AssertionError("Unneeded refinement"))
+        sample = {"reference_time": 100, "actual_value": "12345.678", "raw_value": "12345.678"}
+        readings = iter(("12345.???", "12345.6?8"))
+        self.job.examine(frame(1), None, sample, 100, {**RULES, "fraction_digits": 3},
+                         lambda *_: next(readings), lambda: False, refine_read=refine)
+        self.assertEqual(1, self.job.confirmations)
+        refine.assert_not_called()
+
+    def test_partial_serial_is_skipped_before_fine_search(self):
+        from unittest.mock import Mock
+
+        refine = Mock(side_effect=AssertionError("Unneeded refinement"))
+        sample = {"reference_time": 100, "actual_value": "12345", "raw_value": "12345"}
+        self.job.examine(frame(1), None, sample, 100, RULES, lambda *_: "8?7?6", lambda: False,
+                         refine_read=refine)
+        self.assertEqual([LAYOUT.box], self.job.rejected_regions)
+        refine.assert_not_called()
+
     def test_without_reference_requires_plausible_forward_movement(self):
         self.examine(1, 100, reference=False)
         self.examine(2, 101, reference=False)

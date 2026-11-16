@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.6 Stable
+
+- Bei einem neuen Suchlauf hat die Bildsuche Vorrang vor alten Rahmen und ESP-Markierungen.
+- Stimmen beide OCR-Lesungen mit der eingestellten Vergleichsgenauigkeit überein, folgt direkt die Bestätigung mit frischen Bildern.
+- Die Kalibrierungskarte behält ihre Reihenfolge bei, wenn Status und Bilder eingeblendet werden.
+
 ## 0.5.5 Stable
 
 - Größere, gleichmäßige Ziffernreihen werden bei der Selbsteinrichtung bevorzugt. Ähnlich plausible Felder lassen sich im Kamerabild anklicken.

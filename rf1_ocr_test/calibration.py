@@ -105,14 +105,6 @@ def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False
             and unique(current)):
         yield current
     first = offset % len(ANGLES)
-    if overlay is not None and overlay.size == frame.size:
-        found = find_digit_row(overlay, rules["integer_digits"], rules["fraction_digits"])
-        if found:
-            left, top, right, bottom = found[0]
-            layout = Layout(found[0], 0, found[1],
-                            normalize_digit_boxes(found[2], (right - left, bottom - top)))
-            if unique(layout):
-                yield layout
     configured = None
     if "crop" in rules:
         box = crop_coordinates(rules["crop"], rules["width"], rules["rotation"])
@@ -170,6 +162,14 @@ def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False
                 yield layout
             if len(emitted) >= neighbour_limit:
                 break
+    if len(emitted) < neighbour_limit and overlay is not None and overlay.size == frame.size:
+        found = find_digit_row(overlay, whole, fraction)
+        if found:
+            left, top, right, bottom = found[0]
+            layout = Layout(found[0], 0, found[1],
+                            normalize_digit_boxes(found[2], (right - left, bottom - top)))
+            if unique(layout):
+                yield layout
     if configured:
         for trial in (configured, candidate(configured.box, ANGLES[first], padding=2)):
             if len(emitted) >= MAX_LAYOUTS_PER_IMAGE:
@@ -229,6 +229,19 @@ def position_error(value, sample, precision, whole):
     aligned = sum(a == b for a, b in zip(reading, target))
     return any(sum(a == b for a, b in zip(left, right)) >= max(3, aligned + 2)
                for left, right in ((reading[1:], target), (reading, target[1:])))
+
+
+def contradicts_reference(readings, sample, digits):
+    """Reject a partial row only when both profiles consistently read several wrong positions."""
+    expected = meter_prefix(sample.get("actual_value"), 0, digits)
+    if expected is None or not sample.get("reference_time") or sample.get("reference_is_fallback"):
+        return False
+    rows = [str(value).replace(",", ".").partition(".")[0] for value in readings]
+    if any(len(row) != digits for row in rows):
+        return False
+    agreed = [(a, digit) for a, b, digit in zip(*rows, str(expected).zfill(digits))
+              if a == b and a in "0123456789"]
+    return sum(a != digit for a, digit in agreed) >= 3 and all(a != digit for a, digit in agreed)
 
 
 def refinement_workers():
@@ -468,7 +481,7 @@ class Calibration:
         precision = rules["decimals"] if has_reference else rules["fraction_digits"]
         digits = rules["integer_digits"]
         flow = rules["max_flow_lph"]
-        seed = self.candidate or self.previous_layout
+        seed = self.candidate or (self.previous_layout if self.automatic else None)
         candidates = (guided_layouts(frame, overlay, rules, len(self.seen) - 1, seed, self.region)
                       if self.region else layouts(frame, overlay, rules, len(self.seen) - 1, seed,
                                                   prefer_configured=self.automatic, on_regions=on_regions))
@@ -500,6 +513,11 @@ class Calibration:
                 if stop():
                     return None
                 readings.append(read(layout, OCR_PROFILES[1]))
+                if has_reference and contradicts_reference(readings, sample, digits):
+                    self.rejected_regions = [*self.rejected_regions[-15:], layout.box]
+                    on_decision("position_error" if position_error(readings[0], sample, precision, digits)
+                                else "reference_mismatch")
+                    continue
                 if has_reference and readings[0] == readings[1]:
                     status = compare_sample(sample, readings[0], precision, integer_digits=digits)[0]
                     expected = meter_prefix(sample.get("actual_value"), precision, digits)
@@ -512,7 +530,12 @@ class Calibration:
                         on_decision("position_error" if position_error(readings[0], sample, precision, digits)
                                     else "reference_mismatch")
                         continue
-                if refine_read is not None and not self.confirmations and not self.focused:
+                first_prefix, second_prefix = (meter_prefix(value, precision, digits) for value in readings)
+                agreement = first_prefix is not None and first_prefix == second_prefix
+                matches = agreement and (not has_reference or all(reference_rejection(
+                    sample, compare_sample(sample, value, precision, integer_digits=digits)[0]) is None
+                    for value in readings))
+                if refine_read is not None and not matches and not self.confirmations and not self.focused:
                     original = layout
                     layout, readings = self.refine(layout, readings, sample, rules, refine_read, stop, on_refine,
                                                    tested, frame_ceiling)

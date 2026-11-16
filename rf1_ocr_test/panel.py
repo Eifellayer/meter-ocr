@@ -160,7 +160,7 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .wizard-crop-choices label{{display:flex;align-items:center;gap:.5rem;padding:.65rem;border:1px solid var(--edge);border-radius:.55rem;cursor:pointer}}
 .wizard-crop-choices label:has(:checked){{border-color:#65bcaf;color:inherit}}
 .wizard-crop-choices input{{margin:0;min-height:auto;flex-shrink:0}}
-.calibration-card{{border-color:light-dark(#83aaa2,#4b786e)}}
+.calibration-card{{display:block;border-color:light-dark(#83aaa2,#4b786e)}}
 .calibration-card h2{{font-size:1.15rem}}
 .calibration-card p{{margin:.55rem 0}}
 .calibration-live{{padding:.75rem .9rem;margin:0 0 .8rem;border:1px solid var(--edge);border-radius:.7rem}}

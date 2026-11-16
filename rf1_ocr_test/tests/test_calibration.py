@@ -10,7 +10,7 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import calibration
-from calibration import Calibration, Layout, unrotate_box
+from calibration import Calibration, Layout, MAX_ATTEMPTS, unrotate_box
 
 LAYOUT = Layout((0, 0, 80, 20), -3, 80)
 OTHER_LAYOUT = Layout((10, 0, 90, 20), 3, 80)
@@ -58,10 +58,24 @@ class CalibrationTests(TestCase):
         self.assertEqual(LAYOUT, self.examine(4, 103, "12346", reference=False))
 
     def test_deadline_and_stop(self):
-        self.assertFalse(self.job.expired(299.9))
-        self.assertTrue(self.job.expired(300))
+        self.assertFalse(self.job.expired(899.9))
+        self.assertTrue(self.job.expired(900))
         self.assertIsNone(self.examine(1, 100, stop=lambda: True))
         self.assertEqual(0, self.job.confirmations)
+
+    def test_crop_attempt_budget_and_best_proposal_survive_failed_confirmation(self):
+        self.examine(1, 100)
+        self.assertEqual(LAYOUT, self.job.best)
+        self.candidates.return_value = []
+        self.examine(2, 101)
+        self.assertIsNone(self.job.candidate)
+        self.assertEqual(LAYOUT, self.job.best)
+
+        self.candidates.return_value = [LAYOUT, OTHER_LAYOUT]
+        self.job.attempts = MAX_ATTEMPTS - 1
+        self.examine(3, 102, fallback=True)
+        self.assertEqual(100, self.job.attempts)
+        self.assertEqual(900, self.job.status(0)["duration"])
 
     def test_normal_ocr_must_accept_one_more_new_image_before_saving(self):
         self.examine(1, 100)

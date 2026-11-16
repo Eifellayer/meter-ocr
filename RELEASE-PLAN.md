@@ -2,7 +2,7 @@
 
 ## Releasekanal
 
-- Versionen `0.1.x` bis `0.4.x` sind Alpha. Bis Version 0.5 gibt es keine separate Beta-App; die reguläre Meter-OCR-App ist der Testkanal.
+- Versionen `0.1.x` bis `0.4.x` sind Alpha. Bis Version 0.5 gibt es keine separate Beta-App; die reguläre AI-Meter-Reader-App ist der Testkanal.
 - Ab `0.5` wird eine Beta-Version nur bei größeren Änderungen mit konkretem zusätzlichem Testbedarf angelegt. Kleine Fehlerkorrekturen laufen ohne separaten Beta-Kanal.
 - Beta-Testinstallationen müssen eigene Home-Assistant-Entitäten, Einstellungen und Medienpfade erhalten, damit sie parallel testbar sind.
 - App-Slug, bestehende Entitäts-IDs, gespeicherte Optionen und Prüfhistorie der regulären App bleiben kompatibel.
@@ -18,9 +18,26 @@
 | P1 | Bildquellen und Zählertypen | SLFork ist real am Zähler getestet. Alternative Kameras, ESPHome und weitere Bildtypen sind als simuliert gekennzeichnet, bis reale Gerätetests erfolgt sind. |
 | P2 | Dokumentation und Freigabe | Deutsch und Englisch stimmen mit der App überein. GitHub Actions prüft OCR, Ingress, JavaScript, Konfiguration und App-Images. |
 
-## 0.2.0 Alpha – aktueller Arbeitsstand
+## Leitbild: Fire and Forget
 
-Einrichtung, Live-Kamera-Schnappschüsse, manuelle Diagnose, fallbackbasierte Plausibilitätsprüfung, Prüfintervall, Benachrichtigungswahl, Statusanzeige und deutsch/englische Dokumentation sind umgesetzt. Lokale Tests decken diese Wege ab. Die Home-Assistant-Container-Builds und ein Upgrade in einer echten Supervisor-Installation müssen vor einer Freigabe über GitHub Actions bzw. auf einem Home-Assistant-System bestätigt werden.
+Einmal möglichst automatisch einrichten. Danach prüft die App eigenständig, übernimmt nur belegte Verbesserungen und zeigt Unsicherheit sichtbar an. Ein errechneter Zwischenstand verändert keine bestätigten Messwerte oder Verbrauchszähler.
+
+## 0.5 – Abnahme in dieser Reihenfolge
+
+| Priorität | Arbeit | Abnahme |
+| --- | --- | --- |
+| P0 | Prüfung und Upgrade | Frische Einrichtung und Upgrade simulieren. Gemeldete Werte müssen bei fehlenden, alten, doppelten und unplausiblen Daten belastbar bleiben. In SLFork liegen reguläre Prüfungen mindestens fünf Minuten auseinander. Manuelle Tests und Grobeinrichtung laufen getrennt. |
+| P1 | Live-Bildbearbeitung | Bildausschnitt, Drehung und einzelne Ziffernrahmen stimmen zwischen Vorschau, manuellem Test und Automatik überein. Rot, Gelb und Grün behalten ihre Bedeutung. |
+| P1 | Grobeinrichtung | Höchstens 100 Rahmenversuche, 100 unterschiedliche Aufnahmen und 15 Minuten Laufzeit. Geprüfte Rahmen vergleichen und vor der Übernahme auf einem weiteren Bild bestätigen. Den besten brauchbaren Versuch bei Bedarf zur Korrektur anbieten. |
+| P1 | Bedienung und Anleitung | Ergebnisse auf der Übersicht, Fallback mit Speichern, sichtbare optionale Ziffernergänzung und dezenter Spendenlink. Bebilderte Anleitung mit synthetischen Beispielen. |
+| P2 | Automatische Verbesserungen | Feinjustierung, Ziffernrekonstruktion und adaptive SLFork-Frequenz sind zuschaltbar. Langzeittests am echten Zähler stehen für diese Funktionen noch aus. Saisonprofile brauchen beobachtete Verbräuche aus den betreffenden Monaten. |
+
+## Geplante Langzeit-Abnahme
+
+- Ziffernstellungen und Beleuchtung über mehrere Messzyklen beobachten. Eine Rahmenänderung muss auf frischen Bildern besser abschneiden. Bei nachlassender Erkennung auf die zuletzt funktionierenden Rahmen zurückgehen.
+- Je eine Vorkomma- und eine Nachkommastelle nur eindeutig aus bestätigtem Anker, erkannten Nachbarstellen und Durchflussgrenze ergänzen. Überträge und die Rückkehr zu vollständiger OCR prüfen.
+- Prüfintervalle anhand bestätigter Änderungen und erwarteter Rollenwechsel variieren. Doppelte SLFork-Zyklen verändern die Fehlerzählung nicht. Unklare Fälle bleiben sichtbar.
+- Mehrere Zähler und zusätzliche Zählertypen folgen als eigene Erweiterungen. Der Pulszähler-Entwurf wird frühestens für **0.6** weiterentwickelt.
 
 ## Vor 1.0 noch zu bestätigen
 

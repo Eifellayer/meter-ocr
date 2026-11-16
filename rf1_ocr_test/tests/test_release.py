@@ -27,12 +27,12 @@ def formatted_page(language="de"):
 
 
 class AppIdentityTests(unittest.TestCase):
-    def test_release_metadata_preserves_alpha_app_identity(self):
+    def test_release_metadata_preserves_stable_app_identity(self):
         config = yaml.safe_load((APP / "config.yaml").read_text(encoding="utf-8"))
         repository = yaml.safe_load((APP.parent / "repository.yaml").read_text(encoding="utf-8"))
-        self.assertEqual("0.4.10", config["version"])
+        self.assertEqual("0.5.0", config["version"])
         self.assertEqual("rf1_ocr_test", config["slug"])
-        self.assertEqual("AI Meter Reader (Alpha)", config["name"])
+        self.assertEqual("AI Meter Reader", config["name"])
         self.assertNotIn("stage", config)
         self.assertIn("esp_url", config["options"])
         self.assertEqual("https://github.com/Eifellayer/meter-ocr", repository["url"])

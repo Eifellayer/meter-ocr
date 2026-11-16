@@ -3,6 +3,7 @@ from collections import Counter
 from datetime import datetime
 from decimal import Decimal
 import io
+from itertools import product
 import re
 import subprocess
 import time
@@ -366,17 +367,58 @@ def estimate_missing_digit(pattern, stamp, previous, following, decimals, max_fl
     return {"left": left, "digit": candidates[0], "right": right, "time": stamp}
 
 
+def provisional_digit_estimate(ocr, readings, stamp, previous, decimals, integer_digits, max_flow_lph):
+    """Fill at most one position on each side, only inside a measured flow envelope."""
+    if previous is None or not 0 < stamp - previous["time"] <= WINDOW_SECONDS:
+        return None
+    length = integer_digits + (decimals + 1 if decimals else 0)
+    pattern = str(ocr or "")[:length]
+    whole, _, fraction = pattern.partition(".")
+    if (len(whole) != integer_digits or len(fraction) != decimals
+            or not re.fullmatch(r"[0-9?]+", whole) or (fraction and not re.fullmatch(r"[0-9?]+", fraction))
+            or whole.count("?") > 1 or fraction.count("?") > 1):
+        return None
+    positions = [index for index, char in enumerate(pattern) if char == "?"]
+    if not positions:
+        return None
+    votes = max(2, len(readings) // 2 + 1)
+    if any(char.isdigit() and sum(len(value) > index and value[index] == char for value in readings) < votes
+           for index, char in enumerate(pattern)):
+        return None
+    step = 10 ** (3 - decimals)
+    low = previous["value"]
+    high = low + step - 1 + max_flow_lph * (stamp - previous["time"]) / 3600
+    match = None
+    for digits in product("0123456789", repeat=len(positions)):
+        chars = list(pattern)
+        for index, digit in zip(positions, digits):
+            chars[index] = digit
+        reading = "".join(chars)
+        value = int(reading.replace(".", "")) * step
+        if low <= value <= high:
+            if match is not None:
+                return None
+            match = reading
+    return {"reading": match, "positions": positions, "time": stamp} if match is not None else None
+
+
 def track_reflection(history, ocr, readings, stamp, *, verified, unclear, decimals,
                      integer_digits, max_flow_lph, enabled, manual_anchor=None):
     pattern = single_missing_digit(ocr, readings, decimals, integer_digits) if unclear else None
+    anchor = history.get("reflection_anchor")
+    previous = max((item for item in (anchor, manual_anchor) if item and item["time"] < stamp),
+                   key=lambda item: item["time"], default=None)
+    provisional = (provisional_digit_estimate(ocr, readings, stamp, previous, decimals, integer_digits, max_flow_lph)
+                   if enabled and unclear else None)
+    if provisional:
+        history["reflection_live_estimate"] = provisional
+    else:
+        history.pop("reflection_live_estimate", None)
     if pattern:
         position = pattern.index("?")
         last = history.get("reflection_streak", {})
         count = last.get("count", 0) + 1 if last.get("position") == position else 1
         history["reflection_streak"] = {"position": position, "count": min(count, REFLECTION_SUGGEST_AFTER)}
-        anchor = history.get("reflection_anchor")
-        previous = max((item for item in (anchor, manual_anchor) if item and item["time"] < stamp),
-                       key=lambda item: item["time"], default=None)
         if enabled and previous:
             history["reflection_pending"] = {"pattern": pattern, "time": stamp, "previous": previous}
     else:
@@ -520,6 +562,24 @@ def valid_interval_minutes(value):
     return type(value) is int and 1 <= value <= MAX_INTERVAL_MINUTES
 
 
+def automatic_interval_minutes(interval_minutes, source_mode):
+    """Observe SLFork's regular cadence while retaining the user's configured interval."""
+    return max(RETRY_INTERVAL // 60, interval_minutes) if source_mode == "slfork" else interval_minutes
+
+
+def defer_duplicate_cycle(history, fetched_at, interval_minutes):
+    """Wait for a fresh cycle without changing the outcome, counters or last check."""
+    checked_at = last_check_at(history)
+    suppressed = history.get("retry_suppressed", False)
+    wait = _check_delay(history["check_status"], interval_minutes, suppressed)
+    if not suppressed:
+        wait = min(wait, RETRY_INTERVAL)
+    if checked_at is not None:
+        history["last_check_at"] = checked_at
+    history["next_check_at"] = fetched_at + wait
+    history["check_interval_minutes"] = interval_minutes
+
+
 def _check_delay(outcome, interval_minutes, retry_suppressed=False):
     interval = interval_minutes * 60
     if outcome == STANDALONE_PENDING:
@@ -531,6 +591,7 @@ def _check_delay(outcome, interval_minutes, retry_suppressed=False):
 
 def schedule_next_check(history, outcome, checked_at, interval_minutes=DEFAULT_INTERVAL_MINUTES):
     history["check_status"] = outcome
+    history["last_check_at"] = checked_at
     if outcome in (*SUCCESSFUL_CHECKS, STANDALONE_PENDING):
         history.pop("failure_since", None)
         history.pop("failure_attempts", None)
@@ -551,6 +612,9 @@ def schedule_next_check(history, outcome, checked_at, interval_minutes=DEFAULT_I
 
 
 def last_check_at(history):
+    stored = history.get("last_check_at")
+    if type(stored) in (int, float) and stored > 0:
+        return stored
     deadline = history.get("next_check_at")
     outcome = history.get("check_status")
     if not deadline or not outcome:

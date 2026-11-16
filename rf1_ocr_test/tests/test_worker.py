@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from checks import (FRESH_SAMPLE_AGE, NORMAL_INTERVAL, OCR_PROFILES, RETRY_INTERVAL, WINDOW_SECONDS,
                     LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, compare_sample, explain_uncertain_positions,
-                    last_check_at, read_register, record_sample,
+                    automatic_interval_minutes, defer_duplicate_cycle, last_check_at, read_register, record_sample,
                     reschedule_next_check, rolling_summary, schedule_next_check, slfork_reference,
                     estimate_missing_digit, single_missing_digit, track_reflection)
 from consumption import EXCESSIVE_INCREASE, FALLBACK_PLAUSIBLE, FALLBACK_UNKNOWN_TIME, LOWER_READING, fallback_detail
@@ -494,6 +494,21 @@ class StateTests(TestCase):
         self.assertTrue(reschedule_next_check(history, 1))
         self.assertEqual((2000, 2060, 2000),
                          (last_check_at(history), history["next_check_at"], history["failure_since"]))
+
+    def test_slfork_interval_floor_and_duplicate_cycle_without_counting_a_failure(self):
+        self.assertEqual(5, automatic_interval_minutes(1, "slfork"))
+        self.assertEqual(60, automatic_interval_minutes(60, "slfork"))
+        self.assertEqual(1, automatic_interval_minutes(1, "slfork_camera"))
+        self.assertEqual(1, automatic_interval_minutes(1, "esphome"))
+
+        # Older history did not store the last check time separately.
+        history = {"check_status": "ocr_unclear", "next_check_at": 1300, "failure_attempts": 1,
+                   "check_interval_minutes": 5, "failure_since": 1000, "confirmations": []}
+        defer_duplicate_cycle(history, 1300, 5)
+        self.assertEqual((1000, 1600, 1, 1000),
+                         (last_check_at(history), history["next_check_at"],
+                          history["failure_attempts"], history["failure_since"]))
+        self.assertEqual([], history["confirmations"])
 
     def test_fallback_plausibility_uses_time_repeatable_digits_and_flow_limit(self):
         reference = {"reference": "12346.0416", "reference_time": 1000}

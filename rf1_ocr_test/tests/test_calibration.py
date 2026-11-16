@@ -442,9 +442,14 @@ class CalibrationTests(TestCase):
         for index in (1, 2):
             self.assertIsNone(job.examine(frame(index), None, sample, 100 + index, RULES, read, lambda: False))
         profiles.clear()
+        self.candidates.reset_mock()
+        self.candidates.return_value = [OTHER_LAYOUT]
         self.assertEqual(LAYOUT, job.examine(frame(3), None, sample, 103, RULES, read, lambda: False))
         self.assertEqual(list(calibration.OCR_PROFILES[:5]), profiles)
         self.assertEqual(3, job.status(103)["full_hits"])
+        self.assertTrue(job.status(103)["coarse_complete"])
+        self.assertLess(job.coarse_attempts, calibration.COARSE_LIMIT)
+        self.candidates.assert_not_called()
         self.assertEqual(3, len(job.seen))
 
     def test_a_yellow_last_digit_keeps_the_visible_score_below_one_hundred(self):

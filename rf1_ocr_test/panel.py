@@ -1589,7 +1589,9 @@ function refreshCalibration(status) {{
     }} else if (reason === 'collecting') {{
       message = 'Grobtests: ' + status.coarse_attempts + '/' + status.coarse_limit + '.';
     }} else if (status.stage === 'verify_wait' && reason === 'accepted') {{
-      message = 'Treffer gesammelt. Warte auf ein frisches Bild für die Gegenprobe.';
+      message = status.coarse_complete ?
+        'Drei Treffer mit 100 %: Grobprüfung beendet. Warte auf ein frisches Bild für die Gegenprobe.' :
+        'Treffer gesammelt. Warte auf ein frisches Bild für die Gegenprobe.';
     }} else if (reason === 'reference_unavailable') {{
       message = 'Grün bedeutet lesbar. Ein gültiger Vergleichswert für dieses Bild fehlt.';
     }} else if (reason === 'reference_mismatch') {{

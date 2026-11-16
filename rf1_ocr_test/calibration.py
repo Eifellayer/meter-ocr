@@ -516,6 +516,7 @@ class Calibration:
                 "attempts": self.attempts, "max_attempts": self.attempt_limit, "automatic": self.automatic,
                 "confirmations": self.confirmations, "required": MIN_IMAGES,
                 "full_hits": self.full_hits,
+                "coarse_complete": self.full_hits >= MIN_IMAGES,
                 "awaiting_start_value": self.confirmations >= MIN_IMAGES and not (self.anchored or self.advanced),
                 "simplified": self.simplified, "intensive": self.intensive, "followup": self.followup,
                 "coarse_attempts": self.coarse_attempts, "coarse_limit": COARSE_LIMIT,
@@ -702,7 +703,8 @@ class Calibration:
         committed = self.confirmations >= 2
         preferred = (self.confirmations == 1 and self.rank_candidates
                      and self.shortlist.get(self.candidate, (0, 0))[-1] == 100)
-        collecting = self.rank_candidates and not (committed or preferred or self.optimizing)
+        collecting = self.rank_candidates and not (committed or preferred or self.optimizing
+                                                    or self.full_hits >= MIN_IMAGES)
         if committed or preferred or self.focused:
             candidates = (self.candidate,)
         elif self.followup:
@@ -933,6 +935,8 @@ class Calibration:
                     and agreement_percent(readings, sample, rules["fraction_digits"], digits) == 100
                     and not uncertain_slots(readings, digits_read)):
                 self.full_hits += 1
+                if self.full_hits == MIN_IMAGES:
+                    self.optimizing = True
                 if self.full_hits == MIN_IMAGES and self.attempts + 1 < self.attempt_limit and not stop():
                     if on_shortlist is not None:
                         on_shortlist(1, layout.rotation)

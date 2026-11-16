@@ -317,7 +317,7 @@ class StateTests(TestCase):
 
         def fake_panel(*args, **kwargs):
             access.update(status=kwargs["get_calibration"], image=kwargs["get_calibration_image"],
-                          control=kwargs["control_calibration"])
+                          control=kwargs["control_calibration"], rules=args[6], save=args[7])
             access["control"]("start", 4)
             return None, None, None
 
@@ -350,6 +350,17 @@ class StateTests(TestCase):
         access["control"]("start", 4)
         self.assertEqual({}, access["status"]()["preview"])
         self.assertIsNone(access["image"]("frame", str(preview["frame"])))
+        access["control"]("cancel", 0)
+        access["control"]("repair", 20)
+        self.assertEqual(240, access["status"]()["duration"])
+        self.assertTrue(access["status"]()["automatic"])
+        backup = json.loads(files["HISTORY"].with_name("geometry-backup.json").read_text())
+        self.assertEqual(backup["rules"], access["rules"]())
+        access["control"]("cancel", 0)
+        access["save"]({**access["rules"](), "width": 200, "interval_minutes": 75})
+        access["control"]("restore", 0)
+        self.assertEqual(backup["rules"]["width"], access["rules"]()["width"])
+        self.assertEqual(75, access["rules"]()["interval_minutes"])
 
     def test_edge_camera_only_publishes_local_ocr_without_the_esp_reading(self):
         class StopLoop(Exception):

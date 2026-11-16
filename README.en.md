@@ -8,7 +8,7 @@
 
 📘 [German illustrated user guide (PDF)](docs/Bedienungsanleitung-AI-Meter-Reader.pdf) · [App documentation](rf1_ocr_test/DOCS.md)
 
-**Current version: 0.5.0 Stable.** This release focuses on OCR stability, automatic setup and image editing. Pulse sensor work resumes in 0.6 or later.
+**Current version: 0.5.1 Stable.** This release focuses on OCR stability, automatic setup and image editing. Pulse sensor work resumes in 0.6 or later.
 
 ## Beta testers wanted
 

@@ -160,6 +160,18 @@ class IngressTests(IngressFixture):
                 self.request(path)
         self.assertEqual(403, unauthorized.exception.code)
 
+    def test_geometry_retry_countdown_and_default_setup_opt_in(self):
+        page, _ = self.request("/")
+        wizard = page.split('id="setup-form"', 1)[1].split('</form>', 1)[0]
+        self.assertIn('name="self_repair_enabled" value="1" checked', wizard)
+        self.rules["self_repair_enabled"] = True
+        self.history.write_text(json.dumps({"geometry_recovery": {"failures": 7}}))
+        status = json.loads(self.request("/automatic")[0])
+        self.assertEqual("Neukalibrierung nach 3 weiteren Fehlmessungen.", status["geometry_warning"])
+        self.history.write_text(json.dumps({"geometry_recovery": {"failures": 10, "scheduled_at": 123}}))
+        status = json.loads(self.request("/automatic")[0])
+        self.assertIn("Zehn Fehlmessungen", status["geometry_warning"])
+
     def test_reset_automatic_crop_preserves_other_saved_settings(self):
         self.rules.update(crop_mode="manual", crop="10,10,290,100", width=150, rotation=-6,
                           attempts=8, interval_minutes=20, reflection_estimate_enabled=True)

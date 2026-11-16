@@ -5,10 +5,10 @@ from hashlib import sha256
 from math import ceil, cos, floor, radians, sin
 import subprocess
 
-from checks import OCR_PROFILES, compare_sample, meter_prefix, read_with_retries
+from checks import OCR_PROFILES, compare_sample, crop_register, meter_prefix, read_with_retries
 from consumption import accumulate_consumption
-from checks import crop_register
-from layout import crop_coordinates, find_digit_row, find_raw_digit_row, normalize_digit_boxes, rotated_width, turn_crop
+from layout import (crop_coordinates, digit_box_settings, find_digit_row, find_neighbour_digit_rows,
+                    find_raw_digit_row, normalize_digit_boxes, rotated_width, turn_crop)
 
 from meter_learning import propose_digit_boxes
 
@@ -29,6 +29,7 @@ class Layout:
     rotation: int
     width: int
     digit_boxes: tuple = ()
+    method: str = field(default="", compare=False)
 
     def settings(self):
         return {"crop_mode": "manual", "crop": ",".join(map(str, self.box)),
@@ -49,7 +50,32 @@ def unrotate_box(box, size, angle):
     return max(0, floor(min(xs))), max(0, floor(min(ys))), min(w, ceil(max(xs))), min(h, ceil(max(ys)))
 
 
-def layouts(frame, overlay, rules, offset, current=None):
+def neighbour_layout(frame, angle, detected, whole_digits, fraction_digits):
+    """Translate a grid from the rotated camera view into the saved rotated crop."""
+    bounds, _, boxes = detected
+    outer = unrotate_box(bounds, frame.size, angle)
+    left, top, right, bottom = outer
+    if not (right - left >= 8 and bottom - top >= 8):
+        return None
+    register = turn_crop(crop_register(frame, outer), angle)
+    w, h = register.size
+    x = (left + right - frame.width) / 2
+    y = (top + bottom - frame.height) / 2
+    c, s = cos(radians(angle)), sin(radians(angle))
+    dx = round(bounds[0] - (frame.width / 2 + c * x - s * y - w / 2))
+    dy = round(bounds[1] - (frame.height / 2 + s * x + c * y - h / 2))
+    shifted = [(max(0, l + dx), max(0, t + dy), min(w, r + dx), min(h, b + dy)) for l, t, r, b in boxes]
+    try:
+        normalized = digit_box_settings(normalize_digit_boxes(shifted, register.size), whole_digits + fraction_digits)
+    except ValueError:
+        return None
+    whole_width = round((shifted[whole_digits - 1][2] + shifted[whole_digits][0]) / 2) if fraction_digits else w
+    if not 0 < whole_width <= w:
+        return None
+    return Layout(outer, angle, whole_width, tuple(map(tuple, normalized)), method="neighbours")
+
+
+def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False):
     """Try a few geometry candidates per image, rotating the search across images."""
     emitted = set()
 
@@ -68,7 +94,8 @@ def layouts(frame, overlay, rules, offset, current=None):
         emitted.add(layout)
         return True
 
-    if current is not None and unique(current):
+    if (current is not None and current.box[2] <= frame.width and current.box[3] <= frame.height
+            and unique(current)):
         yield current
     first = offset % len(ANGLES)
     if overlay is not None and overlay.size == frame.size:
@@ -79,9 +106,20 @@ def layouts(frame, overlay, rules, offset, current=None):
                             normalize_digit_boxes(found[2], (right - left, bottom - top)))
             if unique(layout):
                 yield layout
+    configured = None
+    if "crop" in rules:
+        box = crop_coordinates(rules["crop"], rules["width"], rules["rotation"])
+        if box[2] <= frame.width and box[3] <= frame.height:
+            configured = Layout(box, rules["rotation"], rules["width"],
+                                tuple(map(tuple, rules.get("digit_boxes", []))))
+    if prefer_configured and configured and unique(configured):
+        yield configured
+    # Reserve space for neighbour inference and, where possible, the regular crop.
+    neighbour_limit = MAX_LAYOUTS_PER_IMAGE - int(configured is not None and not prefer_configured)
+    raw_limit = neighbour_limit - 1
     for angle in (ANGLES[first], 0, ANGLES[(first + 1) % len(ANGLES)]):
-        if len(emitted) >= MAX_LAYOUTS_PER_IMAGE:
-            return
+        if len(emitted) >= raw_limit:
+            break
         adjusted = turn_crop(frame, angle, expand=False)
         detected = find_raw_digit_row(adjusted, rules["integer_digits"], rules["fraction_digits"])
         if detected:
@@ -94,21 +132,27 @@ def layouts(frame, overlay, rules, offset, current=None):
             variants = (Layout(box, angle, detected[1], frames),
                         Layout(alternate.box, angle, alternate.width, tuple(map(tuple, optimized))))
             for layout in variants:
-                if len(emitted) >= MAX_LAYOUTS_PER_IMAGE:
-                    return
+                if len(emitted) >= raw_limit:
+                    break
                 if unique(layout):
                     yield layout
-    if len(emitted) < MAX_LAYOUTS_PER_IMAGE and "crop" in rules:
-        # The usual OCR can read the configured crop even if the row detector found nothing.
-        # Give that same geometry a chance without weakening confirmation requirements.
-        box = crop_coordinates(rules["crop"], rules["width"], rules["rotation"])
-        if box[2] <= frame.width and box[3] <= frame.height:
-            configured = Layout(box, rules["rotation"], rules["width"], tuple(map(tuple, rules.get("digit_boxes", []))))
-            for trial in (configured, candidate(box, ANGLES[first], padding=2)):
-                if len(emitted) >= MAX_LAYOUTS_PER_IMAGE:
-                    return
-                if unique(trial):
-                    yield trial
+    whole, fraction = rules["integer_digits"], rules["fraction_digits"]
+    for angle in (0, ANGLES[first]):
+        if len(emitted) >= neighbour_limit:
+            break
+        adjusted = turn_crop(frame, angle, expand=False)
+        for detected in find_neighbour_digit_rows(adjusted, whole, fraction):
+            layout = neighbour_layout(frame, angle, detected, whole, fraction)
+            if layout and unique(layout):
+                yield layout
+            if len(emitted) >= neighbour_limit:
+                break
+    if configured:
+        for trial in (configured, candidate(configured.box, ANGLES[first], padding=2)):
+            if len(emitted) >= MAX_LAYOUTS_PER_IMAGE:
+                return
+            if unique(trial):
+                yield trial
 
 
 def reference_rejection(sample, status):
@@ -138,16 +182,20 @@ class Calibration:
     anchored: bool = False
     advanced: bool = False
     verification_pending: bool = False
+    automatic: bool = False
+    duration: int = TIME_LIMIT
+    attempt_limit: int = MAX_ATTEMPTS
+    previous_layout: Layout | None = None
 
     def expired(self, now):
-        return now - self.started >= TIME_LIMIT
+        return now - self.started >= self.duration
 
     def status(self, now):
         return {"state": self.state, "stage": self.stage, "rotation": self.rotation, "variant": self.variant,
-                "tested": len(self.seen), "limit": self.limit, "duration": TIME_LIMIT,
-                "attempts": self.attempts, "max_attempts": MAX_ATTEMPTS,
+                "tested": len(self.seen), "limit": self.limit, "duration": self.duration,
+                "attempts": self.attempts, "max_attempts": self.attempt_limit, "automatic": self.automatic,
                 "confirmations": self.confirmations, "required": MIN_IMAGES,
-                "seconds": max(0, ceil(TIME_LIMIT - (now - self.started)))}
+                "seconds": max(0, ceil(self.duration - (now - self.started)))}
 
     def remember_image(self, frame, stamp):
         digest = sha256(frame.convert("RGB").tobytes()).digest()
@@ -159,7 +207,7 @@ class Calibration:
 
     def verify(self, frame, sample, stamp, rules, read, stop, on_image=None, on_decision=lambda reason: None):
         """Confirm the exact saved geometry with the regular OCR retry routine."""
-        if self.attempts >= MAX_ATTEMPTS or not self.remember_image(frame, stamp):
+        if self.attempts >= self.attempt_limit or not self.remember_image(frame, stamp):
             return None
         self.attempts += 1
         if on_image is not None:
@@ -203,10 +251,11 @@ class Calibration:
         precision = rules["decimals"] if has_reference else rules["fraction_digits"]
         digits = rules["integer_digits"]
         flow = rules["max_flow_lph"]
-        candidates = layouts(frame, overlay, rules, len(self.seen) - 1, self.candidate)
+        candidates = layouts(frame, overlay, rules, len(self.seen) - 1, self.candidate or self.previous_layout,
+                             prefer_configured=self.automatic)
         examined = False
         for index, layout in enumerate(candidates, start=1):
-            if stop() or self.attempts >= MAX_ATTEMPTS:
+            if stop() or self.attempts >= self.attempt_limit:
                 return None
             examined = True
             self.attempts += 1

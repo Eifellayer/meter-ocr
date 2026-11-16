@@ -17,6 +17,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from app_channel import APP_NAME, NAMESPACE
 from calibration import DEFAULT_LIMIT, MIN_IMAGE_LIMIT, MAX_IMAGES
+from meter_learning import GEOMETRY_REPAIR_FAILURES
 from checks import (DEFAULT_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, WARNING_DETAIL_AFTER, meter_prefix,
                     LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, REFLECTION_SUGGEST_AFTER, STANDALONE_PENDING, STANDALONE_REJECTED_NOTICE,
                     STANDALONE_VERIFIED_NOTICE, last_check_at, reschedule_next_check,
@@ -325,6 +326,7 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <dt>Letzte Prüfung</dt><dd id="automatic-last-check" class="stamp" data-epoch="{last_check}">–</dd>
 <dt>Letzter bestätigter Abgleich</dt><dd id="automatic-last-match" class="stamp" data-epoch="{last_match}">–</dd>
 <dt>Nächste Prüfung</dt><dd id="countdown">–</dd></dl>
+<p class="failure-recovery" id="geometry-repair-warning" {geometry_warning_hidden}>{geometry_warning_text}</p>
 <p class="failure-recovery" id="automatic-recovery" data-state="retrying" {recovery_hidden}>{recovery_notice}</p>
 <p class="failure-recovery" id="reflection-live" hidden>
 <strong>Vorläufig ergänzt</strong> <span id="reflection-live-reading"></span>
@@ -491,6 +493,7 @@ name: Zählerstand (OCR)</code></pre>
 <input id="calibration-limit" name="image_limit" type="number" min="{calibration_min}" max="{calibration_max}" value="{calibration_limit}" required></label>
 <div class="crop-actions">
 <button id="calibration-start" type="submit" name="action" value="start">Selbsteinrichtung starten</button>
+<button id="calibration-restore" type="submit" name="action" value="restore" formnovalidate {calibration_restore_hidden}>Gesicherten Ausschnitt wiederherstellen</button>
 <button id="calibration-cancel" type="submit" name="action" value="cancel" formnovalidate hidden>Selbsteinrichtung stoppen</button>
 </div>
 </form>
@@ -553,6 +556,10 @@ name: Zählerstand (OCR)</code></pre>
 <label>Höchstens so viele unterschiedliche Bilder
 <input name="image_limit" type="number" min="{calibration_min}" max="{calibration_max}" value="{calibration_limit}" required disabled></label>
 <p class="settings-note">Startet nach dem Speichern und endet spätestens nach 15 Minuten. Die App übernimmt den Rahmen nach drei Bestätigungen und einer abschließenden Gegenprüfung.</p>
+</div>
+<div class="setup-help">
+<label class="check-option"><input type="checkbox" name="self_repair_enabled" value="1" {wizard_self_repair_checked}> Selbstreparatur bei wiederholten Fehlmessungen</label>
+<p class="settings-note">Nach zehn unterschiedlichen Fehlmessungen sichert die App den bisherigen Rahmen und versucht einmal, ihn zu verbessern. Ohne sichere Gegenprobe bleibt der bisherige Rahmen gültig.</p>
 </div>
 <label>OCR-Versuche pro Bild<select name="attempts">{auto_attempt_options}</select></label>
 <label>Ziffernfarbe<select name="polarity">{auto_polarity_options}</select></label>
@@ -645,6 +652,8 @@ name: Zählerstand (OCR)</code></pre>
 <details class="help setup-help">
 <summary>ⓘ Automatik im Hintergrund verbessern</summary>
 <label class="check-option"><input type="checkbox" name="fine_alignment_enabled" value="1" {fine_alignment_checked}> Ziffernrahmen langfristig feinjustieren</label>
+<label class="check-option"><input type="checkbox" name="self_repair_enabled" value="1" {self_repair_checked}> Selbstreparatur bei wiederholten Fehlmessungen</label>
+<p>Nach zehn unterschiedlichen Fehlmessungen sichert die App den bisherigen Rahmen und versucht einmal, ihn zu verbessern. Ohne sichere Gegenprobe bleibt der bisherige Rahmen gültig.</p>
 <label class="check-option"><input type="checkbox" name="adaptive_interval_enabled" value="1" {adaptive_interval_checked}> Prüfintervall bei erwarteten Rollenwechseln verkürzen (SLFork)</label>
 </details>
 <div class="reflection-settings setup-help" id="reflection-settings">
@@ -1323,7 +1332,9 @@ function refreshCalibrationImages(preview) {{
       (reason.hidden ? 'Die App sucht in diesem Bild nach der Ziffernreihe.' : '') : preview.reading ?
       'Grün: gelesen. Gelb: OCR-Versuche weichen ab. Rot: unklar.' :
       'Die blauen Rahmen zeigen, welche Stellen die App gerade prüft.';
-    if (hasCrop && preview.approximate) section.querySelector('.calibration-preview-help').append(
+    if (hasCrop && preview.method === 'neighbours') section.querySelector('.calibration-preview-help').append(
+      ' Die Rahmen wurden aus sichtbaren Ziffern und ihren Abständen abgeleitet.');
+    else if (hasCrop && preview.approximate) section.querySelector('.calibration-preview-help').append(
       ' Die Position der Ziffernrahmen ist angenähert.');
   }}
 }}
@@ -1361,7 +1372,7 @@ function refreshCalibration(status) {{
     ' · Bestätigungen: ' + status.confirmations + '/' + status.required +
     (active ? ' · Restzeit: ' + clock + ' min' : '');
   const tone = status.state === 'saved' ? 'ok' : ['failed', 'timeout', 'save_failed'].includes(status.state) ? 'error' : '';
-  label.textContent = message + ' ' + detail;
+  label.textContent = (status.automatic ? 'Automatische Nachjustierung · ' : '') + message + ' ' + detail;
   label.dataset.tone = tone;
   document.querySelector('#calibration-overview').dataset.tone = tone;
   document.querySelector('#calibration-overview').hidden = false;
@@ -1400,6 +1411,8 @@ async function refreshTestStatus() {{
     const job = await response.json();
     if (sendingCheck) return;
     refreshCalibration(job.calibration);
+    const calibrating = ['waiting', 'testing'].includes(job.calibration?.state);
+    document.querySelector('#calibration-restore').hidden = !job.calibration_backup || calibrating;
     const bar = document.querySelector('#test-progress');
     const detail = document.querySelector('#test-result');
     const preview = document.querySelector('#test-preview');
@@ -1623,6 +1636,9 @@ async function refreshAutomatic() {{
     }} else if (!sample.paused && next) {{
       refreshDelay = Math.min(15000, Math.max(1000, next * 1000 - Date.now()));
     }}
+    const geometryStatus = document.querySelector('#geometry-repair-warning');
+    geometryStatus.hidden = !sample.geometry_warning;
+    geometryStatus.textContent = sample.geometry_warning;
     const recovery = document.querySelector('#automatic-recovery');
     recovery.hidden = !sample.failure_attempts;
     recovery.dataset.state = sample.retry_suppressed ? 'waiting' : 'retrying';
@@ -1738,6 +1754,7 @@ def start_panel(
     request_factory_reset=None, get_reset_status=None, skip_setup=None, get_activity=None,
     get_auto_paused=None, save_auto_paused=None, discover_sources=None,
     settings_lock=None, get_calibration=None, control_calibration=None, get_calibration_image=None,
+    has_calibration_backup=None,
 ):
     images = {"/aktuell.jpg": current_image, "/treffer.jpg": good_image,
               "/testvorschau.jpg": test_image}
@@ -1854,6 +1871,22 @@ def start_panel(
             return None
         estimate_id = f"{estimate['time']}:{estimate['left']}{estimate['digit']}{estimate['right']}"
         return {**estimate, "id": estimate_id, "confirmed": auto_rules.get("reflection_confirmed_id") == estimate_id}
+
+    def geometry_warning(history, auto_rules, language):
+        recovery = history.get("geometry_recovery", {})
+        if recovery.get("scheduled_at"):
+            message = "Zehn Fehlmessungen. Bitte Bildausschnitt prüfen."
+            return EN_UI[message] if language == "en" else message
+        failures = recovery.get("failures", 0)
+        if not failures:
+            return ""
+        if not auto_rules.get("self_repair_enabled"):
+            message = "Automatische Neukalibrierung ist ausgeschaltet."
+            return EN_UI[message] if language == "en" else message
+        remaining = GEOMETRY_REPAIR_FAILURES - failures
+        if language == "en":
+            return f"Automatic recalibration after {remaining} more failed readings." if remaining != 1 else "Automatic recalibration after one more failed reading."
+        return f"Neukalibrierung nach {remaining} weiteren Fehlmessungen." if remaining != 1 else "Neukalibrierung nach einer weiteren Fehlmessung."
 
     def automatic_summary(history, language, auto_rules):
         reschedule_next_check(history, auto_rules.get("interval_minutes", DEFAULT_INTERVAL_MINUTES))
@@ -1991,6 +2024,7 @@ def start_panel(
             "failure_attempts": failure_attempts,
             "retry_suppressed": retry_suppressed,
             "recovery_notice": recovery_notice,
+            "geometry_warning": geometry_warning(history, auto_rules, language),
             "reflection_estimate": reflection_estimate,
             "reflection_live_estimate": (history.get("reflection_live_estimate")
                                         if auto_rules.get("reflection_estimate_enabled") else None),
@@ -2077,6 +2111,7 @@ def start_panel(
                 snapshot["current_image"] = image_version(current_image)
                 snapshot["manual_source_image"] = image_version(test_source_image)
                 snapshot["calibration"] = get_calibration() if get_calibration else None
+                snapshot["calibration_backup"] = bool(has_calibration_backup and has_calibration_backup())
                 if language == "en":
                     snapshot["message"] = english_progress(snapshot.get("message"))
                     if snapshot.get("detail"):
@@ -2169,6 +2204,7 @@ def start_panel(
             saved_message = (
                 "Ausschnitt und Drehung für manuelle Tests gespeichert." if saved == "manual-crop" else
                 "Einrichtung gespeichert." if saved in ("setup", "setup-calibration") else
+                "Gesicherter Ausschnitt wiederhergestellt." if saved == "crop-restored" else
                 "Fallback-Wert gespeichert." if saved == "fallback" else
                 "Automatische Prüfregeln gespeichert." if saved == "1" else
                 "Getesteten Bildausschnitt für die Automatik übernommen." if saved == "crop" else
@@ -2223,8 +2259,13 @@ def start_panel(
                 fallback_saved_notice=auto_saved_notice if saved == "fallback" else "",
                 calibration_preview_html=(translate_page(CALIBRATION_PREVIEW_HTML) if language == "en"
                                           else CALIBRATION_PREVIEW_HTML),
-                calibration_saved_notice=auto_saved_notice if saved == "setup-calibration" else "",
+                calibration_saved_notice=auto_saved_notice if saved in ("setup-calibration", "crop-restored") else "",
                 calibration_hidden="" if control_calibration else "hidden",
+                geometry_warning_hidden="" if summary["geometry_warning"] else "hidden",
+                geometry_warning_text=html.escape(summary["geometry_warning"]),
+                calibration_restore_hidden="" if has_calibration_backup and has_calibration_backup() else "hidden",
+                self_repair_checked="checked" if auto_rules.get("self_repair_enabled") else "",
+                wizard_self_repair_checked="checked" if setup_pending or auto_rules.get("self_repair_enabled") else "",
                 calibration_min=MIN_IMAGE_LIMIT, calibration_max=MAX_IMAGES,
                 calibration_limit=calibration["limit"] if calibration else DEFAULT_LIMIT,
                 setup_first_run=str(bool(setup_pending or reset_state == "done")).lower(),
@@ -2594,6 +2635,7 @@ def start_panel(
                             and integer_digits == old_rules["integer_digits"] and fraction_digits == old_rules["fraction_digits"]
                         ) else [], "max_flow_lph": max_flow,
                         "precision_mode": field("precision_mode") == "1",
+                        "self_repair_enabled": field("self_repair_enabled") == "1",
                         "interval_minutes": interval_minutes, "integer_digits": integer_digits,
                         "fraction_digits": fraction_digits, "meter_display": meter_display,
                         "fallback_value": fallback_value, "fallback_time": fallback_time,
@@ -2706,7 +2748,7 @@ def start_panel(
                     return
                 try:
                     action = field("action")
-                    if action not in ("start", "cancel"):
+                    if action not in ("start", "cancel", "restore"):
                         raise ValueError("Invalid calibration action")
                     limit = int(field("image_limit", str(DEFAULT_LIMIT))) if action == "start" else 0
                     if action == "start" and not MIN_IMAGE_LIMIT <= limit <= MAX_IMAGES:
@@ -2716,7 +2758,11 @@ def start_panel(
                     problem(400, "Bitte Bildquelle einrichten, die Automatik fortsetzen und das Bildlimit prüfen.",
                             "Set up an image source, resume automatic checks and check the image limit.")
                     return
-                self.redirect("?saved=calibration&ui=settings" + keep_mode)
+                except OSError:
+                    problem(503)
+                    return
+                saved = "crop-restored" if action == "restore" else "calibration"
+                self.redirect(f"?saved={saved}&ui=settings" + keep_mode)
                 return
             if path == "/automatik":
                 if form.get("reset_crop") == ["1"]:
@@ -2768,6 +2814,7 @@ def start_panel(
                                          "precision_mode": field("precision_mode") == "1",
                                          "reflection_estimate_enabled": field("reflection_estimate_enabled") == "1",
                                          "fine_alignment_enabled": field("fine_alignment_enabled") == "1",
+                                         "self_repair_enabled": field("self_repair_enabled") == "1",
                                          "adaptive_interval_enabled": field("adaptive_interval_enabled") == "1",
                                          "reflection_suggestion_hidden": field("reflection_suggestion_hidden") == "1",
                                          "polarity": polarity[0], "crop_mode": crop_mode[0],

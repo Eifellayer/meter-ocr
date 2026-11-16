@@ -1,9 +1,11 @@
 # Changelog
 
-## In Vorbereitung
+## 0.5.1 Stable
 
 - Die Selbsteinrichtung zeigt das Kamerabild mit markiertem Suchbereich, den gedrehten Ausschnitt und die Ziffern pro OCR-Versuch live an.
 - Bilder, getestete Rahmen und Restzeit sind eindeutig beschriftet. Wenn die Suche keine Ziffernreihe findet, probiert die App auch den bereits eingestellten Ausschnitt und erklärt, warum ein Versuch ohne Bestätigung blieb.
+- Die Nachbarsuche leitet fehlende Ziffernrahmen aus sichtbaren Ziffern, Rahmenbreite und Abstand ab. Neue Rahmen werden weiterhin erst nach bestätigter OCR übernommen.
+- Die optionale Selbstreparatur meldet nach zehn unterschiedlichen Fehlmessungen einen einmaligen Suchlauf und sichert die Einstellungen. Der bisherige Rahmen wird zuerst geprüft und kann über die Einstellungen wiederhergestellt werden. Im Assistenten ist die Option bei einer Neueinrichtung vorausgewählt.
 
 ## 0.5.0 Stable
 

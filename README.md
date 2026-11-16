@@ -4,7 +4,7 @@
 
 📘 [Bebilderte Bedienungsanleitung (PDF)](docs/Bedienungsanleitung-AI-Meter-Reader.pdf) · [App-Dokumentation](rf1_ocr_test/DOCS.md)
 
-**Aktueller Stand: 0.5.0 Stable.** Der Schwerpunkt liegt auf stabiler OCR, Grobeinrichtung und Bildbearbeitung. Die Arbeit am Pulszähler folgt frühestens ab 0.6.
+**Aktueller Stand: 0.5.1 Stable.** Der Schwerpunkt liegt auf stabiler OCR, Grobeinrichtung und Bildbearbeitung. Die Arbeit am Pulszähler folgt frühestens ab 0.6.
 
 **Zählerstände direkt in Home Assistant aus Kamerabildern lesen und prüfen.**
 

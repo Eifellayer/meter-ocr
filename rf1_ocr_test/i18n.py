@@ -32,6 +32,18 @@ EN_UI = {
     "Vorschlag bei wiederholt unlesbarer Ziffer ausblenden": "Hide the suggestion for a repeatedly unreadable digit",
     RAW_ROW_UNCLEAR: "Could not find a clear digit row. Set the crop in the manual test.",
     MANUAL_ROW_UNCLEAR: "The digits are hard to read. Check the image rotation, camera angle, focus and lighting.",
+    "Selbstreparatur bei wiederholten Fehlmessungen": "Self-repair after repeated failed readings",
+    "Nach zehn unterschiedlichen Fehlmessungen sichert die App den bisherigen Rahmen und versucht einmal, ihn zu verbessern. Ohne sichere Gegenprobe bleibt der bisherige Rahmen gültig.":
+        "After ten distinct failed readings, the app backs up the current crop and tries once to improve it. The current crop stays in use until a replacement passes verification.",
+    "Zehn Fehlmessungen. Bitte Bildausschnitt prüfen.": "Ten failed readings. Check the image crop.",
+    "Gesicherten Ausschnitt wiederherstellen": "Restore the backed-up crop",
+    "Gesicherter Ausschnitt wiederhergestellt.": "The backed-up crop has been restored.",
+    "Automatische Neukalibrierung ist ausgeschaltet.": "Automatic recalibration is disabled.",
+    "Automatische Nachjustierung · ": "Automatic realignment · ",
+    "Bei mehrfach unlesbaren Aufnahmen sucht die App auch selbst nach einem besseren Rahmen. Erst nach erfolgreichen Gegenproben übernimmt sie eine Änderung.":
+        "After repeated unreadable images, the app also looks for a better crop. It applies a change only after successful cross-checks.",
+    " Die Rahmen wurden aus sichtbaren Ziffern und ihren Abständen abgeleitet.":
+        " The digit boxes were inferred from visible digits and their spacing.",
     " Die Position der Ziffernrahmen ist angenähert.": " The positions of the digit boxes are approximate.",
     "Bilder geprüft: ": "Images checked: ",
     " · Rahmen getestet: ": " · Crops tested: ",

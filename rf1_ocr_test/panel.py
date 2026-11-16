@@ -160,7 +160,7 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .wizard-crop-choices label{{display:flex;align-items:center;gap:.5rem;padding:.65rem;border:1px solid var(--edge);border-radius:.55rem;cursor:pointer}}
 .wizard-crop-choices label:has(:checked){{border-color:#65bcaf;color:inherit}}
 .wizard-crop-choices input{{margin:0;min-height:auto;flex-shrink:0}}
-.calibration-card{{border-color:light-dark(#83aaa2,#4b786e)}}
+.calibration-card{{display:block;border-color:light-dark(#83aaa2,#4b786e)}}
 .calibration-card h2{{font-size:1.15rem}}
 .calibration-card p{{margin:.55rem 0}}
 .calibration-live{{padding:.75rem .9rem;margin:0 0 .8rem;border:1px solid var(--edge);border-radius:.7rem}}
@@ -1482,14 +1482,31 @@ function refreshCalibration(status) {{
     queued: 'Selbsteinrichtung startet, sobald die laufende Prüfung beendet ist …',
     capture: 'Kamerabild wird abgerufen …',
     search: 'Grobkalibrierung: Suche nach der Ziffernreihe …',
-    refine: 'Feinkalibrierung: Prüfe Rahmen und Drehung am vorhandenen Bild …',
+    refine: status.preview?.weak_positions?.length ?
+      'Einzelziffernsuche. Offene Stellen von links: ' + status.preview.weak_positions.join(', ') + '.' :
+      'Feinkalibrierung: Prüfe Rahmen und Drehung am vorhandenen Bild …',
     verify_wait: 'Rahmen gefunden. Warte auf ein frisches Bild zur Gegenprüfung …',
     verify: 'Gefundenen Rahmen mit der normalen Prüfung gegenprüfen …',
     ocr: 'Prüfe Rahmen ' + status.variant + ' mit Drehung ' + status.rotation + '° …',
   }};
-  const waitingForRegion = status.state === 'waiting' && status.preview?.reason === 'no_region';
-  const message = waitingForRegion ? 'Noch kein Ziffernbereich gefunden. Warte auf ein neues Bild …' :
-    active && stages[status.stage] ? stages[status.stage] : messages[status.state] || '';
+  const reason = status.preview?.reason;
+  let message = active && stages[status.stage] ? stages[status.stage] : messages[status.state] || '';
+  if (status.state === 'waiting' && status.stage !== 'queued') {{
+    if (reason === 'await_movement') {{
+      message = 'Ziffernfeld lesbar. Die App wartet auf einen höheren Zählerstand oder einen abgelesenen Startwert.';
+    }} else if (status.confirmations > 0) {{
+      message = 'Ziffernfeld bestätigt. Die App prüft mit dem nächsten neuen Bild weiter.';
+    }} else if (reason === 'no_region') {{
+      message = status.tested >= 2 ?
+        'Ziffernfeld nicht gefunden. Grenze das Ziffernfeld im Kamerabild ein.' :
+        'Noch kein Ziffernbereich gefunden. Warte auf ein neues Bild …';
+    }} else if (reason === 'reference_unavailable') {{
+      message = 'Kein gültiger Vergleichswert für dieses Bild. Die App wartet auf eine neue Messung.';
+    }}
+  }}
+  if (status.state === 'failed' && ['reference_mismatch', 'position_error'].includes(reason)) {{
+    message = 'Der gelesene Bereich passt nicht zum Vergleichswert. Prüfe den Vergleichswert und markiere das Ziffernfeld.';
+  }}
   const detail = 'Bilder geprüft: ' + status.tested +
     ' · Rahmen getestet: ' + status.attempts +
     ' · Bestätigungen: ' + status.confirmations + '/' + status.required +

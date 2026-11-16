@@ -945,11 +945,12 @@ def main():
                 raise TimeoutError("Calibration stopped")
             return get_bytes(url, token, timeout=min(timeout, max(0.01, deadline - time.monotonic())))
 
-        def report_calibration(stage, variant=None, rotation=None):
+        def report_calibration(stage, variant=None, rotation=None, positions=None):
             with settings_lock:
                 if calibration is job and job.state == "testing":
                     job.stage, job.variant, job.rotation = stage, variant, rotation
                     job.attempts = attempt.attempts
+                    calibration_preview["weak_positions"] = positions or []
 
         def report_image(kind, content, **details):
             nonlocal calibration_preview_version
@@ -1109,7 +1110,8 @@ def main():
                                 on_attempt=lambda variant, rotation: report_calibration("ocr", variant, rotation),
                                 on_image=on_image, on_decision=report_decision,
                                 refine_read=lambda layout, profile: recognize(layout, profile, register_for(layout)),
-                                on_refine=lambda variant, rotation: report_calibration("refine", variant, rotation),
+                                on_refine=lambda variant, rotation, positions: report_calibration(
+                                    "refine", variant, rotation, positions),
                                 on_regions=report_regions,
                             )
                             attempt.verification_pending = candidate is not None

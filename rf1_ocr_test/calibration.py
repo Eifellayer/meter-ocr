@@ -13,7 +13,7 @@ from statistics import median
 from checks import OCR_PROFILES, compare_sample, crop_register, meter_prefix, read_with_retries
 from consumption import accumulate_consumption
 from layout import (crop_coordinates, digit_box_settings, find_digit_row, find_neighbour_digit_rows,
-                    find_raw_digit_rows, normalize_digit_boxes, rotated_width, same_digit_region, turn_crop)
+                    find_dark_register, find_raw_digit_rows, normalize_digit_boxes, rotated_width, same_digit_region, turn_crop)
 
 from meter_learning import propose_digit_boxes
 
@@ -105,14 +105,6 @@ def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False
             and unique(current)):
         yield current
     first = offset % len(ANGLES)
-    if overlay is not None and overlay.size == frame.size:
-        found = find_digit_row(overlay, rules["integer_digits"], rules["fraction_digits"])
-        if found:
-            left, top, right, bottom = found[0]
-            layout = Layout(found[0], 0, found[1],
-                            normalize_digit_boxes(found[2], (right - left, bottom - top)))
-            if unique(layout):
-                yield layout
     configured = None
     if "crop" in rules:
         box = crop_coordinates(rules["crop"], rules["width"], rules["rotation"])
@@ -133,6 +125,34 @@ def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False
                 box = unrotate_box(detected[0], frame.size, angle)
                 ranked.append((score * (1.15 if angle == angles[0] else 1), angle, detected, box))
         ranked.sort(key=lambda item: (-item[0], item[3][1], item[3][0]))
+        whole, fraction = rules["integer_digits"], rules["fraction_digits"]
+        windows = []
+        for angle in dict.fromkeys((0, ANGLES[first] if abs(ANGLES[first]) <= 12 else 0, -3, 3)):
+            window = find_dark_register(turn_crop(frame, angle, expand=False), whole + fraction)
+            if window and (not ranked or window[2] - window[0] > 1.25 * (ranked[0][3][2] - ranked[0][3][0])):
+                l, t, r, b = window
+                edges = [round((r - l) * i / (whole + fraction)) for i in range(whole + fraction + 1)]
+                cells = [(a, 0, z, b - t) for a, z in zip(edges, edges[1:])]
+                proposal = neighbour_layout(frame, angle, (window, edges[whole], cells), whole, fraction)
+                if proposal is not None:
+                    windows.append(((r - l) * (b - t), proposal))
+        if windows:
+            proposal = replace(max(windows, key=lambda row: row[0])[1], digit_boxes=())
+            if unique(proposal):
+                yield replace(proposal, method="register_window")
+        if ranked:
+            _, _, (small, _, _), _ = ranked[0]
+            sw, sh = small[2] - small[0], small[3] - small[1]
+            # A small complete row can be a label alongside a larger display
+            # whose moving or partly obscured digits did not pass the strict scan.
+            for detected in find_neighbour_digit_rows(frame, whole, fraction, min_support=min(3, whole + fraction)):
+                box = detected[0]
+                if box[2] - box[0] < sw * 1.35 or box[3] - box[1] < sh * 1.45:
+                    continue
+                larger = neighbour_layout(frame, 0, detected, whole, fraction)
+                if larger is not None and unique(larger):
+                    yield larger
+                    break
         regions = []
         for score, _, _, box in ranked:
             if not regions or score >= regions[0][0] * .75:
@@ -170,6 +190,14 @@ def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False
                 yield layout
             if len(emitted) >= neighbour_limit:
                 break
+    if len(emitted) < neighbour_limit and overlay is not None and overlay.size == frame.size:
+        found = find_digit_row(overlay, whole, fraction)
+        if found:
+            left, top, right, bottom = found[0]
+            layout = Layout(found[0], 0, found[1],
+                            normalize_digit_boxes(found[2], (right - left, bottom - top)))
+            if unique(layout):
+                yield layout
     if configured:
         for trial in (configured, candidate(configured.box, ANGLES[first], padding=2)):
             if len(emitted) >= MAX_LAYOUTS_PER_IMAGE:
@@ -229,6 +257,19 @@ def position_error(value, sample, precision, whole):
     aligned = sum(a == b for a, b in zip(reading, target))
     return any(sum(a == b for a, b in zip(left, right)) >= max(3, aligned + 2)
                for left, right in ((reading[1:], target), (reading, target[1:])))
+
+
+def contradicts_reference(readings, sample, digits):
+    """Reject a partial row only when both profiles consistently read several wrong positions."""
+    expected = meter_prefix(sample.get("actual_value"), 0, digits)
+    if expected is None or not sample.get("reference_time") or sample.get("reference_is_fallback"):
+        return False
+    rows = [str(value).replace(",", ".").partition(".")[0] for value in readings]
+    if any(len(row) != digits for row in rows):
+        return False
+    agreed = [(a, digit) for a, b, digit in zip(*rows, str(expected).zfill(digits))
+              if a == b and a in "0123456789"]
+    return sum(a != digit for a, digit in agreed) >= 3 and all(a != digit for a, digit in agreed)
 
 
 def refinement_workers():
@@ -385,6 +426,10 @@ class Calibration:
         best = (score(readings), layout, readings)
         if best[0][-1] < min(2, whole):
             return layout, readings
+        rows = [str(value).replace(".", "").replace(",", "") for value in readings]
+        weak = [index + 1 for index in range(whole + fraction)
+                if len({row[index:index + 1] for row in rows}) != 1
+                or rows[0][index:index + 1] not in tuple("0123456789")]
         # Bound the work per image, leaving budget for independent confirmations.
         budget = min(12, max(0, min(frame_ceiling, self.attempt_limit - MIN_IMAGES) - self.attempts))
         variants = iter(refinement_layouts(layout, rules, readings))
@@ -404,7 +449,7 @@ class Calibration:
                     break
                 budget -= len(batch)
                 self.attempts += len(batch)
-                on_attempt(self.attempts, best[1].rotation)
+                on_attempt(self.attempts, best[1].rotation, weak)
                 for result in pool.map(evaluate, batch):
                     if result and result[0] > best[0]:
                         best = result
@@ -468,7 +513,7 @@ class Calibration:
         precision = rules["decimals"] if has_reference else rules["fraction_digits"]
         digits = rules["integer_digits"]
         flow = rules["max_flow_lph"]
-        seed = self.candidate or self.previous_layout
+        seed = self.candidate or (self.previous_layout if self.automatic else None)
         candidates = (guided_layouts(frame, overlay, rules, len(self.seen) - 1, seed, self.region)
                       if self.region else layouts(frame, overlay, rules, len(self.seen) - 1, seed,
                                                   prefer_configured=self.automatic, on_regions=on_regions))
@@ -500,6 +545,11 @@ class Calibration:
                 if stop():
                     return None
                 readings.append(read(layout, OCR_PROFILES[1]))
+                if has_reference and contradicts_reference(readings, sample, digits):
+                    self.rejected_regions = [*self.rejected_regions[-15:], layout.box]
+                    on_decision("position_error" if position_error(readings[0], sample, precision, digits)
+                                else "reference_mismatch")
+                    continue
                 if has_reference and readings[0] == readings[1]:
                     status = compare_sample(sample, readings[0], precision, integer_digits=digits)[0]
                     expected = meter_prefix(sample.get("actual_value"), precision, digits)
@@ -512,7 +562,12 @@ class Calibration:
                         on_decision("position_error" if position_error(readings[0], sample, precision, digits)
                                     else "reference_mismatch")
                         continue
-                if refine_read is not None and not self.confirmations and not self.focused:
+                first_prefix, second_prefix = (meter_prefix(value, precision, digits) for value in readings)
+                agreement = first_prefix is not None and first_prefix == second_prefix
+                matches = agreement and (not has_reference or all(reference_rejection(
+                    sample, compare_sample(sample, value, precision, integer_digits=digits)[0]) is None
+                    for value in readings))
+                if refine_read is not None and not matches and not self.confirmations and not self.focused:
                     original = layout
                     layout, readings = self.refine(layout, readings, sample, rules, refine_read, stop, on_refine,
                                                    tested, frame_ceiling)

@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import calibration
 from calibration import Calibration, Layout, MAX_ATTEMPTS, guided_layouts, layouts, neighbour_layout, search_region, unrotate_box
-from layout import find_neighbour_digit_rows, find_raw_digit_row, find_raw_digit_rows, scale_digit_boxes, turn_crop
+from layout import find_dark_register, find_neighbour_digit_rows, find_raw_digit_row, find_raw_digit_rows, scale_digit_boxes, turn_crop
 from meter_learning import widen_digit_boxes
 
 LAYOUT = Layout((0, 0, 80, 20), -3, 80)
@@ -34,6 +34,28 @@ def irregular_meter(text):
 
 
 class NeighbourGeometryTests(TestCase):
+    def test_dark_register_is_located_with_gaps_and_a_separate_small_label(self):
+        photo = Image.new("RGB", (640, 480), "#9c9c9c")
+        draw = ImageDraw.Draw(photo)
+        draw.rectangle((95, 80, 540, 140), fill="#161616")
+        font = ImageFont.truetype("DejaVuSansMono.ttf", 35)
+        draw.text((125, 90), "12  56 8", fill="#dbdbdb", font=font)
+        draw.text((200, 225), "968712", fill="black", font=font)
+        box = find_dark_register(photo, 8)
+        self.assertIsNotNone(box)
+        self.assertLess(box[1], 100)
+        self.assertGreater(box[2] - box[0], 400)
+        first = next(layouts(photo, None, {**RULES, "fraction_digits": 3}, 0))
+        self.assertEqual("register_window", first.method)
+
+    def test_large_partial_row_is_tried_before_a_small_complete_row(self):
+        small = ((2, 2, 32, 12), 30, [])
+        large = ((10, 13, 90, 29), 80, [(i, 0, i + 16, 16) for i in range(0, 80, 16)])
+        with patch.object(calibration, "find_raw_digit_rows", return_value=[(small, 30)]), \
+             patch.object(calibration, "find_neighbour_digit_rows", return_value=[large]):
+            first = next(layouts(frame(1), None, RULES, 0))
+        self.assertEqual(large[0], first.box)
+
     def test_larger_register_ranks_above_a_serial_with_the_same_length(self):
         photo = Image.new("RGB", (640, 480), "#626262")
         draw = ImageDraw.Draw(photo)
@@ -153,17 +175,20 @@ class CalibrationTests(TestCase):
     def test_partial_row_retries_missing_slot_on_same_image_without_extra_confirmation(self):
         reference = {"reference_time": 100, "actual_value": "12345", "raw_value": "12345"}
         calls = []
+        reported_positions = []
 
         def read(trial, profile):
             calls.append((trial, profile))
             return "12?45" if not trial.digit_boxes else "12345"
 
         self.assertIsNone(self.job.examine(frame(1), None, reference, 100, RULES, read,
-                                           lambda: False, refine_read=read))
+                                           lambda: False, refine_read=read,
+                                           on_refine=lambda _, __, positions: reported_positions.append(positions)))
         self.assertEqual(1, self.job.confirmations)
         self.assertEqual(1, len(self.job.seen))
         self.assertTrue(self.job.candidate.digit_boxes)
         self.assertGreater(self.job.attempts, 1)
+        self.assertEqual([3], reported_positions[0])
 
     def test_shifted_complete_row_is_not_confirmed(self):
         reasons = []
@@ -181,6 +206,27 @@ class CalibrationTests(TestCase):
         self.assertEqual(30, self.job.attempts)
         self.assertEqual(1, len(self.job.seen))
         self.assertEqual(0, self.job.confirmations)
+
+    def test_confirmed_whole_digits_skip_fine_search_despite_uncertain_decimals(self):
+        from unittest.mock import Mock
+
+        refine = Mock(side_effect=AssertionError("Unneeded refinement"))
+        sample = {"reference_time": 100, "actual_value": "12345.678", "raw_value": "12345.678"}
+        readings = iter(("12345.???", "12345.6?8"))
+        self.job.examine(frame(1), None, sample, 100, {**RULES, "fraction_digits": 3},
+                         lambda *_: next(readings), lambda: False, refine_read=refine)
+        self.assertEqual(1, self.job.confirmations)
+        refine.assert_not_called()
+
+    def test_partial_serial_is_skipped_before_fine_search(self):
+        from unittest.mock import Mock
+
+        refine = Mock(side_effect=AssertionError("Unneeded refinement"))
+        sample = {"reference_time": 100, "actual_value": "12345", "raw_value": "12345"}
+        self.job.examine(frame(1), None, sample, 100, RULES, lambda *_: "8?7?6", lambda: False,
+                         refine_read=refine)
+        self.assertEqual([LAYOUT.box], self.job.rejected_regions)
+        refine.assert_not_called()
 
     def test_without_reference_requires_plausible_forward_movement(self):
         self.examine(1, 100, reference=False)

@@ -80,10 +80,11 @@ class IngressFixture(TestCase):
     def skip_setup(self):
         self.setup_pending = False
 
-    def control_calibration(self, action, limit):
+    def control_calibration(self, action, limit, region=None):
         self.calibration = {"state": "waiting" if action == "start" else "cancelled",
                             "limit": limit, "tested": 0, "confirmations": 0, "required": 3,
-                            "seconds": 900, "duration": 900, "stage": "queued", "attempts": 0, "max_attempts": 100}
+                            "seconds": 900, "duration": 900, "stage": "queued", "attempts": 0, "max_attempts": 100,
+                            "region": region}
 
     def start_panel(self):
         def request_reset():
@@ -159,6 +160,11 @@ class IngressTests(IngressFixture):
             with self.assertRaises(HTTPError) as unauthorized:
                 self.request(path)
         self.assertEqual(403, unauthorized.exception.code)
+
+    def test_calibration_accepts_only_a_valid_marked_region(self):
+        self.assertEqual(400, self.submit("/selbsteinrichtung", action="start", region="10,900,990,800")[0])
+        self.assertEqual(303, self.submit("/selbsteinrichtung", action="start", region="80,350,890,680")[0])
+        self.assertEqual((80, 350, 890, 680), self.calibration["region"])
 
     def test_geometry_retry_countdown_and_default_setup_opt_in(self):
         page, _ = self.request("/")
@@ -742,6 +748,20 @@ class BrowserTests(IngressFixture):
             self.assertEqual("20%", display.locator(".calibration-crop-region").evaluate("box => box.style.left"))
             page.locator("#open-calibration").click()
             page.locator("#calibration-title").wait_for()
+            page.locator("#calibration-region summary").click()
+            picker = page.locator("#calibration-region-picker")
+            picker.wait_for(state="visible")
+            picker.scroll_into_view_if_needed()
+            box = picker.bounding_box()
+            page.mouse.move(box["x"] + box["width"] * .2, box["y"] + box["height"] * .3)
+            page.mouse.down()
+            page.mouse.move(box["x"] + box["width"] * .8, box["y"] + box["height"] * .7)
+            page.mouse.up()
+            page.locator("#calibration-guided-start").click()
+            page.wait_for_url("**/?saved=calibration&ui=settings")
+            for actual, expected in zip(self.calibration["region"], (200, 300, 800, 700)):
+                self.assertAlmostEqual(actual, expected, delta=4)
+
             browser.close()
 
     def test_automatic_status_and_image_update_when_a_check_runs(self):

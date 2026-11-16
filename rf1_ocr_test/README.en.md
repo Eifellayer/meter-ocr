@@ -12,7 +12,7 @@ This is an additional plausibility check, **not a certified measurement device**
 
 ## Installation
 
-**AI Meter Reader 0.5.1** is on the Stable channel. Enable optional long-term features in Settings. Pulse sensor work resumes in 0.6 or later.
+**AI Meter Reader 0.5.2** is on the Stable channel. Enable optional long-term features in Settings. Pulse sensor work resumes in 0.6 or later.
 
 Add **Add-ons by Eifellayer** under **Settings → Apps → Install app → ⋮ → Repositories** using the [Stable link](https://github.com/Eifellayer/meter-ocr#stable), then install **AI Meter Reader**. Set `esp_url` for SLFork, or configure `kamera_entitaet` and an optional `referenz_entitaet` sensor.
 

@@ -10,7 +10,7 @@ from PIL import Image, ImageDraw, ImageFont
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import calibration
-from calibration import Calibration, Layout, MAX_ATTEMPTS, layouts, neighbour_layout, unrotate_box
+from calibration import Calibration, Layout, MAX_ATTEMPTS, guided_layouts, layouts, neighbour_layout, search_region, unrotate_box
 from layout import find_neighbour_digit_rows, find_raw_digit_row, scale_digit_boxes, turn_crop
 
 LAYOUT = Layout((0, 0, 80, 20), -3, 80)
@@ -61,6 +61,28 @@ class NeighbourGeometryTests(TestCase):
                 reading = read_visible_digits(*register[:4], False, "auto", profile=OCR_PROFILES[0],
                                               whole_digits=whole, fraction_digits=fraction, prefer_boxes=True)
                 self.assertEqual(expected, reading)
+
+    def test_guided_search_ignores_a_serial_number_outside_the_marked_area(self):
+        photo = irregular_meter("12345")
+        draw = ImageDraw.Draw(photo)
+        draw.rectangle((44, 16, 553, 99), fill="white")
+        draw.text((297, 60), "9674830157", font=ImageFont.truetype("DejaVuSansMono.ttf", 52),
+                  fill="black", anchor="mm")
+        region = search_region("205,315,730,650")
+        result = list(guided_layouts(photo, None, RULES, 0, None, region))
+        self.assertTrue(result)
+        self.assertTrue(all(item.box[1] >= 113 and item.box[3] <= 234 for item in result))
+        with self.assertRaises(ValueError):
+            search_region("205,650,730,315")
+
+    def test_serial_number_is_not_split_into_shorter_candidate_rows(self):
+        photo = Image.new("RGB", (600, 240), "#676767")
+        draw = ImageDraw.Draw(photo)
+        draw.rectangle((55, 70, 545, 167), fill="white")
+        draw.text((300, 119), "9674830157", font=ImageFont.truetype("DejaVuSansMono.ttf", 62),
+                  fill="black", anchor="mm")
+        self.assertIsNone(find_raw_digit_row(photo, 5, 0))
+        self.assertEqual([], find_neighbour_digit_rows(photo, 5, 0))
 
     def test_neighbour_boxes_fit_a_rotated_crop(self):
         photo = turn_crop(irregular_meter("12345"), 3)

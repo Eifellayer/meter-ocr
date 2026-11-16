@@ -275,6 +275,24 @@ def crop_quality(frame, layout):
     return (ImageStat.Stat(across).mean[0] + ImageStat.Stat(down).mean[0]) / 2
 
 
+def image_quality_hints(frame, layout):
+    """Give a rough first-frame assessment of the digit area."""
+    gray = crop_register(frame, layout.box).convert("L").resize((160, 48), Image.Resampling.BILINEAR)
+    levels = sorted(gray.tobytes())
+    low, high = levels[len(levels) // 10], levels[len(levels) * 9 // 10]
+    hints = []
+    if high < 45:
+        hints.append("dark")
+    elif low > 215:
+        hints.append("bright")
+    contrast = high - low
+    if contrast < 32:
+        hints.append("low_contrast")
+    elif crop_quality(frame, layout) < 0.065 * contrast:
+        hints.append("soft")
+    return hints
+
+
 def agreement_percent(readings, sample, precision, digits):
     """Measure position agreement across profiles at the required precision."""
     rows = []
@@ -429,6 +447,7 @@ class Calibration:
     best_confirmations: int = 0
     anchored: bool = False
     advanced: bool = False
+    reference_reading: str | None = None
     verification_pending: bool = False
     verification_deadline: float | None = None
     automatic: bool = False
@@ -443,6 +462,7 @@ class Calibration:
     shortlist: dict = field(default_factory=dict)
     confirmed_quality: list = field(default_factory=list)
     fine_evidence: tuple | None = None
+    image_hints: list | None = None
     full_hits: int = 0
     stress_weak_slots: list = field(default_factory=list)
     duration: int = TIME_LIMIT
@@ -536,6 +556,7 @@ class Calibration:
                 "attempts": self.attempts, "max_attempts": self.attempt_limit, "automatic": self.automatic,
                 "confirmations": self.confirmations, "required": MIN_IMAGES,
                 "full_hits": self.full_hits,
+                "image_hints": self.image_hints,
                 "stress_weak_slots": self.stress_weak_slots,
                 "coarse_complete": self.full_hits >= MIN_IMAGES,
                 "awaiting_start_value": self.confirmations >= MIN_IMAGES and not (self.anchored or self.advanced),
@@ -695,8 +716,9 @@ class Calibration:
             if rejection:
                 raise ValueError("Unconfirmed crop")
             rejection = "implausible"
-            accumulate_consumption(self.counter, "calibration", stamp, value, precision,
-                                   rules["max_flow_lph"], digits)
+            self.counter = accumulate_consumption(
+                self.counter, "calibration", stamp, value, precision, rules["max_flow_lph"], digits)
+            self.reference_reading = value
         except (OSError, ValueError, subprocess.SubprocessError):
             on_decision(rejection)
             return None
@@ -997,6 +1019,7 @@ class Calibration:
                 "reading_litres" in anchor and
                 counter["reading_litres"] > anchor["reading_litres"]))
             self.candidate, self.counter = layout, counter
+            self.reference_reading = readings[0]
             self.focused = False
             if self.confirmations > self.best_confirmations:
                 self.best, self.best_confirmations = layout, self.confirmations

@@ -3,6 +3,8 @@
 ## 0.5.18 Stable
 
 - Nach 3/3 Treffern kann die Gegenprobe der Feinprüfung bewusst übersprungen werden. Die App warnt vor möglichen ungenaueren Ablesungen und kennzeichnet den übernommenen Rahmen als ohne Gegenprobe gespeichert.
+- Nach erfolgreicher Einrichtung öffnet sich die Übersicht. Die Automatik startet und kann den bestätigten Einrichtungsstand als Referenz verwenden.
+- Eine kurze Bildprüfung am Anfang weist auf auffällige Helligkeit, wenig Kontrast oder mögliche Unschärfe hin.
 
 ## 0.5.17 Stable
 

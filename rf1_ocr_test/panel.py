@@ -315,9 +315,11 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <p role="status" aria-live="polite"><strong>Automatik:</strong> <span id="automatic-activity">{automatic_activity}</span></p>
 <progress id="automatic-progress" class="setup-progress" aria-label="Fortschritt der automatischen Prüfung" {automatic_progress_hidden}></progress>
 </div>
+<p id="calibration-complete-notice" class="settings-note" role="status" hidden></p>
 <div id="calibration-overview" class="calibration-live" hidden>
 <p id="calibration-overview-state" role="status"></p>
 {calibration_skip_html}
+<p class="calibration-image-hint settings-note" hidden></p>
 <button type="button" id="calibration-open-region">Ziffernfeld manuell markieren</button>
 <progress id="calibration-overview-progress" aria-label="Verstrichene Zeit der Selbsteinrichtung"></progress>
 {calibration_preview_html}
@@ -502,6 +504,7 @@ name: Zählerstand (OCR)</code></pre>
 {calibration_saved_notice}
 <p id="calibration-state" role="status" hidden></p>
 {calibration_skip_html}
+<p class="calibration-image-hint settings-note" hidden></p>
 <button type="button" id="calibration-proposal" hidden>Gefundenen Rahmen im Test prüfen</button>
 <progress id="calibration-progress" aria-label="Verstrichene Zeit der Selbsteinrichtung" hidden></progress>
 {calibration_preview_html}
@@ -1556,6 +1559,7 @@ function refreshCalibrationImages(preview) {{
   }}
 }}
 
+let calibrationWasActive = false;
 function refreshCalibration(status) {{
   refreshCalibrationImages(status?.preview);
   for (const form of document.querySelectorAll('.calibration-skip')) {{
@@ -1664,7 +1668,27 @@ function refreshCalibration(status) {{
   label.dataset.tone = tone;
   document.querySelector('#calibration-overview').dataset.tone = tone;
   document.querySelector('#calibration-overview-state').dataset.tone = tone;
-  document.querySelector('#calibration-overview').hidden = false;
+  const completed = ['saved', 'saved_without_verification'].includes(status.state);
+  document.querySelector('#calibration-overview').hidden = completed;
+  const notice = document.querySelector('#calibration-complete-notice');
+  notice.hidden = !completed;
+  notice.textContent = completed ? message : '';
+  if (completed) {{
+    for (const preview of document.querySelectorAll('.calibration-photo-panel')) preview.hidden = true;
+    if (calibrationWasActive) activateTab('overview');
+  }}
+  calibrationWasActive = active;
+  const imageHints = {{
+    dark: 'Das Ziffernfeld wirkt dunkel.',
+    bright: 'Das Ziffernfeld wirkt sehr hell.',
+    low_contrast: 'Das Ziffernfeld hat wenig Kontrast.',
+    soft: 'Das Ziffernfeld wirkt unscharf.',
+  }};
+  const imageNote = (status.image_hints || []).map(hint => imageHints[hint]).filter(Boolean).join(' ');
+  for (const hint of document.querySelectorAll('.calibration-image-hint')) {{
+    hint.hidden = completed || !imageNote;
+    hint.textContent = imageNote ? 'Hinweis zum Kamerabild. ' + imageNote : '';
+  }}
   document.querySelector('#calibration-overview-state').textContent = label.textContent;
   document.querySelector('.activity-status').hidden = active;
   for (const bar of [progress, document.querySelector('#calibration-overview-progress')]) {{
@@ -3110,7 +3134,8 @@ def start_panel(
                     problem(503)
                     return
                 saved = "crop-restored" if action == "restore" else "calibration"
-                self.redirect(f"?saved={saved}&ui=settings" + keep_mode)
+                view = "overview" if action == "skip-verification" else "settings"
+                self.redirect(f"?saved={saved}&ui={view}" + keep_mode)
                 return
             if path == "/automatik":
                 if form.get("reset_crop") == ["1"]:

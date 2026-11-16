@@ -763,10 +763,18 @@ class BrowserTests(IngressFixture):
             form.get_by_text("Ohne Gegenprobe kann der übernommene Rahmen spätere Ablesungen ungenauer machen.",
                              exact=False).wait_for()
             form.get_by_role("button", name="Gegenprobe überspringen und Rahmen übernehmen").click()
-            state = page.locator("#calibration-state")
-            state.filter(has_text="Rahmen ohne Gegenprobe übernommen.").wait_for()
-            self.assertEqual("warning", state.get_attribute("data-tone"))
-            self.assertFalse(page.locator("#calibration-settings .calibration-skip").is_visible())
+            notice = page.locator("#calibration-complete-notice")
+            notice.filter(has_text="Rahmen ohne Gegenprobe übernommen.").wait_for()
+            self.assertFalse(page.locator("#calibration-overview").is_visible())
+
+            page.locator("#tab-settings").click()
+            self.calibration.update(state="testing", stage="search", image_hints=["dark", "low_contrast"])
+            hint = page.locator("#calibration-settings .calibration-image-hint")
+            hint.filter(has_text="Das Ziffernfeld wirkt dunkel.").filter(has_text="wenig Kontrast").wait_for()
+            self.calibration.update(state="saved")
+            notice.filter(has_text="Dritte Nachkommastelle bestätigt.").wait_for()
+            self.assertEqual("true", page.locator("#tab-overview").get_attribute("aria-selected"))
+            self.assertFalse(page.locator("#calibration-overview").is_visible())
             browser.close()
 
     def test_selecting_a_discovered_meter_prefills_the_wizard(self):

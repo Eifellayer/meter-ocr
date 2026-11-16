@@ -1494,13 +1494,15 @@ function refreshCalibration(status) {{
     queued: 'Selbsteinrichtung startet, sobald die laufende Prüfung beendet ist …',
     capture: 'Kamerabild wird abgerufen …',
     search: 'Grobkalibrierung: Suche nach der Ziffernreihe …',
-    angle: 'Drehung prüfen: ' + status.rotation + '° …',
+    angle: 'Drehung wird geprüft. Der Winkel steht am Vorschaubild.',
     refine: status.preview?.weak_positions?.length ?
       'Einzelziffernsuche. Offene Stellen von links: ' + status.preview.weak_positions.join(', ') + '.' :
       'Feinkalibrierung: Prüfe Rahmen und Drehung am vorhandenen Bild …',
     verify_wait: 'Rahmen gefunden. Warte auf ein frisches Bild zur Gegenprüfung …',
     verify: 'Gefundenen Rahmen mit der normalen Prüfung gegenprüfen …',
-    ocr: 'Prüfe Rahmen ' + status.variant + ' mit Drehung ' + status.rotation + '° …',
+    ocr: status.preview?.crop && status.preview.angle !== status.rotation ?
+      'Prüfe den nächsten Rahmen …' :
+      'Prüfe Rahmen ' + status.variant + ' mit Drehung ' + status.rotation + '° …',
   }};
   const reason = status.preview?.reason;
   let message = active && stages[status.stage] ? stages[status.stage] : messages[status.state] || '';

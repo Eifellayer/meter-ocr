@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.25 Stable
+
+- Bei der vereinfachten Einrichtung zählen übereinstimmende Lesungen bis zur zweiten Nachkommastelle. Fehlt der Vergleichswert, zählt der Rahmen vorläufig. Ein vorhandener, abweichender Vergleichswert blockiert die Bestätigung.
+- Die Einrichtung nutzt zusätzliche OCR-Profile für die Bestätigung des Rahmens, wenn zwei Profile dieselben benötigten Ziffern lesen und kein Profil einen anderen vollständigen Wert liefert.
+
 ## 0.5.24 Stable
 
 - Die Übersicht öffnet nach gespeicherter Kalibrierung einen Editor für vorhandene Ziffernrahmen. Ein Rahmen lässt sich einzeln verschieben, skalieren und zurücksetzen.

@@ -760,6 +760,38 @@ class CalibrationTests(TestCase):
         self.assertEqual([LAYOUT.box], self.job.rejected_regions)
         refine.assert_not_called()
 
+    def test_ranked_simplified_setup_counts_seven_digits_without_fresh_reference(self):
+        job = Calibration(8, 0, simplified=True, rank_candidates=True)
+        rules = {**RULES, "decimals": 3, "fraction_digits": 3}
+        sample = {"reference_time": None, "actual_value": "12345.23?", "raw_value": "12345.23?"}
+        reasons = []
+        for index in (1, 2, 3):
+            self.assertIsNone(job.examine(frame(index), None, sample, 100 + index, rules,
+                                          lambda *_: "12345.23?", lambda: False, on_decision=reasons.append))
+            self.assertEqual(index, job.confirmations)
+        self.assertEqual(["accepted_geometry"] * 3, reasons)
+        self.assertTrue(job.stationary_crop_ready())
+
+    def test_ranked_simplified_setup_uses_extra_profile_for_a_matching_prefix(self):
+        job = Calibration(8, 0, simplified=True, rank_candidates=True)
+        rules = {**RULES, "decimals": 3, "fraction_digits": 3}
+        sample = {"reference_time": 100, "actual_value": "12345.23?", "raw_value": "12345.23?"}
+
+        def read(_, profile):
+            return "12345.2??" if profile == calibration.OCR_PROFILES[0] else "12345.23?"
+
+        reasons = []
+        job.examine(frame(1), None, sample, 101, rules, read, lambda: False, on_decision=reasons.append)
+        self.assertEqual(1, job.confirmations)
+        self.assertEqual(["accepted_partial"], reasons)
+
+    def test_simplified_setup_does_not_count_a_conflicting_reference(self):
+        job = Calibration(8, 0, simplified=True, rank_candidates=True)
+        rules = {**RULES, "decimals": 3, "fraction_digits": 3}
+        sample = {"reference_time": 100, "actual_value": "12345.23?", "raw_value": "12345.23?"}
+        job.examine(frame(1), None, sample, 101, rules, lambda *_: "12345.29?", lambda: False)
+        self.assertEqual(0, job.confirmations)
+
     def test_stationary_simplified_setup_can_save_geometry_after_three_fresh_images(self):
         self.job = Calibration(8, 0, simplified=True)
         rules = {**RULES, "decimals": 3, "fraction_digits": 3}

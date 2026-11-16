@@ -713,6 +713,19 @@ class CalibrationTests(TestCase):
         self.assertEqual([LAYOUT.box], self.job.rejected_regions)
         refine.assert_not_called()
 
+    def test_stationary_simplified_setup_can_save_geometry_after_three_fresh_images(self):
+        self.job = Calibration(8, 0, simplified=True)
+        rules = {**RULES, "decimals": 3, "fraction_digits": 3}
+        sample = {"reference_required": False}
+        for index in (1, 2, 3):
+            self.assertIsNone(self.job.examine(frame(index), None, sample, 100 + index, rules,
+                                               lambda *_: "12345.23?", lambda: False))
+            self.assertEqual(index == 3, self.job.stationary_crop_ready())
+        self.assertFalse(self.job.verification_pending)
+        self.assertEqual(LAYOUT, self.job.candidate)
+        self.job.simplified = False
+        self.assertFalse(self.job.stationary_crop_ready())
+
     def test_without_reference_requires_plausible_forward_movement(self):
         self.examine(1, 100, reference=False)
         self.examine(2, 101, reference=False)

@@ -504,6 +504,10 @@ class Calibration:
     def expired(self, now):
         return self.remaining(now) <= 0
 
+    def stationary_crop_ready(self):
+        return (self.simplified and not self.automatic and self.candidate is not None
+                and self.confirmations >= MIN_IMAGES and not (self.anchored or self.advanced))
+
     def begin_verification(self, now):
         self.verification_pending = True
         if self.intensive and self.verification_deadline is None:

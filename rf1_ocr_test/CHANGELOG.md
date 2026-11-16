@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.20 Stable
+
+- Bei stillstehendem Zähler kann die vereinfachte Einrichtung den Rahmen nach drei frischen, übereinstimmenden Bildern vorläufig speichern. Sie speichert keinen bestätigten Zählerstand und prüft automatisch auf zwei Nachkommastellen weiter und startet die Feinprüfung wieder, sobald die offene Rolle zuverlässig lesbar erscheint.
+
 ## 0.5.19 Stable
 
 - Die Selbsteinrichtung prüft zuerst den zuletzt bestätigten Rahmen derselben Bildquelle und Ziffernaufteilung. Erst wenn er nicht mehr passt, beginnt die weitere Rahmensuche.

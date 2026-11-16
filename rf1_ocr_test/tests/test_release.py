@@ -30,7 +30,7 @@ class AppIdentityTests(unittest.TestCase):
     def test_release_metadata_preserves_stable_app_identity(self):
         config = yaml.safe_load((APP / "config.yaml").read_text(encoding="utf-8"))
         repository = yaml.safe_load((APP.parent / "repository.yaml").read_text(encoding="utf-8"))
-        self.assertEqual("0.5.19", config["version"])
+        self.assertEqual("0.5.20", config["version"])
         self.assertEqual("rf1_ocr_test", config["slug"])
         self.assertEqual("AI Meter Reader", config["name"])
         self.assertNotIn("stage", config)

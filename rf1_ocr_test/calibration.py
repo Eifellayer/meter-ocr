@@ -216,6 +216,8 @@ class Calibration:
     attempt_limit: int = MAX_ATTEMPTS
     previous_layout: Layout | None = None
     region: tuple | None = None
+    focused: bool = False
+    near_score: int = 0
 
     def expired(self, now):
         return now - self.started >= self.duration
@@ -285,6 +287,13 @@ class Calibration:
         candidates = (guided_layouts(frame, overlay, rules, len(self.seen) - 1, seed, self.region)
                       if self.region else layouts(frame, overlay, rules, len(self.seen) - 1, seed,
                                                   prefer_configured=self.automatic))
+        # A geometry that produced a stable OCR string is a strong signal, even
+        # when it did not yet match the external reference. Stay focused on it
+        # for the next fresh image instead of spending attempts on rotations
+        # that are visibly worse. Alternatives are re-enabled after a real OCR
+        # failure or once the focused candidate is confirmed.
+        if self.focused:
+            candidates = ((self.candidate,) if self.candidate is not None else ())
         examined = False
         for index, layout in enumerate(candidates, start=1):
             if stop() or self.attempts >= self.attempt_limit:
@@ -310,8 +319,14 @@ class Calibration:
                     status, _ = compare_sample(sample, readings[0], precision, integer_digits=digits)
                     reason = reference_rejection(sample, status)
                     if reason:
+                        # Keep a candidate with two agreeing OCR profiles as
+                        # the preferred geometry. The reference may be stale
+                        # or the meter may simply not have advanced yet.
+                        self.candidate = layout
+                        self.focused = True
+                        self.near_score = max(self.near_score, 2)
                         on_decision(reason)
-                        continue
+                        return None
                 rejection = "implausible"
                 same = layout == self.candidate
                 anchor = self.counter if same else baseline or {}
@@ -322,8 +337,12 @@ class Calibration:
                 continue
             self.confirmations = self.confirmations + 1 if same else 1
             self.anchored = (same and self.anchored) or has_reference or bool(baseline)
-            self.advanced = same and (self.advanced or counter["reading_litres"] > anchor["reading_litres"])
+            self.advanced = same and (self.advanced or (
+                "reading_litres" in anchor and
+                counter["reading_litres"] > anchor["reading_litres"]))
             self.candidate, self.counter = layout, counter
+            self.focused = False
+            self.near_score = 0
             if self.confirmations > self.best_confirmations:
                 self.best, self.best_confirmations = layout, self.confirmations
             if self.confirmations >= MIN_IMAGES and not (self.anchored or self.advanced):
@@ -338,5 +357,6 @@ class Calibration:
             if not examined:
                 on_decision("no_region")
             self.candidate, self.counter = None, {}
+            self.focused, self.near_score = False, 0
             self.confirmations, self.anchored, self.advanced = 0, False, False
         return None

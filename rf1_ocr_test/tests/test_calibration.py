@@ -148,8 +148,9 @@ class CalibrationTests(TestCase):
         self.candidates.return_value = []
         self.job.examine(frame(2), None, reference, 101, RULES,
                          lambda *_: "12345", lambda: False, on_decision=reasons.append)
-        self.assertEqual("no_region", reasons[-1])
-        self.assertEqual(1, self.job.attempts)
+        self.assertEqual("accepted", reasons[-1])
+        self.assertEqual(2, self.job.attempts)
+        self.assertEqual(1, self.job.confirmations)
 
     def test_deadline_and_stop(self):
         self.assertFalse(self.job.expired(899.9))

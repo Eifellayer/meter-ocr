@@ -64,6 +64,7 @@ class IngressFixture(TestCase):
         self.source_selected = False
         self.suggestions = []
         self.calibration = None
+        self.calibration_images = {}
         self.reset_state = "idle"
         self.activity = {"state": "waiting", "detail": "Wartet auf die nächste automatische Prüfung."}
         self.paused = False
@@ -101,6 +102,7 @@ class IngressFixture(TestCase):
             automatic_preview=self.automatic_preview, get_activity=lambda: dict(self.activity),
             discover_sources=lambda: self.suggestions,
             get_calibration=lambda: self.calibration, control_calibration=self.control_calibration,
+            get_calibration_image=lambda kind, version: self.calibration_images.get((kind, version)),
             get_auto_paused=lambda: self.paused,
             save_auto_paused=lambda value: setattr(self, "paused", value),
         )
@@ -139,6 +141,36 @@ class IngressTests(IngressFixture):
         self.assertEqual("waiting", status["state"])
         self.assertEqual(303, self.submit("/selbsteinrichtung", action="cancel")[0])
         self.assertEqual("cancelled", self.calibration["state"])
+
+    def test_calibration_image_endpoint_uses_versioned_images_and_existing_ingress_access(self):
+        with BytesIO() as stream:
+            Image.new("RGB", (250, 60), "black").save(stream, "JPEG")
+            photo = stream.getvalue()
+        self.calibration_images["crop", "13"] = photo
+        path = "/lernvorschau.jpg?bild=crop&v=13"
+        with open_core(Request(self.base + path)) as response:
+            self.assertEqual("image/jpeg", response.headers["Content-Type"])
+            self.assertEqual("no-store", response.headers["Cache-Control"])
+            self.assertEqual(photo, response.read())
+        with self.assertRaises(HTTPError) as unknown:
+            self.request("/lernvorschau.jpg?bild=crop&v=12")
+        self.assertEqual(404, unknown.exception.code)
+        with patch.object(panel, "SUPERVISOR_ADDRESS", "192.0.2.1"):
+            with self.assertRaises(HTTPError) as unauthorized:
+                self.request(path)
+        self.assertEqual(403, unauthorized.exception.code)
+
+    def test_geometry_retry_countdown_and_default_setup_opt_in(self):
+        page, _ = self.request("/")
+        wizard = page.split('id="setup-form"', 1)[1].split('</form>', 1)[0]
+        self.assertIn('name="self_repair_enabled" value="1" checked', wizard)
+        self.rules["self_repair_enabled"] = True
+        self.history.write_text(json.dumps({"geometry_recovery": {"failures": 7}}))
+        status = json.loads(self.request("/automatic")[0])
+        self.assertEqual("Neukalibrierung nach 3 weiteren Fehlmessungen.", status["geometry_warning"])
+        self.history.write_text(json.dumps({"geometry_recovery": {"failures": 10, "scheduled_at": 123}}))
+        status = json.loads(self.request("/automatic")[0])
+        self.assertIn("Zehn Fehlmessungen", status["geometry_warning"])
 
     def test_reset_automatic_crop_preserves_other_saved_settings(self):
         self.rules.update(crop_mode="manual", crop="10,10,290,100", width=150, rotation=-6,
@@ -688,6 +720,26 @@ class BrowserTests(IngressFixture):
             page.locator("#tab-overview").click()
             page.locator("#calibration-overview-progress").wait_for(state="visible")
             self.assertEqual("20", page.locator("#calibration-overview-progress").get_attribute("value"))
+            for kind, size in (("frame", (600, 400)), ("crop", (300, 50))):
+                with BytesIO() as stream:
+                    Image.new("RGB", size, "gray").save(stream, "JPEG")
+                    self.calibration_images[kind, "15"] = stream.getvalue()
+            self.calibration["preview"] = {"frame": 15}
+            display = page.locator("#calibration-overview .calibration-photo-panel")
+            display.get_by_text("Die App sucht in diesem Bild nach der Ziffernreihe.").wait_for()
+            self.calibration.update(state="waiting", tested=73, attempts=0, preview={"frame": 15, "reason": "no_region"})
+            page.locator("#calibration-overview-state").filter(has_text="Noch kein Ziffernbereich gefunden").wait_for()
+            self.assertIn("Bilder geprüft: 73 · Rahmen getestet: 0", page.locator("#calibration-overview-state").inner_text())
+            self.assertEqual(600, display.locator('[data-image="frame"]').evaluate(
+                "async image => { await image.decode(); return image.naturalWidth; }"))
+            self.calibration["preview"] = {
+                "frame": 15, "crop": 15, "region": [0.2, 0.3, 0.5, 0.2], "angle": -6, "reading": "12345.6?8", "reason": "unclear",
+            }
+            display.get_by_text("OCR gelesen: 12345.6?8", exact=True).wait_for()
+            display.get_by_text("Mindestens eine benötigte Ziffer blieb unklar.", exact=True).wait_for()
+            self.assertEqual(300, display.locator('[data-image="crop"]').evaluate(
+                "async image => { await image.decode(); return image.naturalWidth; }"))
+            self.assertEqual("20%", display.locator(".calibration-crop-region").evaluate("box => box.style.left"))
             page.locator("#open-calibration").click()
             page.locator("#calibration-title").wait_for()
             browser.close()

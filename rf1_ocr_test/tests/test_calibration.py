@@ -5,12 +5,13 @@ from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
 
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import calibration
-from calibration import Calibration, Layout, MAX_ATTEMPTS, unrotate_box
+from calibration import Calibration, Layout, MAX_ATTEMPTS, layouts, neighbour_layout, unrotate_box
+from layout import find_neighbour_digit_rows, find_raw_digit_row, scale_digit_boxes, turn_crop
 
 LAYOUT = Layout((0, 0, 80, 20), -3, 80)
 OTHER_LAYOUT = Layout((10, 0, 90, 20), 3, 80)
@@ -19,6 +20,59 @@ RULES = {"decimals": 0, "fraction_digits": 0, "integer_digits": 5, "max_flow_lph
 
 def frame(number):
     return Image.new("RGB", (100, 30), (0, 20, number))
+
+
+def irregular_meter(text):
+    image = Image.new("RGB", (600, 360), "#676767")
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((152, 135, 415, 215), fill="white")
+    font = ImageFont.truetype("DejaVuSansMono.ttf", 58)
+    for char, x in zip(text, (180, 222, 264, 339, 385)):
+        draw.text((x, 176), char, font=font, fill="black", anchor="mm")
+    return image
+
+
+class NeighbourGeometryTests(TestCase):
+    def test_one_visible_digit_can_seed_neighbours_inside_a_visible_window(self):
+        photo = irregular_meter("  3  ")
+        self.assertIsNone(find_raw_digit_row(photo, 5, 0))
+        self.assertEqual([], find_neighbour_digit_rows(Image.new("RGB", photo.size, "gray"), 5, 0))
+        found = find_neighbour_digit_rows(photo, 5, 0)
+        self.assertTrue(found)
+        crop, _, boxes = found[0]
+        left, _, right, _ = boxes[2]
+        self.assertLess(crop[0] + left, 264)
+        self.assertGreater(crop[0] + right, 264)
+        self.assertEqual(5, len(boxes))
+        self.assertLessEqual(len(found), 2)
+
+    def test_ocr_reads_a_meter_that_the_strict_row_search_rejects(self):
+        from checks import OCR_PROFILES
+        from run import read_visible_digits, select_register
+
+        photo = irregular_meter("12345")
+        self.assertIsNone(find_raw_digit_row(photo, 5, 0))
+        for whole, fraction, expected in ((5, 0, "12345"), (3, 2, "123.45")):
+            with self.subTest(whole=whole, fraction=fraction):
+                rules = {**RULES, "integer_digits": whole, "fraction_digits": fraction}
+                selected = next(item for item in layouts(photo, None, rules, 0) if item.method == "neighbours")
+                register = select_register(photo, None, selected.box, selected.width, selected.rotation,
+                                           whole, fraction, digit_boxes=selected.digit_boxes)
+                reading = read_visible_digits(*register[:4], False, "auto", profile=OCR_PROFILES[0],
+                                              whole_digits=whole, fraction_digits=fraction, prefer_boxes=True)
+                self.assertEqual(expected, reading)
+
+    def test_neighbour_boxes_fit_a_rotated_crop(self):
+        photo = turn_crop(irregular_meter("12345"), 3)
+        cropped = turn_crop(photo, -3, expand=False)
+        candidate = find_neighbour_digit_rows(cropped, 5, 0)[0]
+        selected = neighbour_layout(photo, -3, candidate, 5, 0)
+        self.assertIsNotNone(selected)
+        image = turn_crop(photo.crop(selected.box), -3)
+        boxes = scale_digit_boxes(selected.digit_boxes, image.size)
+        self.assertEqual(5, len(boxes))
+        self.assertTrue(all(0 <= l < r <= image.width and 0 <= t < b <= image.height
+                            for l, t, r, b in boxes))
 
 
 class CalibrationTests(TestCase):
@@ -56,6 +110,24 @@ class CalibrationTests(TestCase):
         self.examine(2, 101, reference=False)
         self.assertIsNone(self.examine(3, 102, reference=False))
         self.assertEqual(LAYOUT, self.examine(4, 103, "12346", reference=False))
+
+    def test_learning_tries_the_configured_crop_when_detection_finds_nothing(self):
+        photo = frame(1)
+        rules = {**RULES, "crop_mode": "auto", "crop": "0,0,80,20", "rotation": 0, "width": 80}
+        with patch.object(calibration, "find_raw_digit_row", return_value=None):
+            self.assertIn(Layout((0, 0, 80, 20), 0, 80), list(layouts(photo, None, rules, 0)))
+
+    def test_reports_why_a_detected_crop_was_rejected(self):
+        reasons = []
+        reference = {"reference_time": 100, "actual_value": "12345", "raw_value": "12345"}
+        self.job.examine(frame(1), None, reference, 100, RULES,
+                         lambda *_: "12346", lambda: False, on_decision=reasons.append)
+        self.assertEqual(["reference_mismatch"], reasons)
+        self.candidates.return_value = []
+        self.job.examine(frame(2), None, reference, 101, RULES,
+                         lambda *_: "12345", lambda: False, on_decision=reasons.append)
+        self.assertEqual("no_region", reasons[-1])
+        self.assertEqual(1, self.job.attempts)
 
     def test_deadline_and_stop(self):
         self.assertFalse(self.job.expired(899.9))

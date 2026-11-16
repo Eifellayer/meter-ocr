@@ -41,7 +41,8 @@ from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, MAX_FLOW_LPH, Implausi
                          accumulate_consumption, fallback_detail, format_cubic_metres)
 from layout import (MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, find_digit_row,
                     digit_box_settings, find_raw_digit_row, rotated_width, scale_digit_boxes, turn_crop)
-from meter_learning import alignment_rollback, observe_alignment, observe_flow, propose_digit_boxes, suggested_interval
+from meter_learning import (GEOMETRY_REPAIR_LIMIT, GEOMETRY_REPAIR_SECONDS, alignment_rollback, observe_alignment, observe_flow,
+                            observe_geometry_failures, propose_digit_boxes, suggested_interval)
 from reminder import Reminder
 from notification_settings import (DEFAULT_DELIVERY_HOURS, DEFAULT_REVIEW_MINUTES, PUSH_SERVICE,
                                    notification_rules)
@@ -334,8 +335,16 @@ def read_visible_digits(register, integer_width, whole_boxes, fraction_boxes, li
     return f"{whole}.{fraction.ljust(fraction_digits, '?')}" if fraction_digits else whole
 
 
+def calibration_jpeg(frame, max_size):
+    image = frame.convert("RGB")
+    image.thumbnail(max_size, Image.Resampling.LANCZOS)
+    with io.BytesIO() as buffer:
+        image.save(buffer, "JPEG", quality=84)
+        return buffer.getvalue()
+
+
 def draw_test_preview(register, integer_width, whole_boxes, fraction_boxes, reading,
-                      whole_digits=5, fraction_digits=3, readings=None, composed=False):
+                      whole_digits=5, fraction_digits=3, readings=None, composed=False, pending=False):
     """Mark OCR digit regions and the actual read characters for manual diagnostics.
 
     Green: a digit was read without observed variation; yellow: attempts disagreed
@@ -387,11 +396,11 @@ def draw_test_preview(register, integer_width, whole_boxes, fraction_boxes, read
         l, t, r, b = [int(coord) for coord in box]
         if not (0 <= l < r <= w and 0 <= t < b <= h):
             continue
-        color = ((203, 65, 77) if not chars[idx].isdigit() else
+        color = ((71, 157, 194) if pending else (203, 65, 77) if not chars[idx].isdigit() else
                  (241, 184, 54) if idx in uncertain else (36, 170, 92))
         draw.rectangle((l, t, r - 1, b - 1), outline=color, width=stroke)
         # The label is drawn on a filled patch for contrast against the counter.
-        label = chars[idx]
+        label = str(idx + 1) if pending else chars[idx]
         draw.rectangle((l, t, min(r, l + max(15, w // 45)), min(b, t + 16)),
                        fill=color)
         draw.text((l + 3, t + 2), label, fill=(255, 255, 255))
@@ -584,7 +593,7 @@ def main():
         wake_worker.set()
 
     auto_rules = {"decimals": default_decimals, "attempts": default_attempts, "polarity": "auto",
-                  "precision_mode": False, "fine_alignment_enabled": False, "adaptive_interval_enabled": False,
+                  "precision_mode": False, "fine_alignment_enabled": False, "adaptive_interval_enabled": False, "self_repair_enabled": False,
                   "reflection_estimate_enabled": False, "reflection_suggestion_hidden": False,
                   "reflection_confirmed_id": "",
                   "crop_mode": "auto", "crop": options["ausschnitt"],
@@ -657,6 +666,7 @@ def main():
                           "meter_display": meter_display, "fallback_value": fallback_value,
                           "precision_mode": saved_rules.get("precision_mode") is True,
                           "fine_alignment_enabled": saved_rules.get("fine_alignment_enabled") is True,
+                          "self_repair_enabled": saved_rules.get("self_repair_enabled") is True,
                           "adaptive_interval_enabled": saved_rules.get("adaptive_interval_enabled") is True,
                           "reflection_estimate_enabled": saved_rules.get("reflection_estimate_enabled") is True,
                           "reflection_suggestion_hidden": saved_rules.get("reflection_suggestion_hidden") is True,
@@ -680,6 +690,7 @@ def main():
         fallback_value = values.get("fallback_value", auto_rules["fallback_value"])
         fallback_time = values.get("fallback_time", auto_rules["fallback_time"])
         precision_mode = values.get("precision_mode", auto_rules["precision_mode"])
+        self_repair = values.get("self_repair_enabled", auto_rules["self_repair_enabled"])
         fine_alignment = values.get("fine_alignment_enabled", auto_rules["fine_alignment_enabled"])
         adaptive_interval = values.get("adaptive_interval_enabled", auto_rules["adaptive_interval_enabled"])
         reflection_estimate_enabled = values.get("reflection_estimate_enabled", auto_rules["reflection_estimate_enabled"])
@@ -692,7 +703,7 @@ def main():
                 or type(integer_digits) is not int or not 1 <= integer_digits <= 9
                 or type(fraction_digits) is not int or not 0 <= fraction_digits <= 3
                 or meter_display not in ("rollers", "digital", "mixed")
-                or type(precision_mode) is not bool or type(fine_alignment) is not bool or type(adaptive_interval) is not bool
+                or type(precision_mode) is not bool or type(fine_alignment) is not bool or type(adaptive_interval) is not bool or type(self_repair) is not bool
                 or type(reflection_estimate_enabled) is not bool or type(reflection_suggestion_hidden) is not bool
                 or not isinstance(reflection_confirmed_id, str) or len(reflection_confirmed_id) > 80
                 or not isinstance(fallback_value, str) or not isinstance(fallback_time, str)):
@@ -719,7 +730,7 @@ def main():
                          "interval_minutes": interval_minutes, "integer_digits": integer_digits,
                          "fraction_digits": fraction_digits, "meter_display": meter_display,
                          "precision_mode": precision_mode, "fine_alignment_enabled": fine_alignment,
-                         "adaptive_interval_enabled": adaptive_interval,
+                         "adaptive_interval_enabled": adaptive_interval, "self_repair_enabled": self_repair,
                          "reflection_estimate_enabled": reflection_estimate_enabled,
                          "reflection_suggestion_hidden": reflection_suggestion_hidden,
                          "reflection_confirmed_id": reflection_confirmed_id,
@@ -820,6 +831,17 @@ def main():
     calibration = None
     calibration_configuration = None
     calibration_next = 0.0
+    calibration_preview = {}
+    calibration_images = {}
+    calibration_preview_version = 0
+    geometry_backup = HISTORY.with_name("geometry-backup.json")
+
+    def read_geometry_backup():
+        try:
+            backup = json.loads(geometry_backup.read_text(encoding="utf-8"))
+            return backup["rules"] if backup["source"] == get_source()[0] else None
+        except (OSError, ValueError, TypeError, KeyError):
+            return None
 
     def calibration_configuration_now():
         return get_auto_rules(), get_source()
@@ -827,9 +849,20 @@ def main():
     def control_calibration(action, limit):
         nonlocal calibration, calibration_configuration, calibration_next
         with settings_lock:
+            running = calibration is not None and calibration.state in ("waiting", "testing") and not calibration.expired(time.monotonic())
             if action == "cancel":
-                if calibration is not None and calibration.state in ("waiting", "testing"):
+                if running:
                     calibration.state = "cancelled"
+            elif action == "restore":
+                backup = read_geometry_backup()
+                if running or not backup:
+                    raise ValueError("No available geometry backup")
+                keys = ("crop_mode", "crop", "width", "rotation", "digit_boxes")
+                save_auto_rules({**get_auto_rules(), **{key: backup[key] for key in keys},
+                                 "crop_revision": str(time.time_ns()) if backup["crop_mode"] == "manual" else ""})
+                calibration = None
+                calibration_preview.clear()
+                calibration_images.clear()
             else:
                 source, pending = get_source()
                 if pending or not source["selected"] or get_auto_paused():
@@ -838,11 +871,20 @@ def main():
                     raise ValueError("Invalid calibration image limit")
                 now = time.monotonic()
                 configuration = calibration_configuration_now()
-                if (calibration is not None and calibration.state in ("waiting", "testing")
-                        and not calibration.expired(now) and calibration.limit == limit
-                        and configuration == calibration_configuration):
+                if running and (action == "repair" or (
+                        calibration.limit == limit and configuration == calibration_configuration)):
                     return
-                calibration = Calibration(limit=limit, started=now)
+                repair = action == "repair"
+                previous = (calibration.best if calibration and calibration_configuration[1][0] == source else None)
+                if repair:
+                    atomic_write(geometry_backup, json.dumps({"source": source, "rules": get_auto_rules()}).encode(),
+                                 0o600)
+                calibration = Calibration(limit=limit, started=now, automatic=repair,
+                                          duration=GEOMETRY_REPAIR_SECONDS if repair else TIME_LIMIT,
+                                          attempt_limit=GEOMETRY_REPAIR_LIMIT if repair else MAX_ATTEMPTS,
+                                          previous_layout=previous)
+                calibration_preview.clear()
+                calibration_images.clear()
                 calibration_configuration = configuration
                 calibration_next = now
             wake_worker.set()
@@ -852,6 +894,7 @@ def main():
             if calibration is None:
                 return None
             status = calibration.status(time.monotonic())
+            status["preview"] = dict(calibration_preview)
             if not status["seconds"] and status["state"] in ("waiting", "testing"):
                 status["state"] = "timeout"
             if status["state"] == "saved":
@@ -860,8 +903,13 @@ def main():
                 status["proposal"] = calibration.best.settings()
             return status
 
+    def calibration_image(kind, version):
+        with settings_lock:
+            return next((content for revision, content in calibration_images.get(kind, ())
+                         if str(revision) == version), None)
+
     def run_calibration(active_rules, active_source, mode, base, camera, reference, source_key):
-        nonlocal calibration, calibration_next
+        nonlocal calibration, calibration_next, calibration_preview_version
         with settings_lock:
             now = time.monotonic()
             job = calibration
@@ -879,7 +927,7 @@ def main():
             job.state = "testing"
             job.stage = "capture"
             attempt = deepcopy(job)
-        deadline = job.started + TIME_LIMIT
+        deadline = job.started + job.duration
 
         def stopped():
             return time.monotonic() >= deadline or calibration is not job or job.state == "cancelled" or get_auto_paused()
@@ -894,6 +942,19 @@ def main():
                 if calibration is job and job.state == "testing":
                     job.stage, job.variant, job.rotation = stage, variant, rotation
                     job.attempts = attempt.attempts
+
+        def report_image(kind, content, **details):
+            nonlocal calibration_preview_version
+            with settings_lock:
+                if calibration is not job or job.state != "testing":
+                    return
+                calibration_preview_version += 1
+                recent = calibration_images.setdefault(kind, [])
+                recent.append((calibration_preview_version, content))
+                del recent[:-2]
+                if kind == "frame":
+                    calibration_preview.clear()
+                calibration_preview.update(details, **{kind: calibration_preview_version})
 
         set_activity("working", "Selbsteinrichtung prüft Bildausschnitt und Drehung.")
         result = None
@@ -936,26 +997,70 @@ def main():
                             except (OSError, ValueError, Image.DecompressionBombError):
                                 pass
 
+                        previous_layout = None
+                        frame_ready = False
+                        readings = []
+                        whole = active_rules["integer_digits"]
+                        fraction = active_rules["fraction_digits"]
+
+                        def on_image():
+                            nonlocal frame_ready
+                            try:
+                                report_image("frame", calibration_jpeg(frame, (720, 540)))
+                                frame_ready = True
+                            except (OSError, ValueError):
+                                pass
+
+                        def report_crop(layout, register, reading):
+                            if not frame_ready:
+                                return
+                            box = layout.box
+                            region = [box[0] / frame.width, box[1] / frame.height,
+                                      (box[2] - box[0]) / frame.width, (box[3] - box[1]) / frame.height]
+                            try:
+                                preview = draw_test_preview(
+                                    *register[:4], reading, whole, fraction, readings=readings, pending=reading is None,
+                                )
+                                report_image("crop", calibration_jpeg(preview, (820, 300)),
+                                             region=region, reading=reading, angle=layout.rotation,
+                                             approximate=not bool(layout.digit_boxes), method=layout.method, reason=None)
+                            except (OSError, ValueError):
+                                pass
+
+                        def report_decision(reason):
+                            with settings_lock:
+                                if frame_ready and calibration is job and job.state == "testing":
+                                    calibration_preview["reason"] = reason
+
                         def read(layout, profile):
+                            nonlocal previous_layout
                             register = select_register(
-                                frame, None, layout.box, layout.width, layout.rotation,
-                                active_rules["integer_digits"], active_rules["fraction_digits"], digit_boxes=layout.digit_boxes,
+                                frame, None, layout.box, layout.width, layout.rotation, whole, fraction,
+                                digit_boxes=layout.digit_boxes,
                             )
-                            return read_visible_digits(
+                            if layout != previous_layout:
+                                readings.clear()
+                                previous_layout = layout
+                                report_crop(layout, register, None)
+                            reading = read_visible_digits(
                                 *register[:4], options["helle_ziffern"], active_rules["polarity"], profile=profile,
-                                whole_digits=active_rules["integer_digits"],
-                                fraction_digits=active_rules["fraction_digits"], deadline=deadline,
+                                whole_digits=whole, fraction_digits=fraction, deadline=deadline,
                                 prefer_boxes=bool(layout.digit_boxes),
                             )
+                            readings.append(reading)
+                            report_crop(layout, register, reading)
+                            return reading
 
                         if attempt.verification_pending:
                             report_calibration("verify", rotation=attempt.candidate.rotation)
-                            selected = attempt.verify(frame, sample, captured, active_rules, read, stopped)
+                            selected = attempt.verify(frame, sample, captured, active_rules, read, stopped,
+                                                      on_image=on_image, on_decision=report_decision)
                         else:
                             report_calibration("search")
                             candidate = attempt.examine(
                                 frame, overlay, sample, captured, active_rules, read, stopped, baseline,
                                 on_attempt=lambda variant, rotation: report_calibration("ocr", variant, rotation),
+                                on_image=on_image, on_decision=report_decision,
                             )
                             attempt.verification_pending = candidate is not None
         except (OSError, ValueError, TypeError, Image.DecompressionBombError) as error:
@@ -974,7 +1079,7 @@ def main():
                     attempt.state = "saved"
                 except (OSError, ValueError):
                     attempt.state = "save_failed"
-            elif len(attempt.seen) >= attempt.limit or attempt.attempts >= MAX_ATTEMPTS:
+            elif len(attempt.seen) >= attempt.limit or attempt.attempts >= attempt.attempt_limit:
                 attempt.state = "failed"
             else:
                 attempt.state = "waiting"
@@ -994,6 +1099,7 @@ def main():
         get_activity=get_automatic_activity,
         get_auto_paused=get_auto_paused, save_auto_paused=save_auto_paused,
         settings_lock=settings_lock, get_calibration=calibration_status, control_calibration=control_calibration,
+        get_calibration_image=calibration_image, has_calibration_backup=lambda: read_geometry_backup() is not None,
     )
     reminder = Reminder(token)
     pending_image = None
@@ -1004,13 +1110,13 @@ def main():
     def perform_factory_reset():
         nonlocal history, configured_source, setup_pending, auto_rules, delivery, source_selected
         nonlocal pending_image, startup, published_standalone, snapshot
-        nonlocal handled_automatic_request
+        nonlocal handled_automatic_request, calibration
         try:
             reminder.clear_for_reset(history)
             paths = (
                 HISTORY, AUTO_RULES, SOURCE_SETTINGS, NOTIFICATIONS, LANGUAGE_MODES,
                 HISTORY.with_name("manual-test-settings.json"), DESTINATION, GOOD_IMAGE,
-                TEST_IMAGE, TEST_SOURCE_IMAGE, AUTOMATIC_PREVIEW, AUTO_PAUSED,
+                TEST_IMAGE, TEST_SOURCE_IMAGE, AUTOMATIC_PREVIEW, AUTO_PAUSED, geometry_backup,
             )
             for path in paths:
                 path.unlink(missing_ok=True)
@@ -1028,7 +1134,10 @@ def main():
             atomic_write(EFFECTIVE_OPTIONS, json.dumps(snapshot, indent=2).encode("utf-8"), 0o600)
             handled_automatic_request = automatic_request
             reset_manual_progress()
-            control_calibration("cancel", 0)
+            with settings_lock:
+                calibration = None
+                calibration_preview.clear()
+                calibration_images.clear()
             reset_result["value"] = "done"
         except (OSError, ValueError, TypeError) as error:
             print(f"Werkreset konnte nicht abgeschlossen werden: {type(error).__name__}")
@@ -1128,7 +1237,7 @@ def main():
                           "source_connection_status", "source_connection_detail",
                           "last_digit_failures",
                           "standalone_candidate",
-                          "learned_rotation",
+                          "learned_rotation", "geometry_recovery",
                           "reflection_anchor", "reflection_pending", "reflection_estimate", "reflection_streak", "reflection_live_estimate",
                           "last_slfork_match", "last_reference", "last_reference_time",
                           "last_reference_is_fallback", "ocr_value", "ocr_readings"):
@@ -1140,6 +1249,8 @@ def main():
         new_standalone = None
         standalone_reference = None
         fine_update = None
+        recover_geometry = False
+        geometry_warning = False
         # Confirmations obtained with another precision are not valid evidence
         # for the newly chosen automatic comparison rules.
         format_changed = any(history.get(key, default) != value for key, default, value in (
@@ -1734,6 +1845,16 @@ def main():
                                 fine_update = observe_alignment(
                                     learning, key, image_time, digits, ocr or "", previous_boxes, candidate_boxes, trial,
                                 )
+                    if not raw_fallback:
+                        geometry_key = [source_key, active_rules["crop_mode"], active_rules["crop"],
+                                        active_rules["rotation"], active_rules["width"], integer_digits,
+                                        fraction_digits, active_rules["crop_revision"]]
+                        recovery = updated.setdefault("geometry_recovery", {})
+                        geometry_warning = observe_geometry_failures(
+                            recovery, geometry_key, image_time, outcome,
+                            reading_problem=not validation_detail and not ocr_error and ocr_attempts > 0,
+                        )
+                        recover_geometry = geometry_warning and active_rules["self_repair_enabled"] and fine_update is None
                     updated.update(
                         last_reference=(standalone_reference["reading"] if standalone_reference else
                                         sample.get("reference", sample["actual_value"])),
@@ -1840,6 +1961,29 @@ def main():
         except OSError as error:
             print(f"Home Assistant konnte nicht aktualisiert werden: {error}")
         check_reminder(reminder, history, now, review_after)
+        repair_started = False
+        if recover_geometry:
+            with settings_lock:
+                if get_auto_rules() == active_rules and get_source()[0] == active_source and not get_auto_paused():
+                    try:
+                        control_calibration("repair", GEOMETRY_REPAIR_LIMIT)
+                        repair_started = True
+                    except (OSError, ValueError) as error:
+                        print(f"Automatische Nachjustierung nicht gestartet: {type(error).__name__}")
+        if geometry_warning and reminder.enabled:
+            message = ("Nach zehn Fehlmessungen sucht die App einmal nach einem besseren Ziffernrahmen. "
+                       "Die bisherigen Einstellungen sind gesichert. Das Ergebnis steht in der App."
+                       if repair_started else "Zehn unterschiedliche Prüfungen waren erfolglos. "
+                                              "Bitte prüfe den Bildausschnitt in der App.")
+            try:
+                reminder.call_service("persistent_notification.create", {
+                    "notification_id": f"{NAMESPACE}_geometry_repair",
+                    "title": f"{APP_NAME}: Bildausschnitt prüfen",
+                    "message": message,
+                })
+            except OSError as error:
+                print(f"Nachjustierungs-Hinweis konnte nicht gesendet werden: {type(error).__name__}")
+
 
 
 if __name__ == "__main__":

@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from checks import provisional_digit_estimate
 from layout import digit_box_settings, scale_digit_boxes
-from meter_learning import alignment_rollback, observe_alignment, observe_flow, suggested_interval
+from meter_learning import alignment_rollback, observe_alignment, observe_flow, observe_geometry_failures, suggested_interval
 
 
 class MeterLearningTests(TestCase):
@@ -52,3 +52,16 @@ class MeterLearningTests(TestCase):
         observe_flow(state, source, 700, "123.999", 3, 3, 12, 6000)
         self.assertEqual({"11", "12"}, set(state["months"]))
         self.assertEqual(60, suggested_interval(60, state, ["different camera"], 11))
+
+
+    def test_geometry_retry_starts_once_after_ten_distinct_failed_measurements(self):
+        state, key = {}, ["camera", "zone"]
+        for stamp in range(1, 10):
+            self.assertFalse(observe_geometry_failures(state, key, stamp, "ocr_unclear", reading_problem=True))
+            self.assertFalse(observe_geometry_failures(state, key, stamp, "ocr_unclear", reading_problem=True))
+        self.assertEqual(9, state["failures"])
+        self.assertTrue(observe_geometry_failures(state, key, 10, "difference", reading_problem=True))
+        self.assertFalse(observe_geometry_failures(state, key, 11, "ocr_unclear", reading_problem=True))
+        self.assertFalse(observe_geometry_failures(state, key, 12, "match", reading_problem=False))
+        self.assertEqual(0, state["failures"])
+        self.assertNotIn("scheduled_at", state)

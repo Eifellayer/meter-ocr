@@ -33,9 +33,10 @@ EN_UI = {
     RAW_ROW_UNCLEAR: "Could not find a clear digit row. Set the crop in the manual test.",
     MANUAL_ROW_UNCLEAR: "The digits are hard to read. Check the image rotation, camera angle, focus and lighting.",
     "Selbstreparatur bei wiederholten Fehlmessungen": "Self-repair after repeated failed readings",
-    "Nach zehn unterschiedlichen Fehlmessungen sichert die App den bisherigen Rahmen und versucht einmal, ihn zu verbessern. Ohne sichere Gegenprobe bleibt der bisherige Rahmen gültig.":
-        "After ten distinct failed readings, the app backs up the current crop and tries once to improve it. The current crop stays in use until a replacement passes verification.",
-    "Zehn Fehlmessungen. Bitte Bildausschnitt prüfen.": "Ten failed readings. Check the image crop.",
+    "Die App sucht frühestens nach zwei Stunden anhaltender Erkennungsprobleme einen besseren Rahmen. Probleme nur an der letzten Rolle zählen dabei nicht mit. Der bisherige Rahmen gilt bis zur erfolgreichen Gegenprobe.":
+        "The app looks for a better crop after at least two hours of persistent recognition problems. Problems with the last digit alone do not count. The current crop stays in use until a replacement passes verification.",
+    "Die App beobachtet, ob die Erkennungsprobleme anhalten.": "The app is checking whether the recognition problems persist.",
+    "Die Ziffernerkennung ist seit mindestens zwei Stunden gestört. Bitte Bildausschnitt prüfen.": "Recognition has been impaired for at least two hours. Check the image crop.",
     "Gesicherten Ausschnitt wiederherstellen": "Restore the backed-up crop",
     "Gesicherter Ausschnitt wiederhergestellt.": "The backed-up crop has been restored.",
     "Automatische Neukalibrierung ist ausgeschaltet.": "Automatic recalibration is disabled.",

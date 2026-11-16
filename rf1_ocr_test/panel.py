@@ -20,7 +20,6 @@ from calibration import (
     DEFAULT_INTENSIVE_AGREEMENT, DEFAULT_LIMIT, MIN_IMAGE_LIMIT, MAX_IMAGES,
     search_region, valid_intensive_agreement,
 )
-from meter_learning import GEOMETRY_REPAIR_FAILURES
 from checks import (DEFAULT_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, WARNING_DETAIL_AFTER, meter_prefix,
                     LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, REFLECTION_SUGGEST_AFTER, STANDALONE_PENDING, STANDALONE_REJECTED_NOTICE,
                     STANDALONE_VERIFIED_NOTICE, last_check_at, reschedule_next_check,
@@ -616,7 +615,7 @@ name: Zählerstand (OCR)</code></pre>
 </div>
 <div class="setup-help">
 <label class="check-option"><input type="checkbox" name="self_repair_enabled" value="1" {wizard_self_repair_checked}> Selbstreparatur bei wiederholten Fehlmessungen</label>
-<p class="settings-note">Nach zehn unterschiedlichen Fehlmessungen sichert die App den bisherigen Rahmen und versucht einmal, ihn zu verbessern. Ohne sichere Gegenprobe bleibt der bisherige Rahmen gültig.</p>
+<p class="settings-note">Die App sucht frühestens nach zwei Stunden anhaltender Erkennungsprobleme einen besseren Rahmen. Probleme nur an der letzten Rolle zählen dabei nicht mit. Der bisherige Rahmen gilt bis zur erfolgreichen Gegenprobe.</p>
 </div>
 <div class="setup-help">
 <input type="hidden" name="reflection_option_present" value="1">
@@ -718,7 +717,7 @@ name: Zählerstand (OCR)</code></pre>
 <summary>ⓘ Automatik im Hintergrund verbessern</summary>
 <label class="check-option"><input type="checkbox" name="fine_alignment_enabled" value="1" {fine_alignment_checked}> Ziffernrahmen langfristig feinjustieren</label>
 <label class="check-option"><input type="checkbox" name="self_repair_enabled" value="1" {self_repair_checked}> Selbstreparatur bei wiederholten Fehlmessungen</label>
-<p>Nach zehn unterschiedlichen Fehlmessungen sichert die App den bisherigen Rahmen und versucht einmal, ihn zu verbessern. Ohne sichere Gegenprobe bleibt der bisherige Rahmen gültig.</p>
+<p>Die App sucht frühestens nach zwei Stunden anhaltender Erkennungsprobleme einen besseren Rahmen. Probleme nur an der letzten Rolle zählen dabei nicht mit. Der bisherige Rahmen gilt bis zur erfolgreichen Gegenprobe.</p>
 <label class="check-option"><input type="checkbox" name="adaptive_interval_enabled" value="1" {adaptive_interval_checked}> Prüfintervall bei erwarteten Rollenwechseln verkürzen (SLFork)</label>
 </details>
 <div class="reflection-settings setup-help" id="reflection-settings">
@@ -2231,8 +2230,8 @@ def start_panel(
 
     def geometry_warning(history, auto_rules, language):
         recovery = history.get("geometry_recovery", {})
-        if recovery.get("scheduled_at"):
-            message = "Zehn Fehlmessungen. Bitte Bildausschnitt prüfen."
+        if recovery.get("scheduled_at") and recovery.get("first_failure_at"):
+            message = "Die Ziffernerkennung ist seit mindestens zwei Stunden gestört. Bitte Bildausschnitt prüfen."
             return EN_UI[message] if language == "en" else message
         failures = recovery.get("failures", 0)
         if not failures:
@@ -2240,10 +2239,8 @@ def start_panel(
         if not auto_rules.get("self_repair_enabled"):
             message = "Automatische Neukalibrierung ist ausgeschaltet."
             return EN_UI[message] if language == "en" else message
-        remaining = GEOMETRY_REPAIR_FAILURES - failures
-        if language == "en":
-            return f"Automatic recalibration after {remaining} more failed readings." if remaining != 1 else "Automatic recalibration after one more failed reading."
-        return f"Neukalibrierung nach {remaining} weiteren Fehlmessungen." if remaining != 1 else "Neukalibrierung nach einer weiteren Fehlmessung."
+        message = "Die App beobachtet, ob die Erkennungsprobleme anhalten."
+        return EN_UI[message] if language == "en" else message
 
     def automatic_summary(history, language, auto_rules):
         stabilizing_until, optimization_until = setup_deadlines(auto_rules, get_source()[0])

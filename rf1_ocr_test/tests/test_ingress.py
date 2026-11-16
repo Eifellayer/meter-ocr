@@ -207,17 +207,17 @@ class IngressTests(IngressFixture):
         self.assertEqual(303, self.submit("/selbsteinrichtung", action="start", region="80,350,890,680")[0])
         self.assertEqual((80, 350, 890, 680), self.calibration["region"])
 
-    def test_geometry_retry_countdown_and_default_setup_opt_in(self):
+    def test_geometry_retry_status_and_default_setup_opt_in(self):
         page, _ = self.request("/")
         wizard = page.split('id="setup-form"', 1)[1].split('</form>', 1)[0]
         self.assertIn('name="self_repair_enabled" value="1" checked', wizard)
         self.rules["self_repair_enabled"] = True
-        self.history.write_text(json.dumps({"geometry_recovery": {"failures": 7}}))
+        self.history.write_text(json.dumps({"geometry_recovery": {"failures": 2}}))
         status = json.loads(self.request("/automatic")[0])
-        self.assertEqual("Neukalibrierung nach 3 weiteren Fehlmessungen.", status["geometry_warning"])
-        self.history.write_text(json.dumps({"geometry_recovery": {"failures": 10, "scheduled_at": 123}}))
+        self.assertEqual("Die App beobachtet, ob die Erkennungsprobleme anhalten.", status["geometry_warning"])
+        self.history.write_text(json.dumps({"geometry_recovery": {"failures": 3, "first_failure_at": 100, "scheduled_at": 7300}}))
         status = json.loads(self.request("/automatic")[0])
-        self.assertIn("Zehn Fehlmessungen", status["geometry_warning"])
+        self.assertIn("seit mindestens zwei Stunden gestört", status["geometry_warning"])
 
     def test_reset_automatic_crop_preserves_other_saved_settings(self):
         self.rules.update(crop_mode="manual", crop="10,10,290,100", width=150, rotation=-6,

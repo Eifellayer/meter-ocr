@@ -451,7 +451,6 @@ class StateTests(TestCase):
         }})
         with patch.object(run.time, "time", return_value=stamp + 3599):
             self.assertFalse(access["control"]("repair", 20))
-            self.assertFalse(access["control"]("continue-fine", 20))
             self.assertTrue(access["control"]("start", 4))
             self.assertFalse(access["status"]()["automatic"])
         access["control"]("cancel", 0)

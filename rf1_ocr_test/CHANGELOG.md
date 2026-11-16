@@ -2,6 +2,8 @@
 
 ## 0.5.10 Stable
 
+- Der Einrichtungsassistent fragt gleich zu Beginn nach einem optionalen, selbst abgelesenen Startwert und trägt die Uhrzeit automatisch ein.
+
 - In einem dunklen Zählfenster werden die Einzelrahmen aus den sichtbaren Ziffernpositionen abgeleitet. Dadurch kann ein breiter Rand den Rahmenabstand nicht mehr vorgeben.
 - Fehlt genau eine Vorkommastelle, kann eine zusätzliche Zeilenlesung sie ergänzen, sofern sie mit allen bereits einzeln gelesenen Stellen übereinstimmt.
 

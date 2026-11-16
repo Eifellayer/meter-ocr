@@ -550,6 +550,13 @@ name: Zählerstand (OCR)</code></pre>
 </div>
 <label id="wizard-source-camera">Home-Assistant-Kamera<input name="camera" value="{source_camera}" maxlength="80" placeholder="camera.gaszaehler"></label>
 <label id="wizard-source-reference">Vergleichssensor (optional)<input name="reference" value="{source_reference}" maxlength="80" placeholder="sensor.gaszaehler"></label>
+<div class="setup-help">
+<label>Zählerstand kurz selbst ablesen (optional)<input name="fallback_value" value="{fallback_value}" inputmode="decimal" maxlength="16" placeholder="z. B. 12345,67"></label>
+<p class="settings-note">Der Stand hilft der App beim Einrichten. Zum Überspringen leer lassen und auf „Weiter“ klicken.</p>
+<details><summary>Ablesezeit ändern</summary>
+<label>Stand abgelesen am<input name="fallback_time" type="datetime-local" value="{fallback_time}"></label>
+</details>
+</div>
 <details class="setup-help"><summary>ⓘ Hinweis zum Teststand</summary><p>Für reale Tests nutze ich ausschließlich AI on the Edge. Die übrigen Kamera- und Zählermodi sind bisher nur mit simulierten Bildern und automatisierten Tests geprüft.</p></details>
 <div class="setup-controls"><span class="setup-count"></span><button type="button" class="setup-next">Weiter</button></div>
 </fieldset>
@@ -563,9 +570,6 @@ name: Zählerstand (OCR)</code></pre>
 <label class="check-option"><input type="checkbox" name="precision_mode" value="1" {precision_checked}> Präzisionsmodus: Alle drei Nachkommastellen müssen stimmen</label>
 </div>
 <p class="settings-note setup-help">Die Vergleichsgenauigkeit darf kleiner sein als die angezeigte Stellenzahl. Kleine Zeiger werden nicht automatisch gelesen; bei Rollen und Zeigern bitte nur die Ziffernrollen einstellen.</p>
-<label>Fallback-Zählerstand (optional)<input name="fallback_value" value="{fallback_value}" inputmode="decimal" maxlength="16" placeholder="z. B. 10446,337"></label>
-<label>Stand abgelesen am<input name="fallback_time" type="datetime-local" value="{fallback_time}"></label>
-<details class="setup-help"><summary>ⓘ Wie wird der Fallback verwendet?</summary><p>Er ist ein Startwert, solange noch keine sichere automatische Ablesung gespeichert ist. AI Meter Reader prüft die erste Ablesung gegen den Zeitabstand und den maximalen Durchfluss. Danach wird der letzte bestätigte Stand als Referenz genutzt. Ohne Fallback beginnt die Plausibilitätsprüfung mit der ersten sicheren Ablesung.</p></details>
 <div class="setup-controls"><button type="button" class="setup-back">Zurück</button><span class="setup-count"></span><button type="button" class="setup-next">Weiter</button></div>
 </fieldset>
 <fieldset class="setup-step" data-step="2"><legend>3. Bildausschnitt und Prüfplan</legend>
@@ -892,6 +896,15 @@ resetForm.addEventListener('submit', event => {{
   resetForm.querySelectorAll('button').forEach(button => button.disabled = true);
 }});
 const setupForm = document.querySelector('#setup-form');
+const wizardReading = setupForm.elements.fallback_value;
+const wizardReadingTime = setupForm.elements.fallback_time;
+let wizardTimeEdited = false;
+wizardReadingTime.addEventListener('input', () => {{ wizardTimeEdited = true; }});
+wizardReading.addEventListener('input', () => {{
+  if (wizardTimeEdited) return;
+  const now = new Date(Date.now() - new Date().getTimezoneOffset() * 60000);
+  wizardReadingTime.value = wizardReading.value.trim() ? now.toISOString().slice(0, 16) : '';
+}});
 setupForm.addEventListener('submit', event => {{
   const saving = document.querySelector('#setup-saving');
   if (!saving.hidden) {{

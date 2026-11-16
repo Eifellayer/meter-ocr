@@ -886,9 +886,16 @@ class Calibration:
         precision = self.precision(rules, has_reference)
         digits = rules["integer_digits"]
         flow = rules["max_flow_lph"]
+        reference_pending = (self.simplified and not self.automatic and has_reference
+                             and (reference_rejection(sample, "match") is not None
+                                  or meter_prefix(sample.get("actual_value"), precision, digits) is None
+                                  or meter_prefix(sample.get("raw_value"), precision, digits) is None))
+        if reference_pending:
+            has_reference = False
         confirming_followup = self.followup and self.confirmations > 0
         committed = self.confirmations >= 2 or confirming_followup
-        preferred = (self.confirmations == 1 and self.rank_candidates and self.full_hits > 0)
+        preferred = (self.confirmations == 1 and self.rank_candidates
+                     and (self.full_hits > 0 or self.simplified))
         collecting = self.rank_candidates and not (committed or preferred or self.optimizing
                                                     or self.full_hits >= MIN_IMAGES)
         if committed or preferred or self.focused:
@@ -997,6 +1004,7 @@ class Calibration:
             if self.attempts > previous_attempts and on_selected is not None and not stop():
                 on_selected(trial, values)
 
+        additional_readings = {}
         if self.rank_candidates and not (committed or preferred):
             for _, layout, readings in coarse:
                 self.record_intermediate(layout, readings, sample, precision, digits, rules["fraction_digits"], frame)
@@ -1021,7 +1029,7 @@ class Calibration:
 
                 promising = any(promising_candidate(layout, values) for _, layout, values in coarse)
                 self.optimizing = self.coarse_attempts >= COARSE_LIMIT or found or promising
-                if self.coarse_attempts >= COARSE_LIMIT and not found:
+                if self.coarse_attempts >= COARSE_LIMIT and not (found or self.simplified and promising):
                     # Re-read the full ranked list against the next image and its reference.
                     return None
             # Read stable crops immediately, including when this image has no usable reference.
@@ -1044,11 +1052,19 @@ class Calibration:
                         continue
                 if extras:
                     all_readings = [*readings, *extras]
+                    if self.simplified and not score[4]:
+                        readable = [value for value in all_readings
+                                    if meter_prefix(value, precision, digits) is not None]
+                        prefixes = {meter_prefix(value, precision, digits) for value in readable}
+                        if len(readable) >= 2 and len(prefixes) == 1:
+                            additional_readings[layout] = readable[:2]
                     self.record_intermediate(layout, all_readings, sample, precision, digits,
                                              rules["fraction_digits"], frame)
                     if layout == perfect:
                         self.stress_weak_slots = [index + 1 for index in uncertain_slots(
                             all_readings, digits + rules["fraction_digits"])]
+            if additional_readings:
+                self.optimizing = True
             if not self.optimizing:
                 reason = "collecting"
                 if stable and has_reference:
@@ -1062,6 +1078,7 @@ class Calibration:
             coarse.sort(key=lambda item: item[0], reverse=True)
         refined = False
         for score, layout, readings in coarse:
+            readings = additional_readings.get(layout, readings)
             if stop():
                 return None
             if self.region_rejected(layout):
@@ -1196,8 +1213,9 @@ class Calibration:
                                                  rules["fraction_digits"], frame)
             self.confirmed_quality = (self.confirmed_quality if same else [])[-2:] + [crop_quality(frame, layout)]
             self.confirmations = self.confirmations + 1 if same else 1
-            self.anchored = ((same or recovered_slot) and self.anchored) or has_reference or bool(baseline)
-            self.advanced = same and (self.advanced or (
+            self.anchored = (not reference_pending and
+                             (((same or recovered_slot) and self.anchored) or has_reference or bool(baseline)))
+            self.advanced = not reference_pending and same and (self.advanced or (
                 "reading_litres" in anchor and
                 counter["reading_litres"] > anchor["reading_litres"]))
             self.candidate, self.counter = layout, counter
@@ -1205,8 +1223,12 @@ class Calibration:
             self.focused = False
             if self.confirmations > self.best_confirmations:
                 self.best, self.best_confirmations = layout, self.confirmations
-            if self.confirmations >= MIN_IMAGES and not (self.anchored or self.advanced):
+            if reference_pending:
+                on_decision("accepted_geometry")
+            elif self.confirmations >= MIN_IMAGES and not (self.anchored or self.advanced):
                 on_decision("await_movement")
+            elif self.simplified and rules["fraction_digits"] == 3 and uncertain_slots(readings, digits + 3):
+                on_decision("accepted_partial")
             else:
                 on_decision("accepted")
             if self.confirmations >= MIN_IMAGES and (self.anchored or self.advanced):

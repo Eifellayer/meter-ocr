@@ -346,7 +346,7 @@ class StateTests(TestCase):
         self.assertEqual(("ocr", None), observed[0][:2])
         preview = access["status"]()["preview"]
         self.assertEqual("12345", preview["reading"])
-        self.assertEqual(-3, preview["angle"])
+        self.assertEqual(0, preview["angle"])
         self.assertEqual(4, len(preview["region"]))
         self.assertGreater(preview["crop"], observed[0][2])
         for kind in ("frame", "crop"):

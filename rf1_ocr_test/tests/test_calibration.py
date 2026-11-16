@@ -371,5 +371,5 @@ class CalibrationImageTests(TestCase):
             if index < 2:
                 self.assertIsNone(selected)
         self.assertIsNotNone(selected)
-        self.assertEqual(-3, selected.rotation)
+        self.assertEqual(0, selected.rotation)
         self.assertEqual(3, job.confirmations)

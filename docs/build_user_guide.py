@@ -13,8 +13,6 @@ from reportlab.lib.utils import ImageReader
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'docs' / 'Bedienungsanleitung-AI-Meter-Reader.pdf'
 LOGO = ROOT / 'docs' / 'images' / 'project-logo-guide.jpg'
-HOUSINGS = ROOT / 'docs' / 'images' / 'housing-prototypes.jpg'
-INSTALLATION = ROOT / 'docs' / 'images' / 'camera-installation-anonymized.jpg'
 FONT = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
 BOLD = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
 pdfmetrics.registerFont(TTFont('GuideSans', FONT))
@@ -67,7 +65,7 @@ class AppStatusMock(Flowable):
         c.setFillColor(YELLOW_BG); c.roundRect(7*mm,h-48*mm,w-14*mm,6*mm,1.3*mm,fill=1,stroke=0)
         c.setFillColor(YELLOW); c.setFont('GuideSans',6.6); c.drawString(10*mm,h-44*mm,'ESP erreichbar. Kein neues Bild seit der letzten Prüfung; das Bild ist noch aktuell genug.')
         labels=['Erkannter Stand','Referenz','Bildzeit','Letzte Prüfung','Nächste Prüfung']
-        vals=['10448.651','10448.6508','15.11.26, 19:22','15.11.26, 19:23','59 min']
+        vals=['01234.567','01234.5671','10:22','10:23','59 min']
         y=h-54*mm
         for label,val in zip(labels,vals):
             c.setFillColor(colors.HexColor('#b8c9d7')); c.setFont('GuideSans',7.2); c.drawString(8*mm,y,label)
@@ -101,7 +99,7 @@ class OCRMock(Flowable):
         c=self.canv; w=self.width; h=self.height
         c.setFillColor(DARK); c.roundRect(0,0,w,h,3*mm,fill=1,stroke=0)
         c.setStrokeColor(colors.HexColor('#2ca56a')); c.setLineWidth(1.4)
-        digits=['1','0','4','4','8','6','5','1']; uncertain={5}; unclear={6}
+        digits=list('01234567'); uncertain={5}; unclear={6}
         x=7*mm; boxw=(w-14*mm)/8
         for i,d in enumerate(digits):
             col=(colors.HexColor('#cb464b') if i in unclear else
@@ -144,7 +142,7 @@ class GuideDoc(BaseDocTemplate):
             canvas.setFillColor(MUTED); canvas.setFont('GuideSans',7)
             canvas.drawString(19*mm,PAGE_H-10*mm,'AI Meter Reader | Bedienungsanleitung')
             canvas.setStrokeColor(colors.HexColor('#dce4e9')); canvas.line(19*mm,13*mm,PAGE_W-19*mm,13*mm)
-            canvas.drawString(19*mm,8*mm,'Version 0.4.0 Alpha | Kernabläufe, Stand: 15.11.2026')
+            canvas.drawString(19*mm,8*mm,'AI Meter Reader | Kernabläufe')
             canvas.drawRightString(PAGE_W-19*mm,8*mm,f'{doc.page}')
         canvas.restoreState()
 
@@ -156,7 +154,7 @@ story += [Spacer(1,7*mm), Image(str(LOGO),width=49*mm,height=49*mm), Spacer(1,3*
           TipBox('Kamera rein. Zählerstand im Blick.', 'AI Meter Reader liest Zählerbilder in Home Assistant und prüft den erkannten Stand - je nach Bildquelle mit oder ohne Referenzwert.', GREEN_BG, GREEN),
           Spacer(1,7*mm), AppStatusMock(), Spacer(1,4*mm),
           p('Diese Anleitung erklärt die Einrichtung, den ersten Bildtest und die wichtigsten Hinweise im Statusbereich. Die Abbildungen zeigen typische Bedienelemente; einzelne Texte können je nach gewählter Sprache und Einrichtung abweichen.', 'BodyCustom'),
-          p('<b>Testversion 0.4.0 Alpha.</b> Die App ist ein privates Hobbyprojekt und keine geeichte Messeinrichtung. Vor Abrechnungen bitte den Zählerstand direkt am Gerät prüfen.', 'SmallCustom'),
+          p('<b>Bedienungsanleitung für den Alpha-Kanal.</b> Die App ist ein privates Hobbyprojekt und keine geeichte Messeinrichtung. Vor Abrechnungen bitte den Zählerstand direkt am Gerät prüfen.', 'SmallCustom'),
           PageBreak()]
 # Page 2
 story += [p('1. Einrichten','H1Custom'),
@@ -171,27 +169,19 @@ story += [p('1. Einrichten','H1Custom'),
           p('<b>Sprache:</b> „Automatisch (Home Assistant)“ folgt der Profilsprache, wenn sie Deutsch oder Englisch ist. Eine manuelle Auswahl findest du oben in der App.', 'BodyCustom'),
           PageBreak()]
 # Page 3
-housing_photo = Image(str(HOUSINGS), width=72*mm, height=96*mm)
-installation_photo = Image(str(INSTALLATION), width=72*mm, height=96*mm)
-photo_table = Table([
-    [housing_photo, installation_photo],
-    [p('<b>Prototypen:</b> Ein kleiner Stapel Gehäuse spart im Zweifel Zeit. (Das ist ein Scherz. Erst Bildausschnitt und Beleuchtung testen.)', 'SmallCustom'),
-     p('<b>Montagebeispiel:</b> Kamera fest ausrichten und den Zählerstand vollständig ins Bild nehmen. Kennzeichnungen sind für diese Anleitung anonymisiert.', 'SmallCustom')]
-], colWidths=[83*mm, 83*mm], rowHeights=[98*mm, 25*mm])
-photo_table.setStyle(TableStyle([
-    ('VALIGN',(0,0),(-1,-1),'TOP'),('ALIGN',(0,0),(-1,0),'CENTER'),
-    ('LEFTPADDING',(0,0),(-1,-1),2),('RIGHTPADDING',(0,0),(-1,-1),2),
-    ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),
-]))
-story += [p('2. Gehäuse & Kameraposition','H1Custom'),
+story += [p('2. Kamera und Bildausschnitt','H1Custom'),
           p('Bevor du ein Gehäuse druckst oder die Kamera endgültig befestigst: erst ein Testbild aufnehmen. Ein passender Ausschnitt, ruhige Befestigung und gleichmäßiges Licht sind für die Erkennung wichtiger als ein besonders schickes Gehäuse.', 'BodyCustom'),
-          photo_table, Spacer(1,4*mm),
           p('Für ein zuverlässiges Bild','H2Custom'),
           p('• Richte die Kamera möglichst gerade auf die Ziffern. Bei schräger Montage Bilddrehung und Ausschnitt im Test anpassen.<br/>• Halte Abstand und Fokus so, dass alle relevanten Stellen scharf und ausreichend groß erscheinen.<br/>• Vermeide Spiegelungen auf einer Abdeckung und starke Schatten. Bei Bedarf Lichtquelle oder Kamerawinkel leicht verändern.<br/>• Befestige die Kamera so, dass sie beim Öffnen der Tür oder bei Berührung nicht verrutscht. Nach jeder Änderung ein neues Testbild prüfen.', 'BodyCustom'),
           TipBox('Erst probieren, dann drucken', 'Ein Papier- oder provisorischer Halter reicht zum Prüfen von Winkel, Fokus und Bildausschnitt. Wenn das Testbild passt, lohnt sich der endgültige Druck deutlich mehr.', YELLOW_BG, YELLOW),
+          Spacer(1,6*mm),
+          p('Ausschnitt und Drehung lernen','H2Custom'),
+          p('Wähle im Assistenten bei <b>Bildbereich</b> die Option <b>Ausschnitt und Drehung lernen</b>. Nach dem Speichern startet die Suche. Später findest du sie auch direkt über <b>Selbsteinrichtung</b> in der Übersicht.', 'BodyCustom'),
+          p('Die App prüft 4 bis 50 unterschiedliche Bilder, höchstens fünf Minuten lang. Der Zeitbalken läuft weiter, wenn die App auf ein neues Bild wartet. Drei Bestätigungen und eine abschließende Gegenprüfung sind nötig. Erst dann übernimmt sie den Rahmen und die Drehung für die Automatik und als Vorgabe für den manuellen Test.', 'BodyCustom'),
+          TipBox('Grün oder Rot', 'Grün bedeutet, dass die Gegenprüfung gelungen ist. Bei einem roten Fehlschlag bleiben deine bisherigen Bild-Einstellungen erhalten. Du kannst dann beim manuellen Test selbst einen Rahmen um die Ziffern ziehen.', GREEN_BG, GREEN),
           PageBreak()]
 # Page 4
-story += [p('2. Erstes Bild prüfen','H1Custom'),
+story += [p('3. Erstes Bild prüfen','H1Custom'),
           p('Starte nach der Einrichtung einen manuellen Test. So siehst du, ob Bildausschnitt, Drehung und Zählerformat passen, bevor du dich auf die Automatik verlässt.', 'BodyCustom'),
           p('1. Öffne <b>Manueller Test</b> und drücke <b>Test starten</b>. Der Fortschritt zeigt, ob das Bild geladen oder gerade ausgewertet wird.', 'BodyCustom'),
           p('2. Prüfe das <b>Letzte Testbild</b>. Grüne Rahmen bedeuten, dass eine Ziffer gelesen wurde. Gelb markiert Ziffern, die zwischen OCR-Versuchen schwankten oder aus mehreren Versuchen zusammengesetzt wurden. Rot markiert weiterhin unklare Stellen. Die Farben zeigen OCR-Erkennung, nicht den Abgleich mit dem Referenzwert.', 'BodyCustom'),
@@ -202,7 +192,7 @@ story += [p('2. Erstes Bild prüfen','H1Custom'),
           Spacer(1,6*mm), p('Die automatische Kontrolle zeigt Ergebnis, Referenz, Bildzeit, letzte Prüfung und nächsten Prüftermin an. Das letzte Testbild lässt sich bei Bedarf aufklappen.','BodyCustom'),
           PageBreak()]
 # Page 4
-story += [p('3. Statusmeldungen verstehen','H1Custom'),
+story += [p('4. Statusmeldungen verstehen','H1Custom'),
           p('Die Farbe hilft dir, das Ergebnis schnell einzuordnen. Ein Hinweis zur Bildquelle ist nicht automatisch ein Fehler beim Zählerstand.', 'BodyCustom')]
 status_rows = [
     [p('GRÜN  |  Zählerstand bestätigt','CardHead'), p('Der erkannte Stand stimmt innerhalb der eingestellten Genauigkeit mit der Referenz überein. Bei „volle m³“ werden Nachkommastellen nicht bewertet.','BodyCustom')],
@@ -222,7 +212,7 @@ story += [t,Spacer(1,5*mm),
           TipBox('Kein neues Bild, aber noch nicht alt?', 'Das ist zunächst ein Quellenhinweis: Die Verbindung kann bestehen und das vorhandene Bild noch innerhalb der zulässigen Altersgrenze liegen. Die App kennzeichnet es deshalb nicht automatisch als kritischen Fehler. Wenn die Lesung weiter unsicher ist, prüfe Beleuchtung, Abstand und Fokus.', YELLOW_BG, YELLOW),
           PageBreak()]
 # Page 5
-story += [p('4. Dashboard, Sprache und Hilfe','H1Custom'),
+story += [p('5. Dashboard, Sprache und Hilfe','H1Custom'),
           p('Wert im Home-Assistant-Dashboard anzeigen','H2Custom'),
           p('1. Öffne in Home Assistant das gewünschte Dashboard und wähle <b>Bearbeiten</b>.<br/>2. Füge eine Karte hinzu, zum Beispiel eine <b>Entitäten-Karte</b>.<br/>3. Suche die AI Meter Reader-Entität für den Zählerstand. Für einen kumulierten Verbrauch steht außerdem <b>sensor.rf1_verbrauch_gesamt</b> bereit.<br/>4. Speichere die Karte. Home Assistant kann den kumulierten Verbrauch anschließend in der Energieansicht verwenden, sofern Einheit und Geräteeinstellungen passen.', 'BodyCustom'),
           TipBox('Hinweis zu Entitätsnamen', 'Einige bestehende Home-Assistant-Entitäten behalten aus Kompatibilitätsgründen ältere IDs. Die sichtbaren Namen können abweichen. Wähle im Dashboard die Entität über die Suche aus.', GREEN_BG, GREEN),

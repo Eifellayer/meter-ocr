@@ -35,7 +35,7 @@ from checks import (
     timestamp_epoch, track_reflection,
     valid_interval_minutes,
 )
-from calibration import Calibration, CAPTURE_INTERVAL, MIN_IMAGES, MAX_IMAGES, TIME_LIMIT
+from calibration import Calibration, CAPTURE_INTERVAL, MIN_IMAGE_LIMIT, MAX_IMAGES, TIME_LIMIT
 from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, MAX_FLOW_LPH, ImplausibleReading,
                          accumulate_consumption, fallback_detail, format_cubic_metres)
 from layout import (MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, find_digit_row,
@@ -583,7 +583,7 @@ def main():
                   "reflection_estimate_enabled": False, "reflection_suggestion_hidden": False,
                   "reflection_confirmed_id": "",
                   "crop_mode": "auto", "crop": options["ausschnitt"],
-                  "width": options["vorkomma_breite"], "rotation": 0,
+                  "width": options["vorkomma_breite"], "rotation": 0, "crop_revision": "",
                   "max_flow_lph": DEFAULT_FLOW_LPH, "interval_minutes": DEFAULT_INTERVAL_MINUTES,
                   "integer_digits": 5, "fraction_digits": 3, "meter_display": "rollers",
                   "fallback_value": "", "fallback_time": ""}
@@ -640,6 +640,8 @@ def main():
             auto_rules = {"decimals": saved_rules["decimals"],
                           "attempts": saved_rules["attempts"], "polarity": polarity,
                           "crop_mode": crop_mode, "crop": crop_text, "width": width, "rotation": rotation,
+                          "crop_revision": (str(saved_rules.get("crop_revision", ""))[:30]
+                                            if crop_mode == "manual" else ""),
                           "max_flow_lph": max_flow, "interval_minutes": interval_minutes,
                           "integer_digits": integer_digits, "fraction_digits": fraction_digits,
                           "meter_display": meter_display, "fallback_value": fallback_value,
@@ -708,6 +710,9 @@ def main():
                          "reflection_confirmed_id": reflection_confirmed_id,
                          "fallback_value": fallback_value, "fallback_time": fallback_time}
         updated_rules["crop"] = ",".join(str(part) for part in coords)
+        if (updated_rules["crop_revision"] == auto_rules["crop_revision"]
+                and any(updated_rules[key] != auto_rules[key] for key in ("crop_mode", "crop", "rotation", "width"))):
+            updated_rules["crop_revision"] = ""
         atomic_write(AUTO_RULES, json.dumps(updated_rules, indent=2).encode("utf-8"), 0o600)
         view_preferences = ("reflection_suggestion_hidden", "reflection_confirmed_id")
         needs_check = any(updated_rules[key] != auto_rules.get(key) for key in updated_rules
@@ -812,13 +817,16 @@ def main():
                 source, pending = get_source()
                 if pending or not source["selected"] or get_auto_paused():
                     raise ValueError("Choose a source and resume automatic checks first.")
-                if not MIN_IMAGES <= limit <= MAX_IMAGES:
+                if not MIN_IMAGE_LIMIT <= limit <= MAX_IMAGES:
                     raise ValueError("Invalid calibration image limit")
                 now = time.monotonic()
-                if calibration is not None and calibration.state in ("waiting", "testing") and not calibration.expired(now):
+                configuration = calibration_configuration_now()
+                if (calibration is not None and calibration.state in ("waiting", "testing")
+                        and not calibration.expired(now) and calibration.limit == limit
+                        and configuration == calibration_configuration):
                     return
                 calibration = Calibration(limit=limit, started=now)
-                calibration_configuration = calibration_configuration_now()
+                calibration_configuration = configuration
                 calibration_next = now
             wake_worker.set()
 
@@ -830,7 +838,7 @@ def main():
             if not status["seconds"] and status["state"] in ("waiting", "testing"):
                 status["state"] = "timeout"
             if status["state"] == "saved":
-                status["settings"] = calibration.candidate.settings()
+                status["settings"] = {**calibration.candidate.settings(), "crop_revision": auto_rules["crop_revision"]}
             return status
 
     def run_calibration(active_rules, active_source, mode, base, camera, reference, source_key):
@@ -850,6 +858,7 @@ def main():
             if now < calibration_next or (active_rules, active_source) != (configured_rules, configured_camera):
                 return True
             job.state = "testing"
+            job.stage = "capture"
             attempt = deepcopy(job)
         deadline = job.started + TIME_LIMIT
 
@@ -860,6 +869,11 @@ def main():
             if stopped():
                 raise TimeoutError("Calibration stopped")
             return get_bytes(url, token, timeout=min(timeout, max(0.01, deadline - time.monotonic())))
+
+        def report_calibration(stage, variant=None, rotation=None):
+            with settings_lock:
+                if calibration is job and job.state == "testing":
+                    job.stage, job.variant, job.rotation = stage, variant, rotation
 
         set_activity("working", "Selbsteinrichtung prüft Bildausschnitt und Drehung.")
         result = None
@@ -913,7 +927,16 @@ def main():
                                 fraction_digits=active_rules["fraction_digits"], deadline=deadline,
                             )
 
-                        selected = attempt.examine(frame, overlay, sample, captured, active_rules, read, stopped, baseline)
+                        if attempt.verification_pending:
+                            report_calibration("verify", rotation=attempt.candidate.rotation)
+                            selected = attempt.verify(frame, sample, captured, active_rules, read, stopped)
+                        else:
+                            report_calibration("search")
+                            candidate = attempt.examine(
+                                frame, overlay, sample, captured, active_rules, read, stopped, baseline,
+                                on_attempt=lambda variant, rotation: report_calibration("ocr", variant, rotation),
+                            )
+                            attempt.verification_pending = candidate is not None
         except (OSError, ValueError, TypeError, Image.DecompressionBombError) as error:
             print(f"Selbsteinrichtung konnte die Aufnahme nicht prüfen: {type(error).__name__}")
         with settings_lock:
@@ -926,7 +949,7 @@ def main():
                 attempt.state = "cancelled"
             elif selected:
                 try:
-                    save_auto_rules({**get_auto_rules(), **selected.settings()})
+                    save_auto_rules({**get_auto_rules(), **selected.settings(), "crop_revision": str(time.time_ns())})
                     attempt.state = "saved"
                 except (OSError, ValueError):
                     attempt.state = "save_failed"
@@ -934,6 +957,7 @@ def main():
                 attempt.state = "failed"
             else:
                 attempt.state = "waiting"
+                attempt.stage = "verify_wait" if attempt.verification_pending else "waiting"
             calibration = attempt
             calibration_next = now + CAPTURE_INTERVAL
         return True
@@ -1237,6 +1261,8 @@ def main():
                                 *manual_crop, manual_width, rotation, detect_raw, integer_digits, fraction_digits,
                                 raw_fallback,
                             ]
+                            if active_rules["crop_revision"]:
+                                rotation_key.append(active_rules["crop_revision"])
                             learned = updated.get("learned_rotation", {})
                             if isinstance(learned, dict) and learned.get("crop") == rotation_key:
                                 rotation_adjustment = learned.get("adjustment", 0)

@@ -81,7 +81,8 @@ class IngressFixture(TestCase):
 
     def control_calibration(self, action, limit):
         self.calibration = {"state": "waiting" if action == "start" else "cancelled",
-                            "limit": limit, "tested": 0, "confirmations": 0, "required": 3, "seconds": 300}
+                            "limit": limit, "tested": 0, "confirmations": 0, "required": 3,
+                            "seconds": 300, "duration": 300, "stage": "queued"}
 
     def start_panel(self):
         def request_reset():
@@ -128,7 +129,7 @@ class IngressFixture(TestCase):
 
 class IngressTests(IngressFixture):
     def test_calibration_uses_the_selected_image_limit_and_can_be_stopped(self):
-        for invalid in ("2", "51", "x"):
+        for invalid in ("2", "3", "51", "x"):
             self.assertEqual(400, self.submit("/selbsteinrichtung", action="start", image_limit=invalid)[0])
         self.assertIsNone(self.calibration)
         self.assertEqual((303, "./?saved=calibration&ui=settings"),
@@ -451,6 +452,48 @@ class IngressTests(IngressFixture):
         self.assertEqual("slfork_camera", self.source["mode"])
         self.assertEqual("http://meter", self.source["url"])
 
+    def test_manual_test_picks_up_a_new_learned_crop_once(self):
+        path = self.root / "manual-test-settings.json"
+        path.write_text(json.dumps({"crop_mode": "manual", "crop": "0,0,250,50", "width": 150,
+                                    "rotation": 0, "attempts": 8}))
+        self.rules.update(crop_mode="manual", crop="10,20,410,100", width=270, rotation=-3,
+                          crop_revision="new")
+        page = self.request("/")[0]
+        self.assertIn('name="crop_revision" value="new"', page)
+        payload = {"crop_mode": "manual", "crop": "0,0,250,50", "width": 150,
+                   "rotation": 0, "attempts": 8, "save_settings": 1}
+        self.assertEqual(303, self.submit("/pruefen", **payload)[0])
+        saved = json.loads(path.read_text())
+        self.assertEqual(("10,20,410,100", 270, -3, 8),
+                         tuple(saved[key] for key in ("crop", "width", "rotation", "attempts")))
+        self.assertEqual(303, self.submit("/pruefen", crop_revision="new", **payload)[0])
+        self.assertEqual("0,0,250,50", json.loads(path.read_text())["crop"])
+
+    def test_setup_starts_calibration_with_saved_source_without_overwriting_crop(self):
+        self.rules.update(crop_mode="manual", crop="10,20,410,100", width=270, rotation=-3)
+        values = {
+            "source_mode": "esphome", "camera": "camera.meter", "meter_display": "rollers",
+            "integer_digits": 5, "fraction_digits": 3, "decimals": 1, "attempts": 5,
+            "polarity": "auto", "crop_mode": "learn", "crop": "ignored", "interval_minutes": 60,
+            "max_flow": "6", "review_minutes": 240, "delivery_hours": 24,
+        }
+        self.assertEqual(400, self.submit("/einrichtung", image_limit=51, **values)[0])
+        self.assertTrue(self.setup_pending)
+        self.assertIsNone(self.calibration)
+        self.paused = True
+        self.assertEqual(409, self.submit("/einrichtung", image_limit=24, **values)[0])
+        self.assertTrue(self.setup_pending)
+        self.assertIsNone(self.calibration)
+        self.paused = False
+        status, location = self.submit("/einrichtung", image_limit=24, **values)
+        self.assertEqual((303, "./?saved=setup-calibration&ui=settings#calibration-settings"), (status, location))
+        self.assertFalse(self.setup_pending)
+        self.assertEqual("camera.meter", self.source["camera"])
+        self.assertEqual(24, self.calibration["limit"])
+        self.assertEqual(("manual", "10,20,410,100", 270, -3),
+                         tuple(self.rules[key] for key in ("crop_mode", "crop", "width", "rotation")))
+        self.assertIn("Einrichtung gespeichert.", self.request("/?saved=setup-calibration&ui=settings")[0])
+
     def test_setup_wizard_rejects_fallback_without_timestamp_and_keeps_old_settings(self):
         before = dict(self.source)
         values = {
@@ -612,6 +655,22 @@ class BrowserTests(IngressFixture):
             self.assertEqual("esphome", mode.input_value())
             self.assertEqual("camera.water_meter", page.locator("#wizard-source-camera input").input_value())
             self.assertFalse(page.locator("#wizard-esp-camera-only").is_visible())
+            for step in (0, 1):
+                page.locator(f'.setup-step[data-step="{step}"] .setup-next').click()
+            page.get_by_role("radio", name="Ausschnitt und Drehung lernen").check()
+            page.locator("#wizard-calibration-options input").fill("18")
+            page.locator('.setup-step[data-step="2"] .setup-next').click()
+            page.locator('#setup-form button[type="submit"]').click()
+            page.get_by_text("Einrichtung gespeichert.", exact=True).wait_for()
+            self.assertEqual(18, self.calibration["limit"])
+            self.calibration.update(state="testing", stage="ocr", rotation=-6, variant=2, seconds=280)
+            page.locator("#calibration-state").filter(has_text="Prüfe Rahmen 2 mit Drehung -6°").wait_for()
+            self.assertEqual("20", page.locator("#calibration-progress").get_attribute("value"))
+            page.locator("#tab-overview").click()
+            page.locator("#calibration-overview-progress").wait_for(state="visible")
+            self.assertEqual("20", page.locator("#calibration-overview-progress").get_attribute("value"))
+            page.locator("#open-calibration").click()
+            page.locator("#calibration-title").wait_for()
             browser.close()
 
     def test_automatic_status_and_image_update_when_a_check_runs(self):
@@ -772,6 +831,7 @@ class BrowserTests(IngressFixture):
             frame.locator("#view-settings").wait_for(state="visible")
             self.assertEqual("manual", self.rules["crop_mode"])
             self.assertEqual(90, self.rules["rotation"])
+            frame.get_by_role("checkbox", name="Einzelne verdeckte Ziffer ergänzen").wait_for(state="visible")
             Image.new("RGB", (640, 480), "white").save(self.root / "current.jpg", "JPEG")
             frame.locator("#auto-crop-draw-area").wait_for(state="visible")
             frame.locator("#auto-form select[name=decimals]").select_option("2")

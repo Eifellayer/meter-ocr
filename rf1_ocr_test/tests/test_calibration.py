@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import calibration
 from calibration import Calibration, Layout, MAX_ATTEMPTS, guided_layouts, layouts, neighbour_layout, search_region, unrotate_box
 from layout import find_neighbour_digit_rows, find_raw_digit_row, scale_digit_boxes, turn_crop
+from meter_learning import widen_digit_boxes
 
 LAYOUT = Layout((0, 0, 80, 20), -3, 80)
 OTHER_LAYOUT = Layout((10, 0, 90, 20), 3, 80)
@@ -33,6 +34,14 @@ def irregular_meter(text):
 
 
 class NeighbourGeometryTests(TestCase):
+    def test_widened_digit_boxes_are_a_separate_safe_trial(self):
+        boxes = [(200, 0, 400, 1000), (400, 0, 600, 1000), (600, 0, 800, 1000)]
+        widened = widen_digit_boxes(boxes, (50, 20), pixels=2)
+        self.assertEqual(3, len(widened))
+        self.assertTrue(all(0 <= left < right <= 1000 for left, _, right, _ in widened))
+        self.assertTrue(all((widened[i][0] + widened[i][2]) <
+                            (widened[i + 1][0] + widened[i + 1][2]) for i in range(2)))
+
     def test_one_visible_digit_can_seed_neighbours_inside_a_visible_window(self):
         photo = irregular_meter("  3  ")
         self.assertIsNone(find_raw_digit_row(photo, 5, 0))

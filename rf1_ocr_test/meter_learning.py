@@ -9,6 +9,26 @@ ALIGNMENT_CONFIRMATIONS = 6
 ALIGNMENT_ROLLBACK_FAILURES = 2
 
 
+def widen_digit_boxes(boxes, size, pixels=2):
+    """Create a conservative wider per-digit grid for glyphs such as 1/8.
+
+    The expansion is clipped to the register and normalized so neighbouring
+    frames cannot overlap. It is used only as a secondary calibration trial.
+    """
+    if not boxes:
+        return []
+    w, h = size
+    scaled = scale_digit_boxes(boxes, size)
+    wider = []
+    for left, top, right, bottom in scaled:
+        wider.append((max(0, left - pixels), max(0, top - pixels),
+                      min(w, right + pixels), min(h, bottom + pixels)))
+    try:
+        return digit_box_settings(normalize_digit_boxes(wider, size), len(boxes))
+    except ValueError:
+        return []
+
+
 def propose_digit_boxes(register, current, whole_width, integer_digits, fraction_digits):
     """Keep the digit centers ordered and tighten each frame around visible strokes."""
     count = integer_digits + fraction_digits

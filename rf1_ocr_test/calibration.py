@@ -10,7 +10,7 @@ from consumption import accumulate_consumption
 from layout import (crop_coordinates, digit_box_settings, find_digit_row, find_neighbour_digit_rows,
                     find_raw_digit_row, normalize_digit_boxes, rotated_width, turn_crop)
 
-from meter_learning import propose_digit_boxes
+from meter_learning import propose_digit_boxes, widen_digit_boxes
 
 DEFAULT_LIMIT = 100
 MIN_IMAGES = 3
@@ -131,6 +131,11 @@ def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False
             optimized = propose_digit_boxes(turned, [], alternate.width, rules["integer_digits"], rules["fraction_digits"])
             variants = (Layout(box, angle, detected[1], frames),
                         Layout(alternate.box, angle, alternate.width, tuple(map(tuple, optimized))))
+            if optimized:
+                widened = widen_digit_boxes(optimized, turned.size)
+                if widened and tuple(map(tuple, widened)) != tuple(map(tuple, optimized)):
+                    variants += (Layout(alternate.box, angle, alternate.width,
+                                        tuple(map(tuple, widened)), method="widened"),)
             for layout in variants:
                 if len(emitted) >= raw_limit:
                     break

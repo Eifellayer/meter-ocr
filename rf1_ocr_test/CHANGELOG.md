@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.4
+
+- Die Selbsteinrichtung trennt die Bildwartezeit von der Rechenzeit und beendet die Bildsuche bei ausbleibenden Aufnahmen nach sechs Minuten.
+- Die Grobsuche prüft feinere Drehwinkel. Die Feinsuche variiert zuerst schwache Ziffernrahmen und nutzt vorhandene Aufnahmen für mehrere parallele OCR-Versuche.
+- Die normale Überwachung läuft währenddessen weiter. Änderungen am Ausschnitt benötigen weiterhin unabhängige Aufnahmen und eine abschließende Gegenprüfung.
+
 ## 0.5.2 Stable
 
 - Die Selbsteinrichtung lässt sich auf das markierte Ziffernfeld im aktuellen Kamerabild einschränken.

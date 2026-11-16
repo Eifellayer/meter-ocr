@@ -1,6 +1,7 @@
 """Bridge the latest matched SLFork picture and reading to Home Assistant."""
 
 import base64
+from concurrent.futures import Future
 from copy import deepcopy
 from datetime import datetime
 from functools import partial
@@ -13,7 +14,7 @@ import re
 import subprocess
 from queue import Empty, Queue
 from tempfile import NamedTemporaryFile
-from threading import Event, Lock, RLock
+from threading import Event, Lock, RLock, Thread
 import time
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -319,13 +320,14 @@ def read_digit(register, box, read, trim_vertical=False):
 
 
 def read_visible_digits(register, integer_width, whole_boxes, fraction_boxes, light_digits, polarity, *, profile,
-                        whole_digits=5, fraction_digits=3, deadline=None, prefer_boxes=False):
+                        whole_digits=5, fraction_digits=3, deadline=None, prefer_boxes=False, recognize=None):
+    recognize = recognize or read_register
     if polarity != "auto":
         light_digits = polarity == "light"
 
     def read(picture, digits=whole_digits):
         kwargs = {"deadline": deadline} if deadline is not None else {}
-        return read_register(picture, light_digits, digits, force_polarity=polarity != "auto", profile=profile, **kwargs)
+        return recognize(picture, light_digits, digits, force_polarity=polarity != "auto", profile=profile, **kwargs)
 
     whole = None if prefer_boxes else read(register.crop((0, 0, integer_width, register.height)))
     if whole is None:
@@ -831,6 +833,7 @@ def main():
     calibration = None
     calibration_configuration = None
     calibration_next = 0.0
+    calibration_worker = None
     calibration_preview = {}
     calibration_images = {}
     calibration_preview_version = 0
@@ -897,9 +900,11 @@ def main():
             status["preview"] = dict(calibration_preview)
             if not status["seconds"] and status["state"] in ("waiting", "testing"):
                 status["state"] = "timeout"
+            elif status["state"] == "waiting" and calibration.image_wait_expired(time.monotonic()):
+                status["state"] = "image_timeout"
             if status["state"] == "saved":
                 status["settings"] = {**calibration.candidate.settings(), "crop_revision": auto_rules["crop_revision"]}
-            elif status["state"] in ("failed", "timeout") and calibration.best:
+            elif status["state"] in ("failed", "timeout", "image_timeout") and calibration.best:
                 status["proposal"] = calibration.best.settings()
             return status
 
@@ -918,6 +923,9 @@ def main():
             if job.expired(now):
                 job.state = "timeout"
                 return False
+            if job.image_wait_expired(now):
+                job.state = "image_timeout"
+                return False
             if calibration_configuration_now() != calibration_configuration or get_auto_paused():
                 job.state = "cancelled"
                 return False
@@ -927,7 +935,7 @@ def main():
             job.state = "testing"
             job.stage = "capture"
             attempt = deepcopy(job)
-        deadline = job.started + job.duration
+        deadline = time.monotonic() + 30
 
         def stopped():
             return time.monotonic() >= deadline or calibration is not job or job.state == "cancelled" or get_auto_paused()
@@ -956,7 +964,6 @@ def main():
                     calibration_preview.clear()
                 calibration_preview.update(details, **{kind: calibration_preview_version})
 
-        set_activity("working", "Selbsteinrichtung prüft Bildausschnitt und Drehung.")
         result = None
         selected = None
         try:
@@ -1002,9 +1009,36 @@ def main():
                         readings = []
                         whole = active_rules["integer_digits"]
                         fraction = active_rules["fraction_digits"]
+                        digit_cache = {}
+                        digit_cache_lock = Lock()
+                        calibration_ocr_env = {**os.environ, "OMP_THREAD_LIMIT": "1"}
+
+                        def cached_digit(picture, light, digits, *, profile, **kwargs):
+                            key = (picture.mode, picture.size, hashlib.sha256(picture.tobytes()).digest(),
+                                   digits, profile)
+                            with digit_cache_lock:
+                                pending = digit_cache.get(key)
+                                if pending is None:
+                                    digit_cache[key] = future = Future()
+                            if pending is not None:
+                                return pending.result()
+                            try:
+                                value = read_register(picture, light, digits, profile=profile,
+                                                      process_env=calibration_ocr_env, **kwargs)
+                            except (OSError, ValueError, subprocess.SubprocessError) as error:
+                                future.set_exception(error)
+                                raise
+                            future.set_result(value)
+                            return value
 
                         def on_image():
-                            nonlocal frame_ready
+                            nonlocal frame_ready, deadline
+                            now = time.monotonic()
+                            deadline = now + attempt.remaining(now)
+                            attempt.last_image_at = attempt.searching_since = now
+                            with settings_lock:
+                                job.searching_since = now
+                                job.seen = attempt.seen.copy()
                             try:
                                 report_image("frame", calibration_jpeg(frame, (720, 540)))
                                 frame_ready = True
@@ -1032,21 +1066,27 @@ def main():
                                 if frame_ready and calibration is job and job.state == "testing":
                                     calibration_preview["reason"] = reason
 
-                        def read(layout, profile):
-                            nonlocal previous_layout
-                            register = select_register(
+                        def register_for(layout):
+                            return select_register(
                                 frame, None, layout.box, layout.width, layout.rotation, whole, fraction,
                                 digit_boxes=layout.digit_boxes,
                             )
+
+                        def recognize(layout, profile, register):
+                            return read_visible_digits(
+                                *register[:4], options["helle_ziffern"], active_rules["polarity"], profile=profile,
+                                whole_digits=whole, fraction_digits=fraction, deadline=deadline,
+                                prefer_boxes=bool(layout.digit_boxes), recognize=cached_digit,
+                            )
+
+                        def read(layout, profile):
+                            nonlocal previous_layout
+                            register = register_for(layout)
                             if layout != previous_layout:
                                 readings.clear()
                                 previous_layout = layout
                                 report_crop(layout, register, None)
-                            reading = read_visible_digits(
-                                *register[:4], options["helle_ziffern"], active_rules["polarity"], profile=profile,
-                                whole_digits=whole, fraction_digits=fraction, deadline=deadline,
-                                prefer_boxes=bool(layout.digit_boxes),
-                            )
+                            reading = recognize(layout, profile, register)
                             readings.append(reading)
                             report_crop(layout, register, reading)
                             return reading
@@ -1061,12 +1101,18 @@ def main():
                                 frame, overlay, sample, captured, active_rules, read, stopped, baseline,
                                 on_attempt=lambda variant, rotation: report_calibration("ocr", variant, rotation),
                                 on_image=on_image, on_decision=report_decision,
+                                refine_read=lambda layout, profile: recognize(layout, profile, register_for(layout)),
+                                on_refine=lambda variant, rotation: report_calibration("refine", variant, rotation),
                             )
                             attempt.verification_pending = candidate is not None
         except (OSError, ValueError, TypeError, Image.DecompressionBombError) as error:
             print(f"Selbsteinrichtung konnte die Aufnahme nicht prüfen: {type(error).__name__}")
         with settings_lock:
             now = time.monotonic()
+            if attempt.searching_since is not None:
+                attempt.spent += now - attempt.searching_since
+                attempt.searching_since = None
+                attempt.last_image_at = now
             if calibration is not job or job.state == "cancelled":
                 return True
             if attempt.expired(now):
@@ -1086,6 +1132,7 @@ def main():
                 attempt.stage = "verify_wait" if attempt.verification_pending else "waiting"
             calibration = attempt
             calibration_next = now + CAPTURE_INTERVAL
+            wake_worker.set()
         return True
 
     _, update_progress, reset_manual_progress = start_panel(
@@ -1192,9 +1239,13 @@ def main():
         request_id = manual_options["request_id"] if manual else None
         if manual:
             update_progress(request_id, "running", "Lade Zählerbild und Referenzdaten …")
-        if not manual and run_calibration(active_rules, active_source, mode, base, camera, reference, source_key):
-            wake_worker.wait(timeout=min(1, CAPTURE_INTERVAL))
-            continue
+        if (not manual and calibration is not None and calibration.state in ("waiting", "testing")
+                and time.monotonic() >= calibration_next
+                and (calibration_worker is None or not calibration_worker.is_alive())):
+            calibration_worker = Thread(target=run_calibration,
+                                        args=(active_rules, active_source, mode, base, camera, reference, source_key),
+                                        daemon=True, name="meter-calibration")
+            calibration_worker.start()
         if get_auto_paused() and not manual:
             set_activity("paused", "Automatik pausiert. Manuelle Tests bleiben verfügbar.")
             wake_worker.wait(timeout=15)
@@ -1220,7 +1271,9 @@ def main():
                 except OSError as error:
                     print(f"Prüfstatus konnte nicht übertragen werden: {error}")
                 check_reminder(reminder, history, now, review_after)
-            wake_worker.wait(timeout=min(remaining, RETRY_INTERVAL))
+            wake_worker.wait(timeout=min(remaining, RETRY_INTERVAL,
+                                         CAPTURE_INTERVAL if calibration is not None
+                                         and calibration.state in ("waiting", "testing") else RETRY_INTERVAL))
             continue
 
         keep_schedule = startup and remaining > 0 and not source_changed and not run_automatic_now
@@ -1572,7 +1625,7 @@ def main():
                         picture = read_state["picture"]
                         captured = read_state["captured"]
                         image_time = captured if captured is not None else sample_timestamp(sample, zone)
-                    except (OSError, ValueError, subprocess.SubprocessError) as error:
+                            except Exception as error:
                         print(f"OCR-Bildprüfung fehlgeschlagen: {error}")
                         ocr_error = ("Ausschnitt ungültig. Koordinaten prüfen." if isinstance(error, ValueError)
                                      else "OCR fehlgeschlagen. Ziffernbereich prüfen.")

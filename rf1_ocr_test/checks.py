@@ -55,7 +55,8 @@ def crop_register(picture, crop):
     return picture.crop(crop)
 
 
-def read_register(picture, light_digits, digits=5, *, force_polarity=False, profile=OCR_PROFILES[0], deadline=None):
+def read_register(picture, light_digits, digits=5, *, force_polarity=False, profile=OCR_PROFILES[0], deadline=None,
+                  process_env=None):
     image = picture.convert("L")
     polarities = (light_digits,) if force_polarity else (light_digits, not light_digits)
     reads = set()
@@ -106,6 +107,7 @@ def read_polarity(image, digits, profile, *, deadline=None):
                 ["tesseract", "stdin", "stdout", "-l", "eng", "--psm", "10" if digits == 1 else "7",
                  "-c", "tessedit_char_whitelist=0123456789"],
                 input=png.getvalue(), capture_output=True, timeout=timeout, check=True,
+                **({"env": process_env} if process_env is not None else {}),
             ).stdout.decode("ascii", errors="ignore").strip()
         if len(result) == digits and re.fullmatch(r"[0-9]+", result):
             votes[result] += 1

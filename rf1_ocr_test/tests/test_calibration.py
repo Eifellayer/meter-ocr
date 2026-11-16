@@ -136,6 +136,29 @@ class CalibrationTests(TestCase):
         self.examine(1, 100, fallback=True)
         self.assertEqual(0, self.job.confirmations)
 
+    def test_partial_row_retries_missing_slot_on_same_image_without_extra_confirmation(self):
+        reference = {"reference_time": 100, "actual_value": "12345", "raw_value": "12345"}
+        calls = []
+
+        def read(trial, profile):
+            calls.append((trial, profile))
+            return "12?45" if not trial.digit_boxes else "12345"
+
+        self.assertIsNone(self.job.examine(frame(1), None, reference, 100, RULES, read,
+                                           lambda: False, refine_read=read))
+        self.assertEqual(1, self.job.confirmations)
+        self.assertEqual(1, len(self.job.seen))
+        self.assertTrue(self.job.candidate.digit_boxes)
+        self.assertGreater(self.job.attempts, 1)
+
+    def test_shifted_complete_row_is_not_confirmed(self):
+        reasons = []
+        reference = {"reference_time": 100, "actual_value": "12345", "raw_value": "12345"}
+        self.job.examine(frame(1), None, reference, 100, RULES, lambda *_: "23456", lambda: False,
+                         on_decision=reasons.append)
+        self.assertEqual(["position_error"], reasons)
+        self.assertEqual(0, self.job.confirmations)
+
     def test_without_reference_requires_plausible_forward_movement(self):
         self.examine(1, 100, reference=False)
         self.examine(2, 101, reference=False)
@@ -162,8 +185,12 @@ class CalibrationTests(TestCase):
         self.assertEqual(1, self.job.confirmations)
 
     def test_deadline_and_stop(self):
-        self.assertFalse(self.job.expired(899.9))
-        self.assertTrue(self.job.expired(900))
+        self.assertFalse(self.job.expired(900))
+        self.assertTrue(self.job.image_wait_expired(900))
+        self.job.searching_since = 100
+        self.assertFalse(self.job.expired(999.9))
+        self.assertTrue(self.job.expired(1000))
+        self.job.searching_since = None
         self.assertIsNone(self.examine(1, 100, stop=lambda: True))
         self.assertEqual(0, self.job.confirmations)
 
@@ -178,7 +205,7 @@ class CalibrationTests(TestCase):
         self.candidates.return_value = [LAYOUT, OTHER_LAYOUT]
         self.job.attempts = MAX_ATTEMPTS - 1
         self.examine(3, 102, fallback=True)
-        self.assertEqual(100, self.job.attempts)
+        self.assertEqual(MAX_ATTEMPTS, self.job.attempts)
         self.assertEqual(900, self.job.status(0)["duration"])
 
     def test_normal_ocr_must_accept_one_more_new_image_before_saving(self):

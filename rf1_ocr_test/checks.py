@@ -60,10 +60,14 @@ def read_register(picture, light_digits, digits=5, *, force_polarity=False, prof
     image = picture.convert("L")
     polarities = (light_digits,) if force_polarity else (light_digits, not light_digits)
     reads = set()
+    limits = {}
+    if deadline is not None:
+        limits["deadline"] = deadline
+    if process_env is not None:
+        limits["process_env"] = process_env
     for invert in polarities:
         gray = ImageOps.invert(image) if invert else image
-        value = (read_polarity(gray, digits, profile) if deadline is None
-                 else read_polarity(gray, digits, profile, deadline=deadline))
+        value = read_polarity(gray, digits, profile, **limits)
         if value is not None:
             reads.add(value)
     return next(iter(reads)) if len(reads) == 1 else None
@@ -82,7 +86,7 @@ def reduce_uneven_lighting(image):
     return ImageChops.subtract(image, background, offset=255)
 
 
-def read_polarity(image, digits, profile, *, deadline=None):
+def read_polarity(image, digits, profile, *, deadline=None, process_env=None):
     cutoff, sharpening, threshold, reduce_shadows = profile
     if reduce_shadows:
         image = reduce_uneven_lighting(image)

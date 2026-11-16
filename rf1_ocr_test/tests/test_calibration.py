@@ -211,6 +211,24 @@ class CalibrationTests(TestCase):
         self.assertEqual(2, self.job.confirmations)
         self.assertEqual(LAYOUT, self.examine(4, 103))
 
+    def test_followup_confirms_the_found_crop_after_reaching_search_limit(self):
+        job = Calibration(7, 0, intensive=True, followup=True, previous_layout=LAYOUT, attempt_limit=20)
+        job.attempts = 19
+        rules = {**RULES, "decimals": 3, "fraction_digits": 3, "attempts": 3}
+        sample = {"reference_time": 100, "raw_value": "12345.239", "actual_value": "12345.239"}
+        read = lambda *_: "12345.239"
+        stop = lambda: False
+
+        self.assertIsNone(job.examine(frame(1), None, sample, 101, rules, read, stop))
+        self.assertEqual(20, job.attempts)
+        self.assertFalse(job.search_exhausted())
+        self.assertIsNone(job.examine(frame(2), None, sample, 102, rules, lambda *_: "12345.23?", stop))
+        self.assertEqual(1, job.confirmations)
+        self.assertIsNone(job.examine(frame(3), None, sample, 103, rules, read, stop))
+        self.assertEqual(LAYOUT, job.examine(frame(4), None, sample, 104, rules, read, stop))
+        self.assertEqual(LAYOUT, job.verify(frame(5), sample, 105, rules, read, stop))
+        self.assertEqual(20, job.attempts)
+
     def test_followup_tries_only_the_saved_crop_and_refines_the_last_digit(self):
         saved = Layout(LAYOUT.box, LAYOUT.rotation, 50)
         self.job = Calibration(5, 0, intensive=True, followup=True, previous_layout=saved)

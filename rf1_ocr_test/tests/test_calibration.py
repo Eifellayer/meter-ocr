@@ -211,6 +211,18 @@ class CalibrationTests(TestCase):
         self.assertEqual(2, self.job.confirmations)
         self.assertEqual(LAYOUT, self.examine(4, 103))
 
+    def test_intensive_verification_has_its_own_deadline_after_the_third_hit(self):
+        job = Calibration(20, 0, intensive=True, duration=240, spent=239, attempts=20, attempt_limit=20)
+        self.assertEqual(1, job.remaining(300))
+        job.begin_verification(300)
+        self.assertTrue(job.verification_pending)
+        self.assertEqual(240, job.remaining(300))
+        self.assertFalse(job.search_exhausted())
+        job.spent = 245
+        job.begin_verification(310)
+        self.assertFalse(job.expired(539))
+        self.assertTrue(job.expired(540))
+
     def test_fine_evidence_keeps_the_best_image_after_a_poor_verification_frame(self):
         self.job.retain_fine_evidence(88, False, {"frame": 1}, {"frame": b"partial"})
         self.job.retain_fine_evidence(100, True, {"frame": 2}, {"frame": b"best"})

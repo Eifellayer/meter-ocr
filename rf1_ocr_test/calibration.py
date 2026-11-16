@@ -27,6 +27,7 @@ MAX_IMAGES = 100
 MAX_ATTEMPTS = 260
 TIME_LIMIT = 15 * 60
 IMAGE_WAIT_LIMIT = 360
+INTENSIVE_VERIFICATION_SECONDS = 4 * 60
 CAPTURE_INTERVAL = 5
 ANGLES = (-3, 3, -1, 1, -2, 2, -4, 4, -6, 6, -9, 9, -12, 12, -18, 18, 90, -90, 180)
 SMALL_ANGLES = (0, -1, 1, -2, 2, -3, 3)
@@ -429,6 +430,7 @@ class Calibration:
     anchored: bool = False
     advanced: bool = False
     verification_pending: bool = False
+    verification_deadline: float | None = None
     automatic: bool = False
     simplified: bool = False
     intensive: bool = False
@@ -458,7 +460,14 @@ class Calibration:
     def expired(self, now):
         return self.remaining(now) <= 0
 
+    def begin_verification(self, now):
+        self.verification_pending = True
+        if self.intensive and self.verification_deadline is None:
+            self.verification_deadline = now + INTENSIVE_VERIFICATION_SECONDS
+
     def remaining(self, now):
+        if self.verification_deadline is not None:
+            return self.verification_deadline - now
         return self.duration - self.spent - (now - self.searching_since if self.searching_since is not None else 0)
 
     def image_wait_expired(self, now):
@@ -514,7 +523,8 @@ class Calibration:
     def status(self, now):
         selected_score = self.shortlist.get(self.candidate, ())
         return {"state": self.state, "stage": self.stage, "rotation": self.rotation, "variant": self.variant,
-                "tested": len(self.seen), "limit": self.limit, "duration": self.duration,
+                "tested": len(self.seen), "limit": self.limit,
+                "duration": INTENSIVE_VERIFICATION_SECONDS if self.verification_deadline is not None else self.duration,
                 "attempts": self.attempts, "max_attempts": self.attempt_limit, "automatic": self.automatic,
                 "confirmations": self.confirmations, "required": MIN_IMAGES,
                 "full_hits": self.full_hits,
@@ -646,7 +656,8 @@ class Calibration:
             self.fine_evidence = rank, {**preview, "best_fine_score": score}, images
 
     def search_exhausted(self):
-        return self.attempts >= self.attempt_limit and not (self.followup and self.confirmations)
+        confirming = (self.followup and self.confirmations) or (self.intensive and self.verification_pending)
+        return self.attempts >= self.attempt_limit and not confirming
 
     def verify(self, frame, sample, stamp, rules, read, stop, on_image=None, on_decision=lambda reason: None):
         """Confirm the exact saved geometry with the regular OCR retry routine."""
@@ -658,7 +669,7 @@ class Calibration:
                 MIN_VERIFICATION_QUALITY * median(self.confirmed_quality)):
             on_decision("soft_image")
             return None
-        if not self.followup:
+        if not self.intensive:
             self.attempts += 1
         has_reference = sample.get("reference_required") is not False
         precision = self.precision(rules, has_reference)

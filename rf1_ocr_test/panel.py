@@ -1635,7 +1635,8 @@ function refreshCalibration(status) {{
     confirmationLabel + status.confirmations + '/' + status.required +
     (active && status.shortlist?.length ?
       ' · Beste Kandidaten: ' + status.shortlist.map(percent => percent + '%').join(', ') : '') +
-    (active ? ' · Rechenzeit übrig: ' + clock + ' min' : '');
+    (active ? (status.intensive && ['verify', 'verify_wait'].includes(status.stage) ?
+      ' · Zeit für Gegenprobe: ' : ' · Rechenzeit übrig: ') + clock + ' min' : '');
   const weakSlots = status.stress_weak_slots || [];
   const stabilityNote = weakSlots.length ?
     ' · Schwankende Stellen im Intensivtest (von links): ' + weakSlots.join(', ') : '';

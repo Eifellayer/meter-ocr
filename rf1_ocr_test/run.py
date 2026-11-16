@@ -1284,7 +1284,8 @@ def main():
                                 on_shortlist=lambda variant, rotation: report_calibration(
                                     "shortlist", variant, rotation),
                             )
-                            attempt.verification_pending = candidate is not None
+                            if candidate is not None:
+                                attempt.begin_verification(time.monotonic())
                             if attempt.simplified and attempt.candidate:
                                 if attempt.candidate != job.candidate:
                                     attempt.last_digit_proposal = None

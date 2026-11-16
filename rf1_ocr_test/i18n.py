@@ -247,6 +247,7 @@ EN_UI = {
     "Bester Treffer der Feinprüfung · ": "Best fine-check result · ",
     "Feinprüfung erfolgreich, Gegenprobe offen. Der beste Rahmen steht für den manuellen Test bereit.":
         "Fine check passed, independent verification pending. The best crop is available for the manual check.",
+    " · Zeit für Gegenprobe: ": " · Verification time left: ",
     LAST_DIGIT_PASS: "The first two decimal places match. The third digit remains unconfirmed.",
     "Für den Verbrauch verwendet die App den plausiblen Vergleichswert.": "The app uses the plausible reference reading to calculate consumption.",
     "Ablesung und Vergleichswert weichen ab": "Image reading and reference differ",

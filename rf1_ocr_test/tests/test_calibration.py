@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import calibration
 from calibration import Calibration, Layout, MAX_ATTEMPTS, guided_layouts, layouts, neighbour_layout, search_region, unrotate_box
-from layout import find_neighbour_digit_rows, find_raw_digit_row, scale_digit_boxes, turn_crop
+from layout import find_neighbour_digit_rows, find_raw_digit_row, find_raw_digit_rows, scale_digit_boxes, turn_crop
 from meter_learning import widen_digit_boxes
 
 LAYOUT = Layout((0, 0, 80, 20), -3, 80)
@@ -34,6 +34,20 @@ def irregular_meter(text):
 
 
 class NeighbourGeometryTests(TestCase):
+    def test_larger_register_ranks_above_a_serial_with_the_same_length(self):
+        photo = Image.new("RGB", (640, 480), "#626262")
+        draw = ImageDraw.Draw(photo)
+        for y, size, value in ((90, 34, "96871"), (320, 75, "12345")):
+            font = ImageFont.truetype("DejaVuSansMono.ttf", size)
+            l, t, r, b = draw.textbbox((320, y), value, font=font, anchor="mm")
+            margin = max(5, round((b - t) * .24))
+            draw.rectangle((l - margin, t - margin, r + margin, b + margin), fill="white")
+            draw.text((320, y), value, font=font, fill="black", anchor="mm")
+        rows = find_raw_digit_rows(photo, 5, 0)
+        self.assertGreaterEqual(len(rows), 2)
+        self.assertGreater(rows[0][0][0][1], 200)
+        self.assertLess(rows[1][0][0][1], 150)
+
     def test_widened_digit_boxes_are_a_separate_safe_trial(self):
         boxes = [(200, 0, 400, 1000), (400, 0, 600, 1000), (600, 0, 800, 1000)]
         widened = widen_digit_boxes(boxes, (50, 20), pixels=2)
@@ -159,6 +173,15 @@ class CalibrationTests(TestCase):
         self.assertEqual(["position_error"], reasons)
         self.assertEqual(0, self.job.confirmations)
 
+    def test_thirty_attempts_include_coarse_and_fine_work(self):
+        self.candidates.return_value = [Layout((x, 0, x + 80, 20), 0, 80) for x in range(4)]
+        sample = {"reference_time": 100, "actual_value": "12345", "raw_value": "12345"}
+        self.job.examine(frame(1), None, sample, 100, RULES, lambda *_: "12?45",
+                         lambda: False, refine_read=lambda *_: "12?45")
+        self.assertEqual(30, self.job.attempts)
+        self.assertEqual(1, len(self.job.seen))
+        self.assertEqual(0, self.job.confirmations)
+
     def test_without_reference_requires_plausible_forward_movement(self):
         self.examine(1, 100, reference=False)
         self.examine(2, 101, reference=False)
@@ -168,7 +191,7 @@ class CalibrationTests(TestCase):
     def test_learning_tries_the_configured_crop_when_detection_finds_nothing(self):
         photo = frame(1)
         rules = {**RULES, "crop_mode": "auto", "crop": "0,0,80,20", "rotation": 0, "width": 80}
-        with patch.object(calibration, "find_raw_digit_row", return_value=None):
+        with patch.object(calibration, "find_raw_digit_rows", return_value=[]):
             self.assertIn(Layout((0, 0, 80, 20), 0, 80), list(layouts(photo, None, rules, 0)))
 
     def test_reports_why_a_detected_crop_was_rejected(self):

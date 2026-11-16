@@ -87,11 +87,11 @@ def digit_components(image, threshold, light_digits):
     return sorted(boxes)
 
 
-def find_raw_digit_row(frame, whole_digits, fraction_digits):
-    """Find a regular row of glyphs in a contrasting meter window, without an ESP overlay."""
+def find_raw_digit_rows(frame, whole_digits, fraction_digits, limit=4):
+    """Rank separate rows by glyph size, spacing and contrast around the register."""
     count = whole_digits + fraction_digits
     if count < 3:
-        return None
+        return []
     image = frame.convert("L")
     image.thumbnail((400, 300), Image.Resampling.BILINEAR)
     image = ImageOps.autocontrast(image, cutoff=2)
@@ -140,23 +140,39 @@ def find_raw_digit_row(frame, whole_digits, fraction_digits):
                 if contrast < 18:
                     continue
                 bounds = (max(0, left - margin), top - margin, min(width, right + margin), bottom + margin)
-                candidates[bounds] = (contrast, row, centers)
-    if not candidates:
-        return None
-    ordered = sorted(candidates, key=lambda bounds: candidates[bounds][0], reverse=True)
-    left, top, right, bottom = ordered[0]
-    contrast, _, centers = candidates[ordered[0]]
-    for other in ordered[1:]:
-        if candidates[other][0] < contrast * 0.85:
-            break
-        if abs(other[0] - left) > (right - left) / count or abs(other[1] - top) > (bottom - top) / 2:
-            return None
+                size = median(box[3] - box[1] for box in row)
+                regularity = 1 - sum(abs(gap - pitch) / pitch for gap in pitches) / len(pitches)
+                score = size * regularity * (1 + min(contrast, 100) / 200)
+                if bounds not in candidates or score > candidates[bounds][0]:
+                    candidates[bounds] = (score, centers)
     xscale, yscale = frame.width / width, frame.height / height
-    crop = (round(left * xscale), round(top * yscale), round(right * xscale), round(bottom * yscale))
-    boundaries = [crop[0], *(round((a + b) * xscale / 2) for a, b in pairwise(centers)), crop[2]]
-    digit_boxes = [(a - crop[0], 0, b - crop[0], crop[3] - crop[1])
+    result = []
+    for bounds, (score, centers) in sorted(candidates.items(), key=lambda item: (-item[1][0], item[0][1], item[0][0])):
+        left, top, right, bottom = bounds
+        crop = (round(left * xscale), round(top * yscale), round(right * xscale), round(bottom * yscale))
+        if any(same_digit_region(crop, old[0][0]) for old in result):
+            continue
+        boundaries = [crop[0], *(round((a + b) * xscale / 2) for a, b in pairwise(centers)), crop[2]]
+        digit_boxes = [(a - crop[0], 0, b - crop[0], crop[3] - crop[1])
                    for a, b in pairwise(boundaries)]
-    return crop, boundaries[whole_digits] - crop[0], digit_boxes
+        result.append(((crop, boundaries[whole_digits] - crop[0], digit_boxes), score))
+        if len(result) >= limit:
+            break
+    return result
+
+
+def same_digit_region(first, second):
+    l, t, r, b = first
+    x, y, u, v = second
+    shared = max(0, min(r, u) - max(l, x)) * max(0, min(b, v) - max(t, y))
+    return shared >= .65 * max((r - l) * (b - t), (u - x) * (v - y))
+
+
+def find_raw_digit_row(frame, whole_digits, fraction_digits):
+    rows = find_raw_digit_rows(frame, whole_digits, fraction_digits, limit=2)
+    if not rows or len(rows) > 1 and rows[1][1] >= .85 * rows[0][1]:
+        return None
+    return rows[0][0]
 
 
 def find_digit_row(overlay, whole_digits=5, fraction_digits=None):

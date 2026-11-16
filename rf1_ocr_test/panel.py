@@ -1375,6 +1375,7 @@ function refreshCalibrationImages(preview) {{
     disagree: 'Die OCR-Versuche lieferten unterschiedliche Ziffern.',
     reference_unavailable: 'Kein gültiger Vergleichswert zu diesem Bild.',
     reference_mismatch: 'Der gelesene Stand weicht vom Vergleichswert ab.',
+    position_error: 'Die Ziffernreihe scheint gegenüber der Referenz um eine Stelle verschoben.',
     implausible: 'Der Stand passt zeitlich nicht zur letzten sicheren Ablesung.',
     await_movement: 'Der Rahmen ist lesbar. Die App wartet auf einen plausiblen Zähleranstieg.',
     accepted: 'Dieser Rahmen wurde auf dem aktuellen Bild bestätigt.',
@@ -1434,6 +1435,7 @@ function refreshCalibration(status) {{
     testing: 'Prüfe Ausschnitt und Drehung …',
     saved: 'Erfolgreich eingerichtet. Ausschnitt und Drehung sind übernommen.',
     failed: 'Selbsteinrichtung fehlgeschlagen. Prüfe Bildausschnitt, Kamerawinkel und Beleuchtung.',
+    image_timeout: 'Kein neues Kamerabild erhalten. Prüfe die Bildquelle.',
     timeout: status.automatic ? 'Nachjustierung nach vier Minuten beendet. Der bisherige Rahmen bleibt gültig.' :
       'Selbsteinrichtung nach 15 Minuten beendet. Keine Einstellung sicher bestätigt.',
     cancelled: 'Selbsteinrichtung gestoppt.',
@@ -1443,7 +1445,8 @@ function refreshCalibration(status) {{
   const stages = {{
     queued: 'Selbsteinrichtung startet, sobald die laufende Prüfung beendet ist …',
     capture: 'Kamerabild wird abgerufen …',
-    search: 'Suche nach der Ziffernreihe …',
+    search: 'Grobkalibrierung: Suche nach der Ziffernreihe …',
+    refine: 'Feinkalibrierung: Prüfe Rahmen und Drehung am vorhandenen Bild …',
     verify_wait: 'Rahmen gefunden. Warte auf ein frisches Bild zur Gegenprüfung …',
     verify: 'Gefundenen Rahmen mit der normalen Prüfung gegenprüfen …',
     ocr: 'Prüfe Rahmen ' + status.variant + ' mit Drehung ' + status.rotation + '° …',
@@ -1454,8 +1457,8 @@ function refreshCalibration(status) {{
   const detail = 'Bilder geprüft: ' + status.tested +
     ' · Rahmen getestet: ' + status.attempts +
     ' · Bestätigungen: ' + status.confirmations + '/' + status.required +
-    (active ? ' · Restzeit: ' + clock + ' min' : '');
-  const tone = status.state === 'saved' ? 'ok' : ['failed', 'timeout', 'save_failed'].includes(status.state) ? 'error' : '';
+    (active ? ' · Rechenzeit übrig: ' + clock + ' min' : '');
+  const tone = status.state === 'saved' ? 'ok' : ['failed', 'timeout', 'image_timeout', 'save_failed'].includes(status.state) ? 'error' : '';
   label.textContent = (status.automatic ? 'Automatische Nachjustierung · ' : '') + message + ' ' + detail;
   label.dataset.tone = tone;
   document.querySelector('#calibration-overview').dataset.tone = tone;

@@ -1,9 +1,14 @@
 """Bounded search for a reproducible meter crop and rotation."""
 
 from dataclasses import dataclass, field, replace
+from concurrent.futures import ThreadPoolExecutor
 from hashlib import sha256
 from math import ceil, cos, floor, radians, sin
 import subprocess
+import os
+from itertools import product
+from pathlib import Path
+from statistics import median
 
 from checks import OCR_PROFILES, compare_sample, crop_register, meter_prefix, read_with_retries
 from consumption import accumulate_consumption
@@ -16,10 +21,11 @@ DEFAULT_LIMIT = 100
 MIN_IMAGES = 3
 MIN_IMAGE_LIMIT = MIN_IMAGES + 1
 MAX_IMAGES = 100
-MAX_ATTEMPTS = 100
+MAX_ATTEMPTS = 260
 TIME_LIMIT = 15 * 60
+IMAGE_WAIT_LIMIT = 360
 CAPTURE_INTERVAL = 5
-ANGLES = (-3, 3, -6, 6, -12, 12, -18, 18, 90, -90, 180)
+ANGLES = (-3, 3, -1, 1, -2, 2, -4, 4, -6, 6, -9, 9, -12, 12, -18, 18, 90, -90, 180)
 MAX_LAYOUTS_PER_IMAGE = 4
 
 
@@ -197,6 +203,92 @@ def reference_rejection(sample, status):
     return None
 
 
+def position_error(value, sample, precision, whole):
+    """Identify a likely one-slot shift against a reliable reference."""
+    reference = sample.get("actual_value")
+    measured = str(value).replace(",", ".").partition(".")
+    if len(measured[0]) != whole:
+        return True
+    expected = meter_prefix(reference, precision, whole)
+    if expected is None:
+        return False
+    target = str(expected).zfill(whole + precision)
+    reading = measured[0] + measured[2][:precision]
+    aligned = sum(a == b for a, b in zip(reading, target))
+    return any(sum(a == b for a, b in zip(left, right)) >= max(3, aligned + 2)
+               for left, right in ((reading[1:], target), (reading, target[1:])))
+
+
+def refinement_workers():
+    cores = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count() or 1
+    try:
+        quota, period = Path("/sys/fs/cgroup/cpu.max").read_text().split()
+        if quota != "max":
+            cores = min(cores, max(1, int(quota) // int(period)))
+    except (OSError, ValueError):
+        pass
+    try:
+        spare_cpu = max(1, int(cores - os.getloadavg()[0]) - 1)
+        spare_memory = os.sysconf("SC_AVPHYS_PAGES") * os.sysconf("SC_PAGE_SIZE")
+        try:
+            limit = Path("/sys/fs/cgroup/memory.max").read_text().strip()
+            if limit != "max":
+                used = int(Path("/sys/fs/cgroup/memory.current").read_text())
+                spare_memory = min(spare_memory, int(limit) - used)
+        except (OSError, ValueError):
+            pass
+        return max(1, min(4, spare_cpu, spare_memory // (256 * 1024 ** 2)))
+    except (OSError, ValueError, AttributeError):
+        return 1
+
+
+def refinement_layouts(layout, rules, readings):
+    """Vary missing or disputed slots first, keeping neighbouring centers as guides."""
+    whole, fraction = rules["integer_digits"], rules["fraction_digits"]
+    count = whole + fraction
+    left, top, right, bottom = layout.box
+    if not layout.digit_boxes:
+        span = rotated_width(right - left, bottom - top, layout.rotation)
+        split = min(1000, round(1000 * layout.width / span))
+        edges = [round(i * split / whole) for i in range(whole + 1)]
+        edges += [split + round(i * (1000 - split) / fraction) for i in range(1, fraction + 1)]
+        boxes = tuple((a, 0, b, 1000) for a, b in zip(edges, edges[1:]))
+    else:
+        boxes = layout.digit_boxes
+    rows = [str(value).replace(".", "").replace(",", "") for value in readings]
+    weak = [i for i in range(count) if any(len(row) != count or row[i:i+1] not in tuple("0123456789")
+                                         for row in rows) or len({row[i:i+1] for row in rows}) > 1]
+    pitch = median(r - l for l, _, r, _ in boxes)
+    shifts = (0, -1, 1, -2, 2)
+    slot_sets = [{i} for i in weak] + [set(weak or range(count)), set(range(count))]
+    offsets = sorted(product(shifts, shifts[:3], shifts[:3], shifts[:3], shifts[:3], shifts[:3]),
+                     key=lambda values: (sum(map(abs, values)), -abs(values[0])))
+    for angle, dx, dy, dw, dh, spacing in offsets:
+        for slots in slot_sets:
+            if not any((angle, dx, dy, dw, dh, spacing)) and layout.digit_boxes:
+                continue
+            if angle and slots != set(range(count)):
+                continue
+            if not -180 <= layout.rotation + angle <= 180:
+                continue
+            if layout.width > rotated_width(right - left, bottom - top, layout.rotation + angle):
+                continue
+            trial = []
+            for i, (l, t, r, b) in enumerate(boxes):
+                if i in slots:
+                    x = round(pitch * (dx + spacing * (i - (count - 1) / 2)) / 12)
+                    margin = round(pitch * dw / 10)
+                    l, r = max(0, l + x - margin), min(1000, r + x + margin)
+                    t, b = max(0, t + 35 * dy - 45 * dh), min(1000, b + 35 * dy + 45 * dh)
+                trial.append((l, t, r, b))
+            try:
+                valid = digit_box_settings(trial, count)
+            except ValueError:
+                continue
+            yield replace(layout, rotation=layout.rotation + angle, digit_boxes=tuple(map(tuple, valid)),
+                          method="refined")
+
+
 @dataclass
 class Calibration:
     limit: int
@@ -222,17 +314,92 @@ class Calibration:
     previous_layout: Layout | None = None
     region: tuple | None = None
     focused: bool = False
-    near_score: int = 0
+    best_score: tuple = ()
+    spent: float = 0
+    searching_since: float | None = None
+    last_image_at: float | None = None
+    refinement_seen: set = field(default_factory=set)
 
     def expired(self, now):
-        return now - self.started >= self.duration
+        return self.remaining(now) <= 0
+
+    def remaining(self, now):
+        return self.duration - self.spent - (now - self.searching_since if self.searching_since is not None else 0)
+
+    def image_wait_expired(self, now):
+        return now - (self.last_image_at if self.last_image_at is not None else self.started) >= IMAGE_WAIT_LIMIT
 
     def status(self, now):
         return {"state": self.state, "stage": self.stage, "rotation": self.rotation, "variant": self.variant,
                 "tested": len(self.seen), "limit": self.limit, "duration": self.duration,
                 "attempts": self.attempts, "max_attempts": self.attempt_limit, "automatic": self.automatic,
                 "confirmations": self.confirmations, "required": MIN_IMAGES,
-                "seconds": max(0, ceil(self.duration - (now - self.started)))}
+                "seconds": max(0, ceil(self.remaining(now)))}
+
+    def refine(self, layout, readings, sample, rules, read, stop, on_attempt, tested):
+        on_attempt = on_attempt or (lambda *_: None)
+        whole, fraction = rules["integer_digits"], rules["fraction_digits"]
+        has_reference = sample.get("reference_required") is not False
+        precision = rules["decimals"] if has_reference else fraction
+
+        def score(values):
+            rows = [str(value).replace(".", "").replace(",", "") for value in values]
+            agreed = sum(a == b and a in "0123456789" for a, b in zip(*rows)
+                         ) if all(len(row) == whole + fraction for row in rows) else 0
+            prefixes = [meter_prefix(value, precision, whole) for value in values]
+            complete = (agreed >= whole and all(len(str(value).replace(",", ".").partition(".")[0]) == whole
+                                               for value in values)
+                        and prefixes[0] is not None and prefixes[0] == prefixes[1])
+            match = complete and has_reference and reference_rejection(
+                sample, compare_sample(sample, values[0], precision, integer_digits=whole)[0]) is None
+            expected = meter_prefix(sample.get("actual_value"), precision, whole) if has_reference else None
+            aligned = (sum(a == b == c and a in "0123456789"
+                           for a, b, c in zip(*rows, str(expected).zfill(whole + precision)))
+                       if expected is not None and not sample.get("reference_is_fallback") else 0)
+            return bool(match), bool(complete), aligned, agreed
+
+        def evaluate(trial):
+            values = []
+            try:
+                for profile in OCR_PROFILES[:2]:
+                    if stop():
+                        return None
+                    values.append(read(trial, profile))
+                return score(values), trial, values
+            except (OSError, ValueError, subprocess.SubprocessError):
+                return None
+
+        best = (score(readings), layout, readings)
+        if best[0][-1] < min(2, whole):
+            return layout, readings
+        # Bound the work per image, leaving budget for independent confirmations.
+        budget = min(80, max(0, self.attempt_limit - self.attempts - MIN_IMAGES))
+        variants = iter(refinement_layouts(layout, rules, readings))
+        with ThreadPoolExecutor(max_workers=refinement_workers()) as pool:
+            while budget and not stop():
+                batch = []
+                batch_size = min(budget, refinement_workers())
+                for trial in variants:
+                    if trial in tested or trial in self.refinement_seen:
+                        continue
+                    tested.add(trial)
+                    self.refinement_seen.add(trial)
+                    batch.append(trial)
+                    if len(batch) >= batch_size:
+                        break
+                if not batch:
+                    break
+                budget -= len(batch)
+                self.attempts += len(batch)
+                on_attempt(self.attempts, best[1].rotation)
+                for result in pool.map(evaluate, batch):
+                    if result and result[0] > best[0]:
+                        best = result
+                if best[0][0] or not has_reference and best[0][1]:
+                    break
+        if best[0] > self.best_score and not self.best_confirmations:
+            self.best_score, self.best = best[0], best[1]
+        return best[1], best[2]
 
     def remember_image(self, frame, stamp):
         digest = sha256(frame.convert("RGB").tobytes()).digest()
@@ -277,7 +444,7 @@ class Calibration:
         return self.candidate
 
     def examine(self, frame, overlay, sample, stamp, rules, read, stop, baseline=None, on_attempt=None,
-                on_image=None, on_decision=lambda reason: None):
+                on_image=None, on_decision=lambda reason: None, refine_read=None, on_refine=None):
         """Return a verified layout, checking two OCR profiles per distinct image."""
         if not self.remember_image(frame, stamp):
             return None
@@ -300,9 +467,13 @@ class Calibration:
         if self.focused:
             candidates = ((self.candidate,) if self.candidate is not None else ())
         examined = False
+        tested = set()
         for index, layout in enumerate(candidates, start=1):
             if stop() or self.attempts >= self.attempt_limit:
                 return None
+            if layout in tested:
+                continue
+            tested.add(layout)
             examined = True
             self.attempts += 1
             if on_attempt is not None:
@@ -313,6 +484,13 @@ class Calibration:
                 if stop():
                     return None
                 readings.append(read(layout, OCR_PROFILES[1]))
+                if refine_read is not None and not self.confirmations and not self.focused:
+                    original = layout
+                    layout, readings = self.refine(layout, readings, sample, rules, refine_read, stop, on_refine, tested)
+                    if layout != original and not stop():
+                        read(layout, OCR_PROFILES[0])
+                if stop():
+                    return None
                 prefixes = [meter_prefix(value, precision, digits) for value in readings]
                 if None in prefixes:
                     on_decision("unclear")
@@ -323,15 +501,20 @@ class Calibration:
                 if has_reference:
                     status, _ = compare_sample(sample, readings[0], precision, integer_digits=digits)
                     reason = reference_rejection(sample, status)
-                    if reason:
+                    if reason == "reference_mismatch" and position_error(readings[0], sample, precision, digits):
+                        on_decision("position_error")
+                        continue
+                    if reason and not self.focused:
                         # Keep a candidate with two agreeing OCR profiles as
                         # the preferred geometry. The reference may be stale
                         # or the meter may simply not have advanced yet.
                         self.candidate = layout
                         self.focused = True
-                        self.near_score = max(self.near_score, 2)
                         on_decision(reason)
                         return None
+                    if reason:
+                        on_decision(reason)
+                        continue
                 rejection = "implausible"
                 same = layout == self.candidate
                 anchor = self.counter if same else baseline or {}
@@ -347,7 +530,6 @@ class Calibration:
                 counter["reading_litres"] > anchor["reading_litres"]))
             self.candidate, self.counter = layout, counter
             self.focused = False
-            self.near_score = 0
             if self.confirmations > self.best_confirmations:
                 self.best, self.best_confirmations = layout, self.confirmations
             if self.confirmations >= MIN_IMAGES and not (self.anchored or self.advanced):
@@ -362,6 +544,6 @@ class Calibration:
             if not examined:
                 on_decision("no_region")
             self.candidate, self.counter = None, {}
-            self.focused, self.near_score = False, 0
+            self.focused = False
             self.confirmations, self.anchored, self.advanced = 0, False, False
         return None

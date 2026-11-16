@@ -332,6 +332,15 @@ class StateTests(TestCase):
             return recognize(*args, **kwargs)
 
         self.enterContext(patch.object(run, "read_visible_digits", side_effect=check_pending))
+        class InlineCalibrationThread:
+            def __init__(self, target, args, **kwargs):
+                self.target, self.args = target, args
+
+            def start(self):
+                self.target(*self.args)
+                raise Done
+
+        self.enterContext(patch.object(run, "Thread", InlineCalibrationThread))
         with self.assertRaises(Done):
             run.main()
         self.assertEqual(("ocr", None), observed[0][:2])

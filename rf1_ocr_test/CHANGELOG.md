@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.21 Stable
+
+- Die Feinprüfung der letzten Rolle liest nur diese Ziffer, verwendet den gespeicherten Drehwinkel und verschiebt bei Bedarf ausschließlich den letzten Einzelrahmen. Neue Bilder werden alle zwei Sekunden angefragt.
+
 ## 0.5.20 Stable
 
 - Bei stillstehendem Zähler kann die vereinfachte Einrichtung den Rahmen nach drei frischen, übereinstimmenden Bildern vorläufig speichern. Sie speichert keinen bestätigten Zählerstand und prüft automatisch auf zwei Nachkommastellen weiter und startet die Feinprüfung wieder, sobald die offene Rolle zuverlässig lesbar erscheint.

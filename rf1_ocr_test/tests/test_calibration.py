@@ -269,6 +269,37 @@ class CalibrationTests(TestCase):
         self.assertEqual({"frame": 2, "best_fine_score": 100}, preview)
         self.assertEqual(b"best", images["frame"])
 
+    def test_last_digit_fine_check_shifts_only_last_box_and_uses_fresh_images(self):
+        boxes = tuple((index * 120, 100, index * 120 + 100, 900) for index in range(8))
+        initial = Layout((0, 0, 80, 20), -1, 50, boxes)
+        job = Calibration(7, 0, intensive=True)
+        attempts = []
+
+        def read(trial, _):
+            self.assertEqual(initial.box, trial.box)
+            self.assertEqual(initial.rotation, trial.rotation)
+            self.assertEqual(initial.digit_boxes[:-1], trial.digit_boxes[:-1])
+            attempts.append(trial)
+            return "4" if trial != initial else "?"
+
+        def check(number, stamp, layout):
+            return job.check_last_digit(frame(number), {"reference_required": False}, stamp,
+                                        layout, 5, read, lambda: False, lambda: None, lambda _: None)
+
+        self.assertIsNone(check(1, 101, initial))
+        chosen = job.candidate
+        self.assertNotEqual(initial, chosen)
+        self.assertEqual(1, job.confirmations)
+        self.assertIsNone(check(1, 102, chosen))
+        self.assertEqual(1, job.confirmations)
+        self.assertIsNone(check(2, 103, chosen))
+        self.assertEqual(chosen, check(3, 104, chosen))
+        job.begin_verification(104)
+        attempts.clear()
+        self.assertEqual(chosen, check(4, 105, chosen))
+        self.assertEqual([chosen, chosen], attempts)
+        self.assertIsNone(job.reference_reading)
+
     def test_followup_confirms_the_found_crop_after_reaching_search_limit(self):
         job = Calibration(7, 0, intensive=True, followup=True, previous_layout=LAYOUT, attempt_limit=20)
         job.attempts = 19

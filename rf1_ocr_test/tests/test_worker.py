@@ -403,7 +403,7 @@ class StateTests(TestCase):
         self.assertEqual(backup["rules"]["width"], access["rules"]()["width"])
         self.assertEqual(75, access["rules"]()["interval_minutes"])
 
-        access["save"]({**access["rules"](), "decimals": 3, "fraction_digits": 3})
+        access["save"]({**access["rules"](), "decimals": 3, "fraction_digits": 3, "crop_mode": "manual"})
         access["control"]("start", 4)
         self.assertTrue(access["status"]()["simplified"])
         access["control"]("intensive", 4)

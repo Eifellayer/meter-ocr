@@ -38,7 +38,8 @@ from checks import (
     valid_interval_minutes,
 )
 from calibration import (Calibration, Layout, CAPTURE_INTERVAL, MIN_IMAGES, MIN_IMAGE_LIMIT, MAX_IMAGES, MAX_ATTEMPTS,
-                         SHORTLIST_LIMIT, TIME_LIMIT, two_decimal_reading)
+                         DEFAULT_INTENSIVE_AGREEMENT, SHORTLIST_LIMIT, TIME_LIMIT,
+                         two_decimal_reading, valid_intensive_agreement)
 from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, MAX_FLOW_LPH, ImplausibleReading,
                          accumulate_consumption, fallback_detail, format_cubic_metres)
 from layout import (MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, find_digit_row,
@@ -641,6 +642,7 @@ def main():
         wake_worker.set()
 
     auto_rules = {"decimals": default_decimals, "attempts": default_attempts, "polarity": "auto",
+                  "intensive_agreement": DEFAULT_INTENSIVE_AGREEMENT,
                   "precision_mode": False, "fine_alignment_enabled": False, "adaptive_interval_enabled": False, "self_repair_enabled": False,
                   "reflection_estimate_enabled": False, "reflection_suggestion_hidden": False,
                   "reflection_confirmed_id": "",
@@ -675,6 +677,9 @@ def main():
             interval_minutes = saved_rules.get("interval_minutes", DEFAULT_INTERVAL_MINUTES)
             if not valid_interval_minutes(interval_minutes):
                 interval_minutes = DEFAULT_INTERVAL_MINUTES
+            intensive_agreement = saved_rules.get("intensive_agreement", DEFAULT_INTENSIVE_AGREEMENT)
+            if not valid_intensive_agreement(intensive_agreement):
+                intensive_agreement = DEFAULT_INTENSIVE_AGREEMENT
             integer_digits = saved_rules.get("integer_digits", 5)
             if type(integer_digits) is not int or not 1 <= integer_digits <= 9:
                 integer_digits = 5
@@ -713,6 +718,7 @@ def main():
                           "integer_digits": integer_digits, "fraction_digits": fraction_digits,
                           "meter_display": meter_display, "fallback_value": fallback_value,
                           "precision_mode": saved_rules.get("precision_mode") is True,
+                          "intensive_agreement": intensive_agreement,
                           "fine_alignment_enabled": saved_rules.get("fine_alignment_enabled") is True,
                           "self_repair_enabled": saved_rules.get("self_repair_enabled") is True,
                           "adaptive_interval_enabled": saved_rules.get("adaptive_interval_enabled") is True,
@@ -738,6 +744,9 @@ def main():
         fallback_value = values.get("fallback_value", auto_rules["fallback_value"])
         fallback_time = values.get("fallback_time", auto_rules["fallback_time"])
         precision_mode = values.get("precision_mode", auto_rules["precision_mode"])
+        intensive_agreement = values.get("intensive_agreement", auto_rules["intensive_agreement"])
+        if not valid_intensive_agreement(intensive_agreement):
+            raise ValueError("Ungültige Übereinstimmung für die Intensivprüfung")
         self_repair = values.get("self_repair_enabled", auto_rules["self_repair_enabled"])
         fine_alignment = values.get("fine_alignment_enabled", auto_rules["fine_alignment_enabled"])
         adaptive_interval = values.get("adaptive_interval_enabled", auto_rules["adaptive_interval_enabled"])

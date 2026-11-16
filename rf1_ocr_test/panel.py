@@ -16,7 +16,10 @@ from tempfile import NamedTemporaryFile
 from urllib.parse import parse_qs, urlsplit
 
 from app_channel import APP_NAME, NAMESPACE
-from calibration import DEFAULT_LIMIT, MIN_IMAGE_LIMIT, MAX_IMAGES, search_region
+from calibration import (
+    DEFAULT_INTENSIVE_AGREEMENT, DEFAULT_LIMIT, MIN_IMAGE_LIMIT, MAX_IMAGES,
+    search_region, valid_intensive_agreement,
+)
 from meter_learning import GEOMETRY_REPAIR_FAILURES
 from checks import (DEFAULT_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, WARNING_DETAIL_AFTER, meter_prefix,
                     LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, REFLECTION_SUGGEST_AFTER, STANDALONE_PENDING, STANDALONE_REJECTED_NOTICE,
@@ -676,6 +679,9 @@ name: Zählerstand (OCR)</code></pre>
 <small {slfork_interval_hidden}>Bei AI on the Edge / SLFork liegen reguläre Prüfungen mindestens fünf Minuten auseinander.</small></label>
 <label>Max. OCR-Versuche
 <select name="attempts">{auto_attempt_options}</select></label>
+<label>Übereinstimmung für die Intensivprüfung (%)
+<input name="intensive_agreement" type="number" min="1" max="100" step="1" value="{intensive_agreement}" required>
+<small>Ab diesem Wert wechselt die Selbsteinrichtung in die Intensivprüfung. Eine einzelne vermutete Ziffernposition kann sie auch früher gezielt prüfen.</small></label>
 <label title="Qmax steht auf deinem Zähler. Die Vorgabe für einen G4 beträgt 6 m³/h.">Maximaler Durchfluss (m³/h)
 <input name="max_flow" type="text" inputmode="decimal" maxlength="10" value="{max_flow}" required></label>
 <label>Ziffernfarbe
@@ -2540,6 +2546,7 @@ def start_panel(
                 setup_first_run=str(bool(setup_pending or reset_state == "done")).lower(),
                 precision_hidden="" if auto_rules["decimals"] == 3 else "hidden",
                 precision_checked="checked" if auto_rules.get("precision_mode") else "",
+                intensive_agreement=auto_rules.get("intensive_agreement", DEFAULT_INTENSIVE_AGREEMENT),
                 reflection_enabled_checked="checked" if auto_rules.get("reflection_estimate_enabled") else "",
                 fine_alignment_checked="checked" if auto_rules.get("fine_alignment_enabled") else "",
                 adaptive_interval_checked="checked" if auto_rules.get("adaptive_interval_enabled") else "",
@@ -3107,7 +3114,17 @@ def start_panel(
                         ))
                         if not valid_interval_minutes(interval_minutes):
                             raise ValueError("Ungültiges Prüfintervall")
+                        try:
+                            intensive_agreement = int(field("intensive_agreement", str(old_rules.get(
+                                "intensive_agreement", DEFAULT_INTENSIVE_AGREEMENT))))
+                        except ValueError:
+                            intensive_agreement = 0
+                        if not valid_intensive_agreement(intensive_agreement):
+                            problem(400, "Die Übereinstimmung für die Intensivprüfung muss zwischen 1 und 100 Prozent liegen.",
+                                    "Enter an intensive-check agreement threshold between 1 and 100 percent.")
+                            return
                         save_auto_rules({"decimals": int(decimals[0]), "attempts": int(attempts[0]),
+                                         "intensive_agreement": intensive_agreement,
                                          "precision_mode": field("precision_mode") == "1",
                                          "reflection_estimate_enabled": field("reflection_estimate_enabled") == "1",
                                          "fine_alignment_enabled": field("fine_alignment_enabled") == "1",

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.15 Stable
+
+- Die Übereinstimmung für den Wechsel von der Grobsuche zur Intensivprüfung ist einstellbar. Der Standardwert beträgt 80 Prozent.
+
 ## 0.5.14 Stable
 
 - Ab 90 Prozent Übereinstimmung beginnt die Intensivprüfung. Bei verlässlichen 100 Prozent bleibt die Prüfung beim gefundenen Rahmen.

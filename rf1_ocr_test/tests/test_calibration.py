@@ -431,6 +431,18 @@ class CalibrationTests(TestCase):
         self.assertTrue(self.job.optimizing)
         self.assertEqual(0, self.job.confirmations)
 
+    def test_intensive_agreement_uses_the_configured_threshold(self):
+        sample = {"reference_time": 100, "raw_value": "123456789.239", "actual_value": "123456789.239"}
+        rules = {**RULES, "integer_digits": 9, "decimals": 3, "fraction_digits": 3}
+        read = lambda *_: "1234567??.239"
+        for override, expected in (({}, True), ({"intensive_agreement": 90}, False)):
+            with self.subTest(override=override):
+                job = Calibration(5, 0, rank_candidates=True)
+                job.examine(frame(1), None, sample, 101, {**rules, **override}, read, lambda: False)
+                self.assertEqual([83], job.status(101)["shortlist"])
+                self.assertEqual(expected, job.optimizing)
+                self.assertEqual(0, job.confirmations)
+
     def test_only_one_open_required_slot_triggers_intensive_search(self):
         self.job = Calibration(5, 0, rank_candidates=True, simplified=True)
         rules = {**RULES, "decimals": 3, "fraction_digits": 3}

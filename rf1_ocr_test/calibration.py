@@ -33,7 +33,7 @@ SMALL_ANGLES = (0, -1, 1, -2, 2, -3, 3)
 MAX_LAYOUTS_PER_IMAGE = 5
 COARSE_LIMIT = 50
 SHORTLIST_LIMIT = 5
-INTENSIVE_AGREEMENT = 90
+DEFAULT_INTENSIVE_AGREEMENT = 80
 MIN_VERIFICATION_QUALITY = .65
 FRAME_ATTEMPT_LIMIT = 30
 
@@ -257,6 +257,10 @@ def two_decimal_reading(value):
     """Mask trailing digits so the comparison cannot round using an open slot."""
     whole, separator, fraction = str(value).replace(",", ".").partition(".")
     return f"{whole}.{fraction[:2]}?" if separator and len(fraction) >= 2 else value
+
+
+def valid_intensive_agreement(value):
+    return type(value) is int and 1 <= value <= 100
 
 
 def crop_quality(frame, layout):
@@ -776,12 +780,13 @@ class Calibration:
             stable = [item for item in coarse if item[0][4]]
             if collecting:
                 found = any(reliable(score) for score, _, _ in coarse)
+                threshold = rules.get("intensive_agreement", DEFAULT_INTENSIVE_AGREEMENT)
                 required_slots = digits + precision
                 almost_complete = round(100 * (required_slots - 1) / required_slots)
 
                 def promising_candidate(layout, values):
                     percentage = self.shortlist.get(layout, (0, 0))[0]
-                    if percentage >= INTENSIVE_AGREEMENT:
+                    if percentage >= threshold:
                         return True
                     if required_slots < 2 or percentage < almost_complete:
                         return False

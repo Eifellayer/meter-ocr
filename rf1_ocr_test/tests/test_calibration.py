@@ -430,6 +430,23 @@ class CalibrationTests(TestCase):
         self.assertEqual([1], checked)
         self.assertEqual(0, self.job.confirmations)
 
+    def test_third_full_hit_triggers_intensive_profiles_before_verification(self):
+        job = Calibration(5, 0, rank_candidates=True)
+        sample = {"reference_time": 100, "raw_value": "12345", "actual_value": "12345"}
+        profiles = []
+
+        def read(layout, profile):
+            profiles.append(profile)
+            return "12345"
+
+        for index in (1, 2):
+            self.assertIsNone(job.examine(frame(index), None, sample, 100 + index, RULES, read, lambda: False))
+        profiles.clear()
+        self.assertEqual(LAYOUT, job.examine(frame(3), None, sample, 103, RULES, read, lambda: False))
+        self.assertEqual(list(calibration.OCR_PROFILES[:5]), profiles)
+        self.assertEqual(3, job.status(103)["full_hits"])
+        self.assertEqual(3, len(job.seen))
+
     def test_a_yellow_last_digit_keeps_the_visible_score_below_one_hundred(self):
         self.job = Calibration(5, 0, rank_candidates=True, simplified=True)
         rules = {**RULES, "decimals": 3, "fraction_digits": 3}

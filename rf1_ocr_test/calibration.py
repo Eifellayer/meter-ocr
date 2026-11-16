@@ -440,6 +440,7 @@ class Calibration:
     optimizing: bool = False
     shortlist: dict = field(default_factory=dict)
     confirmed_quality: list = field(default_factory=list)
+    full_hits: int = 0
     duration: int = TIME_LIMIT
     attempt_limit: int = MAX_ATTEMPTS
     previous_layout: Layout | None = None
@@ -514,6 +515,7 @@ class Calibration:
                 "tested": len(self.seen), "limit": self.limit, "duration": self.duration,
                 "attempts": self.attempts, "max_attempts": self.attempt_limit, "automatic": self.automatic,
                 "confirmations": self.confirmations, "required": MIN_IMAGES,
+                "full_hits": self.full_hits,
                 "awaiting_start_value": self.confirmations >= MIN_IMAGES and not (self.anchored or self.advanced),
                 "simplified": self.simplified, "intensive": self.intensive, "followup": self.followup,
                 "coarse_attempts": self.coarse_attempts, "coarse_limit": COARSE_LIMIT,
@@ -924,6 +926,28 @@ class Calibration:
             if self.rank_candidates and (committed or preferred
                                          or all(layout != tested_layout for _, tested_layout, _ in coarse)):
                 self.record_intermediate(layout, readings, sample, precision, digits, rules["fraction_digits"], frame)
+            if not same:
+                self.full_hits = 0
+            digits_read = digits + rules["fraction_digits"]
+            if (self.rank_candidates
+                    and agreement_percent(readings, sample, rules["fraction_digits"], digits) == 100
+                    and not uncertain_slots(readings, digits_read)):
+                self.full_hits += 1
+                if self.full_hits == MIN_IMAGES and self.attempts + 1 < self.attempt_limit and not stop():
+                    if on_shortlist is not None:
+                        on_shortlist(1, layout.rotation)
+                    self.attempts += 1
+                    extra = []
+                    for profile in OCR_PROFILES[2:5]:
+                        if stop():
+                            break
+                        try:
+                            extra.append(read(layout, profile))
+                        except (OSError, ValueError, subprocess.SubprocessError):
+                            continue
+                    if extra:
+                        self.record_intermediate(layout, [*readings, *extra], sample, precision, digits,
+                                                 rules["fraction_digits"], frame)
             self.confirmed_quality = (self.confirmed_quality if same else [])[-2:] + [crop_quality(frame, layout)]
             self.confirmations = self.confirmations + 1 if same else 1
             self.anchored = (same and self.anchored) or has_reference or bool(baseline)
@@ -948,6 +972,7 @@ class Calibration:
             self.candidate, self.counter = None, {}
             self.focused = False
             self.confirmations, self.anchored, self.advanced = 0, False, False
+            self.full_hits = 0
             if self.rank_candidates and self.optimizing and self.coarse_attempts < COARSE_LIMIT:
                 self.optimizing = False
         return None

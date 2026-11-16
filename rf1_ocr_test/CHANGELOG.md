@@ -6,6 +6,7 @@
 - Der angezeigte Prozentwert berücksichtigt alle sichtbaren Ziffernpositionen. Bei einer offenen Stelle kann das Bild den Rahmen bestätigen, die Anzeige bleibt unter 100 Prozent.
 - Ergibt eine frühe Intensivprüfung keinen Treffer, setzt das nächste Bild die noch verfügbare Grobsuche fort.
 - Der Startwert-Hinweis bleibt während weiterer Bildprüfungen sichtbar.
+- Beim dritten vollständig übereinstimmenden Bild prüft die App den ausgewählten Rahmen sofort mit zusätzlichen OCR-Profilen. Die Gegenprobe bleibt unabhängig.
 
 ## 0.5.14 Stable
 

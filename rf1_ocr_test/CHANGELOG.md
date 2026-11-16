@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.7 Stable
+
+- Die Selbsteinrichtung vergleicht die groben Bildkandidaten, bevor sie höchstens einen Bereich pro Bild feinjustiert.
+- Die Kalibrierungsübersicht bietet einen direkten Einstieg zum manuellen Markieren des Ziffernfelds.
+
 ## 0.5.6 Stable
 
 - Bei einem neuen Suchlauf hat die Bildsuche Vorrang vor alten Rahmen und ESP-Markierungen.

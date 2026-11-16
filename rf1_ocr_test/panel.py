@@ -170,6 +170,9 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .calibration-live[data-tone="error"],#calibration-state[data-tone="error"]{{color:light-dark(#86272d,#ffb6bb);background:light-dark(#fff0f0,#46252b);font-size:1.12rem;font-weight:750}}
 .calibration-live progress,.calibration-card progress{{display:block;width:100%;margin:.55rem 0;accent-color:#bb861b}}
 .calibration-card form{{margin-top:.75rem}}
+#calibration-region{{padding:.75rem;border:1px solid var(--edge);border-radius:.65rem}}
+#calibration-region summary{{font-weight:700;cursor:pointer}}
+#calibration-open-region{{margin-top:.65rem}}
 .calibration-photo-panel{{margin:.75rem 0 0;color:light-dark(#243b4b,#e5edf5);font-size:.9rem;font-weight:400}}
 .calibration-photo-panel summary{{cursor:pointer;font-weight:650}}
 .calibration-photo-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,17rem),1fr));gap:.8rem;margin:.7rem 0}}
@@ -300,6 +303,7 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 </div>
 <div id="calibration-overview" class="calibration-live" hidden>
 <p id="calibration-overview-state" role="status"></p>
+<button type="button" id="calibration-open-region">Ziffernfeld manuell markieren</button>
 <progress id="calibration-overview-progress" aria-label="Verstrichene Zeit der Selbsteinrichtung"></progress>
 {calibration_preview_html}
 </div>
@@ -1310,6 +1314,14 @@ const regionStartButton = document.querySelector('#calibration-guided-start');
 const regionEmpty = document.querySelector('#calibration-region-empty');
 const regionChoices = document.querySelector('#calibration-region-choices');
 const regionHint = document.querySelector('#calibration-region-hint');
+document.querySelector('#calibration-open-region').addEventListener('click', () => {{
+  activateTab('settings');
+  regionDetails.open = true;
+  showRegionPhoto();
+  const summary = regionDetails.querySelector('summary');
+  summary.scrollIntoView({{block: 'center'}});
+  summary.focus({{preventScroll: true}});
+}});
 document.querySelector('#calibration-show-choices').addEventListener('click', () => {{
   regionDetails.open = true;
   showRegionPhoto();

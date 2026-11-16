@@ -137,7 +137,7 @@ def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False
                 if proposal is not None:
                     windows.append(((r - l) * (b - t), proposal))
         if windows:
-            proposal = max(windows, key=lambda row: row[0])[1]
+            proposal = replace(max(windows, key=lambda row: row[0])[1], digit_boxes=())
             if unique(proposal):
                 yield replace(proposal, method="register_window")
         if ranked:

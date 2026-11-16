@@ -287,6 +287,15 @@ class StateTests(TestCase):
         self.assertEqual({"time": 220, "value": 12345120}, history["reflection_anchor"])
         self.assertNotIn("reflection_pending", history)
 
+    def test_provisional_precision_is_bound_to_the_saved_source_and_crop(self):
+        source = {"mode": "camera", "camera": "camera.meter"}
+        rules = {"decimals": 3, "precision_mode": False, "crop_revision": "42",
+                 "stationary_partial_scope": run.calibration_source_id([source, "42"])}
+        self.assertTrue(run.stationary_partial_active(rules, source))
+        self.assertFalse(run.stationary_partial_active(rules, {**source, "camera": "camera.other"}))
+        self.assertFalse(run.stationary_partial_active({**rules, "crop_revision": "43"}, source))
+        self.assertFalse(run.stationary_partial_active({**rules, "precision_mode": True}, source))
+
     def test_existing_calibration_seed_requires_a_verified_matching_crop_revision(self):
         rules = {"crop_mode": "manual", "crop": "0,0,400,90", "width": 250, "rotation": 0,
                  "integer_digits": 5, "fraction_digits": 3, "crop_revision": "123"}

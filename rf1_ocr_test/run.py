@@ -493,6 +493,12 @@ def calibration_source_id(source):
     return hashlib.sha256(json.dumps(source, sort_keys=True).encode()).hexdigest()
 
 
+def stationary_partial_active(rules, source):
+    return (rules["decimals"] == 3 and not rules["precision_mode"]
+            and bool(rules["crop_revision"])
+            and rules.get("stationary_partial_scope") == calibration_source_id([source, rules["crop_revision"]]))
+
+
 def standalone_calibration_reference(rules, source, source_key, captured, previous):
     """Use a recent reading from this meter until a newer automatic reading takes over."""
     saved = rules.get("calibration_reference")
@@ -761,6 +767,7 @@ def main():
                           "meter_display": meter_display, "fallback_value": fallback_value,
                           "precision_mode": saved_rules.get("precision_mode") is True,
                           "calibration_reference": saved_rules.get("calibration_reference"),
+                          "stationary_partial_scope": saved_rules.get("stationary_partial_scope"),
                           "intensive_agreement": intensive_agreement,
                           "fine_alignment_enabled": saved_rules.get("fine_alignment_enabled") is True,
                           "self_repair_enabled": saved_rules.get("self_repair_enabled") is True,
@@ -1004,10 +1011,10 @@ def main():
     def calibration_configuration_now():
         return get_auto_rules(), get_source()
 
-    def save_calibration_layout(attempt, layout):
+    def save_calibration_layout(attempt, layout, *, provisional=False):
         rules = get_auto_rules()
         reference = None
-        if attempt.reference_reading is not None:
+        if not provisional and attempt.reference_reading is not None:
             precision = {1: 3, 10: 2, 100: 1, 1000: 0}[attempt.counter["step_litres"]]
             head, _, fraction = attempt.reference_reading.replace(",", ".").partition(".")
             reading = f"{head}.{fraction[:precision]}" if precision else head
@@ -1016,8 +1023,10 @@ def main():
                 "source": calibration_source_id(get_source()[0]), "integer_digits": rules["integer_digits"],
                 "image_id": attempt.reference_image_id,
             }
-        save_auto_rules({**rules, **layout.settings(), "crop_revision": str(time.time_ns()),
-                         "calibration_reference": reference})
+        revision = str(time.time_ns())
+        partial_scope = calibration_source_id([get_source()[0], revision]) if provisional else None
+        save_auto_rules({**rules, **layout.settings(), "crop_revision": revision,
+                         "calibration_reference": reference, "stationary_partial_scope": partial_scope})
 
     def control_calibration(action, limit, region=None, *, verification_id=None):
         nonlocal calibration, calibration_configuration, calibration_next
@@ -1034,6 +1043,21 @@ def main():
                 save_calibration_layout(calibration, calibration.candidate)
                 calibration.state = "saved_without_verification"
                 calibration.verification_pending = False
+            elif action == "continue-fine":
+                configuration = calibration_configuration_now()
+                rules, (source, _) = configuration
+                if running or get_auto_paused() or not stationary_partial_active(rules, source):
+                    return
+                now = time.monotonic()
+                counter = history.get("consumption")
+                calibration = Calibration(limit=limit, started=now, intensive=True, followup=True,
+                                          previous_layout=geometry_layout(rules, rules),
+                                          followup_baseline={**counter, "source": "calibration"} if counter else None,
+                                          duration=GEOMETRY_REPAIR_SECONDS, attempt_limit=GEOMETRY_REPAIR_LIMIT)
+                calibration_preview.clear()
+                calibration_images.clear()
+                calibration_configuration = configuration
+                calibration_next = now
             elif action == "restore":
                 backup = read_geometry_backup()
                 if running or not backup:
@@ -1102,7 +1126,7 @@ def main():
             elif status["state"] == "waiting" and calibration.image_wait_expired(time.monotonic()):
                 status["state"] = "image_timeout"
             same_configuration = calibration_configuration_now() == calibration_configuration
-            saved = status["state"] in ("saved", "saved_without_verification")
+            saved = status["state"] in ("saved", "saved_without_verification", "saved_stationary")
             saved_layout = calibration.candidate if saved else calibration.previous_layout
             if saved_layout and (saved or (calibration.followup and same_configuration)):
                 status["settings"] = {**saved_layout.settings(), "crop_revision": auto_rules["crop_revision"]}
@@ -1183,6 +1207,7 @@ def main():
 
         result = None
         selected = None
+        provisional = False
         try:
             if mode == "slfork":
                 result = capture(base, {}, fetch=fetch)
@@ -1398,7 +1423,10 @@ def main():
                             )
                             if candidate is not None:
                                 attempt.begin_verification(time.monotonic())
-                            if attempt.simplified and attempt.candidate:
+                            elif attempt.stationary_crop_ready():
+                                selected = attempt.candidate
+                                provisional = True
+                            if attempt.simplified and attempt.candidate and (attempt.anchored or attempt.advanced):
                                 if attempt.candidate != job.candidate:
                                     attempt.last_digit_proposal = None
                                 accepted_new_hit = (attempt.candidate != job.candidate
@@ -1450,10 +1478,11 @@ def main():
                 attempt.state = "cancelled"
             elif selected:
                 try:
-                    save_calibration_layout(attempt, selected)
-                    remember_known_good_layout(get_auto_rules(), active_source, selected)
-                    attempt.state = "saved"
-                    if attempt.simplified:
+                    save_calibration_layout(attempt, selected, provisional=provisional)
+                    if not provisional:
+                        remember_known_good_layout(get_auto_rules(), active_source, selected)
+                    attempt.state = "saved_stationary" if provisional else "saved"
+                    if attempt.simplified and not provisional:
                         # Commit the verified crop before checking the open digit on new photos.
                         attempt = Calibration(limit=attempt.limit, started=now, intensive=True, followup=True,
                                               previous_layout=selected, last_stamp=attempt.last_stamp,
@@ -1565,7 +1594,8 @@ def main():
         review_after = active_delivery["review_minutes"] * 60
         reminder.configure(enabled=active_delivery["enabled"], push=active_delivery["push"], target=active_delivery["target"],
                            delay=active_delivery["delivery_hours"] * 60 * 60)
-        decimals = active_rules["decimals"]
+        stationary_partial = standalone and stationary_partial_active(active_rules, active_source)
+        decimals = 2 if stationary_partial else active_rules["decimals"]
         precision_mode = active_rules["precision_mode"]
         integer_digits = active_rules["integer_digits"]
         fraction_digits = active_rules["fraction_digits"]
@@ -1677,6 +1707,7 @@ def main():
         raw_fallback = False
         duplicate_cycle = False
         cached_standalone = False
+        resume_stationary_fine = False
         image_id = None
         automatic_preview_ready = False
         live_deadline = (time.monotonic() + LIVE_CAPTURE_WINDOW_SECONDS
@@ -2229,7 +2260,14 @@ def main():
                         enabled=active_rules["reflection_estimate_enabled"], manual_anchor=manual_anchor,
                     )
                     verified = outcome == "match" or standalone_reference is not None and outcome == "ocr_only"
-                    if (verified and source == "manual" and active_rules["crop_mode"] == "manual"
+                    if (stationary_partial and verified
+                            and updated.get("stationary_fine_started") != active_rules["crop_revision"]):
+                        full = meter_prefix(ocr, 3, integer_digits)
+                        if full is not None and sum(meter_prefix(value, 3, integer_digits) == full
+                                                   for value in ocr_readings) >= 2:
+                            resume_stationary_fine = True
+                            updated["stationary_fine_started"] = active_rules["crop_revision"]
+                    if (verified and not stationary_partial and source == "manual" and active_rules["crop_mode"] == "manual"
                             and not rotation_adjustment and not raw_fallback):
                         with settings_lock:
                             if get_auto_rules() == active_rules and get_source()[0] == active_source:
@@ -2403,7 +2441,11 @@ def main():
             print(f"Home Assistant konnte nicht aktualisiert werden: {error}")
         check_reminder(reminder, history, now, review_after)
         repair_started = False
-        if recover_geometry:
+        if resume_stationary_fine:
+            with settings_lock:
+                if get_auto_rules() == active_rules and get_source()[0] == active_source:
+                    control_calibration("continue-fine", GEOMETRY_REPAIR_LIMIT)
+        elif recover_geometry:
             with settings_lock:
                 if get_auto_rules() == active_rules and get_source()[0] == active_source and not get_auto_paused():
                     try:

@@ -1584,6 +1584,7 @@ function refreshCalibration(status) {{
       'Ausschnitt und Drehung gespeichert. Zwei Nachkommastellen bestätigt, die dritte bleibt unbestätigt.' :
       status.intensive ? 'Dritte Nachkommastelle bestätigt. Die Ziffernrahmen sind übernommen.' :
       'Erfolgreich eingerichtet. Ausschnitt und Drehung sind übernommen.',
+    saved_stationary: 'Ausschnitt vorläufig gespeichert. Die Automatik prüft die sieben lesbaren Stellen. Die dritte Nachkommastelle bleibt vorerst offen.',
     saved_without_verification: 'Rahmen ohne Gegenprobe übernommen. Spätere Ablesungen können ungenauer sein.',
     failed: 'Selbsteinrichtung fehlgeschlagen. Prüfe Bildausschnitt, Kamerawinkel und Beleuchtung.',
     image_timeout: 'Kein neues Kamerabild erhalten. Prüfe die Bildquelle.',
@@ -1669,13 +1670,13 @@ function refreshCalibration(status) {{
   const weakSlots = status.stress_weak_slots || [];
   const stabilityNote = weakSlots.length ?
     ' · Schwankende Stellen im Intensivtest (von links): ' + weakSlots.join(', ') : '';
-  const tone = status.state === 'saved' ? 'ok' : status.state === 'saved_without_verification' ? 'warning' :
+  const tone = status.state === 'saved' ? 'ok' : ['saved_without_verification', 'saved_stationary'].includes(status.state) ? 'warning' :
     ['failed', 'timeout', 'image_timeout', 'save_failed'].includes(status.state) ? 'error' : '';
   label.textContent = (status.automatic ? 'Automatische Nachjustierung · ' : '') + message + ' ' + detail + stabilityNote;
   label.dataset.tone = tone;
   document.querySelector('#calibration-overview').dataset.tone = tone;
   document.querySelector('#calibration-overview-state').dataset.tone = tone;
-  const completed = ['saved', 'saved_without_verification'].includes(status.state);
+  const completed = ['saved', 'saved_without_verification', 'saved_stationary'].includes(status.state);
   document.querySelector('#calibration-overview').hidden = completed;
   const notice = document.querySelector('#calibration-complete-notice');
   notice.hidden = !completed;

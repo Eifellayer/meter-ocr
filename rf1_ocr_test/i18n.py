@@ -264,6 +264,8 @@ EN_UI = {
         "The last roller was readable. The second-to-last roller remained unclear after a targeted check.",
     "Bei Spiegelungen hilfreich. Die App schätzt verdeckte Stellen nur, wenn Zählerstände und Durchfluss genau eine Ergänzung zulassen. Geschätzte Ziffern bleiben gelb.":
         "Helpful with reflections. The app estimates obscured digits only if the readings and flow allow exactly one possibility. Estimated digits stay yellow.",
+    "Ausschnitt vorläufig gespeichert. Die Automatik prüft die sieben lesbaren Stellen. Die dritte Nachkommastelle bleibt vorerst offen.":
+        "Crop saved provisionally. The automatic check uses the seven readable digits. The third decimal digit remains open for now.",
     LAST_DIGIT_PASS: "The first two decimal places match. The third digit remains unconfirmed.",
     "Für den Verbrauch verwendet die App den plausiblen Vergleichswert.": "The app uses the plausible reference reading to calculate consumption.",
     "Ablesung und Vergleichswert weichen ab": "Image reading and reference differ",

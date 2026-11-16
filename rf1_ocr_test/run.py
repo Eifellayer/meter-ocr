@@ -39,7 +39,7 @@ from checks import (
 )
 from calibration import (Calibration, Layout, CAPTURE_INTERVAL, MIN_IMAGES, MIN_IMAGE_LIMIT, MAX_IMAGES, MAX_ATTEMPTS,
                          DEFAULT_INTENSIVE_AGREEMENT, SHORTLIST_LIMIT, TIME_LIMIT,
-                         two_decimal_reading, valid_intensive_agreement)
+                         agreement_percent, two_decimal_reading, valid_intensive_agreement)
 from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, MAX_FLOW_LPH, ImplausibleReading,
                          accumulate_consumption, fallback_detail, format_cubic_metres)
 from layout import (MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, find_digit_row,
@@ -1005,14 +1005,24 @@ def main():
             if saved_layout and (status["state"] == "saved" or (
                     calibration.followup and calibration_configuration_now() == calibration_configuration)):
                 status["settings"] = {**saved_layout.settings(), "crop_revision": auto_rules["crop_revision"]}
-            if status["state"] in ("failed", "timeout", "image_timeout") and calibration.best:
-                status["proposal"] = calibration.best.settings()
+            if status["state"] in ("failed", "timeout", "image_timeout"):
+                if calibration.best:
+                    status["proposal"] = calibration.best.settings()
+                if calibration.fine_evidence:
+                    status["preview"] = dict(calibration.fine_evidence[1])
             return status
 
     def calibration_image(kind, version):
         with settings_lock:
-            return next((content for revision, content in calibration_images.get(kind, ())
-                         if str(revision) == version), None)
+            recent = next((content for revision, content in calibration_images.get(kind, ())
+                           if str(revision) == version), None)
+            if recent is not None:
+                return recent
+            if calibration and calibration.fine_evidence:
+                _, preview, images = calibration.fine_evidence
+                if str(preview.get(kind)) == version:
+                    return images.get(kind)
+            return None
 
     def run_calibration(active_rules, active_source, mode, base, camera, reference, source_key):
         nonlocal calibration, calibration_configuration, calibration_next, calibration_preview_version
@@ -1178,10 +1188,31 @@ def main():
                             except (OSError, ValueError):
                                 pass
 
+                        def retain_preview(accepted=False):
+                            if not (attempt.intensive and readings):
+                                return
+                            score = agreement_percent(readings, sample, fraction, whole)
+                            # One profile can supply a preview, but a disagreement lowers its score.
+                            if len(readings) > 1:
+                                score = min(score, agreement_percent(
+                                    readings, {"reference_required": False}, fraction, whole))
+                            with settings_lock:
+                                if calibration is not job or job.state != "testing":
+                                    return
+                                images = {}
+                                for kind in ("frame", "crop"):
+                                    version = calibration_preview.get(kind)
+                                    content = calibration_image(kind, str(version)) if version else None
+                                    if content is None:
+                                        return
+                                    images[kind] = content
+                                attempt.retain_fine_evidence(score, accepted, calibration_preview, images)
+
                         def report_decision(reason):
                             with settings_lock:
                                 if frame_ready and calibration is job and job.state == "testing":
                                     calibration_preview["reason"] = reason
+                            retain_preview(accepted=reason in ("accepted", "verified"))
 
                         def report_regions(boxes):
                             regions = [[round(1000 * value / size) for value, size in
@@ -1195,6 +1226,7 @@ def main():
                             previous_layout = layout
                             readings[:] = values
                             report_crop(layout, register_for(layout), values[-1])
+                            retain_preview()
 
                         def register_for(layout):
                             return select_register(

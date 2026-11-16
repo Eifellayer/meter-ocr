@@ -440,6 +440,7 @@ class Calibration:
     optimizing: bool = False
     shortlist: dict = field(default_factory=dict)
     confirmed_quality: list = field(default_factory=list)
+    fine_evidence: tuple | None = None
     full_hits: int = 0
     stress_weak_slots: list = field(default_factory=list)
     duration: int = TIME_LIMIT
@@ -546,7 +547,8 @@ class Calibration:
             aligned = (sum(a == b == c and a in "0123456789"
                            for a, b, c in zip(*rows, str(expected).zfill(whole + precision)))
                        if expected is not None and not sample.get("reference_is_fallback") else 0)
-            return bool(match), bool(complete), aligned, agreed
+            percentage = agreement_percent(values, sample, precision, whole) if self.intensive else 0
+            return bool(match), bool(complete), percentage, aligned, agreed
 
         def evaluate(trial):
             values = []
@@ -636,6 +638,12 @@ class Calibration:
         self.seen.add(digest)
         self.last_stamp = stamp
         return True
+
+    def retain_fine_evidence(self, score, accepted, preview, images):
+        """Keep the highest scoring usable preview, preferring accepted hits on ties."""
+        rank = (score, accepted)
+        if score and (self.fine_evidence is None or rank > self.fine_evidence[0]):
+            self.fine_evidence = rank, {**preview, "best_fine_score": score}, images
 
     def search_exhausted(self):
         return self.attempts >= self.attempt_limit and not (self.followup and self.confirmations)

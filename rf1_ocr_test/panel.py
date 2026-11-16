@@ -44,7 +44,7 @@ CALIBRATION_PREVIEW_HTML = """<details class="calibration-photo-panel" open hidd
 <img data-image="frame" alt="Kamerabild der Selbsteinrichtung" decoding="async">
 <span class="calibration-crop-region" hidden></span>
 </div>
-<figcaption>Aktuelles Kamerabild</figcaption>
+<figcaption class="calibration-frame-caption">Aktuelles Kamerabild</figcaption>
 </figure>
 <figure class="calibration-crop-figure" hidden>
 <img data-image="crop" alt="Geprüfter Bildausschnitt mit einzelnen Ziffernrahmen" decoding="async">
@@ -1506,6 +1506,8 @@ function refreshCalibrationImages(preview) {{
     const crop = section.querySelector('[data-image="crop"]');
     const region = section.querySelector('.calibration-crop-region');
     const hasCrop = Boolean(preview.crop);
+    section.querySelector('.calibration-frame-caption').textContent = preview.best_fine_score ?
+      'Bester Treffer der Feinprüfung · ' + preview.best_fine_score + ' %' : 'Aktuelles Kamerabild';
     section.querySelector('.calibration-crop-figure').hidden = !hasCrop;
     for (const [kind, img] of [['frame', frame], ['crop', crop]]) {{
       const revision = preview[kind];
@@ -1614,7 +1616,9 @@ function refreshCalibration(status) {{
     message = 'Der gelesene Bereich passt nicht zum Vergleichswert. Prüfe den Vergleichswert und markiere das Ziffernfeld.';
   }}
   if (status.intensive && ['failed', 'timeout', 'image_timeout'].includes(status.state)) {{
-    message = 'Dritte Nachkommastelle bleibt unbestätigt. Du kannst später erneut suchen oder sie manuell markieren.';
+    message = status.confirmations >= status.required ?
+      'Feinprüfung erfolgreich, Gegenprobe offen. Der beste Rahmen steht für den manuellen Test bereit.' :
+      'Dritte Nachkommastelle bleibt unbestätigt. Du kannst später erneut suchen oder sie manuell markieren.';
   }}
   if (active && status.preview?.last_digit_hint) {{
     message += ' Vorschlag für die letzte Rolle gefunden. Warte auf Bestätigung mit einem neuen Bild.';

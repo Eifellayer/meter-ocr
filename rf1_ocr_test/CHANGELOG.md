@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.17 Stable
+
+- Endet die Gegenprobe ohne Bestätigung, zeigt die Feinprüfung ihr Bild mit der höchsten Übereinstimmung und bietet den besten Rahmen zur manuellen Prüfung an.
+
 ## 0.5.16 Stable
 
 - Nach dem ersten Treffer der Feinprüfung zählt das Variantenlimit nicht mehr gegen die Bestätigung desselben Rahmens auf frischen Bildern.

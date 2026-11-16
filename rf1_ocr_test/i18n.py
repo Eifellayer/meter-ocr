@@ -106,6 +106,10 @@ EN_UI = {
     "Der gelesene Stand weicht vom Vergleichswert ab.": "The OCR reading differs from the reference.",
     "Der Stand passt zeitlich nicht zur letzten sicheren Ablesung.": "The reading is implausible given the last confirmed reading and elapsed time.",
     "Der Rahmen ist lesbar. Die App wartet auf einen plausiblen Zähleranstieg.": "The crop is readable. Waiting for a plausible meter increase.",
+    "Ziffern bis zur zweiten Nachkommastelle gelesen. Der Rahmen zählt vorläufig. Der Vergleichswert fehlt.":
+        "Digits read through the second decimal. The crop counts provisionally. A reference reading is missing.",
+    "Bis zur zweiten Nachkommastelle bestätigt. Die dritte Stelle bleibt offen.":
+        "Confirmed through the second decimal. The third decimal remains open.",
     "Dieser Rahmen wurde auf dem aktuellen Bild bestätigt.": "This crop was confirmed on the current image.",
     "Die abschließende Gegenprobe war erfolgreich.": "The final cross-check succeeded.",
     "Suchbereich im Kamerabild eingrenzen": "Limit the search area on the camera image",

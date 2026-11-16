@@ -715,12 +715,16 @@ class BrowserTests(IngressFixture):
             self.calibration["preview"] = {"frame": 15}
             display = page.locator("#calibration-overview .calibration-photo-panel")
             display.get_by_text("Die App sucht in diesem Bild nach der Ziffernreihe.").wait_for()
+            self.calibration.update(state="waiting", tested=73, attempts=0, preview={"frame": 15, "reason": "no_region"})
+            page.locator("#calibration-overview-state").filter(has_text="Noch kein Ziffernbereich gefunden").wait_for()
+            self.assertIn("Bilder geprüft: 73 · Rahmen getestet: 0", page.locator("#calibration-overview-state").inner_text())
             self.assertEqual(600, display.locator('[data-image="frame"]').evaluate(
                 "async image => { await image.decode(); return image.naturalWidth; }"))
             self.calibration["preview"] = {
-                "frame": 15, "crop": 15, "region": [0.2, 0.3, 0.5, 0.2], "angle": -6, "reading": "12345.6?8",
+                "frame": 15, "crop": 15, "region": [0.2, 0.3, 0.5, 0.2], "angle": -6, "reading": "12345.6?8", "reason": "unclear",
             }
             display.get_by_text("OCR gelesen: 12345.6?8", exact=True).wait_for()
+            display.get_by_text("Mindestens eine benötigte Ziffer blieb unklar.", exact=True).wait_for()
             self.assertEqual(300, display.locator('[data-image="crop"]').evaluate(
                 "async image => { await image.decode(); return image.naturalWidth; }"))
             self.assertEqual("20%", display.locator(".calibration-crop-region").evaluate("box => box.style.left"))

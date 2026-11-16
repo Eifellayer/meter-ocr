@@ -10,7 +10,7 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import calibration
-from calibration import Calibration, Layout, MAX_ATTEMPTS, unrotate_box
+from calibration import Calibration, Layout, MAX_ATTEMPTS, layouts, unrotate_box
 
 LAYOUT = Layout((0, 0, 80, 20), -3, 80)
 OTHER_LAYOUT = Layout((10, 0, 90, 20), 3, 80)
@@ -56,6 +56,24 @@ class CalibrationTests(TestCase):
         self.examine(2, 101, reference=False)
         self.assertIsNone(self.examine(3, 102, reference=False))
         self.assertEqual(LAYOUT, self.examine(4, 103, "12346", reference=False))
+
+    def test_learning_tries_the_configured_crop_when_detection_finds_nothing(self):
+        photo = frame(1)
+        rules = {**RULES, "crop_mode": "auto", "crop": "0,0,80,20", "rotation": 0, "width": 80}
+        with patch.object(calibration, "find_raw_digit_row", return_value=None):
+            self.assertIn(Layout((0, 0, 80, 20), 0, 80), list(layouts(photo, None, rules, 0)))
+
+    def test_reports_why_a_detected_crop_was_rejected(self):
+        reasons = []
+        reference = {"reference_time": 100, "actual_value": "12345", "raw_value": "12345"}
+        self.job.examine(frame(1), None, reference, 100, RULES,
+                         lambda *_: "12346", lambda: False, on_decision=reasons.append)
+        self.assertEqual(["reference_mismatch"], reasons)
+        self.candidates.return_value = []
+        self.job.examine(frame(2), None, reference, 101, RULES,
+                         lambda *_: "12345", lambda: False, on_decision=reasons.append)
+        self.assertEqual("no_region", reasons[-1])
+        self.assertEqual(1, self.job.attempts)
 
     def test_deadline_and_stop(self):
         self.assertFalse(self.job.expired(899.9))

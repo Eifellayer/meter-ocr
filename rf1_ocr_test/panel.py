@@ -48,6 +48,7 @@ CALIBRATION_PREVIEW_HTML = """<details class="calibration-photo-panel" open hidd
 <p class="calibration-preview-reading"></p>
 </figure>
 </div>
+<p class="calibration-preview-reason" hidden></p>
 <p class="calibration-preview-help">Die App sucht in diesem Bild nach der Ziffernreihe.</p>
 </details>"""
 
@@ -1275,6 +1276,18 @@ calibrationProposal.addEventListener('click', () => {{
 }});
 
 function refreshCalibrationImages(preview) {{
+  const reasons = {{
+    no_region: 'In diesem Bild wurde kein Ziffernbereich gefunden.',
+    unreadable: 'Der Ausschnitt ließ sich nicht auswerten.',
+    unclear: 'Mindestens eine benötigte Ziffer blieb unklar.',
+    disagree: 'Die OCR-Versuche lieferten unterschiedliche Ziffern.',
+    reference_unavailable: 'Kein gültiger Vergleichswert zu diesem Bild.',
+    reference_mismatch: 'Der gelesene Stand weicht vom Vergleichswert ab.',
+    implausible: 'Der Stand passt zeitlich nicht zur letzten sicheren Ablesung.',
+    await_movement: 'Der Rahmen ist lesbar. Die App wartet auf einen plausiblen Zähleranstieg.',
+    accepted: 'Dieser Rahmen wurde auf dem aktuellen Bild bestätigt.',
+    verified: 'Die abschließende Gegenprobe war erfolgreich.',
+  }};
   for (const section of document.querySelectorAll('.calibration-photo-panel')) {{
     section.hidden = !preview?.frame;
     if (section.hidden) continue;
@@ -1303,8 +1316,11 @@ function refreshCalibrationImages(preview) {{
     section.querySelector('.calibration-preview-angle').textContent = hasCrop ? ' · ' + preview.angle + '°' : '';
     section.querySelector('.calibration-preview-reading').textContent = preview.reading ?
       'OCR gelesen: ' + preview.reading : 'Ziffern werden gelesen …';
+    const reason = section.querySelector('.calibration-preview-reason');
+    reason.textContent = reasons[preview.reason] || '';
+    reason.hidden = !reason.textContent;
     section.querySelector('.calibration-preview-help').textContent = !hasCrop ?
-      'Die App sucht in diesem Bild nach der Ziffernreihe.' : preview.reading ?
+      (reason.hidden ? 'Die App sucht in diesem Bild nach der Ziffernreihe.' : '') : preview.reading ?
       'Grün: gelesen. Gelb: OCR-Versuche weichen ab. Rot: unklar.' :
       'Die blauen Rahmen zeigen, welche Stellen die App gerade prüft.';
     if (hasCrop && preview.approximate) section.querySelector('.calibration-preview-help').append(
@@ -1337,11 +1353,13 @@ function refreshCalibration(status) {{
     verify: 'Gefundenen Rahmen mit der normalen Prüfung gegenprüfen …',
     ocr: 'Prüfe Rahmen ' + status.variant + ' mit Drehung ' + status.rotation + '° …',
   }};
-  const message = active && stages[status.stage] ? stages[status.stage] : messages[status.state] || '';
-  const detail = 'Bilder: ' + status.tested + '/' + status.limit +
-    ' · Rahmenversuche: ' + status.attempts + '/' + status.max_attempts +
+  const waitingForRegion = status.state === 'waiting' && status.preview?.reason === 'no_region';
+  const message = waitingForRegion ? 'Noch kein Ziffernbereich gefunden. Warte auf ein neues Bild …' :
+    active && stages[status.stage] ? stages[status.stage] : messages[status.state] || '';
+  const detail = 'Bilder geprüft: ' + status.tested +
+    ' · Rahmen getestet: ' + status.attempts +
     ' · Bestätigungen: ' + status.confirmations + '/' + status.required +
-    (active ? ' · Noch ' + clock + ' min' : '');
+    (active ? ' · Restzeit: ' + clock + ' min' : '');
   const tone = status.state === 'saved' ? 'ok' : ['failed', 'timeout', 'save_failed'].includes(status.state) ? 'error' : '';
   label.textContent = message + ' ' + detail;
   label.dataset.tone = tone;

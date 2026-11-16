@@ -98,11 +98,25 @@ def layouts(frame, overlay, rules, offset, current=None):
                     return
                 if unique(layout):
                     yield layout
-    if len(emitted) < MAX_LAYOUTS_PER_IMAGE and rules["crop_mode"] == "manual":
+    if len(emitted) < MAX_LAYOUTS_PER_IMAGE and "crop" in rules:
+        # The usual OCR can read the configured crop even if the row detector found nothing.
+        # Give that same geometry a chance without weakening confirmation requirements.
         box = crop_coordinates(rules["crop"], rules["width"], rules["rotation"])
-        trial = candidate(box, ANGLES[first], padding=2)
-        if unique(trial):
-            yield trial
+        if box[2] <= frame.width and box[3] <= frame.height:
+            configured = Layout(box, rules["rotation"], rules["width"], tuple(map(tuple, rules.get("digit_boxes", []))))
+            for trial in (configured, candidate(box, ANGLES[first], padding=2)):
+                if len(emitted) >= MAX_LAYOUTS_PER_IMAGE:
+                    return
+                if unique(trial):
+                    yield trial
+
+
+def reference_rejection(sample, status):
+    if sample.get("reference_is_fallback") or not sample.get("reference_time"):
+        return "reference_unavailable"
+    if status != "match":
+        return "reference_mismatch" if status == "difference" else "reference_unavailable"
+    return None
 
 
 @dataclass
@@ -143,7 +157,7 @@ class Calibration:
         self.last_stamp = stamp
         return True
 
-    def verify(self, frame, sample, stamp, rules, read, stop, on_image=None):
+    def verify(self, frame, sample, stamp, rules, read, stop, on_image=None, on_decision=lambda reason: None):
         """Confirm the exact saved geometry with the regular OCR retry routine."""
         if self.attempts >= MAX_ATTEMPTS or not self.remember_image(frame, stamp):
             return None
@@ -153,6 +167,7 @@ class Calibration:
         has_reference = sample.get("reference_required") is not False
         precision = rules["decimals"] if has_reference else rules["fraction_digits"]
         digits = rules["integer_digits"]
+        rejection = "unreadable"
         try:
             value, confirmed, _ = read_with_retries(
                 lambda profile: read(self.candidate, profile), sample, precision,
@@ -160,19 +175,24 @@ class Calibration:
                 integer_digits=digits, stop_before_attempt=stop,
             )
             status, _ = compare_sample(sample, value, precision, ocr_confirmed=confirmed, integer_digits=digits)
-            if status != ("match" if has_reference else "ocr_only") or (has_reference and not sample.get("reference_time")):
+            rejection = (reference_rejection(sample, status) if has_reference and status != "ocr_unclear"
+                         else None if status == "ocr_only" else "unclear")
+            if rejection:
                 raise ValueError("Unconfirmed crop")
+            rejection = "implausible"
             accumulate_consumption(self.counter, "calibration", stamp, value, precision,
                                    rules["max_flow_lph"], digits)
         except (OSError, ValueError, subprocess.SubprocessError):
+            on_decision(rejection)
             self.verification_pending = False
             self.candidate, self.counter = None, {}
             self.confirmations, self.anchored, self.advanced = 0, False, False
             return None
+        on_decision("verified")
         return self.candidate
 
     def examine(self, frame, overlay, sample, stamp, rules, read, stop, baseline=None, on_attempt=None,
-                on_image=None):
+                on_image=None, on_decision=lambda reason: None):
         """Return a verified layout, checking two OCR profiles per distinct image."""
         if not self.remember_image(frame, stamp):
             return None
@@ -184,30 +204,40 @@ class Calibration:
         digits = rules["integer_digits"]
         flow = rules["max_flow_lph"]
         candidates = layouts(frame, overlay, rules, len(self.seen) - 1, self.candidate)
+        examined = False
         for index, layout in enumerate(candidates, start=1):
             if stop() or self.attempts >= MAX_ATTEMPTS:
                 return None
+            examined = True
             self.attempts += 1
             if on_attempt is not None:
                 on_attempt(index, layout.rotation)
+            rejection = "unreadable"
             try:
                 readings = [read(layout, OCR_PROFILES[0])]
                 if stop():
                     return None
                 readings.append(read(layout, OCR_PROFILES[1]))
                 prefixes = [meter_prefix(value, precision, digits) for value in readings]
-                if prefixes[0] is None or prefixes[0] != prefixes[1]:
+                if None in prefixes:
+                    on_decision("unclear")
                     continue
-                if has_reference and (
-                    not sample.get("reference_time") or
-                    compare_sample(sample, readings[0], precision, integer_digits=digits)[0] != "match"
-                ):
+                if prefixes[0] != prefixes[1]:
+                    on_decision("disagree")
                     continue
+                if has_reference:
+                    status, _ = compare_sample(sample, readings[0], precision, integer_digits=digits)
+                    reason = reference_rejection(sample, status)
+                    if reason:
+                        on_decision(reason)
+                        continue
+                rejection = "implausible"
                 same = layout == self.candidate
                 anchor = self.counter if same else baseline or {}
                 counter = accumulate_consumption(anchor, "calibration", stamp, readings[0], precision,
                                                 flow, digits)
             except (OSError, ValueError, subprocess.SubprocessError):
+                on_decision(rejection)
                 continue
             self.confirmations = self.confirmations + 1 if same else 1
             self.anchored = (same and self.anchored) or has_reference or bool(baseline)
@@ -215,11 +245,17 @@ class Calibration:
             self.candidate, self.counter = layout, counter
             if self.confirmations > self.best_confirmations:
                 self.best, self.best_confirmations = layout, self.confirmations
+            if self.confirmations >= MIN_IMAGES and not (self.anchored or self.advanced):
+                on_decision("await_movement")
+            else:
+                on_decision("accepted")
             if self.confirmations >= MIN_IMAGES and (self.anchored or self.advanced):
                 return layout
             # Preserve a reproducible candidate and test it on the next photograph.
             return None
         if not stop():
+            if not examined:
+                on_decision("no_region")
             self.candidate, self.counter = None, {}
             self.confirmations, self.anchored, self.advanced = 0, False, False
         return None

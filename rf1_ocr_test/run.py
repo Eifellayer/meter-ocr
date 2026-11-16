@@ -993,9 +993,15 @@ def main():
                                     *register[:4], reading, whole, fraction, readings=readings, pending=reading is None,
                                 )
                                 report_image("crop", calibration_jpeg(preview, (820, 300)),
-                                             region=region, reading=reading, angle=layout.rotation, approximate=not bool(layout.digit_boxes))
+                                             region=region, reading=reading, angle=layout.rotation,
+                                             approximate=not bool(layout.digit_boxes), reason=None)
                             except (OSError, ValueError):
                                 pass
+
+                        def report_decision(reason):
+                            with settings_lock:
+                                if frame_ready and calibration is job and job.state == "testing":
+                                    calibration_preview["reason"] = reason
 
                         def read(layout, profile):
                             nonlocal previous_layout
@@ -1018,13 +1024,14 @@ def main():
 
                         if attempt.verification_pending:
                             report_calibration("verify", rotation=attempt.candidate.rotation)
-                            selected = attempt.verify(frame, sample, captured, active_rules, read, stopped, on_image=on_image)
+                            selected = attempt.verify(frame, sample, captured, active_rules, read, stopped,
+                                                      on_image=on_image, on_decision=report_decision)
                         else:
                             report_calibration("search")
                             candidate = attempt.examine(
                                 frame, overlay, sample, captured, active_rules, read, stopped, baseline,
                                 on_attempt=lambda variant, rotation: report_calibration("ocr", variant, rotation),
-                                on_image=on_image,
+                                on_image=on_image, on_decision=report_decision,
                             )
                             attempt.verification_pending = candidate is not None
         except (OSError, ValueError, TypeError, Image.DecompressionBombError) as error:

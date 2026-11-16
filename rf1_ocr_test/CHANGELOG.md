@@ -3,6 +3,7 @@
 ## In Vorbereitung
 
 - Die Selbsteinrichtung zeigt das Kamerabild mit markiertem Suchbereich, den gedrehten Ausschnitt und die Ziffern pro OCR-Versuch live an.
+- Bilder, getestete Rahmen und Restzeit sind eindeutig beschriftet. Wenn die Suche keine Ziffernreihe findet, probiert die App auch den bereits eingestellten Ausschnitt und erklärt, warum ein Versuch ohne Bestätigung blieb.
 
 ## 0.5.0 Stable
 

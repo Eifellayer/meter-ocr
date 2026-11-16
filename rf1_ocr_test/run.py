@@ -1044,7 +1044,7 @@ def main():
     def control_calibration(action, limit, region=None, *, verification_id=None):
         nonlocal calibration, calibration_configuration, calibration_next
         with settings_lock:
-            if action in ("repair", "continue-fine"):
+            if action == "repair":
                 _, optimization_until = setup_deadlines(get_auto_rules(), get_source()[0])
                 if time.time() < optimization_until:
                     return False
@@ -1060,21 +1060,6 @@ def main():
                 save_calibration_layout(calibration, calibration.candidate)
                 calibration.state = "saved_without_verification"
                 calibration.verification_pending = False
-            elif action == "continue-fine":
-                configuration = calibration_configuration_now()
-                rules, (source, _) = configuration
-                if running or get_auto_paused() or not stationary_partial_active(rules, source):
-                    return
-                now = time.monotonic()
-                counter = history.get("consumption")
-                calibration = Calibration(limit=limit, started=now, intensive=True, followup=True,
-                                          previous_layout=geometry_layout(rules, rules),
-                                          followup_baseline={**counter, "source": "calibration"} if counter else None,
-                                          duration=GEOMETRY_REPAIR_SECONDS, attempt_limit=GEOMETRY_REPAIR_LIMIT)
-                calibration_preview.clear()
-                calibration_images.clear()
-                calibration_configuration = configuration
-                calibration_next = now
             elif action == "restore":
                 backup = read_geometry_backup()
                 if running or not backup:
@@ -1729,7 +1714,6 @@ def main():
         raw_fallback = False
         duplicate_cycle = False
         cached_standalone = False
-        resume_stationary_fine = False
         image_id = None
         automatic_preview_ready = False
         live_deadline = (time.monotonic() + LIVE_CAPTURE_WINDOW_SECONDS
@@ -2262,7 +2246,7 @@ def main():
                             updated["last_slfork_match"] = {"reading": sample["actual_value"], "time": image_time}
                     data = {**sample, "crop_source": source, "ocr_attempts": ocr_attempts}
                     updated["ocr_rotation_adjustment"] = rotation_adjustment
-                    if (not optimization_paused and rotation_key is not None and not raw_fallback
+                    if (not optimization_paused and not stationary_partial and rotation_key is not None and not raw_fallback
                             and (outcome == "match" or standalone_reference is not None and outcome == "ocr_only")):
                         updated["learned_rotation"] = {"crop": rotation_key, "adjustment": rotation_adjustment}
                     if rotation_adjustment:
@@ -2307,14 +2291,6 @@ def main():
                                     stabilizing_until, _ = setup_deadlines(get_auto_rules(), active_source)
                                     interval_minutes = stabilization_interval(interval_minutes, stabilizing_until, now.timestamp())
                                     optimization_paused = True
-                    if (not optimization_paused and stationary_partial and verified
-                            and updated.get("stationary_fine_started") != active_rules["crop_revision"]):
-                        full = meter_prefix(ocr, 3, integer_digits)
-                        if full is not None and (sum(meter_prefix(value, 3, integer_digits) == full
-                                                     for value in ocr_readings) >= 2 or (
-                                not standalone and compare_sample(sample, ocr, 3, integer_digits=integer_digits)[0] == "match")):
-                            resume_stationary_fine = True
-                            updated["stationary_fine_started"] = active_rules["crop_revision"]
                     if (verified and not stationary_partial and source == "manual" and active_rules["crop_mode"] == "manual"
                             and not rotation_adjustment and not raw_fallback):
                         with settings_lock:
@@ -2330,7 +2306,7 @@ def main():
                         interval_minutes = suggested_interval(
                             automatic_interval_minutes(active_rules["interval_minutes"], mode), flow, source_key, now.month,
                         )
-                    if (not optimization_paused and active_rules["fine_alignment_enabled"]
+                    if (not optimization_paused and not stationary_partial and active_rules["fine_alignment_enabled"]
                             and active_rules["crop_mode"] == "manual" and not raw_fallback):
                         learning = updated.setdefault("fine_alignment", {})
                         key = [source_key, active_rules["crop"], active_rules["rotation"], active_rules["width"],
@@ -2376,7 +2352,8 @@ def main():
                         recovery = updated.setdefault("geometry_recovery", {})
                         geometry_warning = observe_geometry_failures(
                             recovery, geometry_key, image_time, outcome,
-                            reading_problem=not validation_detail and not ocr_error and ocr_attempts > 0,
+                            reading_problem=(not validation_detail and not ocr_error and ocr_attempts > 0
+                                             and not updated.get("last_digit_failures")),
                         )
                         recover_geometry = geometry_warning and active_rules["self_repair_enabled"] and fine_update is None
                     updated.update(
@@ -2490,11 +2467,7 @@ def main():
             print(f"Home Assistant konnte nicht aktualisiert werden: {error}")
         check_reminder(reminder, history, now, review_after)
         repair_started = False
-        if resume_stationary_fine:
-            with settings_lock:
-                if get_auto_rules() == active_rules and get_source()[0] == active_source:
-                    control_calibration("continue-fine", GEOMETRY_REPAIR_LIMIT)
-        elif recover_geometry:
+        if recover_geometry:
             with settings_lock:
                 if get_auto_rules() == active_rules and get_source()[0] == active_source and not get_auto_paused():
                     try:
@@ -2502,9 +2475,9 @@ def main():
                     except (OSError, ValueError) as error:
                         print(f"Automatische Nachjustierung nicht gestartet: {type(error).__name__}")
         if geometry_warning and reminder.enabled:
-            message = ("Nach zehn Fehlmessungen sucht die App einmal nach einem besseren Ziffernrahmen. "
+            message = ("Nach zwei Stunden mit anhaltenden Fehlmessungen sucht die App einmal nach einem besseren Ziffernrahmen. "
                        "Die bisherigen Einstellungen sind gesichert. Das Ergebnis steht in der App."
-                       if repair_started else "Zehn unterschiedliche Prüfungen waren erfolglos. "
+                       if repair_started else "Die Ziffernerkennung ist seit mindestens zwei Stunden gestört. "
                                               "Bitte prüfe den Bildausschnitt in der App.")
             try:
                 reminder.call_service("persistent_notification.create", {

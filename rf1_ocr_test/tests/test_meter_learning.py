@@ -54,14 +54,26 @@ class MeterLearningTests(TestCase):
         self.assertEqual(60, suggested_interval(60, state, ["different camera"], 11))
 
 
-    def test_geometry_retry_starts_once_after_ten_distinct_failed_measurements(self):
-        state, key = {}, ["camera", "zone"]
-        for stamp in range(1, 10):
+    def test_geometry_retry_needs_distinct_failures_over_two_hours(self):
+        state, key = {}, [["camera"], "zone"]
+        for stamp in (100, 400, 700, 7299):
             self.assertFalse(observe_geometry_failures(state, key, stamp, "ocr_unclear", reading_problem=True))
             self.assertFalse(observe_geometry_failures(state, key, stamp, "ocr_unclear", reading_problem=True))
-        self.assertEqual(9, state["failures"])
-        self.assertTrue(observe_geometry_failures(state, key, 10, "difference", reading_problem=True))
-        self.assertFalse(observe_geometry_failures(state, key, 11, "ocr_unclear", reading_problem=True))
-        self.assertFalse(observe_geometry_failures(state, key, 12, "match", reading_problem=False))
+        self.assertTrue(observe_geometry_failures(state, key, 7300, "difference", reading_problem=True))
+        self.assertFalse(observe_geometry_failures(state, key, 15000, "difference", reading_problem=True))
+
+    def test_a_plausible_reading_restarts_the_two_hour_window(self):
+        state, key = {}, [["camera"], "zone"]
+        for stamp in (100, 400, 700):
+            self.assertFalse(observe_geometry_failures(state, key, stamp, "ocr_unclear", reading_problem=True))
+        self.assertFalse(observe_geometry_failures(state, key, 760, "ocr_only", reading_problem=False))
+        self.assertNotIn("first_failure_at", state)
+        for stamp in (1000, 1300, 7300, 8199):
+            self.assertFalse(observe_geometry_failures(state, key, stamp, "difference", reading_problem=True))
+        self.assertTrue(observe_geometry_failures(state, key, 8200, "difference", reading_problem=True))
+
+    def test_single_roll_failures_cannot_trigger_geometry_repair(self):
+        state, key = {}, [["camera"], "zone"]
+        for stamp in range(300, 3600, 300):
+            self.assertFalse(observe_geometry_failures(state, key, stamp, "ocr_unclear", reading_problem=False))
         self.assertEqual(0, state["failures"])
-        self.assertNotIn("scheduled_at", state)

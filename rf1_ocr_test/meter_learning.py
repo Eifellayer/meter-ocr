@@ -163,27 +163,31 @@ def suggested_interval(configured, state, source, month):
     return min(configured, max(RETRY_INTERVAL // 60, int(minutes)))
 
 
-GEOMETRY_REPAIR_FAILURES = 10
+GEOMETRY_REPAIR_FAILURES = 3
 GEOMETRY_REPAIR_SECONDS = 4 * 60
 GEOMETRY_REPAIR_LIMIT = 20
+GEOMETRY_FAILURE_DURATION = 2 * 60 * 60
 
 
 def observe_geometry_failures(state, key, stamp, outcome, *, reading_problem):
-    """Request one bounded recalibration after distinct unreadable frames."""
+    """Request one bounded repair per sustained failure streak."""
     if state.get("key") != key:
         state.clear()
         state.update(key=key, failures=0)
     if stamp <= state.get("stamp", 0):
         return False
     state["stamp"] = stamp
-    if outcome in ("match", "match_with_warning", "ocr_only"):
+    if not reading_problem or outcome not in ("ocr_unclear", "difference"):
         state["failures"] = 0
+        state.pop("first_failure_at", None)
         state.pop("scheduled_at", None)
-    elif reading_problem and outcome in ("ocr_unclear", "difference"):
-        state["failures"] = min(GEOMETRY_REPAIR_FAILURES, state["failures"] + 1)
-    else:
         return False
-    if state["failures"] < GEOMETRY_REPAIR_FAILURES or state.get("scheduled_at"):
+    if "first_failure_at" not in state:
+        state.update(first_failure_at=stamp, failures=0)
+        state.pop("scheduled_at", None)
+    state["failures"] = min(GEOMETRY_REPAIR_FAILURES, state["failures"] + 1)
+    if (state["failures"] < GEOMETRY_REPAIR_FAILURES or state.get("scheduled_at")
+            or stamp - state["first_failure_at"] < GEOMETRY_FAILURE_DURATION):
         return False
     state["scheduled_at"] = stamp
     return True

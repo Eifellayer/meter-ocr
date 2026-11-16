@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.23 Stable
+
+- Eine automatische Rahmensuche startet pro Fehlerserie höchstens einmal und frühestens nach zwei Stunden anhaltender Erkennungsprobleme. Plausible Messungen beenden die Fehlerserie.
+- Bei vorläufiger Einrichtung bleibt der gespeicherte Rahmen mit zwei Nachkommastellen in Betrieb. Die Feinprüfung der dritten Nachkommastelle lässt sich manuell starten.
+
 ## 0.5.22 Stable
 
 - Nach der ersten bestätigten Einrichtung speichert die App den Referenzstand und prüft 20 Minuten lang regulär in höchstens fünfminütigem Abstand.

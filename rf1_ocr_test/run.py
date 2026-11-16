@@ -770,6 +770,7 @@ def main():
                           "precision_mode": saved_rules.get("precision_mode") is True,
                           "calibration_reference": saved_rules.get("calibration_reference"),
                           "setup_completed": saved_rules.get("setup_completed"),
+                          "setup_pending_source": saved_rules.get("setup_pending_source"),
                           "stationary_partial_scope": saved_rules.get("stationary_partial_scope"),
                           "intensive_agreement": intensive_agreement,
                           "fine_alignment_enabled": saved_rules.get("fine_alignment_enabled") is True,
@@ -789,7 +790,7 @@ def main():
     def get_auto_rules():
         return dict(auto_rules)
 
-    def save_auto_rules(values):
+    def save_auto_rules(values, *, request_check=True):
         nonlocal auto_rules
         integer_digits = values.get("integer_digits", auto_rules["integer_digits"])
         fraction_digits = values.get("fraction_digits", auto_rules["fraction_digits"])
@@ -857,7 +858,7 @@ def main():
                           if key not in view_preferences)
         view_changed = any(updated_rules[key] != auto_rules.get(key) for key in view_preferences)
         auto_rules = updated_rules
-        if needs_check or not view_changed:
+        if request_check and (needs_check or not view_changed):
             request_automatic_check()
 
     requested = Queue(maxsize=1)
@@ -1034,9 +1035,11 @@ def main():
         revision = str(time.time_ns())
         partial = provisional or verified and attempt.simplified
         partial_scope = calibration_source_id([source, revision]) if partial else None
+        pending_source = setup_source_id(source) if provisional else rules.get("setup_pending_source")
         save_auto_rules({**rules, **layout.settings(), "crop_revision": revision,
                          "calibration_reference": reference, "stationary_partial_scope": partial_scope,
-                         "setup_completed": completed})
+                         "setup_completed": completed,
+                         "setup_pending_source": None if completed else pending_source})
 
     def control_calibration(action, limit, region=None, *, verification_id=None):
         nonlocal calibration, calibration_configuration, calibration_next
@@ -2280,6 +2283,30 @@ def main():
                         enabled=active_rules["reflection_estimate_enabled"], manual_anchor=manual_anchor,
                     )
                     verified = outcome == "match" or standalone_reference is not None and outcome == "ocr_only"
+                    setup_source = setup_source_id(active_source)
+                    if (verified and not raw_fallback and not stabilizing_until
+                            and active_rules.get("setup_pending_source") == setup_source):
+                        whole, _, fraction = ocr.replace(",", ".").partition(".")
+                        reading = f"{whole}.{fraction[:decimals]}" if decimals else whole
+                        with settings_lock:
+                            if get_auto_rules() == active_rules and get_source()[0] == active_source:
+                                try:
+                                    save_auto_rules({
+                                        **active_rules,
+                                        "setup_completed": {"source": setup_source, "time": now.timestamp()},
+                                        "setup_pending_source": None,
+                                        "calibration_reference": {
+                                            "reading": reading, "time": image_time, "precision": decimals,
+                                            "source": setup_source, "integer_digits": integer_digits,
+                                            "image_id": image_id,
+                                        },
+                                    }, request_check=False)
+                                except OSError:
+                                    print("Abschluss der Einrichtung konnte nicht gespeichert werden.")
+                                else:
+                                    stabilizing_until, _ = setup_deadlines(get_auto_rules(), active_source)
+                                    interval_minutes = stabilization_interval(interval_minutes, stabilizing_until, now.timestamp())
+                                    optimization_paused = True
                     if (not optimization_paused and stationary_partial and verified
                             and updated.get("stationary_fine_started") != active_rules["crop_revision"]):
                         full = meter_prefix(ocr, 3, integer_digits)

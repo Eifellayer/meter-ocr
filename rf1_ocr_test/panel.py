@@ -24,7 +24,7 @@ from meter_learning import GEOMETRY_REPAIR_FAILURES
 from checks import (DEFAULT_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, WARNING_DETAIL_AFTER, meter_prefix,
                     LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, REFLECTION_SUGGEST_AFTER, STANDALONE_PENDING, STANDALONE_REJECTED_NOTICE,
                     STANDALONE_VERIFIED_NOTICE, last_check_at, reschedule_next_check,
-                    setup_deadlines, stabilization_interval, valid_interval_minutes)
+                    setup_deadlines, setup_source_id, stabilization_interval, valid_interval_minutes)
 from consumption import DEFAULT_FLOW_LPH, format_cubic_metres, parse_flow_limit
 from i18n import EN_UI, english_progress, english_result, translate_page
 from language import MODES, SUPPORTED, USER_ID, browser_locale, profile_script
@@ -1956,6 +1956,8 @@ async function refreshAutomatic() {{
     const response = await fetch('automatic?lang=' + lang, {{cache: 'no-store'}});
     if (!response.ok) throw new Error();
     const sample = await response.json();
+    stabilizingUntil = sample.stabilizing_until || 0;
+    document.querySelector('#setup-stabilization').hidden = Date.now() >= stabilizingUntil * 1000;
     automaticStatusFailures = 0;
     next = sample.next_check;
     document.querySelector('#paused-notice').hidden = !sample.paused;
@@ -2384,6 +2386,7 @@ def start_panel(
             "retry_suppressed": retry_suppressed,
             "recovery_notice": recovery_notice,
             "geometry_warning": geometry_warning(history, auto_rules, language) if now >= optimization_until else "",
+            "stabilizing_until": stabilizing_until,
             "reflection_estimate": reflection_estimate,
             "reflection_live_estimate": (history.get("reflection_live_estimate")
                                         if auto_rules.get("reflection_estimate_enabled") else None),
@@ -3039,6 +3042,8 @@ def start_panel(
                         if initial_setup:
                             rules_values["precision_mode"] = False
                         save_source(source_values)
+                        if initial_setup and not learn_crop:
+                            rules_values["setup_pending_source"] = setup_source_id(get_source()[0])
                         with delivery_lock:
                             save_delivery(delivery_values)
                         save_auto_rules(rules_values)

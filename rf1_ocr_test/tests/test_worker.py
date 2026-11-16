@@ -930,6 +930,18 @@ class StateTests(TestCase):
         source = {**run.source_rules(json.loads(files["SOURCE_SETTINGS"].read_text())), "selected": True}
         files["AUTO_RULES"].write_text(json.dumps({
             "decimals": 0, "attempts": 1, "crop_mode": "manual",
+            "crop": "0,0,500,100", "width": 350, "setup_pending_source": run.setup_source_id(source),
+        }))
+        self.assertEqual("standalone_pending", check("12346.???")["check_status"])
+        self.assertIsNone(json.loads(files["AUTO_RULES"].read_text()).get("setup_completed"))
+        self.assertEqual("ocr_only", check("12346.???")["check_status"])
+        completed = json.loads(files["AUTO_RULES"].read_text())
+        self.assertEqual("12346", completed["calibration_reference"]["reading"])
+        self.assertIsNone(completed["setup_pending_source"])
+        self.assertGreater(run.setup_deadlines(completed, source)[1], datetime.now(timezone.utc).timestamp())
+        files["HISTORY"].unlink()
+        files["AUTO_RULES"].write_text(json.dumps({
+            "decimals": 0, "attempts": 1, "crop_mode": "manual",
             "crop": "0,0,500,100", "width": 350,
             "setup_completed": {"source": run.setup_source_id(source), "time": datetime.now(timezone.utc).timestamp()},
             "calibration_reference": {

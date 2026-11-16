@@ -342,6 +342,10 @@ def read_visible_digits(register, integer_width, whole_boxes, fraction_boxes, li
                        max(integer_width, whole_boxes[-1][2]), bottom - inset)
             try:
                 row = read(register.crop(row_box))
+                if row is None and row_box[0] > 0:
+                    # Give a narrow leading digit slightly more background.
+                    margin = max(1, (whole_boxes[0][2] - whole_boxes[0][0]) // 20)
+                    row = read(register.crop((max(0, row_box[0] - margin), *row_box[1:])))
             except (OSError, subprocess.SubprocessError):
                 row = None
             if row and len(row) == whole_digits and all(a == b or a == "?" for a, b in zip(whole, row)):

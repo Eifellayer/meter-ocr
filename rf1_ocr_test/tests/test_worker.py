@@ -39,6 +39,17 @@ def synthetic_meter():
 
 
 class SourceTests(TestCase):
+    def test_row_ocr_only_fills_a_missing_cell_when_other_digits_agree(self):
+        boxes = [(x, 2, x + 15, 28) for x in range(0, 75, 15)]
+        image = Image.new("RGB", (75, 30), "white")
+        for row, expected in (("12345", "12345"), ("18345", "12?45")):
+            with self.subTest(row=row):
+                reads = iter(("1", "2", None, "4", "5", row))
+                self.assertEqual(expected, run.read_visible_digits(
+                    image, 75, boxes, [], False, "auto", profile=OCR_PROFILES[0],
+                    whole_digits=5, fraction_digits=0, prefer_boxes=True,
+                    recognize=lambda *_args, **_kwargs: next(reads)))
+
     def test_small_signed_rotation_restores_ocr_alignment(self):
         upright = synthetic_meter()
         tilted = turn_crop(upright, 6)

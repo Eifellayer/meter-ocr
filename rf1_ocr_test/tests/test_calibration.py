@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import calibration
 from calibration import Calibration, Layout, MAX_ATTEMPTS, guided_layouts, layouts, neighbour_layout, search_region, unrotate_box
-from layout import find_dark_register, find_neighbour_digit_rows, find_raw_digit_row, find_raw_digit_rows, scale_digit_boxes, turn_crop
+from layout import dark_register_cells, find_dark_register, find_neighbour_digit_rows, find_raw_digit_row, find_raw_digit_rows, scale_digit_boxes, turn_crop
 from meter_learning import widen_digit_boxes
 
 LAYOUT = Layout((0, 0, 80, 20), -3, 80)
@@ -34,6 +34,17 @@ def irregular_meter(text):
 
 
 class NeighbourGeometryTests(TestCase):
+    def test_dark_window_fit_follows_visible_digits_instead_of_unequal_side_margins(self):
+        register = Image.new("RGB", (490, 87), "#09151b")
+        draw = ImageDraw.Draw(register)
+        font = ImageFont.truetype("DejaVuSansMono.ttf", 47)
+        centers = [32, 86, 140, 194, 248, 302, 356, 410]
+        for x, digit in zip(centers, "1246587"):
+            draw.text((x, 45), digit, fill="#83cfdf", font=font, anchor="mm")
+        boxes = scale_digit_boxes(dark_register_cells(register, 8), register.size)
+        self.assertEqual(8, len(boxes))
+        self.assertTrue(all(abs((box[0] + box[2]) / 2 - x) <= 4 for box, x in zip(boxes, centers)))
+
     def test_dark_register_is_located_with_gaps_and_a_separate_small_label(self):
         photo = Image.new("RGB", (640, 480), "#9c9c9c")
         draw = ImageDraw.Draw(photo)

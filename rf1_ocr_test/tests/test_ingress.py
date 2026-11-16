@@ -712,6 +712,8 @@ class BrowserTests(IngressFixture):
             self.assertEqual("esphome", mode.input_value())
             self.assertEqual("camera.water_meter", page.locator("#wizard-source-camera input").input_value())
             self.assertFalse(page.locator("#wizard-esp-camera-only").is_visible())
+            page.locator('#setup-form [name="fallback_value"]').fill("12345,67")
+            self.assertTrue(page.locator('#setup-form [name="fallback_time"]').input_value())
             for step in (0, 1):
                 page.locator(f'.setup-step[data-step="{step}"] .setup-next').click()
             page.get_by_role("radio", name="Ausschnitt und Drehung lernen").check()
@@ -720,6 +722,7 @@ class BrowserTests(IngressFixture):
             page.locator('#setup-form button[type="submit"]').click()
             page.get_by_text("Einrichtung gespeichert.", exact=True).wait_for()
             self.assertEqual(18, self.calibration["limit"])
+            self.assertEqual("12345,67", self.rules["fallback_value"])
             self.calibration.update(state="testing", stage="ocr", rotation=-6, variant=2, seconds=880)
             page.locator("#calibration-state").filter(has_text="Prüfe Rahmen 2 mit Drehung -6°").wait_for()
             self.assertEqual("20", page.locator("#calibration-progress").get_attribute("value"))

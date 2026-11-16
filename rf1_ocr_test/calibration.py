@@ -13,7 +13,8 @@ from statistics import median
 from checks import OCR_PROFILES, compare_sample, crop_register, meter_prefix, read_with_retries
 from consumption import accumulate_consumption
 from layout import (crop_coordinates, digit_box_settings, find_digit_row, find_neighbour_digit_rows,
-                    find_dark_register, find_raw_digit_rows, normalize_digit_boxes, rotated_width, same_digit_region, turn_crop)
+                    dark_register_cells, find_dark_register, find_raw_digit_rows, normalize_digit_boxes,
+                    rotated_width, same_digit_region, scale_digit_boxes, turn_crop)
 
 from meter_learning import propose_digit_boxes
 
@@ -143,6 +144,12 @@ def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False
             proposal = max(windows, key=lambda row: row[0])[1]
             proposal = replace(proposal, rotation=0, width=min(proposal.width, proposal.box[2] - proposal.box[0]),
                                digit_boxes=())
+            register = crop_register(frame, proposal.box)
+            boxes = dark_register_cells(register, whole + fraction)
+            if boxes:
+                scaled = scale_digit_boxes(boxes, register.size)
+                split = (scaled[whole - 1][2] + scaled[whole][0]) // 2 if fraction else register.width
+                proposal = replace(proposal, width=split, digit_boxes=boxes)
             if unique(proposal):
                 yield replace(proposal, method="register_window")
         if ranked:

@@ -333,6 +333,23 @@ def read_visible_digits(register, integer_width, whole_boxes, fraction_boxes, li
     if whole is None:
         whole = "".join(read_digit(register, box, read, trim_vertical=not prefer_boxes)
                         for box in whole_boxes).ljust(whole_digits, "?")
+        if prefer_boxes and whole_digits >= 4 and whole.count("?") == 1 and len(whole_boxes) == whole_digits:
+            # Recover one weak cell with a tightly cropped row read. Keep
+            # every independently read cell as a check on OCR alignment.
+            top, bottom = min(box[1] for box in whole_boxes), max(box[3] for box in whole_boxes)
+            inset = (bottom - top) // 40
+            row_box = (whole_boxes[0][0], top + inset,
+                       max(integer_width, whole_boxes[-1][2]), bottom - inset)
+            try:
+                row = read(register.crop(row_box))
+                if row is None and row_box[0] > 0:
+                    # Give a narrow leading digit slightly more background.
+                    margin = max(1, (whole_boxes[0][2] - whole_boxes[0][0]) // 20)
+                    row = read(register.crop((max(0, row_box[0] - margin), *row_box[1:])))
+            except (OSError, subprocess.SubprocessError):
+                row = None
+            if row and len(row) == whole_digits and all(a == b or a == "?" for a, b in zip(whole, row)):
+                whole = row
     fraction = "".join(read_digit(register, box, read) for box in fraction_boxes[:fraction_digits])
     return f"{whole}.{fraction.ljust(fraction_digits, '?')}" if fraction_digits else whole
 

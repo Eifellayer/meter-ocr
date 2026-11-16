@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.22 Stable
+
+- Nach der ersten bestätigten Einrichtung speichert die App den Referenzstand und prüft 20 Minuten lang regulär in höchstens fünfminütigem Abstand.
+- Die automatische Selbstoptimierung wartet 60 Minuten, auch nach einem Neustart. Danach startet sie nur bei den vorgesehenen Auslösern.
+- Die Übersicht zeigt eine kurze Erfolgsmeldung. Technische Einzelheiten bleiben in den Einstellungen aufklappbar.
+
 ## 0.5.21 Stable
 
 - Die Feinprüfung der letzten Rolle liest nur diese Ziffer, verwendet den gespeicherten Drehwinkel und verschiebt bei Bedarf ausschließlich den letzten Einzelrahmen. Neue Bilder werden alle zwei Sekunden angefragt.

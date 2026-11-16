@@ -243,6 +243,7 @@ EN_UI = {
         " Without a reference, the app waits for a plausible increase or a starting reading.",
     "Drei Treffer mit 100 %: Grobprüfung beendet. Warte auf ein frisches Bild für die Gegenprobe.":
         "Three matches at 100%: coarse search complete. Waiting for a fresh image for verification.",
+    " · Schwankende Stellen im Intensivtest (von links): ": " · Unstable positions in the intensive check (from the left): ",
     LAST_DIGIT_PASS: "The first two decimal places match. The third digit remains unconfirmed.",
     "Für den Verbrauch verwendet die App den plausiblen Vergleichswert.": "The app uses the plausible reference reading to calculate consumption.",
     "Ablesung und Vergleichswert weichen ab": "Image reading and reference differ",

@@ -1632,8 +1632,11 @@ function refreshCalibration(status) {{
     (active && status.shortlist?.length ?
       ' · Beste Kandidaten: ' + status.shortlist.map(percent => percent + '%').join(', ') : '') +
     (active ? ' · Rechenzeit übrig: ' + clock + ' min' : '');
+  const weakSlots = status.stress_weak_slots || [];
+  const stabilityNote = weakSlots.length ?
+    ' · Schwankende Stellen im Intensivtest (von links): ' + weakSlots.join(', ') : '';
   const tone = status.state === 'saved' ? 'ok' : ['failed', 'timeout', 'image_timeout', 'save_failed'].includes(status.state) ? 'error' : '';
-  label.textContent = (status.automatic ? 'Automatische Nachjustierung · ' : '') + message + ' ' + detail;
+  label.textContent = (status.automatic ? 'Automatische Nachjustierung · ' : '') + message + ' ' + detail + stabilityNote;
   label.dataset.tone = tone;
   document.querySelector('#calibration-overview').dataset.tone = tone;
   document.querySelector('#calibration-overview').hidden = false;

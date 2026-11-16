@@ -437,7 +437,7 @@ class CalibrationTests(TestCase):
 
         def read(layout, profile):
             profiles.append(profile)
-            return "12345"
+            return "1234?" if profile == calibration.OCR_PROFILES[4] else "12345"
 
         for index in (1, 2):
             self.assertIsNone(job.examine(frame(index), None, sample, 100 + index, RULES, read, lambda: False))
@@ -448,6 +448,8 @@ class CalibrationTests(TestCase):
         self.assertEqual(list(calibration.OCR_PROFILES[:5]), profiles)
         self.assertEqual(3, job.status(103)["full_hits"])
         self.assertTrue(job.status(103)["coarse_complete"])
+        self.assertEqual([5], job.status(103)["stress_weak_slots"])
+        self.assertEqual(80, job.status(103)["candidate_agreement"])
         self.assertLess(job.coarse_attempts, calibration.COARSE_LIMIT)
         self.candidates.assert_not_called()
         self.assertEqual(3, len(job.seen))

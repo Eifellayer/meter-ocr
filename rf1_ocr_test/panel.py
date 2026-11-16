@@ -553,6 +553,9 @@ name: Zählerstand (OCR)</code></pre>
 <div class="setup-help">
 <label>Zählerstand kurz selbst ablesen (optional)<input name="fallback_value" value="{fallback_value}" inputmode="decimal" maxlength="16" placeholder="z. B. 12345,67"></label>
 <p class="settings-note">Der Stand hilft der App beim Einrichten. Zum Überspringen leer lassen und auf „Weiter“ klicken.</p>
+<button type="button" id="wizard-load-reading-image">Kamerabild zum Ablesen laden</button>
+<p id="wizard-reading-image-status" role="status" hidden></p>
+<img id="wizard-reading-image" alt="Zählerbild zum Ablesen" style="width:100%;max-width:42rem;height:auto;margin:.6rem 0" hidden>
 <details><summary>Ablesezeit ändern</summary>
 <label>Stand abgelesen am<input name="fallback_time" type="datetime-local" value="{fallback_time}"></label>
 </details>
@@ -898,6 +901,49 @@ resetForm.addEventListener('submit', event => {{
 const setupForm = document.querySelector('#setup-form');
 const wizardReading = setupForm.elements.fallback_value;
 const wizardReadingTime = setupForm.elements.fallback_time;
+const wizardImage = document.querySelector('#wizard-reading-image');
+const wizardImageButton = document.querySelector('#wizard-load-reading-image');
+const wizardImageStatus = document.querySelector('#wizard-reading-image-status');
+const wizardSourceFields = ['source_mode', 'url', 'camera', 'esp_camera_only'];
+let wizardPreviewRevision = 0;
+let wizardImageUrl = '';
+function clearWizardImage() {{
+  wizardPreviewRevision++;
+  wizardImage.hidden = true;
+  wizardImage.removeAttribute('src');
+  if (wizardImageUrl) URL.revokeObjectURL(wizardImageUrl);
+  wizardImageUrl = '';
+  wizardImageStatus.hidden = true;
+}}
+for (const name of wizardSourceFields) setupForm.elements[name].addEventListener('input', clearWizardImage);
+document.querySelector('#wizard-discovered-source').addEventListener('change', clearWizardImage);
+wizardImageButton.addEventListener('click', async () => {{
+  clearWizardImage();
+  const revision = wizardPreviewRevision;
+  const body = new URLSearchParams();
+  for (const name of [...wizardSourceFields, 'csrf', 'lang', 'mode']) {{
+    const field = setupForm.elements[name];
+    if (field.type !== 'checkbox' || field.checked) body.set(name, field.value);
+  }}
+  wizardImageButton.disabled = true;
+  wizardImageStatus.hidden = false;
+  wizardImageStatus.textContent = 'Kamerabild wird geladen …';
+  try {{
+    const response = await fetch('einrichtungsbild', {{method: 'POST', body, cache: 'no-store'}});
+    if (!response.ok) throw new Error();
+    const image = await response.blob();
+    if (revision !== wizardPreviewRevision) return;
+    wizardImageUrl = URL.createObjectURL(image);
+    wizardImage.src = wizardImageUrl;
+    wizardImage.hidden = false;
+    wizardImageStatus.hidden = true;
+  }} catch (_) {{
+    if (revision === wizardPreviewRevision)
+      wizardImageStatus.textContent = 'Kein Kamerabild verfügbar. Prüfe die Bildquelle oder lies direkt am Zähler ab.';
+  }} finally {{
+    wizardImageButton.disabled = false;
+  }}
+}});
 let wizardTimeEdited = false;
 wizardReadingTime.addEventListener('input', () => {{ wizardTimeEdited = true; }});
 wizardReading.addEventListener('input', () => {{
@@ -1927,7 +1973,7 @@ def start_panel(
     request_factory_reset=None, get_reset_status=None, skip_setup=None, get_activity=None,
     get_auto_paused=None, save_auto_paused=None, discover_sources=None,
     settings_lock=None, get_calibration=None, control_calibration=None, get_calibration_image=None,
-    has_calibration_backup=None,
+    has_calibration_backup=None, get_wizard_image=None,
 ):
     images = {"/aktuell.jpg": current_image, "/treffer.jpg": good_image,
               "/testvorschau.jpg": test_image}
@@ -1941,6 +1987,7 @@ def start_panel(
     preferences_lock = Lock()
     rules_lock = settings_lock if settings_lock is not None else Lock()
     delivery_lock = Lock()
+    wizard_image_lock = Lock()
     def read_auto_rules():
         return {"integer_digits": 5, "fraction_digits": 3, "meter_display": "rollers",
                 "fallback_value": "", "fallback_time": "", "digit_boxes": [], **get_auto_rules()}
@@ -2479,7 +2526,7 @@ def start_panel(
                     **({"learn": "Learn crop and rotation" if language == "en"
                         else "Ausschnitt und Drehung lernen"} if control_calibration else {}),
                     "manual": "Enter crop coordinates" if language == "en" else "Bildkoordinaten eingeben",
-                }, auto_rules["crop_mode"]),
+                }, "learn" if setup_pending and control_calibration else auto_rules["crop_mode"]),
                 fallback_value=html.escape(auto_rules["fallback_value"], quote=True),
                 fallback_time=html.escape(auto_rules["fallback_time"], quote=True),
                 wizard_saved_notice=(
@@ -2727,6 +2774,26 @@ def start_panel(
             def selected_source_mode(default=""):
                 selected = field("source_mode", default)
                 return "slfork_camera" if selected == "slfork" and field("esp_camera_only") == "1" else selected
+
+            if path == "/einrichtungsbild":
+                try:
+                    source = source_rules({"mode": selected_source_mode(), "url": field("url"),
+                                           "camera": field("camera"), "reference": ""})
+                except ValueError:
+                    problem(400, "Bitte zuerst eine Bildquelle auswählen.", "Select a camera source first.")
+                    return
+                if get_wizard_image is None or not wizard_image_lock.acquire(blocking=False):
+                    problem(503)
+                    return
+                try:
+                    content = get_wizard_image(source)
+                except (OSError, ValueError):
+                    problem(503, "Das Kamerabild konnte nicht geladen werden.", "Could not load the camera image.")
+                else:
+                    self.reply(content, "image/jpeg")
+                finally:
+                    wizard_image_lock.release()
+                return
 
             if path == "/spiegelungs-hinweis-ausblenden":
                 try:

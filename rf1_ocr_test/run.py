@@ -354,6 +354,30 @@ def read_visible_digits(register, integer_width, whole_boxes, fraction_boxes, li
     return f"{whole}.{fraction.ljust(fraction_digits, '?')}" if fraction_digits else whole
 
 
+def wizard_camera_preview(source, token, zone):
+    mode = source["mode"]
+    if mode == "slfork":
+        base = source["url"].rstrip("/")
+        try:
+            picture = get_bytes(base + "/img_tmp/alg.jpg", timeout=5)
+        except HTTPError as error:
+            if error.code not in (404, 410):
+                raise
+            error.close()
+            picture, _, _ = capture_edge_camera(base, zone)
+    elif mode == "slfork_camera":
+        picture, _, _ = capture_edge_camera(source["url"].rstrip("/"), zone)
+    else:
+        picture, _, _ = capture_camera(source["camera"], "", token, zone, timeout=5)
+    try:
+        with Image.open(io.BytesIO(picture)) as frame:
+            if frame.width * frame.height > MAX_IMAGE_PIXELS:
+                raise ValueError("Kamerabild hat zu viele Pixel")
+            return calibration_jpeg(frame, (960, 720))
+    except Image.DecompressionBombError as error:
+        raise ValueError("Kamerabild hat zu viele Pixel") from error
+
+
 def calibration_jpeg(frame, max_size):
     image = frame.convert("RGB")
     image.thumbnail(max_size, Image.Resampling.LANCZOS)
@@ -1188,6 +1212,7 @@ def main():
         request_factory_reset=request_factory_reset, get_reset_status=lambda: reset_result["value"],
         skip_setup=skip_setup,
         discover_sources=partial(discover_ha_sources, token),
+        get_wizard_image=partial(wizard_camera_preview, token=token, zone=zone),
         get_activity=get_automatic_activity,
         get_auto_paused=get_auto_paused, save_auto_paused=save_auto_paused,
         settings_lock=settings_lock, get_calibration=calibration_status, control_calibration=control_calibration,

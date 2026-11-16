@@ -3,6 +3,9 @@
 ## 0.5.19 Stable
 
 - Die Selbsteinrichtung prüft zuerst den zuletzt bestätigten Rahmen derselben Bildquelle und Ziffernaufteilung. Erst wenn er nicht mehr passt, beginnt die weitere Rahmensuche.
+- Bei der Feinprüfung wird eine unklare vorletzte Rolle gezielt nachgeprüft, wenn nur sie offen ist. Ein geänderter Rahmen sammelt seine eigenen Bestätigungen.
+- Bei einer neuen Grobsuche vergleicht die App die Ziffernbereiche vor der Winkelprüfung. Am besten Kandidaten prüft sie kleine Winkel auch bei einem lesbaren Ausgangsbild.
+- Die optionale rechnerische Ergänzung verdeckter Ziffern ist im Assistenten sichtbar.
 
 ## 0.5.18 Stable
 

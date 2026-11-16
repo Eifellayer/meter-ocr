@@ -287,6 +287,62 @@ class CalibrationTests(TestCase):
         self.assertEqual(LAYOUT, job.verify(frame(5), sample, 105, rules, read, stop))
         self.assertEqual(20, job.attempts)
 
+    def test_fine_check_retries_only_the_penultimate_digit_and_keeps_the_same_frame_hits(self):
+        job = Calibration(7, 0, intensive=True, followup=True, previous_layout=LAYOUT, attempt_limit=20)
+        rules = {**RULES, "decimals": 3, "fraction_digits": 3}
+        sample = {"reference_time": 100, "raw_value": "12345.239", "actual_value": "12345.239"}
+        for index in (1, 2):
+            job.examine(frame(index), None, sample, 100 + index, rules, lambda *_: "12345.239", lambda: False)
+        checked = []
+
+        def retry(layout, profile):
+            self.assertEqual(LAYOUT, layout)
+            self.assertIn(profile, calibration.OCR_PROFILES[2:4])
+            return "12345.239"
+
+        accepted = job.examine(frame(3), None, sample, 103, rules, lambda *_: "12345.2?9", lambda: False,
+                               refine_read=retry, on_refine=lambda _, __, positions: checked.append(positions))
+        self.assertEqual(LAYOUT, accepted)
+        self.assertEqual([[7]], checked)
+        self.assertEqual(3, job.confirmations)
+
+    def test_fine_check_can_reuse_the_verified_penultimate_box_without_transferring_hits(self):
+        boxes = tuple((125 * index, 0, 125 * (index + 1), 1000) for index in range(8))
+        current = Layout((0, 0, 80, 20), 0, 50, boxes)
+        verified_boxes = (*boxes[:6], (755, 0, 880, 1000), boxes[-1])
+        known_good = Layout(current.box, current.rotation, current.width, verified_boxes)
+        job = Calibration(7, 0, intensive=True, followup=True, previous_layout=current,
+                          known_good_layout=known_good, attempt_limit=20)
+        rules = {**RULES, "decimals": 3, "fraction_digits": 3}
+        sample = {"reference_time": 100, "raw_value": "12345.239", "actual_value": "12345.239"}
+        for index in (1, 2):
+            job.examine(frame(index), None, sample, 100 + index, rules, lambda *_: "12345.239", lambda: False)
+        job.attempts = 20
+
+        def retry(layout, profile):
+            return "12345.239" if layout == known_good else "12345.249"
+
+        self.assertIsNone(job.examine(frame(3), None, sample, 103, rules, lambda *_: "12345.249", lambda: False,
+                                      refine_read=retry))
+        self.assertEqual(known_good, job.candidate)
+        self.assertEqual(1, job.confirmations)
+        self.assertEqual(current, job.best)
+
+    def test_fine_check_keeps_two_hits_when_both_last_digits_are_unreadable(self):
+        job = Calibration(7, 0, intensive=True, followup=True, previous_layout=LAYOUT)
+        rules = {**RULES, "decimals": 3, "fraction_digits": 3}
+        sample = {"reference_time": 100, "raw_value": "12345.239", "actual_value": "12345.239"}
+        for index in (1, 2):
+            job.examine(frame(index), None, sample, 100 + index, rules, lambda *_: "12345.239", lambda: False)
+
+        def unexpected_retry(*_):
+            self.fail("Targeted retry requires a readable last digit")
+
+        job.examine(frame(3), None, sample, 103, rules, lambda *_: "12345.2??", lambda: False,
+                    refine_read=unexpected_retry)
+        self.assertEqual(2, job.confirmations)
+        self.assertEqual(LAYOUT, job.candidate)
+
     def test_followup_tries_only_the_saved_crop_and_refines_the_last_digit(self):
         saved = Layout(LAYOUT.box, LAYOUT.rotation, 50)
         self.job = Calibration(5, 0, intensive=True, followup=True, previous_layout=saved)
@@ -467,7 +523,7 @@ class CalibrationTests(TestCase):
         self.job.examine(frame(1), None, {"reference_required": False}, 100, RULES, read, lambda: False)
         self.assertEqual([register, register], seen)
 
-    def test_ranked_crop_tries_rotation_before_moving_to_the_next_box(self):
+    def test_ranked_crop_compares_regions_before_trying_its_angle(self):
         initial = Layout((0, 0, 80, 20), 0, 60)
         self.candidates.return_value = [initial, OTHER_LAYOUT]
         self.job = Calibration(5, 0, rank_candidates=True, simplified=True)
@@ -483,10 +539,22 @@ class CalibrationTests(TestCase):
         self.job.examine(frame(1), None, sample, 101, rules, read, lambda: False, angle_read=read,
                          on_angle=lambda _, angle: angles.append(angle))
         self.assertEqual([-1], angles)
-        self.assertEqual({initial.box}, set(attempted))
+        self.assertEqual([initial.box] * 2 + [OTHER_LAYOUT.box] * 2, attempted[:4])
         self.assertEqual(1, self.job.confirmations)
         self.assertEqual(-1, self.job.candidate.rotation)
-        self.assertEqual(2, self.job.coarse_attempts)
+        self.assertEqual(3, self.job.coarse_attempts)
+
+    def test_new_search_prefers_larger_display_and_checks_small_angles_even_on_a_match(self):
+        small = Layout((0, 0, 35, 18), 0, 25)
+        large = Layout((0, 8, 90, 29), 0, 65)
+        self.candidates.return_value = [small, large]
+        self.job = Calibration(5, 0, rank_candidates=True)
+        angles = []
+        sample = {"reference_time": 100, "raw_value": "12345", "actual_value": "12345"}
+        self.job.examine(frame(1), None, sample, 101, RULES, lambda *_: "12345", lambda: False,
+                         angle_read=lambda *_: "12345", on_angle=lambda _, angle: angles.append(angle))
+        self.assertEqual([-1, 1, -2, 2, -3, 3], angles)
+        self.assertEqual(large, self.job.candidate)
 
     def test_ranked_crop_enters_intensive_search_at_ninety_percent(self):
         initial = Layout((0, 0, 80, 20), 0, 50)

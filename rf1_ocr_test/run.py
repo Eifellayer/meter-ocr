@@ -936,13 +936,22 @@ def main():
     def calibration_configuration_now():
         return get_auto_rules(), get_source()
 
-    def control_calibration(action, limit, region=None):
+    def control_calibration(action, limit, region=None, *, verification_id=None):
         nonlocal calibration, calibration_configuration, calibration_next
         with settings_lock:
             running = calibration is not None and calibration.state in ("waiting", "testing") and not calibration.expired(time.monotonic())
             if action == "cancel":
                 if running:
                     calibration.state = "cancelled"
+            elif action == "skip-verification":
+                current_id = calibration.skippable_verification_id() if calibration else None
+                if (not current_id or verification_id != current_id
+                        or calibration_configuration_now() != calibration_configuration):
+                    raise ValueError("No matching fine-check verification to skip")
+                save_auto_rules({**get_auto_rules(), **calibration.candidate.settings(),
+                                 "crop_revision": str(time.time_ns())})
+                calibration.state = "saved_without_verification"
+                calibration.verification_pending = False
             elif action == "restore":
                 backup = read_geometry_backup()
                 if running or not backup:
@@ -1001,15 +1010,18 @@ def main():
                 status["state"] = "timeout"
             elif status["state"] == "waiting" and calibration.image_wait_expired(time.monotonic()):
                 status["state"] = "image_timeout"
-            saved_layout = calibration.candidate if status["state"] == "saved" else calibration.previous_layout
-            if saved_layout and (status["state"] == "saved" or (
-                    calibration.followup and calibration_configuration_now() == calibration_configuration)):
+            same_configuration = calibration_configuration_now() == calibration_configuration
+            saved = status["state"] in ("saved", "saved_without_verification")
+            saved_layout = calibration.candidate if saved else calibration.previous_layout
+            if saved_layout and (saved or (calibration.followup and same_configuration)):
                 status["settings"] = {**saved_layout.settings(), "crop_revision": auto_rules["crop_revision"]}
-            if status["state"] in ("failed", "timeout", "image_timeout"):
-                if calibration.best:
-                    status["proposal"] = calibration.best.settings()
-                if calibration.fine_evidence:
-                    status["preview"] = dict(calibration.fine_evidence[1])
+            if same_configuration:
+                status["skip_verification_id"] = calibration.skippable_verification_id()
+            if status["state"] in ("failed", "timeout", "image_timeout") and calibration.best:
+                status["proposal"] = calibration.best.settings()
+            if calibration.fine_evidence and status["state"] in (
+                    "failed", "timeout", "image_timeout", "saved_without_verification"):
+                status["preview"] = dict(calibration.fine_evidence[1])
             return status
 
     def calibration_image(kind, version):
@@ -1051,7 +1063,7 @@ def main():
         deadline = time.monotonic() + 30
 
         def stopped():
-            return time.monotonic() >= deadline or calibration is not job or job.state == "cancelled" or get_auto_paused()
+            return time.monotonic() >= deadline or calibration is not job or job.state != "testing" or get_auto_paused()
 
         def fetch(url, token=None, timeout=8):
             if stopped():
@@ -1320,7 +1332,7 @@ def main():
                 attempt.spent += now - attempt.searching_since
                 attempt.searching_since = None
                 attempt.last_image_at = now
-            if calibration is not job or job.state == "cancelled":
+            if calibration is not job or job.state != "testing":
                 return True
             if (attempt.shortlist != job.shortlist and attempt.shortlist
                     and calibration_configuration_now() == calibration_configuration):

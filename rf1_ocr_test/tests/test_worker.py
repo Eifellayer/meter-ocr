@@ -392,6 +392,32 @@ class StateTests(TestCase):
         access["control"]("start", 4)
         self.assertFalse(access["status"]()["simplified"])
 
+        layout = run.Layout((120, 160, 525, 315), 1, 280)
+        fine = run.Calibration(limit=4, started=0, intensive=True, candidate=layout, confirmations=2)
+        with patch.object(run, "Calibration", return_value=fine):
+            access["control"]("intensive", 4)
+        self.assertIsNone(access["status"]()["skip_verification_id"])
+        fine.confirmations = 3
+        fine.begin_verification(1)
+        fine.state = "timeout"
+        verification_id = access["status"]()["skip_verification_id"]
+        self.assertTrue(verification_id)
+        with self.assertRaises(ValueError):
+            access["control"]("skip-verification", 0, verification_id="stale")
+        self.assertNotEqual(layout.settings()["crop"], access["rules"]()["crop"])
+        with patch.object(run, "atomic_write", side_effect=OSError):
+            with self.assertRaises(OSError):
+                access["control"]("skip-verification", 0, verification_id=verification_id)
+        self.assertEqual(verification_id, access["status"]()["skip_verification_id"])
+        access["control"]("skip-verification", 0, verification_id=verification_id)
+        status = access["status"]()
+        self.assertEqual("saved_without_verification", status["state"])
+        self.assertIsNone(status.get("skip_verification_id"))
+        self.assertEqual(layout.settings()["crop"], status["settings"]["crop"])
+        self.assertEqual(layout.settings()["crop"], json.loads(files["AUTO_RULES"].read_text())["crop"])
+        with self.assertRaises(ValueError):
+            access["control"]("skip-verification", 0, verification_id=verification_id)
+
     def test_edge_camera_only_publishes_local_ocr_without_the_esp_reading(self):
         class StopLoop(Exception):
             pass

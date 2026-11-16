@@ -36,6 +36,15 @@ SUPERVISOR_ADDRESS = "172.30.32.2"
 MAX_MANUAL_IMAGE_BYTES = 3_000_000
 MAX_MULTIPART_OVERHEAD = 16_384
 
+CALIBRATION_SKIP_HTML = """<form method="post" action="selbsteinrichtung" class="calibration-skip" hidden>
+<input type="hidden" name="lang" value="{language}">
+<input type="hidden" name="mode" value="{mode}">
+<input type="hidden" name="csrf" value="{csrf}">
+<input type="hidden" name="verification_id">
+<p><strong>Hinweis zur Genauigkeit.</strong> Ohne Gegenprobe kann der übernommene Rahmen spätere Ablesungen ungenauer machen.</p>
+<button type="submit" name="action" value="skip-verification">Gegenprobe überspringen und Rahmen übernehmen</button>
+</form>"""
+
 CALIBRATION_PREVIEW_HTML = """<details class="calibration-photo-panel" open hidden>
 <summary>Bilder der Selbsteinrichtung</summary>
 <div class="calibration-photo-grid">
@@ -170,6 +179,8 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .calibration-live p{{margin:0}}
 #calibration-state[data-tone]:not([data-tone=""]){{padding:.75rem .9rem;border:1px solid;border-radius:.7rem}}
 .calibration-live[data-tone="ok"],#calibration-state[data-tone="ok"]{{color:light-dark(#185d35,#9ce5b5);background:light-dark(#e9f8ee,#17382a);font-size:1.12rem;font-weight:750}}
+.calibration-skip,#calibration-state[data-tone="warning"],#calibration-overview-state[data-tone="warning"]{{margin:.6rem 0;padding:.75rem .9rem;border:1px solid light-dark(#9b6414,#af8039);border-radius:.7rem;color:light-dark(#704508,#ffe1a0);background:light-dark(#fff5db,#362b19)}}
+.calibration-skip p{{margin:0 0 .55rem}}
 .calibration-live[data-tone="error"],#calibration-state[data-tone="error"]{{color:light-dark(#86272d,#ffb6bb);background:light-dark(#fff0f0,#46252b);font-size:1.12rem;font-weight:750}}
 .calibration-live progress,.calibration-card progress{{display:block;width:100%;margin:.55rem 0;accent-color:#bb861b}}
 .calibration-card form{{margin-top:.75rem}}
@@ -306,6 +317,7 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 </div>
 <div id="calibration-overview" class="calibration-live" hidden>
 <p id="calibration-overview-state" role="status"></p>
+{calibration_skip_html}
 <button type="button" id="calibration-open-region">Ziffernfeld manuell markieren</button>
 <progress id="calibration-overview-progress" aria-label="Verstrichene Zeit der Selbsteinrichtung"></progress>
 {calibration_preview_html}
@@ -489,6 +501,7 @@ name: Zählerstand (OCR)</code></pre>
 <p>Ohne externen Vergleichswert hilft ein von Hand abgelesener Startwert. Ohne Startwert wartet die App zusätzlich auf einen plausiblen Zähleranstieg.</p>
 {calibration_saved_notice}
 <p id="calibration-state" role="status" hidden></p>
+{calibration_skip_html}
 <button type="button" id="calibration-proposal" hidden>Gefundenen Rahmen im Test prüfen</button>
 <progress id="calibration-progress" aria-label="Verstrichene Zeit der Selbsteinrichtung" hidden></progress>
 {calibration_preview_html}
@@ -1545,6 +1558,10 @@ function refreshCalibrationImages(preview) {{
 
 function refreshCalibration(status) {{
   refreshCalibrationImages(status?.preview);
+  for (const form of document.querySelectorAll('.calibration-skip')) {{
+    form.elements.verification_id.value = status?.skip_verification_id || '';
+    form.hidden = !form.elements.verification_id.value;
+  }}
   if (!status) return;
   const active = status.state === 'waiting' || status.state === 'testing';
   const label = document.querySelector('#calibration-state');
@@ -1557,6 +1574,7 @@ function refreshCalibration(status) {{
       'Ausschnitt und Drehung gespeichert. Zwei Nachkommastellen bestätigt, die dritte bleibt unbestätigt.' :
       status.intensive ? 'Dritte Nachkommastelle bestätigt. Die Ziffernrahmen sind übernommen.' :
       'Erfolgreich eingerichtet. Ausschnitt und Drehung sind übernommen.',
+    saved_without_verification: 'Rahmen ohne Gegenprobe übernommen. Spätere Ablesungen können ungenauer sein.',
     failed: 'Selbsteinrichtung fehlgeschlagen. Prüfe Bildausschnitt, Kamerawinkel und Beleuchtung.',
     image_timeout: 'Kein neues Kamerabild erhalten. Prüfe die Bildquelle.',
     timeout: status.automatic ? 'Nachjustierung nach vier Minuten beendet. Der bisherige Rahmen bleibt gültig.' :
@@ -1640,10 +1658,12 @@ function refreshCalibration(status) {{
   const weakSlots = status.stress_weak_slots || [];
   const stabilityNote = weakSlots.length ?
     ' · Schwankende Stellen im Intensivtest (von links): ' + weakSlots.join(', ') : '';
-  const tone = status.state === 'saved' ? 'ok' : ['failed', 'timeout', 'image_timeout', 'save_failed'].includes(status.state) ? 'error' : '';
+  const tone = status.state === 'saved' ? 'ok' : status.state === 'saved_without_verification' ? 'warning' :
+    ['failed', 'timeout', 'image_timeout', 'save_failed'].includes(status.state) ? 'error' : '';
   label.textContent = (status.automatic ? 'Automatische Nachjustierung · ' : '') + message + ' ' + detail + stabilityNote;
   label.dataset.tone = tone;
   document.querySelector('#calibration-overview').dataset.tone = tone;
+  document.querySelector('#calibration-overview-state').dataset.tone = tone;
   document.querySelector('#calibration-overview').hidden = false;
   document.querySelector('#calibration-overview-state').textContent = label.textContent;
   document.querySelector('.activity-status').hidden = active;
@@ -2543,6 +2563,8 @@ def start_panel(
                 fallback_saved_notice=auto_saved_notice if saved == "fallback" else "",
                 calibration_preview_html=(translate_page(CALIBRATION_PREVIEW_HTML) if language == "en"
                                           else CALIBRATION_PREVIEW_HTML),
+                calibration_skip_html=(translate_page(CALIBRATION_SKIP_HTML) if language == "en"
+                                       else CALIBRATION_SKIP_HTML).format(language=language, mode=mode, csrf=csrf_token),
                 calibration_saved_notice=auto_saved_notice if saved in ("setup-calibration", "crop-restored") else "",
                 calibration_hidden="" if control_calibration else "hidden",
                 calibration_intensive_hidden="" if auto_rules["fraction_digits"] == 3 else "hidden",
@@ -3058,20 +3080,29 @@ def start_panel(
                 if control_calibration is None:
                     self.send_error(404)
                     return
+                action = field("action")
                 try:
-                    action = field("action")
-                    if action not in ("start", "intensive", "cancel", "restore"):
+                    if action not in ("start", "intensive", "cancel", "restore", "skip-verification"):
                         raise ValueError("Invalid calibration action")
                     starting = action in ("start", "intensive")
                     limit = int(field("image_limit", str(DEFAULT_LIMIT))) if starting else 0
                     if starting and not MIN_IMAGE_LIMIT <= limit <= MAX_IMAGES:
                         raise ValueError("Invalid calibration image limit")
                     region = search_region(field("region")) if action == "start" else None
-                    if region:
+                    if action == "skip-verification":
+                        verification_id = field("verification_id")
+                        if not verification_id:
+                            raise ValueError("Missing verification ID")
+                        control_calibration(action, limit, verification_id=verification_id)
+                    elif region:
                         control_calibration(action, limit, region=region)
                     else:
                         control_calibration(action, limit)
                 except ValueError:
+                    if action == "skip-verification":
+                        problem(409, "Die Gegenprobe für diesen Rahmen ist nicht mehr offen.",
+                                "Verification for this crop is no longer pending.")
+                        return
                     problem(400, "Bitte Bildquelle einrichten, die Automatik fortsetzen und das Bildlimit prüfen.",
                             "Set up an image source, resume automatic checks and check the image limit.")
                     return

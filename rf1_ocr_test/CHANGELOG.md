@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.18 Stable
+
+- Nach 3/3 Treffern kann die Gegenprobe der Feinprüfung bewusst übersprungen werden. Die App warnt vor möglichen ungenaueren Ablesungen und kennzeichnet den übernommenen Rahmen als ohne Gegenprobe gespeichert.
+
 ## 0.5.17 Stable
 
 - Nach 3/3 Treffern hat die Gegenprobe der Feinprüfung ein eigenes Zeitfenster von vier Minuten.

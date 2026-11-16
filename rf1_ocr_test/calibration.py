@@ -465,6 +465,14 @@ class Calibration:
         if self.intensive and self.verification_deadline is None:
             self.verification_deadline = now + INTENSIVE_VERIFICATION_SECONDS
 
+    def skippable_verification_id(self):
+        if (self.intensive and not self.automatic and self.verification_pending
+                and self.verification_deadline is not None and self.candidate is not None
+                and self.confirmations >= MIN_IMAGES
+                and self.state in ("waiting", "testing", "failed", "timeout", "image_timeout")):
+            return str(self.verification_deadline)
+        return None
+
     def remaining(self, now):
         if self.verification_deadline is not None:
             return self.verification_deadline - now

@@ -1,8 +1,11 @@
 """Conservative learning from regular, independently confirmed meter readings."""
 
+import subprocess
+import time
+
 from PIL import ImageOps
 
-from checks import RETRY_INTERVAL, meter_prefix
+from checks import OCR_PROFILES, RETRY_INTERVAL, meter_prefix, read_register
 from layout import digit_box_settings, normalize_digit_boxes, scale_digit_boxes
 
 ALIGNMENT_CONFIRMATIONS = 6
@@ -44,30 +47,78 @@ def propose_digit_boxes(register, current, whole_width, integer_digits, fraction
         edges = whole + fraction
         boxes = [(left, 0, right, h) for left, right in zip(edges, edges[1:])]
     image = register.convert("L")
-    refined = []
-    for original in boxes:
-        left, top, right, bottom = original
-        crop = image.crop(original)
-        if crop.width < 8 or crop.height < 12:
-            refined.append(original)
-            continue
-        gray = ImageOps.autocontrast(crop, cutoff=3)
-        # Subtract the background tone at the outer edges, without assuming polarity.
-        border = gray.resize((8, 8))
-        sides = [border.getpixel((x, y)) for y in range(8) for x in (0, 7)]
-        background = sorted(sides)[len(sides) // 2]
-        mask = gray.point(lambda value: 255 if abs(value - background) >= 82 else 0)
-        box = mask.getbbox()
-        if box and 0.32 * crop.width <= box[2] - box[0] and 0.4 * crop.height <= box[3] - box[1]:
-            margin = max(2, min(crop.size) // 10)
-            refined.append((max(left, left + box[0] - margin), max(top, top + box[1] - margin),
-                            min(right, left + box[2] + margin), min(bottom, top + box[3] + margin)))
-        else:
-            refined.append(original)
+    refined = [tighten_digit_box(image, box) for box in boxes]
     try:
         return digit_box_settings(normalize_digit_boxes(refined, register.size), count)
     except ValueError:
         return []
+
+
+def tighten_digit_box(image, original):
+    left, top, right, bottom = original
+    crop = image.crop(original)
+    if crop.width < 8 or crop.height < 12:
+        return original
+    gray = ImageOps.autocontrast(crop, cutoff=3)
+    border = gray.resize((8, 8))
+    sides = [border.getpixel((x, y)) for y in range(8) for x in (0, 7)]
+    background = sorted(sides)[len(sides) // 2]
+    mask = gray.point(lambda value: 255 if abs(value - background) >= 82 else 0)
+    box = mask.getbbox()
+    if not box or box[2] - box[0] < .32 * crop.width or box[3] - box[1] < .4 * crop.height:
+        return original
+    margin = max(2, min(crop.size) // 10)
+    return (max(left, left + box[0] - margin), max(top, top + box[1] - margin),
+            min(right, left + box[2] + margin), min(bottom, top + box[3] + margin))
+
+
+def suggest_single_digit_box(register, boxes, index, polarity):
+    """Read only the selected slot and return a proposal when two profiles agree."""
+    image = register.convert("L")
+    pixels = scale_digit_boxes(boxes, image.size)
+    left, top, right, bottom = original = pixels[index]
+    width, height = right - left, bottom - top
+    # Keep the search between the centers of adjacent rolls.
+    minimum = (sum(pixels[index - 1][::2]) + 1) // 2 if index else 0
+    maximum = sum(pixels[index + 1][::2]) // 2 if index + 1 < len(boxes) else image.width
+    dx, dy = max(1, width // 4), max(1, height // 5)
+    windows = [
+        (max(minimum, left - dx), max(0, top - dy),
+         min(maximum, right + dx), min(image.height, bottom + dy)),
+        (max(minimum, left - dx), top, right - dx, bottom),
+        (left + dx, top, min(maximum, right + dx), bottom),
+        (left, max(0, top - dy), right, bottom - dy),
+        (left, top + dy, right, min(image.height, bottom + dy)),
+    ]
+    deadline = time.monotonic() + 7
+    tried = {original}
+    for window in windows:
+        if window[2] - window[0] < 8 or window[3] - window[1] < 12:
+            continue
+        proposal = tighten_digit_box(image, window)
+        if proposal in tried:
+            continue
+        tried.add(proposal)
+        normalized = list(normalize_digit_boxes([proposal], image.size)[0])
+        candidate = list(boxes)
+        candidate[index] = normalized
+        try:
+            digit_box_settings(candidate, len(boxes))
+        except ValueError:
+            continue
+        if normalized == boxes[index]:
+            continue
+        try:
+            digit_crop = image.crop(proposal)
+            reading = read_register(digit_crop, polarity != "dark", 1, force_polarity=polarity != "auto",
+                                    profile=OCR_PROFILES[0], deadline=deadline)
+            if reading and reading == read_register(
+                    digit_crop, polarity != "dark", 1, force_polarity=polarity != "auto",
+                    profile=OCR_PROFILES[1], deadline=deadline):
+                return {"box": normalized, "digit": reading}
+        except (OSError, subprocess.SubprocessError):
+            break
+    return None
 
 
 def observe_alignment(state, key, stamp, expected, baseline, current, candidate, trial):

@@ -29,6 +29,7 @@ TIME_LIMIT = 15 * 60
 IMAGE_WAIT_LIMIT = 360
 INTENSIVE_VERIFICATION_SECONDS = 4 * 60
 CAPTURE_INTERVAL = 5
+PERFECT_CONFIRMATION_INTERVAL = 12
 LAST_DIGIT_CAPTURE_INTERVAL = 2
 ANGLES = (-3, 3, -1, 1, -2, 2, -4, 4, -6, 6, -9, 9, -12, 12, -18, 18, 90, -90, 180)
 SMALL_ANGLES = (0, -1, 1, -2, 2, -3, 3)
@@ -887,8 +888,7 @@ class Calibration:
         flow = rules["max_flow_lph"]
         confirming_followup = self.followup and self.confirmations > 0
         committed = self.confirmations >= 2 or confirming_followup
-        preferred = (self.confirmations == 1 and self.rank_candidates
-                     and self.shortlist.get(self.candidate, (0, 0))[-1] == 100)
+        preferred = (self.confirmations == 1 and self.rank_candidates and self.full_hits > 0)
         collecting = self.rank_candidates and not (committed or preferred or self.optimizing
                                                     or self.full_hits >= MIN_IMAGES)
         if committed or preferred or self.focused:
@@ -924,6 +924,7 @@ class Calibration:
         tested = set()
         frame_ceiling = self.attempts + FRAME_ATTEMPT_LIMIT
         coarse = []
+        perfect = None
         def score_layout(layout, readings):
             prefixes = [meter_prefix(value, precision, digits) for value in readings]
             agreement = prefixes[0] is not None and prefixes[0] == prefixes[1]
@@ -966,6 +967,11 @@ class Calibration:
                 continue
             score = score_layout(layout, readings)
             coarse.append((score, layout, readings))
+            if (self.rank_candidates and reliable(score)
+                    and agreement_percent(readings, sample, rules["fraction_digits"], digits) == 100
+                    and not uncertain_slots(readings, digits + rules["fraction_digits"])):
+                perfect = layout
+                break
             if reliable(score) and layout in (self.known_good_layout, self.candidate):
                 break
 
@@ -974,7 +980,7 @@ class Calibration:
             return (reliable(score), score[1], score[3], score[2],
                     agreement_percent(readings, sample, precision, digits))
 
-        if (coarse and self.rank_candidates and angle_read is not None and not self.confirmations
+        if (coarse and perfect is None and self.rank_candidates and angle_read is not None and not self.confirmations
                 and not any(layout == self.known_good_layout and reliable(score) for score, layout, _ in coarse)):
             # Compare regions first and spend the angle budget on the strongest candidate.
             index = max(range(len(coarse)), key=lambda position: ranked_crop(coarse[position]))
@@ -1019,7 +1025,8 @@ class Calibration:
                     # Re-read the full ranked list against the next image and its reference.
                     return None
             # Read stable crops immediately, including when this image has no usable reference.
-            intensive = coarse if self.optimizing else stable
+            intensive = ([item for item in coarse if item[1] == perfect] if perfect is not None
+                         else coarse if self.optimizing else stable)
             for index, (score, layout, readings) in enumerate(intensive[:SHORTLIST_LIMIT], start=1):
                 if stop() or self.attempts >= min(self.attempt_limit, frame_ceiling):
                     return None
@@ -1027,7 +1034,7 @@ class Calibration:
                 if on_shortlist is not None:
                     on_shortlist(index, layout.rotation)
                 extras = []
-                profile_end = 5 if score[4] and not reliable(score) else 3
+                profile_end = 5 if layout == perfect or (score[4] and not reliable(score)) else 3
                 for profile in OCR_PROFILES[2:profile_end]:
                     if stop():
                         break
@@ -1036,8 +1043,12 @@ class Calibration:
                     except (OSError, ValueError, subprocess.SubprocessError):
                         continue
                 if extras:
-                    self.record_intermediate(layout, [*readings, *extras], sample, precision, digits,
+                    all_readings = [*readings, *extras]
+                    self.record_intermediate(layout, all_readings, sample, precision, digits,
                                              rules["fraction_digits"], frame)
+                    if layout == perfect:
+                        self.stress_weak_slots = [index + 1 for index in uncertain_slots(
+                            all_readings, digits + rules["fraction_digits"])]
             if not self.optimizing:
                 reason = "collecting"
                 if stable and has_reference:
@@ -1045,7 +1056,8 @@ class Calibration:
                     reason = reference_rejection(sample, status) or reason
                 on_decision(reason)
                 return None
-            coarse.sort(key=lambda item: (ranked_crop(item), self.shortlist.get(item[1], (0, 0))), reverse=True)
+            coarse.sort(key=lambda item: (item[1] == perfect, ranked_crop(item),
+                                         self.shortlist.get(item[1], (0, 0))), reverse=True)
         else:
             coarse.sort(key=lambda item: item[0], reverse=True)
         refined = False
@@ -1156,7 +1168,8 @@ class Calibration:
                 self.record_intermediate(layout, readings, sample, precision, digits, rules["fraction_digits"], frame)
             if not same:
                 self.full_hits = 0
-                self.stress_weak_slots = []
+                if layout != perfect:
+                    self.stress_weak_slots = []
             digits_read = digits + rules["fraction_digits"]
             if (self.rank_candidates
                     and agreement_percent(readings, sample, rules["fraction_digits"], digits) == 100

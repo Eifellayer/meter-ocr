@@ -1129,7 +1129,7 @@ def main():
                                 on_refine=report_fine,
                                 on_regions=report_regions,
                                 on_selected=show_selected,
-                                angle_read=lambda layout, profile: recognize(layout, profile, register_for(layout)),
+                                angle_read=read,
                                 on_angle=lambda variant, rotation: report_calibration("angle", variant, rotation),
                             )
                             attempt.verification_pending = candidate is not None

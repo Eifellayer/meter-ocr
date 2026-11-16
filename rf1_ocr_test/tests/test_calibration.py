@@ -208,7 +208,7 @@ class CalibrationTests(TestCase):
         self.assertEqual(0, self.job.confirmations)
 
     def test_coarse_search_compares_small_label_and_wide_register_before_refining(self):
-        label = Layout((8, 19, 38, 29), 0, 30)
+        label = Layout((8, 13, 38, 28), 0, 30)
         register = Layout((4, 0, 94, 17), 0, 90, method="register_window")
         self.candidates.return_value = [label, register]
         events = []
@@ -227,6 +227,19 @@ class CalibrationTests(TestCase):
         self.assertTrue(events[4:])
         self.assertTrue(all(item == ("fine", register.box) for item in events[4:]))
         self.assertEqual(1, self.job.confirmations)
+
+    def test_small_label_outside_detected_register_is_never_read(self):
+        label = Layout((57, 19, 90, 29), 0, 33)
+        register = Layout((4, 0, 94, 17), 0, 90, method="register_window")
+        self.candidates.return_value = [label, register]
+        seen = []
+
+        def read(layout, profile):
+            seen.append(layout)
+            return "12345"
+
+        self.job.examine(frame(1), None, {"reference_required": False}, 100, RULES, read, lambda: False)
+        self.assertEqual([register, register], seen)
 
     def test_sweeps_in_one_degree_steps_then_refines_at_the_best_angle(self):
         base = Layout((0, 0, 90, 25), 0, 55, method="register_window")
@@ -257,6 +270,18 @@ class CalibrationTests(TestCase):
                          lambda: False, refine_read=fine, angle_read=lambda *_: "1234?.???")
         fine.assert_not_called()
         self.assertEqual(0, self.job.confirmations)
+
+    def test_preview_returns_to_original_angle_when_it_wins_the_sweep(self):
+        self.candidates.return_value = [Layout((0, 0, 90, 25), 0, 55, method="register_window")]
+        shown = []
+        attempted = []
+        self.job.examine(frame(1), None, {"reference_required": False}, 100,
+                         {**RULES, "fraction_digits": 3}, lambda *_: "12345.???", lambda: False,
+                         refine_read=lambda *_: "12345.???", angle_read=lambda *_: "12???.???",
+                         on_angle=lambda _, angle: attempted.append(angle),
+                         on_selected=lambda layout, _: shown.append(layout.rotation))
+        self.assertIn(3, attempted)
+        self.assertEqual([0, 0], shown)
 
     def test_confirmed_whole_digits_skip_fine_search_despite_uncertain_decimals(self):
         from unittest.mock import Mock

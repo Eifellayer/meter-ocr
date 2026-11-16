@@ -52,6 +52,8 @@ EN_UI = {
     "Mehrere Ziffernfelder gefunden.": "Multiple digit rows found.",
     "Ziffernfelder ansehen": "Show digit rows",
     "Drehung prüfen: ": "Checking rotation: ",
+    "Drehung wird geprüft. Der Winkel steht am Vorschaubild.": "Checking rotation. See the preview for its angle.",
+    "Prüfe den nächsten Rahmen …": "Checking the next crop …",
     "Ziffernfeld manuell markieren": "Mark digit row manually",
     "Einzelziffernsuche. Offene Stellen von links: ": "Individual digit search. Uncertain positions from the left: ",
     "Ziffernfeld lesbar. Die App wartet auf einen höheren Zählerstand oder einen abgelesenen Startwert.": "The digit row is readable. The app is waiting for a higher reading or a starting reading you enter.",

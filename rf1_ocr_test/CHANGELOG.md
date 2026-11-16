@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.11 Stable
+
+- Beim optionalen Startwert lässt sich ein Kamerabild schon vor dem Speichern der Einrichtung laden.
+- Bei der Ersteinrichtung ist „Ausschnitt und Drehung lernen“ vorausgewählt.
+
 ## 0.5.10 Stable
 
 - Der Einrichtungsassistent fragt gleich zu Beginn nach einem optionalen, selbst abgelesenen Startwert und trägt die Uhrzeit automatisch ein.

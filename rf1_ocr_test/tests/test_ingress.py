@@ -65,6 +65,7 @@ class IngressFixture(TestCase):
         self.suggestions = []
         self.calibration = None
         self.calibration_images = {}
+        self.wizard_image_sources = []
         self.reset_state = "idle"
         self.activity = {"state": "waiting", "detail": "Wartet auf die nächste automatische Prüfung."}
         self.paused = False
@@ -87,6 +88,12 @@ class IngressFixture(TestCase):
                             "region": region}
 
     def start_panel(self):
+        def wizard_image(source):
+            self.wizard_image_sources.append(source)
+            with BytesIO() as stream:
+                Image.new("RGB", (80, 40), "gray").save(stream, "JPEG")
+                return stream.getvalue()
+
         def request_reset():
             self.reset_state = "pending"
             return self.reset_state
@@ -102,6 +109,7 @@ class IngressFixture(TestCase):
             request_factory_reset=request_reset, get_reset_status=lambda: self.reset_state,
             automatic_preview=self.automatic_preview, get_activity=lambda: dict(self.activity),
             discover_sources=lambda: self.suggestions,
+            get_wizard_image=wizard_image,
             get_calibration=lambda: self.calibration, control_calibration=self.control_calibration,
             get_calibration_image=lambda kind, version: self.calibration_images.get((kind, version)),
             get_auto_paused=lambda: self.paused,
@@ -131,6 +139,21 @@ class IngressFixture(TestCase):
 
 
 class IngressTests(IngressFixture):
+    def test_wizard_image_uses_unsaved_camera_with_csrf_and_keeps_setup_pending(self):
+        fields = dict(source_mode="esphome", camera="camera.unsaved")
+        with self.assertRaises(HTTPError) as error:
+            self.request("/einrichtungsbild", data=fields)
+        self.assertEqual(403, error.exception.code)
+        request = Request(self.base + "/einrichtungsbild",
+                          data=urlencode({**fields, "csrf": self.csrf}).encode(),
+                          headers={"Content-Type": "application/x-www-form-urlencoded"})
+        with open_core(request) as response:
+            self.assertEqual("image/jpeg", response.headers.get_content_type())
+            with Image.open(BytesIO(response.read())) as picture:
+                self.assertEqual((80, 40), picture.size)
+        self.assertEqual("camera.unsaved", self.wizard_image_sources[-1]["camera"])
+        self.assertTrue(self.setup_pending)
+
     def test_calibration_uses_the_selected_image_limit_and_can_be_stopped(self):
         for invalid in ("2", "3", "101", "x"):
             self.assertEqual(400, self.submit("/selbsteinrichtung", action="start", image_limit=invalid)[0])
@@ -712,11 +735,17 @@ class BrowserTests(IngressFixture):
             self.assertEqual("esphome", mode.input_value())
             self.assertEqual("camera.water_meter", page.locator("#wizard-source-camera input").input_value())
             self.assertFalse(page.locator("#wizard-esp-camera-only").is_visible())
+            page.get_by_role("button", name="Kamerabild zum Ablesen laden").click()
+            image = page.locator("#wizard-reading-image")
+            image.wait_for(state="visible")
+            self.assertEqual(80, image.evaluate("async img => { await img.decode(); return img.naturalWidth; }"))
+            self.assertEqual("camera.water_meter", self.wizard_image_sources[-1]["camera"])
+            self.assertTrue(self.setup_pending)
             page.locator('#setup-form [name="fallback_value"]').fill("12345,67")
             self.assertTrue(page.locator('#setup-form [name="fallback_time"]').input_value())
             for step in (0, 1):
                 page.locator(f'.setup-step[data-step="{step}"] .setup-next').click()
-            page.get_by_role("radio", name="Ausschnitt und Drehung lernen").check()
+            self.assertTrue(page.get_by_role("radio", name="Ausschnitt und Drehung lernen").is_checked())
             page.locator("#wizard-calibration-options input").fill("18")
             page.locator('.setup-step[data-step="2"] .setup-next').click()
             page.locator('#setup-form button[type="submit"]').click()

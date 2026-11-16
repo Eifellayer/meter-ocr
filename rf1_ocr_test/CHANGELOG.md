@@ -139,3 +139,8 @@
 ## 0.1.0 Alpha
 
 - Initial Home Assistant app release with local Tesseract OCR verification for AI on the Edge / SLFork meter images.
+## 0.5.3 Stable
+
+- Selbsteinrichtung priorisiert fast passende Ausschnitte und prüft nicht unnötig alle Rotationen.
+- Einzelziffern werden zusätzlich geprüft; vorsichtig breitere Rahmen werden als eigener Versuch getestet.
+

@@ -1025,7 +1025,7 @@ def main():
                             try:
                                 value = read_register(picture, light, digits, profile=profile,
                                                       process_env=calibration_ocr_env, **kwargs)
-                            except (OSError, ValueError, subprocess.SubprocessError) as error:
+                            except Exception as error:
                                 future.set_exception(error)
                                 raise
                             future.set_result(value)
@@ -1625,7 +1625,7 @@ def main():
                         picture = read_state["picture"]
                         captured = read_state["captured"]
                         image_time = captured if captured is not None else sample_timestamp(sample, zone)
-                            except Exception as error:
+                    except (OSError, ValueError, subprocess.SubprocessError) as error:
                         print(f"OCR-Bildprüfung fehlgeschlagen: {error}")
                         ocr_error = ("Ausschnitt ungültig. Koordinaten prüfen." if isinstance(error, ValueError)
                                      else "OCR fehlgeschlagen. Ziffernbereich prüfen.")

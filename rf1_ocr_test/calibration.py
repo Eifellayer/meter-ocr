@@ -651,7 +651,7 @@ class Calibration:
                                 sample, value, precision, integer_digits=digits)[0]) for value in readings)):
                         layout, readings = self.refine(layout, readings, sample, rules, refine_read, stop, on_refine,
                                                        tested, frame_ceiling)
-                    if layout != original and not stop() and on_selected is not None:
+                    if (layout != original or angle_read is not None) and not stop() and on_selected is not None:
                         on_selected(layout, readings)
                 if stop():
                     return None

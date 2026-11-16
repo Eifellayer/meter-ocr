@@ -258,6 +258,18 @@ class CalibrationTests(TestCase):
         fine.assert_not_called()
         self.assertEqual(0, self.job.confirmations)
 
+    def test_preview_returns_to_original_angle_when_it_wins_the_sweep(self):
+        self.candidates.return_value = [Layout((0, 0, 90, 25), 0, 55, method="register_window")]
+        shown = []
+        attempted = []
+        self.job.examine(frame(1), None, {"reference_required": False}, 100,
+                         {**RULES, "fraction_digits": 3}, lambda *_: "12345.???", lambda: False,
+                         refine_read=lambda *_: "12345.???", angle_read=lambda *_: "12???.???",
+                         on_angle=lambda _, angle: attempted.append(angle),
+                         on_selected=lambda layout, _: shown.append(layout.rotation))
+        self.assertIn(3, attempted)
+        self.assertEqual([0, 0], shown)
+
     def test_confirmed_whole_digits_skip_fine_search_despite_uncertain_decimals(self):
         from unittest.mock import Mock
 

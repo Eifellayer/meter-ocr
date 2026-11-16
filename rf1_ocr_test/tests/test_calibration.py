@@ -203,9 +203,30 @@ class CalibrationTests(TestCase):
         sample = {"reference_time": 100, "actual_value": "12345", "raw_value": "12345"}
         self.job.examine(frame(1), None, sample, 100, RULES, lambda *_: "12?45",
                          lambda: False, refine_read=lambda *_: "12?45")
-        self.assertEqual(30, self.job.attempts)
+        self.assertEqual(16, self.job.attempts)
         self.assertEqual(1, len(self.job.seen))
         self.assertEqual(0, self.job.confirmations)
+
+    def test_coarse_search_compares_small_label_and_wide_register_before_refining(self):
+        label = Layout((8, 19, 38, 29), 0, 30)
+        register = Layout((4, 0, 94, 17), 0, 90, method="register_window")
+        self.candidates.return_value = [label, register]
+        events = []
+
+        def coarse_read(layout, profile):
+            events.append(("coarse", layout.box))
+            return "98765" if layout == label else "12?45"
+
+        def fine_read(layout, profile):
+            events.append(("fine", layout.box))
+            return "12345"
+
+        self.job.examine(frame(1), None, {"reference_required": False}, 100, RULES, coarse_read,
+                         lambda: False, refine_read=fine_read)
+        self.assertEqual([("coarse", label.box)] * 2 + [("coarse", register.box)] * 2, events[:4])
+        self.assertTrue(events[4:])
+        self.assertTrue(all(item == ("fine", register.box) for item in events[4:]))
+        self.assertEqual(1, self.job.confirmations)
 
     def test_confirmed_whole_digits_skip_fine_search_despite_uncertain_decimals(self):
         from unittest.mock import Mock

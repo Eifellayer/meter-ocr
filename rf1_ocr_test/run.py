@@ -1074,6 +1074,12 @@ def main():
                                 if frame_ready and calibration is job and job.state == "testing":
                                     calibration_preview["regions"] = regions
 
+                        def show_selected(layout, values):
+                            nonlocal previous_layout
+                            previous_layout = layout
+                            readings[:] = values
+                            report_crop(layout, register_for(layout), values[-1])
+
                         def register_for(layout):
                             return select_register(
                                 frame, None, layout.box, layout.width, layout.rotation, whole, fraction,
@@ -1113,6 +1119,7 @@ def main():
                                 on_refine=lambda variant, rotation, positions: report_calibration(
                                     "refine", variant, rotation, positions),
                                 on_regions=report_regions,
+                                on_selected=show_selected,
                             )
                             attempt.verification_pending = candidate is not None
         except (OSError, ValueError, TypeError, Image.DecompressionBombError) as error:

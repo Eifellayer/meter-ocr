@@ -424,7 +424,7 @@ class Calibration:
                 return None
 
         best = (score(readings), layout, readings)
-        if best[0][-1] < min(2, whole):
+        if best[0][-1] < min(2, whole) and layout.method != "register_window":
             return layout, readings
         rows = [str(value).replace(".", "").replace(",", "") for value in readings]
         weak = [index + 1 for index in range(whole + fraction)
@@ -502,7 +502,8 @@ class Calibration:
         return self.candidate
 
     def examine(self, frame, overlay, sample, stamp, rules, read, stop, baseline=None, on_attempt=None,
-                on_image=None, on_decision=lambda reason: None, refine_read=None, on_refine=None, on_regions=None):
+                on_image=None, on_decision=lambda reason: None, refine_read=None, on_refine=None, on_regions=None,
+                on_selected=None):
         """Return a verified layout, checking two OCR profiles per distinct image."""
         if not self.remember_image(frame, stamp):
             return None
@@ -527,9 +528,12 @@ class Calibration:
         examined = False
         tested = set()
         frame_ceiling = self.attempts + FRAME_ATTEMPT_LIMIT
+        coarse = []
         for index, layout in enumerate(candidates, start=1):
-            if stop() or self.attempts >= min(self.attempt_limit, frame_ceiling):
+            if stop():
                 return None
+            if self.attempts >= min(self.attempt_limit, frame_ceiling):
+                break
             if any(same_digit_region(layout.box, old) for old in self.rejected_regions):
                 continue
             if layout in tested:
@@ -539,12 +543,39 @@ class Calibration:
             self.attempts += 1
             if on_attempt is not None:
                 on_attempt(index, layout.rotation)
-            rejection = "unreadable"
             try:
                 readings = [read(layout, OCR_PROFILES[0])]
                 if stop():
                     return None
                 readings.append(read(layout, OCR_PROFILES[1]))
+            except (OSError, ValueError, subprocess.SubprocessError):
+                on_decision("unreadable")
+                continue
+            prefixes = [meter_prefix(value, precision, digits) for value in readings]
+            agreement = prefixes[0] is not None and prefixes[0] == prefixes[1]
+            reference_match = has_reference and agreement and all(reference_rejection(
+                sample, compare_sample(sample, value, precision, integer_digits=digits)[0]) is None
+                for value in readings)
+            l, t, r, b = layout.box
+            # Visual scale ranks partial candidates. An actual reference match
+            # and a frame already confirmed on previous images take priority.
+            score = (reference_match, self.confirmations > 0 and layout == self.candidate,
+                     (r - l) * (b - t), layout.method == "register_window", agreement)
+            coarse.append((score, layout, readings))
+        coarse.sort(key=lambda item: item[0], reverse=True)
+        refined = False
+        for score, layout, readings in coarse:
+            if stop():
+                return None
+            if any(same_digit_region(layout.box, old) for old in self.rejected_regions):
+                continue
+            if (not score[0] and not self.confirmations
+                    and coarse[0][0][2] > 2.5 * score[2]):
+                continue
+            if on_selected is not None:
+                on_selected(layout, readings)
+            rejection = "unreadable"
+            try:
                 if has_reference and contradicts_reference(readings, sample, digits):
                     self.rejected_regions = [*self.rejected_regions[-15:], layout.box]
                     on_decision("position_error" if position_error(readings[0], sample, precision, digits)
@@ -567,12 +598,14 @@ class Calibration:
                 matches = agreement and (not has_reference or all(reference_rejection(
                     sample, compare_sample(sample, value, precision, integer_digits=digits)[0]) is None
                     for value in readings))
-                if refine_read is not None and not matches and not self.confirmations and not self.focused:
+                if (refine_read is not None and not refined and not matches
+                        and not self.confirmations and not self.focused):
+                    refined = True
                     original = layout
                     layout, readings = self.refine(layout, readings, sample, rules, refine_read, stop, on_refine,
                                                    tested, frame_ceiling)
-                    if layout != original and not stop():
-                        read(layout, OCR_PROFILES[0])
+                    if layout != original and not stop() and on_selected is not None:
+                        on_selected(layout, readings)
                 if stop():
                     return None
                 prefixes = [meter_prefix(value, precision, digits) for value in readings]

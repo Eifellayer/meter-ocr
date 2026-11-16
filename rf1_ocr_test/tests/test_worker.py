@@ -444,6 +444,21 @@ class StateTests(TestCase):
         with self.assertRaises(ValueError):
             access["control"]("skip-verification", 0, verification_id=verification_id)
 
+        source = {**run.source_rules(json.loads(files["SOURCE_SETTINGS"].read_text())), "selected": True}
+        stamp = 10000
+        access["save"]({**access["rules"](), "setup_completed": {
+            "source": run.setup_source_id(source), "time": stamp,
+        }})
+        with patch.object(run.time, "time", return_value=stamp + 3599):
+            self.assertFalse(access["control"]("repair", 20))
+            self.assertFalse(access["control"]("continue-fine", 20))
+            self.assertTrue(access["control"]("start", 4))
+            self.assertFalse(access["status"]()["automatic"])
+        access["control"]("cancel", 0)
+        with patch.object(run.time, "time", return_value=stamp + 3600):
+            self.assertTrue(access["control"]("repair", 20))
+            self.assertTrue(access["status"]()["automatic"])
+
     def test_edge_camera_only_publishes_local_ocr_without_the_esp_reading(self):
         class StopLoop(Exception):
             pass
@@ -668,6 +683,18 @@ class StateTests(TestCase):
         self.assertTrue(reschedule_next_check(history, 1))
         self.assertEqual((2000, 2060, 2000),
                          (last_check_at(history), history["next_check_at"], history["failure_since"]))
+
+    def test_setup_windows_survive_serialization_and_end_independently(self):
+        source = {"mode": "camera", "camera": "camera.meter", "selected": True}
+        rules = {"setup_completed": {"source": run.setup_source_id(source), "time": 1000}}
+        restored = json.loads(json.dumps(rules))
+        stabilize, pause = run.setup_deadlines(restored, source)
+        self.assertEqual((2200, 4600), (stabilize, pause))
+        self.assertEqual(5, run.stabilization_interval(60, stabilize, 2199))
+        self.assertEqual(3, run.stabilization_interval(3, stabilize, 2199))
+        self.assertEqual(60, run.stabilization_interval(60, stabilize, 2200))
+        self.assertEqual((0, 0), run.setup_deadlines(restored, {**source, "camera": "camera.other"}))
+        self.assertEqual((0, 0), run.setup_deadlines({}, source))
 
     def test_slfork_interval_floor_and_duplicate_cycle_without_counting_a_failure(self):
         self.assertEqual(5, automatic_interval_minutes(1, "slfork"))
@@ -903,7 +930,9 @@ class StateTests(TestCase):
         source = {**run.source_rules(json.loads(files["SOURCE_SETTINGS"].read_text())), "selected": True}
         files["AUTO_RULES"].write_text(json.dumps({
             "decimals": 0, "attempts": 1, "crop_mode": "manual",
-            "crop": "0,0,500,100", "width": 350, "calibration_reference": {
+            "crop": "0,0,500,100", "width": 350,
+            "setup_completed": {"source": run.setup_source_id(source), "time": datetime.now(timezone.utc).timestamp()},
+            "calibration_reference": {
                 "source": run.calibration_source_id(source), "integer_digits": 5, "precision": 0,
                 "reading": "12346", "time": datetime.now(timezone.utc).timestamp() - 10,
             },
@@ -911,10 +940,15 @@ class StateTests(TestCase):
         started = check("12346.???")
         self.assertEqual("ocr_only", started["check_status"])
         self.assertEqual("12346", started["last_reference"])
+        self.assertEqual(5, started["check_interval_minutes"])
         self.assertNotIn("standalone_candidate", started)
         saved = json.loads(files["HISTORY"].with_name("known-good-geometry.json").read_text())
         self.assertEqual("0,0,500,100", saved["geometry"]["crop"])
         self.assertEqual("standalone_pending", check("12346.???")["check_status"])
+        failed = check("12345.???")
+        self.assertEqual("ocr_unclear", failed["check_status"])
+        self.assertEqual(started["consumption"], failed["consumption"])
+        self.assertEqual("12346", json.loads(files["AUTO_RULES"].read_text())["calibration_reference"]["reading"])
 
     def test_main_keeps_manual_run_separate_from_automated_entities_and_history(self):
         class StopLoop(Exception):

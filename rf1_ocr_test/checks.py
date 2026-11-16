@@ -3,6 +3,8 @@ from collections import Counter
 from datetime import datetime
 from decimal import Decimal
 import io
+import hashlib
+import json
 from itertools import product
 import re
 import subprocess
@@ -568,6 +570,28 @@ def record_sample(history, data, ocr, zone, now, decimals=0, *, ocr_confirmed=Tr
 
 def valid_interval_minutes(value):
     return type(value) is int and 1 <= value <= MAX_INTERVAL_MINUTES
+
+
+SETUP_STABILIZATION_SECONDS = 20 * 60
+SETUP_OPTIMIZATION_PAUSE_SECONDS = 60 * 60
+SETUP_CHECK_INTERVAL_MINUTES = 5
+
+
+def setup_source_id(source):
+    return hashlib.sha256(json.dumps(source, sort_keys=True).encode()).hexdigest()
+
+
+def setup_deadlines(rules, source):
+    completed = rules.get("setup_completed")
+    if isinstance(completed, dict) and completed.get("source") == setup_source_id(source):
+        stamp = completed.get("time")
+        if type(stamp) in (int, float) and 0 < stamp < 10 ** 12:
+            return stamp + SETUP_STABILIZATION_SECONDS, stamp + SETUP_OPTIMIZATION_PAUSE_SECONDS
+    return 0, 0
+
+
+def stabilization_interval(interval, until, now):
+    return min(interval, SETUP_CHECK_INTERVAL_MINUTES) if now < until else interval
 
 
 def automatic_interval_minutes(interval_minutes, source_mode):

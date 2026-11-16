@@ -24,7 +24,7 @@ from meter_learning import GEOMETRY_REPAIR_FAILURES
 from checks import (DEFAULT_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, WARNING_DETAIL_AFTER, meter_prefix,
                     LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, REFLECTION_SUGGEST_AFTER, STANDALONE_PENDING, STANDALONE_REJECTED_NOTICE,
                     STANDALONE_VERIFIED_NOTICE, last_check_at, reschedule_next_check,
-                    valid_interval_minutes)
+                    setup_deadlines, stabilization_interval, valid_interval_minutes)
 from consumption import DEFAULT_FLOW_LPH, format_cubic_metres, parse_flow_limit
 from i18n import EN_UI, english_progress, english_result, translate_page
 from language import MODES, SUPPORTED, USER_ID, browser_locale, profile_script
@@ -315,6 +315,10 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <p role="status" aria-live="polite"><strong>Automatik:</strong> <span id="automatic-activity">{automatic_activity}</span></p>
 <progress id="automatic-progress" class="setup-progress" aria-label="Fortschritt der automatischen Prüfung" {automatic_progress_hidden}></progress>
 </div>
+<div id="setup-stabilization" class="settings-note" role="status" hidden>
+<strong>Zähler erfolgreich eingerichtet</strong>
+<p>Die automatische Erkennung wird in den ersten 20 Minuten durch weitere Kontrollmessungen stabilisiert. Einzelne Messwerte können in dieser Zeit noch ungenau sein.</p>
+</div>
 <p id="calibration-complete-notice" class="settings-note" role="status" hidden></p>
 <div id="calibration-overview" class="calibration-live" hidden>
 <p id="calibration-overview-state" role="status"></p>
@@ -502,12 +506,15 @@ name: Zählerstand (OCR)</code></pre>
 <p>Die App tastet sich mit unterschiedlichen Bildern an einen passenden Rahmen und Winkel heran. Nach drei bestätigten Ablesungen prüft sie den gefundenen Rahmen mit einem weiteren Bild und übernimmt ihn dann. Nach 15 Minuten endet der Versuch automatisch.</p>
 <p>Ohne externen Vergleichswert hilft ein von Hand abgelesener Startwert. Ohne Startwert wartet die App zusätzlich auf einen plausiblen Zähleranstieg.</p>
 {calibration_saved_notice}
+<details id="calibration-diagnostics" open hidden>
+<summary>Diagnose der Selbsteinrichtung</summary>
 <p id="calibration-state" role="status" hidden></p>
+{calibration_preview_html}
+</details>
 {calibration_skip_html}
 <p class="calibration-image-hint settings-note" hidden></p>
 <button type="button" id="calibration-proposal" hidden>Gefundenen Rahmen im Test prüfen</button>
 <progress id="calibration-progress" aria-label="Verstrichene Zeit der Selbsteinrichtung" hidden></progress>
-{calibration_preview_html}
 <form method="post" action="selbsteinrichtung">
 <input type="hidden" name="lang" value="{language}">
 <input type="hidden" name="mode" value="{language_mode}">
@@ -1567,8 +1574,13 @@ function refreshCalibrationImages(preview) {{
 }}
 
 let calibrationWasActive = false;
+let previousCalibrationState = '';
+let stabilizingUntil = {setup_stabilizing_until};
 function refreshCalibration(status) {{
   refreshCalibrationImages(status?.preview);
+  if (status && typeof status.stabilizing_until === 'number') stabilizingUntil = status.stabilizing_until;
+  const stabilizing = Date.now() < stabilizingUntil * 1000;
+  document.querySelector('#setup-stabilization').hidden = !stabilizing;
   for (const form of document.querySelectorAll('.calibration-skip')) {{
     form.elements.verification_id.value = status?.skip_verification_id || '';
     form.hidden = !form.elements.verification_id.value;
@@ -1682,12 +1694,16 @@ function refreshCalibration(status) {{
   const completed = ['saved', 'saved_without_verification', 'saved_stationary'].includes(status.state);
   document.querySelector('#calibration-overview').hidden = completed;
   const notice = document.querySelector('#calibration-complete-notice');
-  notice.hidden = !completed;
+  notice.hidden = !completed || (stabilizing && status.state === 'saved');
   notice.textContent = completed ? message : '';
-  if (completed) {{
-    for (const preview of document.querySelectorAll('.calibration-photo-panel')) preview.hidden = true;
-    if (calibrationWasActive) activateTab('overview');
+  const diagnostics = document.querySelector('#calibration-diagnostics');
+  diagnostics.hidden = false;
+  if (previousCalibrationState !== status.state) {{
+    if (completed) diagnostics.open = false;
+    else if (active && !calibrationWasActive) diagnostics.open = true;
   }}
+  previousCalibrationState = status.state;
+  if (completed && calibrationWasActive) activateTab('overview');
   calibrationWasActive = active;
   const imageHints = {{
     dark: 'Das Ziffernfeld wirkt dunkel.',
@@ -2228,7 +2244,11 @@ def start_panel(
         return f"Neukalibrierung nach {remaining} weiteren Fehlmessungen." if remaining != 1 else "Neukalibrierung nach einer weiteren Fehlmessung."
 
     def automatic_summary(history, language, auto_rules):
-        reschedule_next_check(history, auto_rules.get("interval_minutes", DEFAULT_INTERVAL_MINUTES))
+        stabilizing_until, optimization_until = setup_deadlines(auto_rules, get_source()[0])
+        now = time.time()
+        interval = stabilization_interval(auto_rules.get("interval_minutes", DEFAULT_INTERVAL_MINUTES),
+                                          stabilizing_until, now)
+        reschedule_next_check(history, interval)
         paused = bool(get_auto_paused()) if get_auto_paused else False
         detail = history.get("check_detail")
         precision_pending = any(history.get(key, value) != value for key, value in (
@@ -2363,7 +2383,7 @@ def start_panel(
             "failure_attempts": failure_attempts,
             "retry_suppressed": retry_suppressed,
             "recovery_notice": recovery_notice,
-            "geometry_warning": geometry_warning(history, auto_rules, language),
+            "geometry_warning": geometry_warning(history, auto_rules, language) if now >= optimization_until else "",
             "reflection_estimate": reflection_estimate,
             "reflection_live_estimate": (history.get("reflection_live_estimate")
                                         if auto_rules.get("reflection_estimate_enabled") else None),
@@ -2600,6 +2620,7 @@ def start_panel(
                                           else CALIBRATION_PREVIEW_HTML),
                 calibration_skip_html=(translate_page(CALIBRATION_SKIP_HTML) if language == "en"
                                        else CALIBRATION_SKIP_HTML).format(language=language, mode=mode, csrf=csrf_token),
+                setup_stabilizing_until=setup_deadlines(auto_rules, source)[0],
                 calibration_saved_notice=auto_saved_notice if saved in ("setup-calibration", "crop-restored") else "",
                 calibration_hidden="" if control_calibration else "hidden",
                 calibration_intensive_hidden="" if auto_rules["fraction_digits"] == 3 else "hidden",

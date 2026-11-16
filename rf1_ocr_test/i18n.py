@@ -271,6 +271,10 @@ EN_UI = {
     "Prüfe nur die letzte Rolle im gespeicherten Ausschnitt …": "Checking only the last roller in the saved crop …",
     "Letzte Rolle gefunden. Warte auf ein frisches Bild zur Gegenprobe …":
         "Last roller found. Waiting for a fresh verification image …",
+    "Zähler erfolgreich eingerichtet": "Meter setup complete",
+    "Die automatische Erkennung wird in den ersten 20 Minuten durch weitere Kontrollmessungen stabilisiert. Einzelne Messwerte können in dieser Zeit noch ungenau sein.":
+        "Additional checks stabilize automatic recognition during the first 20 minutes. Individual readings may still be inaccurate during this time.",
+    "Diagnose der Selbsteinrichtung": "Setup diagnostics",
     LAST_DIGIT_PASS: "The first two decimal places match. The third digit remains unconfirmed.",
     "Für den Verbrauch verwendet die App den plausiblen Vergleichswert.": "The app uses the plausible reference reading to calculate consumption.",
     "Ablesung und Vergleichswert weichen ab": "Image reading and reference differ",

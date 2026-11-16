@@ -106,7 +106,7 @@ class ReminderTests(TestCase):
         self.assertTrue(all("weiterhin einen Ersatzwert" in payload["message"] for _, payload in self.sent))
 
     def test_factory_reset_clears_existing_app_notice_and_push(self):
-        notification_id = "rf1_review_100000000"
+        notification_id = "rf1_beta_review_100000000"
         self.notices.add(notification_id)
         self.history["reminder"] = {
             "id": notification_id, "incident": 100, "shown_at": 100,

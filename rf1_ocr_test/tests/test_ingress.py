@@ -53,6 +53,7 @@ class IngressFixture(TestCase):
         self.root = Path(folder.name)
         self.history = self.root / "history.json"
         self.preview = self.root / "preview.jpg"
+        self.automatic_preview = self.root / "automatic-preview.jpg"
         self.preferences = self.root / "language.json"
         self.requested = Queue(maxsize=1)
         self.rules = dict(decimals=0, attempts=3, crop_mode="auto", polarity="auto",
@@ -60,6 +61,12 @@ class IngressFixture(TestCase):
         self.profiles = {}
         self.source = dict(mode="slfork", url="http://meter", camera="", reference="")
         self.setup_pending = True
+        self.source_selected = False
+        self.suggestions = []
+        self.calibration = None
+        self.reset_state = "idle"
+        self.activity = {"state": "waiting", "detail": "Wartet auf die nächste automatische Prüfung."}
+        self.paused = False
         self.delivery = dict(enabled=False, review_minutes=240, delivery_hours=24, push="", target="")
         self.enterContext(patch.object(panel, "SUPERVISOR_ADDRESS", "127.0.0.1"))
         self.start_panel()
@@ -67,19 +74,35 @@ class IngressFixture(TestCase):
     def save_source(self, values):
         self.source = values
         self.setup_pending = False
+        self.source_selected = True
 
     def skip_setup(self):
         self.setup_pending = False
 
+    def control_calibration(self, action, limit):
+        self.calibration = {"state": "waiting" if action == "start" else "cancelled",
+                            "limit": limit, "tested": 0, "confirmations": 0, "required": 3,
+                            "seconds": 900, "duration": 900, "stage": "queued", "attempts": 0, "max_attempts": 100}
+
     def start_panel(self):
-        server, self.update = panel.start_panel(
+        def request_reset():
+            self.reset_state = "pending"
+            return self.reset_state
+
+        server, self.update, self.reset_manual_progress = panel.start_panel(
             self.history, self.root / "current.jpg", self.root / "good.jpg",
             self.requested, 0, 3, lambda: dict(self.rules), self.rules.update,
             "0,0,400,90", 250, self.preview, lambda: load_preferences(self.preferences),
             lambda modes: atomic_write(self.preferences, json.dumps(modes).encode(), 0o600),
             lambda: dict(self.delivery), self.delivery.update,
-            lambda: (dict(self.source), self.setup_pending), self.save_source,
+            lambda: ({**self.source, "selected": self.source_selected}, self.setup_pending), self.save_source,
             address=("127.0.0.1", 0), skip_setup=self.skip_setup,
+            request_factory_reset=request_reset, get_reset_status=lambda: self.reset_state,
+            automatic_preview=self.automatic_preview, get_activity=lambda: dict(self.activity),
+            discover_sources=lambda: self.suggestions,
+            get_calibration=lambda: self.calibration, control_calibration=self.control_calibration,
+            get_auto_paused=lambda: self.paused,
+            save_auto_paused=lambda value: setattr(self, "paused", value),
         )
         self.server = server
         self.addCleanup(server.server_close)
@@ -105,6 +128,149 @@ class IngressFixture(TestCase):
 
 
 class IngressTests(IngressFixture):
+    def test_calibration_uses_the_selected_image_limit_and_can_be_stopped(self):
+        for invalid in ("2", "3", "101", "x"):
+            self.assertEqual(400, self.submit("/selbsteinrichtung", action="start", image_limit=invalid)[0])
+        self.assertIsNone(self.calibration)
+        self.assertEqual((303, "./?saved=calibration&ui=settings"),
+                         self.submit("/selbsteinrichtung", action="start", image_limit="24"))
+        status = json.loads(self.request("/status")[0])["calibration"]
+        self.assertEqual(24, status["limit"])
+        self.assertEqual("waiting", status["state"])
+        self.assertEqual(303, self.submit("/selbsteinrichtung", action="cancel")[0])
+        self.assertEqual("cancelled", self.calibration["state"])
+
+    def test_reset_automatic_crop_preserves_other_saved_settings(self):
+        self.rules.update(crop_mode="manual", crop="10,10,290,100", width=150, rotation=-6,
+                          attempts=8, interval_minutes=20, reflection_estimate_enabled=True)
+        self.assertEqual((303, "./?saved=crop-reset&ui=settings"),
+                         self.submit("/automatik", reset_crop=1, attempts=1, interval_minutes=5))
+        self.assertEqual(("auto", "0,0,400,90", 250, 0), (
+            self.rules["crop_mode"], self.rules["crop"], self.rules["width"], self.rules["rotation"],
+        ))
+        self.assertEqual((8, 20, True), (
+            self.rules["attempts"], self.rules["interval_minutes"], self.rules["reflection_estimate_enabled"],
+        ))
+        self.assertIn("Die Automatik sucht die Ziffernreihe wieder selbst",
+                      self.request("/?saved=crop-reset&ui=settings")[0])
+        self.assertIn('id="reset-manual-crop"', self.request("/?test=open")[0])
+
+    def test_reflection_notice_is_optional_and_only_marks_the_inferred_digit(self):
+        self.history.write_text(json.dumps({
+            "check_status": "ocr_unclear", "reflection_streak": {"count": 3, "position": 7},
+            "reflection_estimate": {"left": "12345.1", "digit": "1", "right": "5", "time": 160},
+        }))
+        status = json.loads(self.request("/automatic")[0])
+        self.assertTrue(status["reflection_suggestion"])
+        self.assertIsNone(status["reflection_estimate"])
+        self.assertEqual((303, "./?ui=overview"), self.submit("/spiegelungs-hinweis-ausblenden"))
+        self.assertTrue(self.rules["reflection_suggestion_hidden"])
+        self.assertFalse(json.loads(self.request("/automatic")[0])["reflection_suggestion"])
+        self.rules["reflection_estimate_enabled"] = True
+        status = json.loads(self.request("/automatic")[0])
+        self.assertEqual("1", status["reflection_estimate"]["digit"])
+        self.assertFalse(status["reflection_estimate"]["confirmed"])
+        candidate_id = status["reflection_estimate"]["id"]
+        self.assertEqual(409, self.submit("/ergaenzte-ziffer-bestaetigen", estimate_id=candidate_id, digit="2")[0])
+        self.assertEqual((303, "./?ui=overview"),
+                         self.submit("/ergaenzte-ziffer-bestaetigen", estimate_id=candidate_id, digit="1"))
+        self.assertTrue(json.loads(self.request("/automatic")[0])["reflection_estimate"]["confirmed"])
+        page = self.request("/")[0]
+        self.assertIn('class="reflection-estimate" >', page)
+        self.assertIn('<mark id="reflection-value-digit" title="Berechnete Ziffer">1</mark>', page)
+
+    def test_factory_reset_clears_manual_result_after_pending_response(self):
+        self.setup_pending = False
+        form = dict(decimals=0, attempts=3, crop_mode="auto", polarity="auto")
+        self.assertEqual((303, "./?test=queued"), self.submit("/pruefen", **form))
+        job = self.requested.get_nowait()
+        self.preview.write_bytes(b"preview")
+        self.update(job["request_id"], "done", "Prüfung beendet.", 3, 100,
+                    outcome="match", preview=True, ocr="12345")
+        self.assertTrue(json.loads(self.request("/status")[0])["preview"])
+
+        self.assertEqual((303, "./?reset=pending&ui=settings"), self.submit("/werkreset"))
+        self.assertIn("Werkreset läuft noch.", self.request("/?reset=pending&ui=settings")[0])
+        self.reset_manual_progress()
+        self.reset_state = "done"
+        self.update(job["request_id"], "done", "Veraltetes Ergebnis", preview=True)
+        status = json.loads(self.request("/status")[0])
+        self.assertEqual(("idle", None, False), (status["phase"], status["ocr"], status["preview"]))
+        page = self.request("/?reset=pending&ui=settings")[0]
+        self.assertIn("Werkseinstellungen wiederhergestellt.", page)
+        self.assertIn('data-first-run="true"', page)
+
+    def test_first_missing_image_has_an_immediate_yellow_status(self):
+        self.history.write_text(json.dumps({"check_status": "capture_unavailable", "failure_since": time.time()}))
+        status = json.loads(self.request("/automatic")[0])
+        self.assertEqual(("warning", "Noch kein aktuelles Zählerbild"), (status["tone"], status["heading"]))
+        self.assertIn("versucht es automatisch erneut", status["detail"])
+
+    def test_mismatch_immediately_explains_what_to_do(self):
+        self.history.write_text(json.dumps({"check_status": "difference", "failure_since": time.time()}))
+        status = json.loads(self.request("/automatic")[0])
+        self.assertEqual(("warning", "Ablesung und Vergleichswert weichen ab"),
+                         (status["tone"], status["heading"]))
+        self.assertIn("prüft automatisch erneut", status["detail"])
+        self.assertIn("direkt am Zähler", status["detail"])
+        status_en = json.loads(self.request("/automatic?lang=en")[0])
+        self.assertIn("value on the meter itself", status_en["detail"])
+
+    def test_last_digit_warning_and_optional_precision_mode(self):
+        self.rules.update(decimals=3)
+        page = self.request("/")[0]
+        self.assertIn('data-precision-options >', page)
+        self.assertNotIn('name="precision_mode" value="1" checked', page)
+        form = dict(decimals=3, attempts=3, crop_mode="auto", polarity="auto", precision_mode=1)
+        self.assertEqual((303, "./?saved=1"), self.submit("/automatik", **form))
+        self.assertTrue(self.rules["precision_mode"])
+        self.assertIn('name="precision_mode" value="1" checked', self.request("/")[0])
+        self.rules["precision_mode"] = False
+        self.history.write_text(json.dumps({
+            "check_status": "match_with_warning", "comparison_decimals": 3,
+            "check_detail": "Die ersten zwei Nachkommastellen stimmen überein. Die dritte Stelle bleibt unbestätigt.",
+        }))
+        status = json.loads(self.request("/automatic")[0])
+        self.assertEqual(("warning", "Prüfung bestanden mit Hinweis"), (status["tone"], status["heading"]))
+
+
+    def test_automatic_status_explains_three_retry_attempts_and_one_hour_wait(self):
+        self.history.write_text(json.dumps({
+            "check_status": "ocr_unclear", "failure_attempts": 2,
+            "next_check_at": time.time() + 3500,
+        }))
+        status = json.loads(self.request("/automatic")[0])
+        self.assertEqual(2, status["failure_attempts"])
+        self.assertIn("2 von 3", status["recovery_notice"])
+        self.assertNotIn("fünf Minuten", status["recovery_notice"])
+        self.assertGreater(status["next_check"] - time.time(), 300)
+        self.assertFalse(status["retry_suppressed"])
+
+        self.history.write_text(json.dumps({
+            "check_status": "ocr_unclear", "failure_attempts": 3,
+            "retry_suppressed": True, "next_check_at": time.time() + 3_600,
+        }))
+        status = json.loads(self.request("/automatic")[0])
+        self.assertIn("3 automatische Prüfungen fehlgeschlagen", status["recovery_notice"])
+        self.assertIn("höheren Zählerstand", status["recovery_notice"])
+        self.assertNotIn("einer Stunde", status["recovery_notice"])
+        self.assertTrue(status["retry_suppressed"])
+
+    def test_automatic_checks_can_be_paused_and_resumed_without_blocking_manual_tests(self):
+        self.assertEqual((303, "./?paused=1"), self.submit("/automatik-pause", paused="1"))
+        page, _ = self.request("/")
+        self.assertTrue(self.paused)
+        self.assertIn('id="paused-notice"', page)
+        self.assertIn("Automatik pausiert", page)
+        self.assertNotIn('id="paused-notice" hidden', page)
+        self.assertIn('id="manual-form"', page)
+        status = json.loads(self.request("/automatic")[0])
+        self.assertTrue(status["paused"])
+        self.assertEqual((303, "./?paused=0"), self.submit("/automatik-pause", paused="0"))
+        self.assertFalse(self.paused)
+        self.assertFalse(json.loads(self.request("/automatic")[0])["paused"])
+        self.assertIn('id="pause-auto-form"', self.request("/")[0])
+
     def test_language_defaults_and_is_user_specific_after_restart(self):
         self.assertEqual("en", browser_locale("fr-FR,de;q=.4,en-US;q=.8"))
         self.assertEqual("de", browser_locale("en;q=0,fr-FR"))
@@ -220,12 +386,20 @@ class IngressTests(IngressFixture):
         self.assertIn('<option value="1" selected>1 Nachkommastelle</option>', page)
 
     def test_initial_source_selection_and_later_changes(self):
-        self.assertIn('id="source-settings" open', self.request("/")[0])
+        page = self.request("/")[0]
+        self.assertIn('id="source-settings" open', page)
+        self.assertIn('id="wizard-source-mode" required><option value="" selected>', page)
+        self.assertIn('class="source-mode-guide"', page)
+        self.assertEqual(400, self.submit("/einrichtung", camera="camera.esp")[0])
+        self.assertEqual(400, self.submit("/bildquelle", source_mode="", camera="camera.esp")[0])
+        self.skip_setup()
+        self.assertIn('id="wizard-source-mode" required><option value="" selected>', self.request("/")[0])
         self.assertEqual(400, self.submit("/bildquelle", source_mode="esphome", camera="sensor.invalid")[0])
         self.assertEqual((303, "./?saved=source"),
                          self.submit("/bildquelle", source_mode="esphome", camera="camera.esp"))
         self.assertFalse(self.setup_pending)
         self.assertEqual("esphome", self.source["mode"])
+        self.assertIn('<option value="esphome" selected>ESPHome / Kamera</option>', self.request("/")[0])
         self.assertNotIn('id="source-settings" open', self.request("/")[0])
         self.assertEqual((303, "./?saved=source"),
                          self.submit("/bildquelle", source_mode="camera",
@@ -235,6 +409,13 @@ class IngressTests(IngressFixture):
         self.assertEqual("", self.source["reference"])
         self.assertEqual((303, "./?saved=source"),
                          self.submit("/bildquelle", source_mode="slfork", url="http://new-meter"))
+        self.assertEqual("http://new-meter", self.source["url"])
+        self.assertEqual((303, "./?saved=source"),
+                         self.submit("/bildquelle", source_mode="slfork", esp_camera_only=1))
+        self.assertEqual("slfork_camera", self.source["mode"])
+        self.assertIn('name="esp_camera_only" value="1" checked', self.request("/")[0])
+        self.assertEqual((303, "./?saved=source"), self.submit("/bildquelle", source_mode="slfork"))
+        self.assertEqual("slfork", self.source["mode"])
         self.assertEqual("http://new-meter", self.source["url"])
 
     def test_setup_wizard_saves_source_meter_format_crop_schedule_and_notifications(self):
@@ -253,7 +434,11 @@ class IngressTests(IngressFixture):
             "notifications_enabled": 1, "review_minutes": 60, "delivery_hours": 0,
             "push": "notify.mobile_app_phone", "target": "notify.email",
         }
-        self.assertEqual((303, "./?saved=setup&test=ready&ui=overview"), self.submit("/einrichtung", **values))
+        self.assertEqual((303, "./?saved=setup&ui=overview"), self.submit("/einrichtung", **values))
+        page = self.request("/?saved=setup&ui=overview")[0]
+        self.assertNotIn('aria-labelledby="tab-overview" hidden', page)
+        self.assertIn('id="automatic-progress"', page)
+        self.assertIn('id="setup-image-test"', page)
         self.assertEqual("camera", self.source["mode"])
         self.assertEqual("sensor.meter", self.source["reference"])
         self.assertEqual((6, 2, "mixed", 1), (self.rules["integer_digits"], self.rules["fraction_digits"],
@@ -262,6 +447,65 @@ class IngressTests(IngressFixture):
                                                    self.rules["max_flow_lph"],
                                                    self.rules["fallback_value"]))
         self.assertTrue(self.delivery["enabled"])
+        values.update(source_mode="slfork", esp_camera_only=1, camera="")
+        self.assertEqual((303, "./?saved=setup&ui=overview"), self.submit("/einrichtung", **values))
+        self.assertEqual("slfork_camera", self.source["mode"])
+        self.assertEqual("http://meter", self.source["url"])
+
+    def test_fallback_can_be_saved_and_cleared_without_rerunning_setup(self):
+        original = dict(self.rules)
+        self.assertEqual(400, self.submit("/fallback", fallback_value="12345.6", fallback_time="")[0])
+        self.assertEqual(original, self.rules)
+        stamp = "2026-11-16T08:00"
+        self.assertEqual((303, "./?saved=fallback&ui=settings#fallback-form"),
+                         self.submit("/fallback", fallback_value="12345.6", fallback_time=stamp))
+        self.assertEqual(("12345.6", stamp), (self.rules["fallback_value"], self.rules["fallback_time"]))
+        self.assertEqual(original["crop"], self.rules["crop"])
+        self.assertTrue(self.setup_pending)
+        self.assertEqual(303, self.submit("/fallback", fallback_value="", fallback_time=stamp)[0])
+        self.assertEqual(("", ""), (self.rules["fallback_value"], self.rules["fallback_time"]))
+
+    def test_manual_test_picks_up_a_new_learned_crop_once(self):
+        path = self.root / "manual-test-settings.json"
+        path.write_text(json.dumps({"crop_mode": "manual", "crop": "0,0,250,50", "width": 150,
+                                    "rotation": 0, "attempts": 8}))
+        self.rules.update(crop_mode="manual", crop="10,20,410,100", width=270, rotation=-3,
+                          crop_revision="new")
+        page = self.request("/")[0]
+        self.assertIn('name="crop_revision" value="new"', page)
+        payload = {"crop_mode": "manual", "crop": "0,0,250,50", "width": 150,
+                   "rotation": 0, "attempts": 8, "save_settings": 1}
+        self.assertEqual(303, self.submit("/pruefen", **payload)[0])
+        saved = json.loads(path.read_text())
+        self.assertEqual(("10,20,410,100", 270, -3, 8),
+                         tuple(saved[key] for key in ("crop", "width", "rotation", "attempts")))
+        self.assertEqual(303, self.submit("/pruefen", crop_revision="new", **payload)[0])
+        self.assertEqual("0,0,250,50", json.loads(path.read_text())["crop"])
+
+    def test_setup_starts_calibration_with_saved_source_without_overwriting_crop(self):
+        self.rules.update(crop_mode="manual", crop="10,20,410,100", width=270, rotation=-3)
+        values = {
+            "source_mode": "esphome", "camera": "camera.meter", "meter_display": "rollers",
+            "integer_digits": 5, "fraction_digits": 3, "decimals": 1, "attempts": 5,
+            "polarity": "auto", "crop_mode": "learn", "crop": "ignored", "interval_minutes": 60,
+            "max_flow": "6", "review_minutes": 240, "delivery_hours": 24,
+        }
+        self.assertEqual(400, self.submit("/einrichtung", image_limit=101, **values)[0])
+        self.assertTrue(self.setup_pending)
+        self.assertIsNone(self.calibration)
+        self.paused = True
+        self.assertEqual(409, self.submit("/einrichtung", image_limit=24, **values)[0])
+        self.assertTrue(self.setup_pending)
+        self.assertIsNone(self.calibration)
+        self.paused = False
+        status, location = self.submit("/einrichtung", image_limit=24, **values)
+        self.assertEqual((303, "./?saved=setup-calibration&ui=settings#calibration-settings"), (status, location))
+        self.assertFalse(self.setup_pending)
+        self.assertEqual("camera.meter", self.source["camera"])
+        self.assertEqual(24, self.calibration["limit"])
+        self.assertEqual(("manual", "10,20,410,100", 270, -3),
+                         tuple(self.rules[key] for key in ("crop_mode", "crop", "width", "rotation")))
+        self.assertIn("Einrichtung gespeichert.", self.request("/?saved=setup-calibration&ui=settings")[0])
 
     def test_setup_wizard_rejects_fallback_without_timestamp_and_keeps_old_settings(self):
         before = dict(self.source)
@@ -365,6 +609,117 @@ class RedirectTests(TestCase):
 
 
 class BrowserTests(IngressFixture):
+    def test_drawing_a_crop_sets_coordinates_for_the_manual_test(self):
+        from playwright.sync_api import sync_playwright
+
+        self.setup_pending = False
+        Image.new("RGB", (640, 480), "white").save(self.root / "current.jpg", "JPEG")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(executable_path=os.getenv("RF1_CHROMIUM"))
+            page = browser.new_page(viewport={"width": 600, "height": 850}, locale="de-DE")
+            page.set_default_timeout(7000)
+            page.goto(self.base + "/?test=open")
+            page.locator("#crop-mode").select_option("manual")
+            image = page.locator("#crop-draw-area")
+            image.wait_for(state="visible")
+            image.scroll_into_view_if_needed()
+            box = image.bounding_box()
+            page.mouse.move(box["x"] + box["width"] * .25, box["y"] + box["height"] * .25)
+            page.mouse.down()
+            page.mouse.move(box["x"] + box["width"] * .75, box["y"] + box["height"] * .50, steps=4)
+            page.mouse.up()
+            self.assertEqual("manual", page.locator("#crop-mode").input_value())
+            rotation = page.locator("#manual-form input[name=rotation]")
+            rotation.fill("-6")
+            page.locator('#crop-draw canvas[data-rotation="-6"]').wait_for(state="visible")
+            frame = page.get_by_role("button", name="Ziffernrahmen 1", exact=True)
+            frame.press("Shift+ArrowUp")
+            self.assertTrue(json.loads(page.locator("#manual-form input[name=digit_boxes]").input_value()))
+            rotation.press("Tab")
+            page.locator("#save-manual-crop").click()
+            page.get_by_text("Ausschnitt und Drehung für manuelle Tests gespeichert.", exact=True).wait_for()
+            self.assertTrue(self.requested.empty())
+            self.assertEqual("-6", rotation.input_value())
+            page.locator("#start-check-with-options").click()
+            job = self.requested.get(timeout=2)
+            self.assertEqual("manual", job["crop_mode"])
+            for actual, expected in zip(map(int, job["crop"].split(",")), (160, 120, 480, 240)):
+                self.assertAlmostEqual(expected, actual, delta=2)
+            self.assertEqual(-6, job["rotation"])
+            self.assertEqual(990, job["digit_boxes"][0][3])
+            self.assertEqual(1000, job["digit_boxes"][1][3])
+            self.assertAlmostEqual(207, job["width"], delta=2)
+            browser.close()
+
+    def test_selecting_a_discovered_meter_prefills_the_wizard(self):
+        from playwright.sync_api import sync_playwright
+
+        self.suggestions = [
+            {"mode": "slfork", "url": "http://esp-meter", "label": "Gas meter"},
+            {"mode": "esphome", "camera": "camera.water_meter", "label": "Water meter"},
+        ]
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(executable_path=os.getenv("RF1_CHROMIUM"))
+            page = browser.new_page(locale="de-DE")
+            page.set_default_timeout(7000)
+            page.goto(self.base)
+            mode = page.locator("#wizard-source-mode")
+            self.assertEqual("", mode.input_value())
+            discovered = page.locator("#wizard-discovered-source")
+            discovered.select_option(label="AI on the Edge · Gas meter")
+            self.assertEqual("slfork", mode.input_value())
+            self.assertEqual("http://esp-meter", page.locator("#wizard-source-url input").input_value())
+            page.locator("#wizard-esp-camera-only input").check()
+            discovered.select_option(label="Kamera · Water meter")
+            self.assertEqual("esphome", mode.input_value())
+            self.assertEqual("camera.water_meter", page.locator("#wizard-source-camera input").input_value())
+            self.assertFalse(page.locator("#wizard-esp-camera-only").is_visible())
+            for step in (0, 1):
+                page.locator(f'.setup-step[data-step="{step}"] .setup-next').click()
+            page.get_by_role("radio", name="Ausschnitt und Drehung lernen").check()
+            page.locator("#wizard-calibration-options input").fill("18")
+            page.locator('.setup-step[data-step="2"] .setup-next').click()
+            page.locator('#setup-form button[type="submit"]').click()
+            page.get_by_text("Einrichtung gespeichert.", exact=True).wait_for()
+            self.assertEqual(18, self.calibration["limit"])
+            self.calibration.update(state="testing", stage="ocr", rotation=-6, variant=2, seconds=880)
+            page.locator("#calibration-state").filter(has_text="Prüfe Rahmen 2 mit Drehung -6°").wait_for()
+            self.assertEqual("20", page.locator("#calibration-progress").get_attribute("value"))
+            page.locator("#tab-overview").click()
+            page.locator("#calibration-overview-progress").wait_for(state="visible")
+            self.assertEqual("20", page.locator("#calibration-overview-progress").get_attribute("value"))
+            page.locator("#open-calibration").click()
+            page.locator("#calibration-title").wait_for()
+            browser.close()
+
+    def test_automatic_status_and_image_update_when_a_check_runs(self):
+        from playwright.sync_api import sync_playwright
+
+        self.setup_pending = False
+        self.activity = {"state": "working", "detail": "Warte auf Bild und Messwerte vom ESP …"}
+        current = self.root / "current.jpg"
+        Image.new("RGB", (240, 60), "white").save(current, "JPEG")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(executable_path=os.getenv("RF1_CHROMIUM"))
+            page = browser.new_page(locale="de-DE")
+            page.set_default_timeout(7000)
+            page.goto(self.base)
+            page.locator("#automatic-progress").wait_for(state="visible")
+            self.assertTrue(page.locator("#automatic-images").evaluate("section => section.open"))
+            preview = page.locator("#test-preview-image")
+            self.assertEqual(240, preview.evaluate("async image => { await image.decode(); return image.naturalWidth; }"))
+            self.assertFalse(page.locator("#preview-legend").is_visible())
+            page.wait_for_function("document.querySelector('.activity-status').dataset.offline === 'false'")
+            Image.new("RGB", (200, 45), "white").save(self.automatic_preview, "JPEG")
+            self.activity = {"state": "working", "detail": "Bild wird vorbereitet.", "completed": 2, "total": 5}
+            page.wait_for_function("document.querySelector('#automatic-progress').value === 2")
+            page.wait_for_function("document.querySelector('#test-preview-image').naturalWidth === 200")
+            self.assertTrue(page.locator("#preview-legend").is_visible())
+            self.activity = {"state": "waiting", "detail": "Wartet auf die nächste automatische Prüfung."}
+            page.locator("#automatic-progress").wait_for(state="hidden")
+            self.assertEqual("false", page.locator(".activity-status").get_attribute("data-offline"))
+            browser.close()
+
     def test_profile_and_manual_override_on_a_narrow_screen(self):
         from playwright.sync_api import sync_playwright
 
@@ -410,9 +765,10 @@ class BrowserTests(IngressFixture):
                     "callWS: request => { window.calls++;"
                     "if (request.type !== 'frontend/get_user_data' || request.key !== 'language')"
                     "throw new Error('Unexpected HA command');"
-                    f"return Promise.resolve({{value: {{language: '{profile}'}}}});"
+                    "return Promise.resolve({value: {language: window.haLanguage}});"
                     "}};"
                 )
+                script = f"window.haLanguage='{profile}';{script}"
                 if delay_ms:
                     script = f"setTimeout(() => {{{script}}}, {delay_ms});"
                 result = (f"<home-assistant></home-assistant><script>window.calls=0;{script}</script>"
@@ -441,25 +797,29 @@ class BrowserTests(IngressFixture):
             def expect_language(language):
                 heading = frame.locator(f"html[lang='{language}'] h1")
                 heading.wait_for()
-                self.assertEqual("Meter OCR", heading.inner_text())
+                self.assertEqual("AI Meter Reader", heading.inner_text())
                 self.assertTrue(frame.locator("html").evaluate(
                     "element => element.scrollWidth <= element.clientWidth"))
 
             page.goto(parent + "/?de")
             expect_language("de")
-            self.assertEqual(1, page.evaluate("window.calls"))
+            self.assertEqual(2, page.evaluate("window.calls"))
             self.assertIn("Home Assistant: Deutsch", frame.locator("#language-select").inner_text())
             page.goto(parent + "/?late_de")
             expect_language("de")
-            self.assertEqual(1, page.evaluate("window.calls"))
+            self.assertEqual(2, page.evaluate("window.calls"))
             page.goto(parent + "/?en")
+            expect_language("en")
+            page.evaluate("window.haLanguage='de-AT'")
+            expect_language("de")
+            page.evaluate("window.haLanguage='en-US'")
             expect_language("en")
             if frame.locator("#setup-dialog").evaluate("dialog => dialog.open"):
                 frame.locator("#setup-skip").click()
             frame.locator("#open-manual-settings").click()
             frame.locator("#manual-form select[name=crop_mode]").select_option("manual")
             frame.locator("#manual-form input[name=crop]").fill("0,0,90,400")
-            frame.locator("#manual-form select[name=rotation]").select_option("90")
+            frame.locator("#manual-form input[name=rotation]").fill("90")
             frame.locator("#start-check").click()
             frame.get_by_text("Request accepted", exact=True).wait_for()
             frame.locator("#test-progress").wait_for(state="visible")
@@ -490,11 +850,14 @@ class BrowserTests(IngressFixture):
             frame.locator("#view-settings").wait_for(state="visible")
             self.assertEqual("manual", self.rules["crop_mode"])
             self.assertEqual(90, self.rules["rotation"])
+            frame.get_by_role("checkbox", name="Verdeckte Ziffern ergänzen").wait_for(state="visible")
+            Image.new("RGB", (640, 480), "white").save(self.root / "current.jpg", "JPEG")
+            frame.locator("#auto-crop-draw-area").wait_for(state="visible")
             frame.locator("#auto-form select[name=decimals]").select_option("2")
             frame.locator("#auto-form input[name=max_flow]").fill("4,5")
             self.assertEqual("60", frame.locator("#auto-form input[name=interval_minutes]").input_value())
             frame.locator("#auto-form input[name=interval_minutes]").fill("15")
-            frame.locator("#auto-form button").click()
+            frame.locator("#save-auto-settings").click()
             frame.get_by_text("Automatische Prüfregeln gespeichert.", exact=True).wait_for()
             self.assertEqual(4500, self.rules["max_flow_lph"])
             self.assertEqual(15, self.rules["interval_minutes"])

@@ -6,11 +6,128 @@ The language only affects text shown in the ingress interface.
 
 import re
 
-from checks import FALLBACK_NOTICE, uncertain_positions
+from checks import (FALLBACK_NOTICE, LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, STANDALONE_PENDING_NOTICE,
+                    STANDALONE_REJECTED_NOTICE, STANDALONE_VERIFIED_NOTICE, uncertain_positions)
+from layout import MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR
 
 
 EN_UI = {
     "Erkennungsbild": "Recognition image",
+    "Letztes Testbild": "Latest test image",
+    "Noch kein Testbild verfügbar.": "No test image available yet.",
+    "Eindeutig ergänzter Zwischenstand": "Reconstructed intermediate reading",
+    "Berechnete Ziffer": "Calculated digit",
+    "Für eine unlesbare Ziffer gibt es einen eindeutigen Vorschlag. Wähle die Ziffer aus, um den Zwischenstand zu übernehmen.":
+        "There is one plausible value for an unreadable digit. Select it to accept the intermediate reading.",
+    "Ziffer auswählen …": "Choose a digit …",
+    "Zwischenstand übernehmen": "Accept the intermediate reading",
+    "Dieselbe Ziffer ist wiederholt unlesbar. Bei Spiegelungen kannst du sie aus der vorherigen und der nächsten sicheren Ablesung ergänzen lassen.":
+        "The same digit has been unreadable repeatedly. For reflections, the previous and next confirmed readings can help reconstruct it.",
+    "Zur Einstellung": "Open settings",
+    "Vorschlag dauerhaft ausblenden": "Hide this suggestion permanently",
+    "ⓘ Spiegelungen und verdeckte Ziffern": "ⓘ Reflections and obscured digits",
+    "Einzelne verdeckte Ziffer ergänzen": "Reconstruct one obscured digit",
+    "Die App ergänzt eine Ziffer nur, wenn zwischen zwei sicheren Ständen genau ein Wert plausibel ist. Die berechnete Ziffer bleibt gelb. Ein manuell eingetragener Startwert mit Ablesezeit kann als erster Vergleichswert dienen.":
+        "The app fills in a digit only when exactly one value is plausible between two confirmed readings. The calculated digit is highlighted in yellow. A manually entered starting value with its reading time can serve as the first reference.",
+    "Vorschlag bei wiederholt unlesbarer Ziffer ausblenden": "Hide the suggestion for a repeatedly unreadable digit",
+    RAW_ROW_UNCLEAR: "Could not find a clear digit row. Set the crop in the manual test.",
+    MANUAL_ROW_UNCLEAR: "The digits are hard to read. Check the image rotation, camera angle, focus and lighting.",
+    "Selbsteinrichtung": "Automatic setup",
+    "ⓘ Automatik im Hintergrund verbessern": "ⓘ Improve automatic checks in the background",
+    "Ziffernrahmen langfristig feinjustieren": "Fine-tune digit boxes over time",
+    "Prüfintervall bei erwarteten Rollenwechseln verkürzen (SLFork)":
+        "Check sooner when a digit is expected to roll over (SLFork)",
+    "Vorläufig ergänzt": "Provisionally reconstructed",
+    "Gelb markierte Ziffern sind berechnet. Der Wert dient der Orientierung.":
+        "Yellow digits are calculated. The reading is for guidance.",
+    "Verdeckte Ziffern ergänzen": "Reconstruct obscured digits",
+    "Die App kann je eine verdeckte Stelle vor und nach dem Komma ergänzen, wenn nur ein Ergebnis zum bisherigen Stand und zum maximalen Durchfluss passt. Berechnete Ziffern bleiben gelb. Ein datierter Startwert kann als erster Vergleichswert dienen.":
+        "The app can reconstruct one whole digit and one decimal digit when only one reading fits the preceding reading and maximum flow. Calculated digits stay yellow. A dated starting reading can serve as the first reference.",
+    "Vorschau mit Bilddrehung": "Preview with rotation",
+    "Rahmen einzeln ziehen oder an der unteren Ecke vergrößern. Mit den Pfeiltasten verschieben, mit Umschalt und Pfeiltaste skalieren.":
+        "Drag each box or resize it using the bottom corner. Use the arrow keys to move it, or hold Shift and use the arrow keys to resize.",
+    "Einzelrahmen zurücksetzen": "Reset digit boxes",
+    "Ziffernrahmen ": "Digit box ",
+    "Bei AI on the Edge / SLFork liegen reguläre Prüfungen mindestens fünf Minuten auseinander.":
+        "Regular AI on the Edge / SLFork checks are at least five minutes apart.",
+    "Trage den selbst abgelesenen Stand und die Ablesezeit ein. Die App nutzt ihn als Startwert, solange noch keine sichere automatische Ablesung vorliegt.":
+        "Enter the meter reading you observed and when you read it. The app uses it as a starting reading until it has a reliable automatic reading.",
+    "Fallback-Zählerstand": "Fallback reading",
+    "Fallback-Wert speichern": "Save fallback reading",
+    "Fallback-Wert gespeichert.": "Fallback reading saved.",
+    "Gefundenen Rahmen im Test prüfen": "Review the suggested crop in a manual test",
+    " · Rahmenversuche: ": " · Crop attempts: ",
+    "Warte auf einen neuen Messzyklus vom ESP …": "Waiting for a new ESP measurement cycle …",
+    "Verstrichene Zeit der Selbsteinrichtung": "Elapsed automatic setup time",
+    "Selbsteinrichtung startet, sobald die laufende Prüfung beendet ist …":
+        "Automatic setup will start once the current check finishes …",
+    "Kamerabild wird abgerufen …": "Fetching a camera image …",
+    "Suche nach der Ziffernreihe …": "Looking for the digit row …",
+    "Prüfe Rahmen ": "Checking frame ",
+    " mit Drehung ": " at a rotation of ",
+    "Selbsteinrichtung für Ausschnitt und Drehung": "Automatic setup for crop and rotation",
+    "Die App tastet sich mit unterschiedlichen Bildern an einen passenden Rahmen und Winkel heran. Nach drei bestätigten Ablesungen prüft sie den gefundenen Rahmen mit einem weiteren Bild und übernimmt ihn dann. Nach 15 Minuten endet der Versuch automatisch.":
+        "The app searches for a suitable crop and rotation using different images. After three confirmed readings, it checks the result on one more image before saving. The search automatically ends after 15 minutes.",
+    "Ohne externen Vergleichswert hilft ein von Hand abgelesener Startwert. Ohne Startwert wartet die App zusätzlich auf einen plausiblen Zähleranstieg.":
+        "A manually entered starting reading helps if there is no external reference. Without either, the app also waits for a plausible increase.",
+    "Geprüfte Bilder der Selbsteinrichtung": "Images checked during automatic setup",
+    "Startet nach dem Speichern und endet spätestens nach 15 Minuten. Die App übernimmt den Rahmen nach drei Bestätigungen und einer abschließenden Gegenprüfung.":
+        "Starts after saving and ends within 15 minutes. The app saves the crop after three confirmations and a final check.",
+    "Höchstens so viele unterschiedliche Bilder": "Maximum number of distinct images",
+    "Selbsteinrichtung starten": "Start automatic setup",
+    "Selbsteinrichtung stoppen": "Stop automatic setup",
+    "Warte auf ein neues Kamerabild …": "Waiting for a new camera image …",
+    "Prüfe Ausschnitt und Drehung …": "Checking crop and rotation …",
+    "Selbsteinrichtung prüft Bildausschnitt und Drehung.": "Automatic setup is checking the crop and rotation.",
+    "Erfolgreich eingerichtet. Ausschnitt und Drehung sind übernommen.": "Setup successful. Crop and rotation saved.",
+    "Rahmen gefunden. Warte auf ein frisches Bild zur Gegenprüfung …": "Crop found. Waiting for a fresh image to cross-check …",
+    "Gefundenen Rahmen mit der normalen Prüfung gegenprüfen …": "Cross-checking the crop with the regular OCR check …",
+    "Selbsteinrichtung fehlgeschlagen. Prüfe Bildausschnitt, Kamerawinkel und Beleuchtung.":
+        "Automatic setup failed. Check the crop, camera angle and lighting.",
+    "Selbsteinrichtung nach 15 Minuten beendet. Keine Einstellung sicher bestätigt.":
+        "Automatic setup ended after 15 minutes without finding a reliable crop and rotation.",
+    "Selbsteinrichtung gestoppt.": "Automatic setup stopped.",
+    "Ausschnitt und Drehung konnten nicht gespeichert werden.": "Could not save the crop and rotation.",
+    "Bilder: ": "Images: ",
+    " · Bestätigungen: ": " · Confirmations: ",
+    " · Noch ": " · Remaining ",
+    "Ausschnitt zurücksetzen": "Reset crop",
+    "Ausschnitt zurückgesetzt. Die Automatik sucht die Ziffernreihe wieder selbst.":
+        "Crop reset. Automatic checks will locate the digit row again.",
+    "Ziehe mit Maus oder Finger einen Rahmen um die gesamte Ziffernreihe.":
+        "Draw a frame around the full row of digits with a mouse or finger.",
+    "Originalbild zum Einstellen des Ausschnitts": "Original image for setting the crop",
+    "Kamerabild wird geladen …": "Loading camera image …",
+    "Kein Kamerabild verfügbar. Wähle ein eigenes Bild oder starte einen Test.":
+        "No camera image available. Choose your own image or run a test.",
+    "Kein Kamerabild verfügbar. Prüfe die Bildquelle oder warte auf die nächste automatische Prüfung.":
+        "No camera image available. Check the image source or wait for the next automatic check.",
+    "Ausschnitt, Drehung und Einstellungen speichern": "Save crop, rotation and settings",
+    "Ausschnitt und Drehung speichern": "Save crop and rotation",
+    "Ausschnitt und Drehung für manuelle Tests gespeichert.": "Crop and rotation saved for manual tests.",
+    "Einstellungen speichern": "Save settings",
+    "Stand aus AI on the Edge oder aus dem gewählten Home-Assistant-Sensor": "Reading from AI on the Edge or the selected Home Assistant sensor",
+    "Stand aus der ersten Aufnahme oder aus einer externen Quelle": "Reading from the first image or an external source",
+    "Zweite Aufnahme steht aus": "Waiting for the second image",
+    "Zählerstand gegengeprüft": "Meter reading cross-checked",
+    "Aufnahmen stimmen nicht plausibel überein": "The two images suggest an implausible change",
+    STANDALONE_PENDING_NOTICE: "First image read. Waiting for a second snapshot to cross-check the reading.",
+    STANDALONE_VERIFIED_NOTICE: "Meter reading cross-checked against a second snapshot.",
+    STANDALONE_REJECTED_NOTICE: "The second image does not confirm the first meter reading.",
+    "Vergleichswert": "Reference reading",
+    "Die letzte Stelle kann beim Weiterdrehen schwer lesbar sein. Das kann zu Fehlmeldungen führen.":
+        "The last digit can be hard to read as it turns, which can cause false alerts.",
+    "Präzisionsmodus: Alle drei Nachkommastellen müssen stimmen": "Precision mode: Require all three decimal places to match",
+    "Prüfung bestanden mit Hinweis": "Check passed with a note",
+    "Test bestanden mit Hinweis": "Test passed with a note",
+    "Letzte Nachkommastelle unsicher": "Last decimal digit uncertain",
+    LAST_DIGIT_NOTICE: "Only the third decimal digit is unclear or differs.",
+    LAST_DIGIT_PASS: "The first two decimal places match. The third digit remains unconfirmed.",
+    "Für den Verbrauch verwendet die App den plausiblen Vergleichswert.": "The app uses the plausible reference reading to calculate consumption.",
+    "Ablesung und Vergleichswert weichen ab": "Image reading and reference differ",
+    "Vergleiche beide Werte mit dem Stand direkt am Zähler.": "Compare both readings with the value on the meter itself.",
+    "Die App prüft automatisch erneut. Bleibt der Unterschied, vergleiche beide Werte mit dem Stand direkt am Zähler.":
+        "The app will check again automatically. If the readings still differ, compare both with the value on the meter itself.",
     "Letzte automatische Erkennung": "Latest automatic reading",
     "Schließen": "Close",
     "Originalbild zum Ablesen": "Original image for reading",
@@ -18,32 +135,37 @@ EN_UI = {
     "Du kannst die Einrichtung jederzeit über „Einrichtung öffnen“ erneut starten.":
         "You can restart setup at any time using “Open setup wizard”.",
     "Stand im Home-Assistant-Dashboard anzeigen": "Show the reading on a Home Assistant dashboard",
-    "Wenn Meter OCR selbst aus einer ESPHome- oder Home-Assistant-Kamera liest, kannst du den Sensor „OCR-Zählerstand“ zum Dashboard hinzufügen. Seine Entitäts-ID lautet ":
-        "When Meter OCR reads directly from an ESPHome or Home Assistant camera, you can add its OCR meter reading sensor to your dashboard. Its entity ID is ",
+    "Wenn AI Meter Reader selbst aus einer ESPHome- oder Home-Assistant-Kamera liest, kannst du den Sensor „OCR-Zählerstand“ zum Dashboard hinzufügen. Seine Entitäts-ID lautet ":
+        "When AI Meter Reader reads directly from an ESPHome or Home Assistant camera, you can add its OCR meter reading sensor to your dashboard. Its entity ID is ",
     "Oder füge diese kurze YAML-Konfiguration in eine manuelle Karte ein:":
         "Or paste this short YAML configuration into a manual card:",
     "App-Daten zurücksetzen": "Reset app data",
-    "Setzt die Meter-OCR-Einstellungen und Prüfhistorie auf Standardwerte zurück und entfernt gespeicherte Testbilder. Die Home-Assistant-App-Konfiguration und vorhandenen Entitäten bleiben erhalten.":
-        "Resets Meter OCR settings and check history to defaults and removes saved test images. Home Assistant app configuration and existing entities are kept.",
+    "Setzt die AI-Meter-Reader-Einstellungen und Prüfhistorie auf Standardwerte zurück und entfernt gespeicherte Testbilder. Die Home-Assistant-App-Konfiguration und vorhandenen Entitäten bleiben erhalten.":
+        "Resets AI Meter Reader settings and check history to defaults and removes saved test images. Home Assistant app configuration and existing entities are kept.",
     "Auf Werkseinstellungen zurücksetzen": "Restore factory settings",
     "Werkseinstellungen wiederherstellen?": "Restore factory settings?",
     "Gespeicherte Bildquelle, OCR- und Benachrichtigungseinstellungen, Prüfhistorie und Testbilder werden zurückgesetzt. Home-Assistant-App-Konfiguration und Entitätsnamen bleiben erhalten.":
         "Saved image source, OCR and notification settings, check history, and test images will be reset. Home Assistant app configuration and entity IDs will be kept.",
     "Abbrechen": "Cancel",
     "Jetzt zurücksetzen": "Reset now",
+    "Werkreset angefordert. Eine laufende Prüfung kann den Reset verzögern. Bitte warte, bis sich die Einrichtung öffnet.":
+        "Factory reset requested. A check in progress may delay the reset. Please wait for setup to open.",
     "Werkseinstellungen wiederhergestellt. Die Einrichtung öffnet sich erneut.":
         "Factory settings restored. Setup will open again.",
-    "Werkreset läuft noch. Bitte die Seite in Kürze neu laden.":
-        "The reset is still running. Reload the page shortly.",
+    "Werkreset läuft noch. Die Einrichtung öffnet sich, sobald er fertig ist.":
+        "The reset is still running. Setup will open when it finishes.",
     "Werkreset konnte nicht vollständig ausgeführt werden.":
         "The reset could not be completed.",
     "Die Einrichtung konnte nicht übersprungen werden.": "Setup could not be skipped.",
     "Übersicht": "Overview",
     "Hauptmenü": "Main menu",
+    "Ansichten": "Views",
+    "Bebilderte Bedienungsanleitung (PDF)": "Illustrated user guide (PDF)",
+    ">Anleitung</a>": ">Guide</a>",
     "Fallback-Wert für diesen Test (optional)": "Fallback reading for this test (optional)",
     "Am markierten Bild ablesen und hier eintragen. Der Wert wird nur mit dem manuellen Test verglichen und nicht als automatische Referenz gespeichert.":
         "Read the marked image and enter the value here. It is compared only with the manual test and is not saved as the automatic reference.",
-    "Über Meter OCR": "About Meter OCR",
+    "Über AI Meter Reader": "About AI Meter Reader",
     "Stand und Verbrauch im Dashboard anzeigen": "Show the reading and usage on a dashboard",
     "Für den erkannten Zählerstand im ESPHome- oder Kameramodus: ": "For the recognized meter reading in ESPHome or camera mode: ",
     "Für den Home-Assistant-Energieverbrauch: ": "For Home Assistant energy usage: ",
@@ -65,17 +187,72 @@ EN_UI = {
     "Prüfergebnis": "Check result",
     "Bildzeit": "Image time",
     "Letzte automatische Prüfung": "Last automatic check",
+    "Letzte Prüfung": "Last check",
+    "Wiederholte Fehlablesung? Ein kürzeres Prüfintervall kann helfen, wenn sich der Zähler nach einer Weile wieder klarer ablesen lässt.": "Repeated reading errors? A shorter check interval can help if the meter becomes easier to read after it turns.",
+    "Prüfintervall ändern": "Change check interval",
+    "ⓘ Warum das Prüfintervall ändern?": "ⓘ Why change the check interval?",
+    "Nach einem fehlgeschlagenen automatischen Test folgen bis zu zwei weitere Prüfungen im Abstand von fünf Minuten. Sind alle drei erfolglos, wartet die App eine Stunde und prüft dann erneut. Nach Erfolg gilt wieder dein eingestelltes Intervall. Ein kürzeres Intervall kann helfen, wenn sich der Zähler beim Weiterdrehen vorübergehend schlecht lesen lässt.":
+        "After a failed automatic check, up to two more checks follow at five-minute intervals. If all three fail, the app waits one hour before trying again. After a successful check, your selected interval applies again. A shorter interval can help when the meter is temporarily hard to read as it turns.",
+    "Nach einer fehlgeschlagenen automatischen Prüfung folgen bis zu zwei weitere Bildprüfungen im Abstand von fünf Minuten. Bleiben alle drei Prüfungen erfolglos, wartet AI Meter Reader eine Stunde auf einen höheren Zählerstand oder ein neues Bild und versucht es dann erneut. Beleuchtung, Abstand und Fokus prüfen.": "After a failed automatic check, up to two more image checks follow at five-minute intervals. If all three fail, AI Meter Reader waits one hour for a higher reading or a new image, then tries again. Check lighting, distance, and focus.",
+    "Wartet auf die nächste automatische Prüfung.": "Waiting for the next automatic check.",
+    "App läuft. Wartet auf die nächste automatische Prüfung.": "App is running and waiting for the next automatic check.",
+    "Automatik:": "Automatic checks:",
+    "Einrichtung erforderlich. Bitte Bildquelle festlegen.": "Setup required. Choose an image source.",
+    "Automatik pausiert. Manuelle Tests bleiben verfügbar.": "Automatic checks are paused. Manual tests are still available.",
+    "Automatik pausiert": "Automatic checks paused",
+    "Es werden keine automatischen Prüfungen gestartet. Manuelle Tests bleiben verfügbar.": "No automatic checks will start. Manual tests remain available.",
+    "Es starten keine neuen automatischen Prüfungen. Ein bereits laufender Durchlauf darf noch enden. Manuelle Tests bleiben verfügbar.": "No new automatic checks will start. A check already in progress may finish. Manual tests remain available.",
+    "Automatik fortsetzen": "Resume automatic checks",
+    "Automatik pausieren": "Pause automatic checks",
+    "Keine Verbindung zur App. Sie könnte gestoppt oder vorübergehend nicht erreichbar sein.": "No connection to the app. It may be stopped or temporarily unavailable.",
+    "Quelle: ": "Source: ",
+    "Noch kein Bildabruf erfolgt.": "No image has been fetched yet.",
+    "ESP erreichbar. Bild und Messwerte empfangen.": "ESP reachable. Image and reading received.",
+    "Aufbereitetes ESP-Bild fehlt oder ist zu alt. Die App prüft ein frisches Rohbild.": "The processed ESP image is missing or too old. Checking a fresh raw image.",
+    "Aufbereitetes ESP-Bild nicht nutzbar. Rohbild ohne ESP-Referenz geprüft.": "The processed ESP image is unusable. A raw image was checked without an ESP reference.",
+    "Aufbereitetes ESP-Bild nicht nutzbar. Es konnte kein frisches Rohbild geladen werden.": "The processed ESP image is unusable and a fresh raw image could not be loaded.",
+    "Rohbild gelesen. Mögliche Ursache: Bildausrichtung oder Referenzmarken in AI on the Edge.": "Raw image read. Possible cause: image alignment or reference markers in AI on the Edge.",
+    "Kamera erreichbar. Frisches Bild empfangen.": "Camera reachable. Fresh image received.",
+    "ESP erreichbar, aber Bild ist älter als 15 Minuten oder hat einen ungültigen Zeitstempel.": "ESP reachable, but the image is older than 15 minutes or has an invalid timestamp.",
+    "Kamera erreichbar, aber das Bild hat einen ungültigen Zeitstempel.": "Camera reachable, but the image has an invalid timestamp.",
+    "ESP erreichbar. Seit der letzten Prüfung kam kein neues Bild; das vorhandene Bild ist noch nicht veraltet.": "ESP reachable. No new image since the last check; the current image is not stale yet.",
+    "Home-Assistant-Kamera erreichbar; dieses Bild wurde bereits geprüft.": "Home Assistant camera reachable; this image was already checked.",
+    "Home-Assistant-Kamera nicht erreichbar oder Bild unlesbar. Kamera und Zugriff prüfen.": "Home Assistant camera unavailable or image unreadable. Check the camera and access.",
+    "ESP nicht erreichbar oder Antwort unvollständig. Adresse und Verbindung prüfen.": "ESP unavailable or response incomplete. Check its address and connection.",
+    "Kamerabild wird aufgenommen.": "Capturing a fresh camera image.",
+    "Einstellungen gespeichert. Prüfung startet gleich.": "Settings saved. The check is about to start.",
+    "Automatische Prüfung startet …": "Starting the automatic check …",
+    "Warte auf ein Kamerabild …": "Waiting for a camera image …",
+    "Warte auf Bild und Messwerte vom ESP …": "Waiting for the image and reading from the ESP …",
+    "Warte auf ein aktuelles Bild vom ESP …": "Waiting for a new image from the ESP …",
+    "Intensivtest: Prüfe eine leicht gedrehte Aufnahme.": "Recovery check: testing a slightly rotated image.",
+    "Noch kein aktuelles Zählerbild": "No current meter image yet",
+    "Fortschritt der automatischen Prüfung": "Automatic check progress",
+    "Einstellungen werden gespeichert …": "Saving settings …",
+    "Bild und Messwerte werden vom ESP abgerufen.": "Fetching the image and reading from the ESP.",
+    "Bild wird vorbereitet.": "Preparing the image.",
+    "Automatische Prüfung wird abgeschlossen.": "Finishing the automatic check.",
+    "Letzte Prüfung beendet. Nächster Versuch nach kurzer Wartezeit.": "Last check finished. The next attempt follows after a short wait.",
+    "Letzte Prüfung beendet. Wartet auf das eingestellte Prüfintervall.": "Last check finished. Waiting for the selected check interval.",
+    "Nach einer fehlgeschlagenen automatischen Prüfung folgen bis zu zwei weitere Bildprüfungen im Abstand von fünf Minuten. Bleiben alle drei Prüfungen erfolglos, wartet die App eine Stunde auf einen höheren Zählerstand oder ein neues Bild. Beleuchtung, Abstand und Fokus prüfen.": "After a failed automatic check, up to two more image checks follow at five-minute intervals. If all three fail, the app waits one hour for a higher reading or a new image. Check lighting, distance, and focus.",
+    "Nach drei fehlgeschlagenen automatischen Prüfungen mit unterschiedlichen Bildabrufen wartet die App eine Stunde und versucht es dann erneut. Nach einem erfolgreichen Abgleich gilt wieder dein eingestelltes Prüfintervall. Bei geänderter Vergleichsgenauigkeit beginnt die Trefferzählung neu.": "After three failed automatic checks using different image captures, the app waits one hour and tries again. After a successful match, the selected interval applies again. Changing comparison precision resets the match count.",
+    "Die automatische Erkennung versucht, den Ziffernrahmen zu finden. Bei einer unsicheren Ablesung folgen bis zu zehn zusätzliche Bildauswertungen; die App setzt einzelne Ziffern nur bei einer strikten Mehrheit zusammen. Nach drei fehlgeschlagenen automatischen Prüfungen mit unterschiedlichen Bildabrufen wartet sie eine Stunde auf ein neues Bild oder einen höheren Zählerstand. Prüfe bei wiederholten Fehlern auch Beleuchtung, Abstand und Fokus. Beim Livebild kann AI Meter Reader bis zu 10 frische Standbilder innerhalb von höchstens 20 Sekunden prüfen.": "Automatic detection tries to find the digit area. If a reading is uncertain, up to ten extra image analyses follow; digits are combined only when a strict majority agrees. After three failed automatic checks using different image captures, the app waits one hour for a higher reading or a new image. If errors continue, check lighting, distance, and focus. For live images, AI Meter Reader can try up to 10 fresh snapshots within 20 seconds.",
+    "SLFork liefert Bild und Messwert. Die Livebild-Quelle ruft bei jeder Prüfung ein aktuelles Standbild deiner Home-Assistant-Kamera ab; ein Video wird nicht dauerhaft ausgewertet. Du kannst dazu einen Zählerstandssensor – etwa von AI on the Edge – als Vergleich eintragen. Ohne Referenzsensor liest AI Meter Reader selbst und prüft die Werte auf Plausibilität.": "SLFork supplies the image and reading. The live image source takes a fresh snapshot from your Home Assistant camera for each check; video is not continuously processed. You can add a meter reading sensor, such as AI on the Edge, for comparison. Without a reference sensor, AI Meter Reader reads the image itself and checks plausibility.",
+    "Er ist ein Startwert, solange noch keine sichere automatische Ablesung gespeichert ist. AI Meter Reader prüft die erste Ablesung gegen den Zeitabstand und den maximalen Durchfluss. Danach wird der letzte bestätigte Stand als Referenz genutzt. Ohne Fallback beginnt die Plausibilitätsprüfung mit der ersten sicheren Ablesung.": "This is a starting value until a reliable automatic reading is saved. AI Meter Reader checks the first reading against elapsed time and maximum flow. After that, it uses the latest confirmed reading as its reference. Without a fallback, plausibility checks begin with the first reliable reading.",
     "Letzter bestätigter Abgleich": "Last confirmed match",
     "Einstellungen": "Settings",
     "Automatische Prüfung": "Automatic checks",
     "Prüfintervall (Minuten)": "Check interval (minutes)",
-    "Zeit nach einer erfolgreichen Prüfung. Bei einem Fehler erfolgt der nächste Versuch spätestens nach fünf Minuten.":
-        "Wait after a successful check. After a failure, retry within five minutes.",
+    "Nach einer fehlgeschlagenen automatischen Prüfung folgen bis zu zwei weitere Bildprüfungen im Abstand von fünf Minuten. Bleiben alle drei Prüfungen erfolglos, wartet AI Meter Reader eine Stunde auf einen höheren Zählerstand oder ein neues Bild und versucht es dann erneut. Beleuchtung, Abstand und Fokus prüfen.":
+        "After a failed automatic check, up to two more image checks follow at five-minute intervals. If all three fail, AI Meter Reader waits one hour for a higher reading or a new image, then tries again. Check lighting, distance, and focus.",
     "Max. OCR-Versuche": "Max. OCR attempts",
     "Ziffernfarbe": "Digit color",
     "Bildbereich (links, oben, rechts, unten)": "Image region (left, top, right, bottom)",
     "Manueller Ausschnitt (links, oben, rechts, unten)": "Custom crop (left, top, right, bottom)",
     "Bilddrehung im Uhrzeigersinn": "Clockwise rotation",
+    "Bilddrehung (°)": "Image rotation (°)",
+    "Wähle den Ausschnitt im Originalbild. Positive Winkel drehen nach rechts, negative nach links. Die Vorkommabreite gilt nach der Drehung.":
+        "Select the crop in the original image. Positive angles turn right; negative angles turn left. The whole-number width applies after rotation.",
     "Wähle den Ausschnitt im Originalbild. Die Vorkommabreite gilt nach der Drehung.":
         "Use coordinates from the original image. The whole-digit width applies after rotation.",
     "Maximaler Durchfluss (m³/h)": "Maximum flow (m³/h)",
@@ -95,7 +272,7 @@ EN_UI = {
     "Jetzt prüfen": "Run check now",
     "Eigenes Testbild (optional, JPG oder PNG)": "Choose a test image (optional, JPG or PNG)",
     "Ein ausgewähltes Bild wird nur für diesen manuellen Test verwendet (max. 3 MB).": "The selected image is used only for this manual test (max. 3 MB).",
-    "Speichern und Test öffnen": "Save and open test",
+    "Speichern und prüfen": "Save and check",
     "ⓘ Was passiert bei „Jetzt prüfen“?": "ⓘ What happens when I run a check?",
     "Die App verwendet das letzte vorhandene Zählerbild oder ein ausgewähltes eigenes JPG-/PNG-Testbild (bis 3 MB). Sie liest die Zahlen aus dem Bild und vergleicht sie mit dem Referenzwert. Sobald die Werte übereinstimmen, stoppt die Prüfung. Andernfalls werden höchstens so viele OCR-Versuche durchgeführt wie eingestellt (1–10). Der Test verändert die automatische Trefferzahl nicht.": "The app uses the latest available meter image or a selected JPG/PNG test image (up to 3 MB). It reads the digits and compares them with the reference. The check stops as soon as they match. Otherwise it runs up to the configured number of OCR attempts (1–10). A manual test does not change the automatic confirmation count.",
     "Ziffern aus mehreren OCR-Versuchen zusammengesetzt.": "Digits combined from multiple OCR attempts.",
@@ -130,9 +307,16 @@ EN_UI = {
     " Nachkommastelle(n).": " decimal place(s).",
     "OCR-Testbild mit erkannten Stellen": "OCR image showing recognized digits",
     "Grün:": "Green:",
+    "Gelb:": "Yellow:",
     "Rot:": "Red:",
     "Ziffer wurde gelesen": "Digit recognized",
+    "Ziffer schwankte zwischen OCR-Versuchen oder wurde aus mehreren Versuchen zusammengesetzt" :
+        "Digit varied across OCR attempts or was composed from multiple attempts",
+    "Ziffer gelesen": "Digit read",
+    "Ziffer weiterhin unklar": "Digit still unclear",
     "Ziffer unklar": "Digit unclear",
+    "Die Farben zeigen OCR-Sicherheit, nicht die Übereinstimmung mit dem Referenzstand.":
+        "The colors show OCR confidence, not whether the reading matches the reference.",
     "Die Farbrahmen zeigen die OCR-Erkennung, nicht die Übereinstimmung mit dem Referenzstand. Ohne automatisch erkannte Ziffernrahmen sind die Bereiche nur näherungsweise aufgeteilt.":
         "The colored boxes show OCR recognition, not whether the digits match the reference. Without detected digit frames, the individual regions are approximate.",
     "Zählerbild mit grün markierten erkannten Ziffern und rot markierten unklaren Stellen":
@@ -145,6 +329,11 @@ EN_UI = {
     "Betriebsmodus": "Mode",
     "Die Adresse deines SLFork-Geräts im Heimnetz.": "The address of your SLFork device on your local network.",
     "SLFork-Adresse": "SLFork address",
+    "ESP-Adresse": "ESP address",
+    "Die Adresse deines ESP-Geräts im Heimnetz.": "The address of your ESP on your home network.",
+    "ESP nur als Kamera verwenden": "Use the ESP as a camera only",
+    "Wenn der ESP den Zähler nicht zuverlässig liest, kann die App das Bild direkt abrufen und selbst ablesen.":
+        "If the ESP cannot read the meter reliably, the app can fetch the image and read it itself.",
     "Die Entitäts-ID der Kamera in Home Assistant.": "The camera entity ID in Home Assistant.",
     "Kamera in Home Assistant": "Camera in Home Assistant",
     "Optionaler Sensor mit aktuellem Zählerstand in Kubikmetern.":
@@ -222,11 +411,22 @@ EN_UI = {
     "3. Bildausschnitt und Prüfplan": "3. Image area and schedule",
     "4. Hinweise und speichern": "4. Alerts and save",
     "Woher kommt das Zählerbild?": "Where does the meter image come from?",
+    "Erklärung der Bildquellen": "Image source guide",
+    "In Home Assistant gefunden": "Found in Home Assistant",
+    "Gerät auswählen …": "Choose a device …",
+    "ESPHome / Kamera:": "ESPHome / camera:",
+    "Empfohlen für den Einstieg mit einer Kamera. Die App liest den Stand selbst.":
+        "Recommended when starting with a camera. The app reads the meter itself.",
+    "Home-Assistant-Kamera mit Vergleichswert:": "Home Assistant camera with reference reading:",
+    "Die App holt pro Prüfung ein Standbild und kann den Wert mit einem vorhandenen Sensor abgleichen.":
+        "The app takes a snapshot for each check and can compare the reading with an existing sensor.",
+    "Die App prüft den ESP-Messwert. Du kannst den ESP auch nur als Kamera verwenden.":
+        "The app verifies the ESP reading. You can also use the ESP as a camera only.",
     "Home-Assistant-Kamera (Livebild, Standbild je Prüfung)": "Home Assistant camera (live image, one snapshot per check)",
     "Home Assistant camera (snapshot per check)": "Home Assistant camera (live image, one snapshot per check)",
     "ⓘ Welcher Weg passt?": "ⓘ Which source should I choose?",
-    "SLFork liefert Bild und Messwert. Bei einer Home-Assistant-Kamera kannst du einen Zählerstandssensor – etwa von AI on the Edge – als Vergleich eintragen. Ohne Referenzsensor liest Meter OCR selbst und prüft die Werte auf Plausibilität.":
-        "SLFork supplies the image and reading. With a Home Assistant camera, you can add a meter reading sensor, such as AI on the Edge, for comparison. Without one, Meter OCR reads the image itself and checks readings for plausibility.",
+    "SLFork liefert Bild und Messwert. Bei einer Home-Assistant-Kamera kannst du einen Zählerstandssensor – etwa von AI on the Edge – als Vergleich eintragen. Ohne Referenzsensor liest AI Meter Reader selbst und prüft die Werte auf Plausibilität.":
+        "SLFork supplies the image and reading. With a Home Assistant camera, you can add a meter reading sensor, such as AI on the Edge, for comparison. Without one, AI Meter Reader reads the image itself and checks readings for plausibility.",
     "Anzeigeart": "Display type",
     "Ziffern vor dem Komma": "Digits before the decimal point",
     "Nachkommastellen auf dem Zähler": "Decimal places shown on the meter",
@@ -236,16 +436,16 @@ EN_UI = {
     "Fallback-Zählerstand (optional)": "Fallback meter reading (optional)",
     "Stand abgelesen am": "Reading recorded at",
     "ⓘ Wie wird der Fallback verwendet?": "ⓘ How is the fallback used?",
-    "Er ist ein Startwert, solange noch keine sichere automatische Ablesung gespeichert ist. Meter OCR prüft die erste Ablesung gegen den Zeitabstand und den maximalen Durchfluss. Danach wird der letzte bestätigte Stand als Referenz genutzt. Ohne Fallback beginnt die Plausibilitätsprüfung mit der ersten sicheren Ablesung.":
-        "This is a starting value until a reliable automatic reading has been saved. Meter OCR checks the first reading against the elapsed time and maximum flow. After that, it uses the latest confirmed reading as its reference. Without a fallback, plausibility checks begin with the first reliable reading.",
+    "Er ist ein Startwert, solange noch keine sichere automatische Ablesung gespeichert ist. AI Meter Reader prüft die erste Ablesung gegen den Zeitabstand und den maximalen Durchfluss. Danach wird der letzte bestätigte Stand als Referenz genutzt. Ohne Fallback beginnt die Plausibilitätsprüfung mit der ersten sicheren Ablesung.":
+        "This is a starting value until a reliable automatic reading has been saved. AI Meter Reader checks the first reading against the elapsed time and maximum flow. After that, it uses the latest confirmed reading as its reference. Without a fallback, plausibility checks begin with the first reliable reading.",
     "OCR-Versuche pro Bild": "OCR attempts per image",
     "Prüfintervall (Minuten)": "Check interval (minutes)",
     "Breite des Vorkomma-Bereichs in Pixeln": "Width of whole-digit area in pixels",
     "ⓘ Bild einrichten": "ⓘ Set up the image",
-    "Die automatische Erkennung versucht, den Ziffernrahmen zu finden. Wenn sie das nicht schafft, öffne den manuellen Test: Dort wird das aktuelle Bild mit den erkannten Ziffern angezeigt. Einen getesteten Ausschnitt kannst du danach ausdrücklich für die Automatik übernehmen. Beim Livebild kann Meter OCR bis zu 10 frische Standbilder innerhalb von höchstens 20 Sekunden prüfen.":
-        "Automatic detection tries to find the digit area. If it cannot, open the manual test to see the current image and recognized digits. You can explicitly apply a tested crop to automatic checks. For live images, Meter OCR can try up to 10 fresh snapshots within 20 seconds.",
-    "SLFork liefert Bild und Messwert. Die Livebild-Quelle ruft bei jeder Prüfung ein aktuelles Standbild deiner Home-Assistant-Kamera ab; ein Video wird nicht dauerhaft ausgewertet. Du kannst dazu einen Zählerstandssensor – etwa von AI on the Edge – als Vergleich eintragen. Ohne Referenzsensor liest Meter OCR selbst und prüft die Werte auf Plausibilität.":
-        "SLFork supplies the image and reading. The live image source takes a fresh snapshot from your Home Assistant camera for each check; it does not continuously process video. You can add a meter reading sensor, such as AI on the Edge, for comparison. Without one, Meter OCR reads the image itself and checks readings for plausibility.",
+    "Die automatische Erkennung versucht, den Ziffernrahmen zu finden. Wenn sie das nicht schafft, öffne den manuellen Test: Dort wird das aktuelle Bild mit den erkannten Ziffern angezeigt. Einen getesteten Ausschnitt kannst du danach ausdrücklich für die Automatik übernehmen. Beim Livebild kann AI Meter Reader bis zu 10 frische Standbilder innerhalb von höchstens 20 Sekunden prüfen.":
+        "Automatic detection tries to find the digit area. If it cannot, open the manual test to see the current image and recognized digits. You can explicitly apply a tested crop to automatic checks. For live images, AI Meter Reader can try up to 10 fresh snapshots within 20 seconds.",
+    "SLFork liefert Bild und Messwert. Die Livebild-Quelle ruft bei jeder Prüfung ein aktuelles Standbild deiner Home-Assistant-Kamera ab; ein Video wird nicht dauerhaft ausgewertet. Du kannst dazu einen Zählerstandssensor – etwa von AI on the Edge – als Vergleich eintragen. Ohne Referenzsensor liest AI Meter Reader selbst und prüft die Werte auf Plausibilität.":
+        "SLFork supplies the image and reading. The live image source takes a fresh snapshot from your Home Assistant camera for each check; it does not continuously process video. You can add a meter reading sensor, such as AI on the Edge, for comparison. Without one, AI Meter Reader reads the image itself and checks readings for plausibility.",
     "Hinweis zum Teststand": "Testing note",
     "Für reale Tests nutze ich ausschließlich AI on the Edge. Die übrigen Kamera- und Zählermodi sind bisher nur mit simulierten Bildern und automatisierten Tests geprüft.":
         "For real-world tests, I use AI on the Edge only. The other camera and meter modes have so far been checked only with simulated images and automated tests.",
@@ -321,6 +521,16 @@ def translate_page(source):
     return source
 
 
+def english_activity(state, detail):
+    """Translate concise automatic worker activity, including attempt counters."""
+    if detail in EN_UI:
+        return EN_UI[detail]
+    match = re.fullmatch(r"Lese Zählerbild: OCR-Versuch (\d+) von (\d+) (?:läuft|abgeschlossen)\.", str(detail or ""))
+    if match:
+        return f"Reading meter image: OCR attempt {match[1]} of {match[2]}."
+    return "Automatic check in progress." if state == "working" else "Waiting for the next automatic check."
+
+
 def english_uncertain_positions(readings, decimals):
     """Describe each unreliable digit relevant to the configured precision."""
     positions = uncertain_positions(readings, decimals)
@@ -340,8 +550,22 @@ def english_result(detail, status=None, decimals=0, readings=None):
     """Translate a saved result without changing the Home Assistant sensor state."""
     if not isinstance(detail, str):
         return "No result available."
+    if detail in (LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, RAW_ROW_UNCLEAR, MANUAL_ROW_UNCLEAR,
+                  STANDALONE_PENDING_NOTICE, STANDALONE_VERIFIED_NOTICE):
+        return EN_UI[detail]
+    if detail.startswith(STANDALONE_REJECTED_NOTICE):
+        reason = detail.removeprefix(STANDALONE_REJECTED_NOTICE).strip()
+        return " ".join(filter(None, (EN_UI[STANDALONE_REJECTED_NOTICE], EN_DETAILS.get(reason))))
     if detail in EN_DETAILS:
         return EN_DETAILS[detail]
+    for prefix in (
+        "Rohbild gelesen. Mögliche Ursache: Bildausrichtung oder Referenzmarken in AI on the Edge.",
+        "Aufbereitetes ESP-Bild nicht nutzbar. Es konnte kein frisches Rohbild geladen werden.",
+    ):
+        if detail == prefix:
+            return EN_UI[prefix]
+        if detail.startswith(prefix + " "):
+            return EN_UI[prefix] + " " + english_result(detail[len(prefix) + 1:], status, decimals, readings)
     if detail.startswith(FALLBACK_NOTICE + " "):
         reason = detail[len(FALLBACK_NOTICE) + 1:]
         translated = EN_DETAILS.get(reason.removeprefix("OCR: "), "")
@@ -382,6 +606,8 @@ def english_progress(message):
     """Localize progress updates including parameterized OCR attempt counts."""
     translations = {
         "Lade Zählerbild und Referenzdaten …": "Loading meter image and reference data …",
+        "Aufbereitetes ESP-Bild fehlt oder ist zu alt. Die App prüft ein frisches Rohbild.":
+            EN_UI["Aufbereitetes ESP-Bild fehlt oder ist zu alt. Die App prüft ein frisches Rohbild."],
         "Bild geladen – überprüfe Zeitstempel und Ziffernbereich …":
             "Image loaded – checking timestamp and digit area …",
         "Ergebnis wird gespeichert …": "Saving result …",

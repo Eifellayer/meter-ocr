@@ -1,7 +1,8 @@
-name: Meter OCR (Alpha)
-version: "0.3.0"
-slug: rf1_ocr_test
-description: "Lokale optische Zählerkontrolle / Local optical meter verification. Alpha release (<0.5)."
+name: AI Meter Reader (Beta)
+version: "0.5.0-beta.1"
+slug: ai_meter_reader_beta
+stage: experimental
+description: "AI-gestützte Zählerablesung und Plausibilitätsprüfung / AI-assisted meter reading and verification. 0.5 Beta. Bebilderte Anleitung / illustrated guide: https://github.com/Eifellayer/meter-ocr/blob/beta/docs/Bedienungsanleitung-AI-Meter-Reader.pdf"
 arch:
   - aarch64
   - amd64

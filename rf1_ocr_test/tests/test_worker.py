@@ -9,17 +9,21 @@ import sys
 from tempfile import TemporaryDirectory
 from unittest import TestCase
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from checks import (FRESH_SAMPLE_AGE, NORMAL_INTERVAL, OCR_PROFILES, RETRY_INTERVAL, WINDOW_SECONDS,
-                    compare_sample, explain_uncertain_positions, last_check_at, read_register, record_sample,
-                    reschedule_next_check, rolling_summary, schedule_next_check, slfork_reference)
+                    LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, compare_sample, explain_uncertain_positions,
+                    automatic_interval_minutes, defer_duplicate_cycle, last_check_at, read_register, record_sample,
+                    reschedule_next_check, rolling_summary, schedule_next_check, slfork_reference,
+                    estimate_missing_digit, single_missing_digit, track_reflection)
 from consumption import EXCESSIVE_INCREASE, FALLBACK_PLAUSIBLE, FALLBACK_UNKNOWN_TIME, LOWER_READING, fallback_detail
-from layout import crop_coordinates, find_digit_row
+from layout import crop_coordinates, find_digit_row, rotated_width, turn_crop
 from settings import load_options
+from source_settings import discovered_sources
 import run
 
 
@@ -35,6 +39,74 @@ def synthetic_meter():
 
 
 class SourceTests(TestCase):
+    def test_small_signed_rotation_restores_ocr_alignment(self):
+        upright = synthetic_meter()
+        tilted = turn_crop(upright, 6)
+        self.assertEqual(rotated_width(*upright.size, 6), tilted.width)
+        recovered = turn_crop(tilted, -6)
+        self.assertEqual(rotated_width(*tilted.size, -6), recovered.width)
+        self.assertEqual((0, 0, tilted.width, tilted.height), crop_coordinates(
+            f"0,0,{tilted.width},{tilted.height}", recovered.width, -6
+        ))
+        self.assertEqual("12345", read_register(recovered, False, profile=OCR_PROFILES[2]))
+
+    def test_camera_finds_digit_strip_when_default_crop_cuts_off_digits(self):
+        frame = Image.new("RGB", (640, 480), "#467b88")
+        draw = ImageDraw.Draw(frame)
+        draw.rectangle((85, 52, 408, 110), fill="#031426")
+        draw.rectangle((285, 52, 408, 110), fill="#461629")
+        font = ImageFont.truetype("DejaVuSansMono.ttf", 38)
+        for index, digit in enumerate("10449227"):
+            draw.text((105 + 39 * index, 82), digit, font=font, anchor="mm", fill="#70cad5")
+        draw.text((110, 145), "GAS SER 29823", font=font, fill="#102427")
+        register, width, whole, fractions, mode = run.select_register(
+            frame, None, (52, 79, 564, 151), 350, detect_raw=True
+        )
+        self.assertEqual(("raw_auto", 5, 3), (mode, len(whole), len(fractions)))
+        self.assertEqual("10449.227",
+                         run.read_visible_digits(register, width, whole, fractions, True, "auto",
+                                                 profile=OCR_PROFILES[0]))
+
+    def test_raw_detector_does_not_treat_text_without_a_meter_window_as_digits(self):
+        frame = Image.new("RGB", (640, 480), "white")
+        ImageDraw.Draw(frame).text(
+            (85, 52), "10449227", font=ImageFont.truetype("DejaVuSansMono.ttf", 38), fill="black"
+        )
+        register, _, _, _, mode = run.select_register(
+            frame, None, (52, 79, 564, 151), 350, detect_raw=True
+        )
+        self.assertEqual(("manual", (512, 72)), (mode, register.size))
+
+    def test_edge_camera_reads_fresh_jpeg_from_either_firmware(self):
+        base = "http://meter"
+        modern = base + "/camera?task=capture"
+        legacy = base + "/capture_with_flashlight"
+        not_found = HTTPError(modern, 404, "Not found", {}, None)
+        for responses, urls in (([b"jpeg"], [modern]), ([not_found, b"jpeg"], [modern, legacy])):
+            with self.subTest(urls=urls), patch.object(run, "get_bytes", side_effect=responses) as fetch:
+                picture, overlay, data = run.capture_edge_camera(base, timezone.utc)
+                self.assertEqual((b"jpeg", None, False), (picture, overlay, data["reference_required"]))
+                self.assertIsNone(data["actual_value"])
+                self.assertEqual(urls, [call.args[0] for call in fetch.call_args_list])
+
+    def test_discovery_lists_only_camera_entities_and_valid_esp_addresses(self):
+        sources = discovered_sources({
+            "cameras": [{"camera": "camera.test", "label": "Camera"}, {"camera": "sensor.extra"}],
+            "devices": [{"url": "http://meter/", "label": "Meter"}, {"url": "http://meter"},
+                        {"ip": "192.168.0.10", "label": "Second meter"},
+                        {"url": "http://user:secret@meter"}, {"url": "file:///tmp/example"}],
+        })
+        self.assertEqual(["camera.test", "http://meter", "http://192.168.0.10"],
+                         [source.get("camera") or source["url"] for source in sources])
+
+    def test_slfork_aborted_cycle_skips_aligned_images(self):
+        payload = {"process_error": -2, "timestamp_processed": {"main": "2026-11-15T08:01:00"}}
+        diagnostics = {}
+        with patch.object(run, "get_bytes", return_value=json.dumps(payload)) as fetch:
+            self.assertIsNone(run.capture("http://meter", diagnostics))
+            fetch.assert_called_once_with("http://meter/process_data")
+        self.assertTrue(run.slfork_cycle_failed(diagnostics))
+
     def test_slfork_checks_cycle_on_both_sides_of_image_download(self):
         expected = {"timestamp_processed": {"main": "2026-11-15T08:01:00"},
                     "raw_value": {"main": "12345.170"}, "actual_value": {"main": "12345.170"}}
@@ -174,6 +246,218 @@ class OCRTests(TestCase):
 
 
 class StateTests(TestCase):
+    def test_reflection_estimate_requires_one_digit_and_unique_time_bounds(self):
+        previous = {"time": 100, "value": 12345110}
+        following = {"time": 220, "value": 12345120}
+        self.assertEqual({"left": "12345.1", "digit": "1", "right": "5", "time": 160},
+                         estimate_missing_digit("12345.1?5", 160, previous, following, 3, 6000))
+        self.assertIsNone(estimate_missing_digit(
+            "12345.1?5", 160, previous, {**following, "value": 12345126}, 3, 6000))
+        self.assertIsNone(estimate_missing_digit("12345.1?5", 160, previous, following, 3, 60))
+        self.assertIsNone(single_missing_digit("12345.1??", ["12345.1??"] * 3, 3, 5))
+        self.assertIsNone(single_missing_digit("12345.1?5", ["12345.1?5", "12345.1?4"], 3, 5))
+
+    def test_reflection_can_start_with_a_manual_value_and_await_a_confirmed_reading(self):
+        history = {}
+        rules = {"decimals": 3, "integer_digits": 5, "max_flow_lph": 6000}
+        for stamp in (140, 150, 160):
+            track_reflection(history, "12345.1?5", ["12345.1?5"] * 2, stamp,
+                             verified=False, unclear=True, enabled=False, **rules)
+        self.assertEqual(3, history["reflection_streak"]["count"])
+        self.assertNotIn("reflection_pending", history)
+
+        manual = {"time": 100, "value": 12345110}
+        track_reflection(history, "12345.1?5", ["12345.1?5"] * 2, 160,
+                         verified=False, unclear=True, enabled=True, manual_anchor=manual, **rules)
+        track_reflection(history, "12345.120", [], 200, verified=False, unclear=False, enabled=True, **rules)
+        self.assertNotIn("reflection_estimate", history)
+        track_reflection(history, "12345.120", [], 220, verified=True, unclear=False, enabled=True, **rules)
+        self.assertEqual("1", history["reflection_estimate"]["digit"])
+        self.assertEqual({"time": 220, "value": 12345120}, history["reflection_anchor"])
+        self.assertNotIn("reflection_pending", history)
+
+    def test_edge_camera_only_publishes_local_ocr_without_the_esp_reading(self):
+        class StopLoop(Exception):
+            pass
+
+        folder = Path(self.enterContext(TemporaryDirectory()))
+        files = {key: folder / key for key in (
+            "OPTIONS", "HISTORY", "EFFECTIVE_OPTIONS", "AUTO_RULES", "AUTO_PAUSED",
+            "LANGUAGE_MODES", "SOURCE_SETTINGS", "NOTIFICATIONS", "DESTINATION",
+            "GOOD_IMAGE", "TEST_IMAGE", "AUTOMATIC_PREVIEW",
+        )}
+        files["OPTIONS"].write_text(json.dumps({
+            "ausschnitt": "0,0,500,100", "vorkomma_breite": 350, "ocr_versuche": 1,
+        }))
+        files["SOURCE_SETTINGS"].write_text(json.dumps({
+            "mode": "slfork_camera", "url": "http://meter", "camera": "", "reference": "",
+        }))
+        self.enterContext(patch.multiple(run, **files))
+        self.enterContext(patch.dict(os.environ, {"SUPERVISOR_TOKEN": "stub"}))
+        self.enterContext(patch.object(run, "start_panel", return_value=(None, None, None)))
+        with BytesIO() as stream:
+            synthetic_meter().save(stream, "JPEG")
+            photo = stream.getvalue()
+        fetch = self.enterContext(patch.object(run, "get_bytes", return_value=photo))
+        recognize = self.enterContext(patch.object(run, "read_visible_digits", return_value="12345.???"))
+        published = self.enterContext(patch.object(run, "publish_state"))
+        self.enterContext(patch.object(run, "publish_consumption", side_effect=StopLoop))
+        with self.assertRaises(StopLoop):
+            run.main()
+        fetch.assert_called_once_with("http://meter/camera?task=capture")
+        self.assertEqual(2, recognize.call_count)
+        sensor = published.call_args.args[1]
+        self.assertEqual("unavailable", sensor["state"])
+        self.assertEqual("http://meter", sensor["attributes"]["source_camera"])
+        history = json.loads(files["HISTORY"].read_text())
+        self.assertEqual("standalone_pending", history["check_status"])
+        self.assertIsNone(history["last_reference"])
+        self.assertNotIn("consumption", history)
+        self.assertAlmostEqual(300, history["next_check_at"] - history["last_epoch"], delta=5)
+
+        history["next_check_at"] = 0
+        files["HISTORY"].write_text(json.dumps(history))
+        recognize.reset_mock()
+        recognize.side_effect = lambda frame, *_, **__: "12345.???" if frame.width > 500 else "?????.???"
+        with self.assertRaises(StopLoop):
+            run.main()
+        history = json.loads(files["HISTORY"].read_text())
+        self.assertEqual("ocr_only", history["check_status"])
+        self.assertEqual("12345.???", history["last_reference"])
+        self.assertEqual(-6, history["ocr_rotation_adjustment"])
+        self.assertEqual(10, recognize.call_count)
+        self.assertEqual("12345", published.call_args.args[1]["state"])
+        self.assertEqual(-6, history["learned_rotation"]["adjustment"])
+
+        history["next_check_at"] = 0
+        files["HISTORY"].write_text(json.dumps(history))
+        recognize.reset_mock()
+        with self.assertRaises(StopLoop):
+            run.main()
+        history = json.loads(files["HISTORY"].read_text())
+        self.assertEqual("standalone_pending", history["check_status"])
+        self.assertEqual(-6, history["standalone_candidate"]["rotation_adjustment"])
+        self.assertEqual(2, recognize.call_count)
+    def test_skipping_setup_does_not_fetch_the_placeholder_slfork_url(self):
+        class WaitingForSource(Exception):
+            pass
+
+        class StopOnWait(run.Event):
+            def wait(self, timeout=None):
+                raise WaitingForSource
+
+        folder = Path(self.enterContext(TemporaryDirectory()))
+        files = {key: folder / key for key in (
+            "OPTIONS", "HISTORY", "EFFECTIVE_OPTIONS", "AUTO_RULES", "AUTO_PAUSED",
+            "LANGUAGE_MODES", "SOURCE_SETTINGS", "NOTIFICATIONS",
+        )}
+        files["OPTIONS"].write_text("{}")
+        self.enterContext(patch.multiple(run, **files, Event=StopOnWait))
+        self.enterContext(patch.dict(os.environ, {"SUPERVISOR_TOKEN": "stub"}))
+
+        def skip_in_panel(*_, **kwargs):
+            kwargs["skip_setup"]()
+            return None, None, None
+
+        self.enterContext(patch.object(run, "start_panel", skip_in_panel))
+        capture = self.enterContext(patch.object(run, "capture"))
+        with self.assertRaises(WaitingForSource):
+            run.main()
+        capture.assert_not_called()
+
+    def test_last_digit_can_pass_with_warning_after_three_distinct_samples(self):
+        now = datetime.now(timezone.utc)
+        for strict in (False, True):
+            with self.subTest(strict=strict):
+                history = {}
+                for index in range(3):
+                    data = sample(now - timedelta(seconds=3 - index))
+                    data.update(raw_value="12345.2276", actual_value="12345.2276")
+                    readings = ("12345.222", "12345.22?", "12345.222")
+                    self.assertTrue(record_sample(history, data, "12345.222", timezone.utc, now, 3,
+                                                  readings=readings, precision_mode=strict))
+                    self.assertFalse(record_sample(history, data, "12345.222", timezone.utc, now, 3,
+                                                   readings=readings, precision_mode=strict))
+                    if index < 2 or strict:
+                        self.assertEqual(("difference", LAST_DIGIT_NOTICE),
+                                         (history["status"], history["check_detail"]))
+                    else:
+                        self.assertEqual(("match_with_warning", LAST_DIGIT_PASS),
+                                         (history["status"], history["check_detail"]))
+                    schedule_next_check(history, history["status"], now.timestamp())
+                self.assertEqual([], history["confirmations"])
+                self.assertNotIn("last_match_at", history)
+                if not strict:
+                    self.assertNotIn("failure_since", history)
+                    self.assertEqual(now.timestamp() + NORMAL_INTERVAL, history["next_check_at"])
+
+    def test_last_digit_warning_requires_agreeing_prefixes_and_valid_reference(self):
+        now = datetime.now(timezone.utc)
+        expected = {**sample(now), "raw_value": "12345.2276", "actual_value": "12345.2276"}
+        for data, reading, readings in (
+            (expected, "12345.212", ("12345.212",) * 3),
+            (expected, "12345.222", ("12345.212", "12345.222", "12345.21?")),
+            ({**expected, "reference_is_fallback": True}, "12345.222", ("12345.222",) * 3),
+            ({**expected, "raw_value": "12345.2376"}, "12345.222", ("12345.222",) * 3),
+        ):
+            with self.subTest(data=data, reading=reading):
+                history = {"last_digit_failures": 2}
+                self.assertTrue(record_sample(history, data, reading, timezone.utc, now, 3, readings=readings))
+                self.assertNotEqual("match_with_warning", history["status"])
+                self.assertNotIn("last_digit_failures", history)
+
+    def test_saving_settings_bypasses_the_previous_interval(self):
+        class StopLoop(Exception):
+            pass
+
+        class NoWait(run.Event):
+            def wait(self, timeout=None):
+                raise AssertionError(f"Worker waited {timeout}s instead of checking the saved settings")
+
+        folder = Path(self.enterContext(TemporaryDirectory()))
+        files = {name: folder / name for name in (
+            "OPTIONS", "HISTORY", "EFFECTIVE_OPTIONS", "AUTO_RULES", "AUTO_PAUSED",
+            "LANGUAGE_MODES", "SOURCE_SETTINGS", "NOTIFICATIONS", "DESTINATION",
+            "GOOD_IMAGE", "TEST_IMAGE", "AUTOMATIC_PREVIEW",
+        )}
+        files["OPTIONS"].write_text(json.dumps({
+            "esp_url": "http://meter", "ausschnitt": "0,0,500,100", "vorkomma_breite": 350,
+        }))
+        self.enterContext(patch.multiple(run, **files, Event=NoWait))
+        self.enterContext(patch.dict(os.environ, {"SUPERVISOR_TOKEN": "stub"}))
+        with BytesIO() as stream:
+            synthetic_meter().save(stream, "JPEG")
+            photo = stream.getvalue()
+        rules = {}
+
+        def fake_panel(*args, **kwargs):
+            rules.update(read=args[6], save=args[7], activity=kwargs["get_activity"])
+            return None, None, None
+
+        self.enterContext(patch.object(run, "start_panel", fake_panel))
+        capture = self.enterContext(patch.object(run, "capture", side_effect=(
+            (photo, None, sample(datetime.now(timezone.utc) - timedelta(seconds=5))),
+            (photo, None, sample(datetime.now(timezone.utc))),
+        )))
+        self.enterContext(patch.object(run, "read_visible_digits", return_value="12345.170"))
+        self.enterContext(patch.object(run, "publish_state"))
+        published = []
+
+        def publish(history, _):
+            published.append(dict(history))
+            if len(published) == 1:
+                rules["save"]({**rules["read"](), "interval_minutes": 120})
+                self.assertEqual("queued", rules["activity"]()["state"])
+            else:
+                raise StopLoop
+
+        self.enterContext(patch.object(run, "publish_consumption", side_effect=publish))
+        with self.assertRaises(StopLoop):
+            run.main()
+        self.assertEqual(2, capture.call_count)
+        self.assertEqual(120, published[-1]["check_interval_minutes"])
+        self.assertEqual("match", published[-1]["check_status"])
+
     def test_startup_upgrade_keeps_values_and_supervisor_overrides(self):
         options = load_options({"ocr_versuche": 8}, {"options": {"esp_url": "http://my-meter",
                                                                "ausschnitt": "1,2,50,55",
@@ -211,6 +495,21 @@ class StateTests(TestCase):
         self.assertEqual((2000, 2060, 2000),
                          (last_check_at(history), history["next_check_at"], history["failure_since"]))
 
+    def test_slfork_interval_floor_and_duplicate_cycle_without_counting_a_failure(self):
+        self.assertEqual(5, automatic_interval_minutes(1, "slfork"))
+        self.assertEqual(60, automatic_interval_minutes(60, "slfork"))
+        self.assertEqual(1, automatic_interval_minutes(1, "slfork_camera"))
+        self.assertEqual(1, automatic_interval_minutes(1, "esphome"))
+
+        # Older history did not store the last check time separately.
+        history = {"check_status": "ocr_unclear", "next_check_at": 1300, "failure_attempts": 1,
+                   "check_interval_minutes": 5, "failure_since": 1000, "confirmations": []}
+        defer_duplicate_cycle(history, 1300, 5)
+        self.assertEqual((1000, 1600, 1, 1000),
+                         (last_check_at(history), history["next_check_at"],
+                          history["failure_attempts"], history["failure_since"]))
+        self.assertEqual([], history["confirmations"])
+
     def test_fallback_plausibility_uses_time_repeatable_digits_and_flow_limit(self):
         reference = {"reference": "12346.0416", "reference_time": 1000}
         source = ["slfork", "http://meter", ""]
@@ -237,7 +536,7 @@ class StateTests(TestCase):
                                                 "vorkomma_breite": 350, "vergleich_nachkommastellen": 3}))
         self.enterContext(patch.multiple(run, **files))
         self.enterContext(patch.dict(os.environ, {"SUPERVISOR_TOKEN": "stub"}))
-        self.enterContext(patch.object(run, "start_panel", return_value=(None, None)))
+        self.enterContext(patch.object(run, "start_panel", return_value=(None, None, None)))
         with BytesIO() as stream:
             synthetic_meter().save(stream, "JPEG")
             photo = stream.getvalue()
@@ -250,7 +549,12 @@ class StateTests(TestCase):
 
         def check(payload, ocr):
             recognize.return_value = ocr
-            capture.side_effect = lambda *_: (photo, None, dict(payload))
+
+            def fake_capture(_, diagnostics):
+                diagnostics["slfork_process_error"] = payload.get("slfork_process_error")
+                return None if run.slfork_cycle_failed(diagnostics) else (photo, None, dict(payload))
+
+            capture.side_effect = fake_capture
             if files["HISTORY"].exists():
                 history = json.loads(files["HISTORY"].read_text())
                 files["HISTORY"].write_text(json.dumps({**history, "next_check_at": 0}))
@@ -278,6 +582,35 @@ class StateTests(TestCase):
         self.assertFalse(recovered["last_reference_is_fallback"])
         self.assertEqual(309, recovered["consumption"]["total_litres"])
         self.assertEqual(2, len(recovered["confirmations"]))
+
+        old_sample = {**sample(now - timedelta(minutes=30)), "actual_value": "12346.351"}
+        for payload in (old_sample, {**sample(now), "slfork_process_error": -2}):
+            with self.subTest(payload=payload):
+                with patch.object(run, "get_bytes", return_value=photo) as fetch:
+                    local = check(payload, "12346.351")
+                    fetch.assert_called_once_with("http://meter/camera?task=capture")
+                self.assertEqual("ocr_only", local["check_status"])
+                self.assertEqual("12346.351", local["ocr_value"])
+                self.assertIsNone(local["last_reference"])
+                self.assertEqual(run.SLFORK_RAW_SUCCESS, local["source_connection_detail"])
+                self.assertEqual("stale", local["source_connection_status"])
+                self.assertEqual(recovered["confirmations"], local["confirmations"])
+                self.assertEqual(recovered["consumption"], local["consumption"])
+
+        with patch.object(run, "get_bytes", return_value=photo):
+            uncertain = check(old_sample, "?????.???")
+        self.assertEqual("ocr_unclear", uncertain["check_status"])
+        self.assertNotEqual(run.SLFORK_RAW_SUCCESS, uncertain["source_connection_detail"])
+
+        for index in range(3):
+            timestamp = datetime.now(timezone.utc) + timedelta(seconds=index + 1)
+            marginal = check({
+                **sample(timestamp), "raw_value": "12346.3530", "actual_value": "12346.3530",
+            }, "12346.354")
+        self.assertEqual("match_with_warning", marginal["check_status"])
+        self.assertEqual(12346353, marginal["consumption"]["reading_litres"])
+        self.assertEqual(recovered["consumption"]["total_litres"] + 2, marginal["consumption"]["total_litres"])
+        self.assertEqual(recovered["confirmations"], marginal["confirmations"])
     def test_standalone_sensor_retains_exact_precision_and_rejects_lower_readings(self):
         data = sample(datetime.now(timezone.utc))
         latest = run.standalone_reading("camera.meter", data, "12345.170", 2, None)
@@ -286,7 +619,7 @@ class StateTests(TestCase):
         with patch.object(run, "publish_state") as publish:
             run.publish_standalone({"standalone_reading": latest, "check_status": "ocr_only"}, "camera.meter", "stub")
             url, body, _ = publish.call_args.args
-        self.assertTrue(url.endswith("sensor.rf1_ocr_zaehlerstand"))
+        self.assertTrue(url.endswith("sensor.rf1_beta_ocr_zaehlerstand"))
         self.assertEqual("12345.17", body["state"])
         self.assertEqual("m³", body["attributes"]["unit_of_measurement"])
         self.assertNotIn("state_class", body["attributes"])
@@ -313,7 +646,7 @@ class StateTests(TestCase):
         with BytesIO() as stream:
             synthetic_meter().save(stream, "PNG")
             photo = stream.getvalue()
-        self.enterContext(patch.object(run, "start_panel", return_value=(None, None)))
+        self.enterContext(patch.object(run, "start_panel", return_value=(None, None, None)))
         fetch = self.enterContext(patch.object(run, "get_bytes", return_value=photo))
         recognize = self.enterContext(patch.object(run, "read_visible_digits", return_value="12345.???"))
         published = {}
@@ -321,17 +654,35 @@ class StateTests(TestCase):
         def collect(url, payload, _):
             entity = url.rsplit("/", 1)[1]
             published[entity] = payload
-            if entity == run.CONSUMPTION_ENTITY:
-                raise StopLoop
 
         self.enterContext(patch.object(run, "publish_state", collect))
-        with self.assertRaises(StopLoop):
-            run.main()
+        publish_consumption = run.publish_consumption
+
+        def finish_run(history, token):
+            publish_consumption(history, token)
+            raise StopLoop
+
+        self.enterContext(patch.object(run, "publish_consumption", finish_run))
+
+        def check(ocr):
+            recognize.return_value = ocr
+            if files["HISTORY"].exists():
+                history = json.loads(files["HISTORY"].read_text())
+                history["next_check_at"] = 0
+                files["HISTORY"].write_text(json.dumps(history))
+            with self.assertRaises(StopLoop):
+                run.main()
+            return json.loads(files["HISTORY"].read_text())
+
+        pending = check("12345.???")
         fetch.assert_called_once_with("http://supervisor/core/api/camera_proxy/camera.esp", "stub", timeout=8)
         self.assertEqual(2, recognize.call_count)
+        self.assertEqual("standalone_pending", pending["check_status"])
+        self.assertEqual("unavailable", published[run.OCR_ENTITY]["state"])
+        self.assertNotIn(run.CONSUMPTION_ENTITY, published)
+        initial = check("12345.???")
         self.assertEqual("12345", published[run.OCR_ENTITY]["state"])
         self.assertEqual("ocr_only", published[run.CHECK_ENTITY]["state"])
-        initial = json.loads(files["HISTORY"].read_text())
         self.assertEqual([], initial["confirmations"])
         self.assertEqual("0", published[run.CONSUMPTION_ENTITY]["state"])
         attributes = published[run.CONSUMPTION_ENTITY]["attributes"]
@@ -343,25 +694,19 @@ class StateTests(TestCase):
             self.assertEqual("JPEG", overlay.format)
             self.assertGreater(overlay.width, 0)
 
-        initial["next_check_at"] = 0
         initial["consumption"]["timestamp"] -= 3600
         files["HISTORY"].write_text(json.dumps(initial))
-        recognize.return_value = "12347.???"
-        with self.assertRaises(StopLoop):
-            run.main()
+        self.assertEqual("standalone_pending", check("12347.???")["check_status"])
+        self.assertEqual("12345", published[run.OCR_ENTITY]["state"])
+        second = check("12347.???")
         self.assertEqual("2", published[run.CONSUMPTION_ENTITY]["state"])
-        second = json.loads(files["HISTORY"].read_text())
-
-        second["next_check_at"] = 0
-        files["HISTORY"].write_text(json.dumps(second))
-        recognize.return_value = "13347.???"
-        with self.assertRaises(StopLoop):
-            run.main()
-        rejected = json.loads(files["HISTORY"].read_text())
+        self.assertEqual("standalone_pending", check("12347.???")["check_status"])
+        rejected = check("13347.???")
         self.assertEqual("2", published[run.CONSUMPTION_ENTITY]["state"])
         self.assertEqual("unavailable", published[run.OCR_ENTITY]["state"])
         self.assertEqual("ocr_unclear", published[run.CHECK_ENTITY]["state"])
-        self.assertEqual(EXCESSIVE_INCREASE, rejected["check_detail"])
+        self.assertIn(EXCESSIVE_INCREASE, rejected["check_detail"])
+        self.assertIn("zweite Aufnahme", rejected["check_detail"])
         self.assertEqual(second["consumption"], rejected["consumption"])
 
     def test_main_keeps_manual_run_separate_from_automated_entities_and_history(self):
@@ -390,7 +735,7 @@ class StateTests(TestCase):
                 "crop_mode": "manual", "crop": "0,0,480,100", "width": 350,
                 "manual_reference": "12345.129", "image": jpeg,
             })
-            return None, lambda *args, **kwargs: progress_updates.append((args, kwargs))
+            return None, lambda *args, **kwargs: progress_updates.append((args, kwargs)), None
 
         def fake_publish(url, payload, _):
             published.append((url, payload))

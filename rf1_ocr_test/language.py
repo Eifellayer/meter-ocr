@@ -48,15 +48,18 @@ def load_preferences(path):
 # Do not read browser auth storage or ask Core for other users' preferences.
 PROFILE_SCRIPT = """
 (() => {
-  if (new URLSearchParams(location.search).has('ui')) return;
   document.documentElement.classList.add('resolving-language');
   const user = %s;
+  let firstCheck = true;
+  let checking = false;
   const reveal = () => document.documentElement.classList.remove('resolving-language');
-  async function resolve() {
+  async function syncLanguage() {
+    if (checking) return;
+    checking = true;
     try {
       if (window.top === window) return;
       let hass = window.top.document.querySelector('home-assistant')?.hass;
-      for (let attempt = 0; !hass?.user && attempt < 20; attempt++) {
+      for (let attempt = 0; !hass?.user && firstCheck && attempt < 20; attempt++) {
         await new Promise(resolve => setTimeout(resolve, 150));
         hass = window.top.document.querySelector('home-assistant')?.hass;
       }
@@ -68,19 +71,22 @@ PROFILE_SCRIPT = """
       const raw = response?.value?.language;
       const language = typeof raw === 'string' ? raw.toLowerCase().split(/[-_]/, 1)[0] : '';
       if (language !== 'en' && language !== 'de') return;
-      const url = new URL(location.href);
-      url.searchParams.set('ui', language);
-      location.replace(url);
-      return true;
+      if (document.documentElement.lang !== language) {
+        const url = new URL(location.href);
+        url.searchParams.set('ha_language', language);
+        location.replace(url);
+      }
     } catch (_) {
       // The parent may be cross-origin or the frontend may be unavailable.
+    } finally {
+      checking = false;
+      if (firstCheck) reveal();
+      firstCheck = false;
     }
   }
   const deadline = setTimeout(reveal, 4500);
-  resolve().then(redirecting => {
-    clearTimeout(deadline);
-    if (!redirecting) reveal();
-  });
+  syncLanguage().finally(() => clearTimeout(deadline));
+  setInterval(syncLanguage, 5000);
 })();
 """
 

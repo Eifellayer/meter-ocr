@@ -1,10 +1,10 @@
-# Meter OCR – Home Assistant App
+# AI Meter Reader – Home Assistant App
 
 [Deutsch](README.md) · [Project documentation (English)](../README.en.md)
 
 **Local camera OCR and reference checks for Home Assistant.**
 
-This Home Assistant app takes the latest available gas meter image from **AI on the Edge / SLFork**, or from a compatible Home Assistant camera, reads the digits again with **Tesseract OCR**, and optionally compares the result with an existing reference reading. Designed for the **Pipersberg G4 RF1**.
+This Home Assistant app reads meter images locally with **Tesseract OCR** and can compare its reading with an existing reference. It supports configurable digit counts and sources such as **AI on the Edge / SLFork**, ESPHome, and Home Assistant cameras. It is currently best suited to mechanical meters with rolling digits.
 
 This is an additional plausibility check, **not a certified measurement device**. OCR may be wrong. Read the physical meter for billing and legally relevant measurements. Private hobby project, no warranty or guaranteed support.
 
@@ -12,9 +12,9 @@ This is an additional plausibility check, **not a certified measurement device**
 
 ## Installation
 
-**Meter OCR (Alpha)** is the regular app and the test channel until version 0.5. From 0.5 onward, Beta builds are reserved for larger changes that need dedicated testing.
+**AI Meter Reader (Beta)** is the separate Beta channel in version 0.5.0-beta.1. Version 0.5 focuses on OCR stability, automatic setup and image editing. Pulse sensor work resumes in 0.6 or later.
 
-Add **Add-ons by Eifellayer** under **Settings → Apps → Install app → ⋮ → Repositories** using the [shared link](https://github.com/Eifellayer/meter-ocr), then install **Meter OCR (Alpha)**. Releases below 0.5 use the regular app as their test channel. From 0.5 onward, Beta builds are reserved for larger changes that need dedicated testing. Set `esp_url` for SLFork, or configure `kamera_entitaet` and an optional `referenz_entitaet` sensor.
+Add **Add-ons by Eifellayer** under **Settings → Apps → Install app → ⋮ → Repositories** using the [Beta link](https://github.com/Eifellayer/meter-ocr#beta), then install **AI Meter Reader (Beta)**. Version 0.5.0-beta.1 is the Beta test build; pulse sensor work resumes in 0.6 or later. Set `esp_url` for SLFork, or configure `kamera_entitaet` and an optional `referenz_entitaet` sensor.
 
 ## Choose a language
 
@@ -33,7 +33,7 @@ Saving automatic settings starts a check immediately. Changing the precision res
 
 ## Advanced manual test
 
-Open **Open manual test** only when you need it. It lets you temporarily override all of the above settings and try a custom crop. **Run check now** uses the most recent image, or an optional uploaded JPG/PNG image (up to 3 MB); it does not request a new camera capture.
+**Save and check** opens the overview and starts the automatic check immediately. A yellow progress bar shows image capture and OCR attempts. Choose **Test your own image** to open the manual test with an upload. It lets you temporarily override all of the above settings and try a custom crop. **Run check now** uses the most recent image, or an optional uploaded JPG/PNG image (up to 3 MB); a live camera source captures a fresh still; an uploaded test image is used as-is.
 
 The result appears below the progress indicator, using muted green only for a confirmed match, red for failures, and neutral styling while running or without a reference. It explains whether whole cubic meters or decimal places matched. The annotated image outlines digits the OCR recognized in green and unclear ones in red; red or green here does not establish agreement with the reference. The positions may be approximate without detected frames.
 
@@ -41,10 +41,10 @@ Expand **More details** to see the individual attempt readings. When a custom cr
 
 ## Schedules and files
 
-Successful automatic checks normally run hourly; errors and uncertain readings cause five-minute retries. The default delay for `review_due` is four hours. The **Notifications** panel controls Home Assistant notices, mobile push and email. See the [project guide](../README.en.md#notifications-and-automatic-status).
+Successful automatic checks normally run hourly. After a failed check, up to two more image checks follow at five-minute intervals. If all three fail, the app waits one hour for a higher reading or new image, then tries again. After a successful match, the selected interval applies again. The failed-check count and wait reason appear in the overview. The default delay for `review_due` is four hours. **Pause automatic checks** keeps a large yellow notice visible; manual tests still work. The overview shows whether the app is waiting, capturing an image, or reading it, and whether the ESP/camera returned an image or why it was stale. If the app is stopped or unreachable, an open page reports the lost connection. The **Notifications** panel controls Home Assistant notices, mobile push and email. See the [project guide](../README.en.md#notifications-and-automatic-status).
 
-The app publishes `sensor.rf1_kontrollbild` and `sensor.rf1_pruefstatus`, and stores the latest/last-confirmed images in **Media → Local Media → rf1**. Neither entity name is translated because dashboards and automations depend on it.
+The app publishes `sensor.rf1_beta_kontrollbild` and `sensor.rf1_beta_pruefstatus`, and stores the latest/last-confirmed images in **Media → Local Media → rf1**. Neither entity name is translated because dashboards and automations depend on it.
 
 Full options and troubleshooting: [Project documentation](../README.en.md).
 
-Support: [GitHub Issues](https://github.com/Eifellayer/meter-ocr/issues). Optional donations are linked in the app under **About Meter OCR**.
+Support: [GitHub Issues](https://github.com/Eifellayer/meter-ocr/issues). Optional donations are linked in the app under **About AI Meter Reader**.

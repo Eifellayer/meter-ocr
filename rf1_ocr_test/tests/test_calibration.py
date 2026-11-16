@@ -431,6 +431,16 @@ class CalibrationTests(TestCase):
         self.assertTrue(self.job.optimizing)
         self.assertEqual(0, self.job.confirmations)
 
+    def test_only_one_open_required_slot_triggers_intensive_search(self):
+        self.job = Calibration(5, 0, rank_candidates=True, simplified=True)
+        rules = {**RULES, "decimals": 3, "fraction_digits": 3}
+        sample = {"reference_time": 100, "raw_value": "12345.23?", "actual_value": "12345.23?"}
+        checked = []
+        self.job.examine(frame(1), None, sample, 101, rules, lambda *_: "12345.2??", lambda: False,
+                         on_shortlist=lambda number, _: checked.append(number))
+        self.assertEqual([1], checked)
+        self.assertEqual(0, self.job.confirmations)
+
     def test_sweeps_in_one_degree_steps_then_refines_at_the_best_angle(self):
         base = Layout((0, 0, 90, 25), 0, 55, method="register_window")
         self.candidates.return_value = [base]

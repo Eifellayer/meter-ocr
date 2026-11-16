@@ -778,13 +778,19 @@ class Calibration:
                 found = any(reliable(score) for score, _, _ in coarse)
                 required_slots = digits + precision
                 almost_complete = round(100 * (required_slots - 1) / required_slots)
-                promising = any(
-                    percentage >= INTENSIVE_AGREEMENT
-                    or (required_slots >= 2 and percentage >= almost_complete
-                        and len(uncertain_slots(values, required_slots)) == 1)
-                        for _, layout, values in coarse
-                    for percentage in (self.shortlist.get(layout, (0, 0))[0],)
-                )
+
+                def promising_candidate(layout, values):
+                    percentage = self.shortlist.get(layout, (0, 0))[0]
+                    if percentage >= INTENSIVE_AGREEMENT:
+                        return True
+                    if required_slots < 2 or percentage < almost_complete:
+                        return False
+                    required_rows = [
+                        str(value).replace(".", "").replace(",", "")[:required_slots] for value in values
+                    ]
+                    return len(uncertain_slots(required_rows, required_slots)) == 1
+
+                promising = any(promising_candidate(layout, values) for _, layout, values in coarse)
                 self.optimizing = self.coarse_attempts >= COARSE_LIMIT or found or promising
                 if self.coarse_attempts >= COARSE_LIMIT and not found:
                     # Re-read the full ranked list against the next image and its reference.

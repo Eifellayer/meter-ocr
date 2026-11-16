@@ -143,11 +143,13 @@ class Calibration:
         self.last_stamp = stamp
         return True
 
-    def verify(self, frame, sample, stamp, rules, read, stop):
+    def verify(self, frame, sample, stamp, rules, read, stop, on_image=None):
         """Confirm the exact saved geometry with the regular OCR retry routine."""
         if self.attempts >= MAX_ATTEMPTS or not self.remember_image(frame, stamp):
             return None
         self.attempts += 1
+        if on_image is not None:
+            on_image()
         has_reference = sample.get("reference_required") is not False
         precision = rules["decimals"] if has_reference else rules["fraction_digits"]
         digits = rules["integer_digits"]
@@ -169,10 +171,13 @@ class Calibration:
             return None
         return self.candidate
 
-    def examine(self, frame, overlay, sample, stamp, rules, read, stop, baseline=None, on_attempt=None):
+    def examine(self, frame, overlay, sample, stamp, rules, read, stop, baseline=None, on_attempt=None,
+                on_image=None):
         """Return a verified layout, checking two OCR profiles per distinct image."""
         if not self.remember_image(frame, stamp):
             return None
+        if on_image is not None:
+            on_image()
         has_reference = sample.get("reference_required") is not False
         # Without an outside reference, read every displayed digit to check movement.
         precision = rules["decimals"] if has_reference else rules["fraction_digits"]

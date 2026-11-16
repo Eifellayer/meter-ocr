@@ -1,5 +1,9 @@
 # Changelog
 
+## In Vorbereitung
+
+- Die Selbsteinrichtung zeigt das Kamerabild mit markiertem Suchbereich, den gedrehten Ausschnitt und die Ziffern pro OCR-Versuch live an.
+
 ## 0.5.0 Stable
 
 - Echtzeitvorschau für Bilddrehung und einzeln verschiebbare Ziffernrahmen im manuellen Test und in der Automatik.

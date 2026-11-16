@@ -334,8 +334,16 @@ def read_visible_digits(register, integer_width, whole_boxes, fraction_boxes, li
     return f"{whole}.{fraction.ljust(fraction_digits, '?')}" if fraction_digits else whole
 
 
+def calibration_jpeg(frame, max_size):
+    image = frame.convert("RGB")
+    image.thumbnail(max_size, Image.Resampling.LANCZOS)
+    with io.BytesIO() as buffer:
+        image.save(buffer, "JPEG", quality=84)
+        return buffer.getvalue()
+
+
 def draw_test_preview(register, integer_width, whole_boxes, fraction_boxes, reading,
-                      whole_digits=5, fraction_digits=3, readings=None, composed=False):
+                      whole_digits=5, fraction_digits=3, readings=None, composed=False, pending=False):
     """Mark OCR digit regions and the actual read characters for manual diagnostics.
 
     Green: a digit was read without observed variation; yellow: attempts disagreed
@@ -387,11 +395,11 @@ def draw_test_preview(register, integer_width, whole_boxes, fraction_boxes, read
         l, t, r, b = [int(coord) for coord in box]
         if not (0 <= l < r <= w and 0 <= t < b <= h):
             continue
-        color = ((203, 65, 77) if not chars[idx].isdigit() else
+        color = ((71, 157, 194) if pending else (203, 65, 77) if not chars[idx].isdigit() else
                  (241, 184, 54) if idx in uncertain else (36, 170, 92))
         draw.rectangle((l, t, r - 1, b - 1), outline=color, width=stroke)
         # The label is drawn on a filled patch for contrast against the counter.
-        label = chars[idx]
+        label = str(idx + 1) if pending else chars[idx]
         draw.rectangle((l, t, min(r, l + max(15, w // 45)), min(b, t + 16)),
                        fill=color)
         draw.text((l + 3, t + 2), label, fill=(255, 255, 255))
@@ -820,6 +828,9 @@ def main():
     calibration = None
     calibration_configuration = None
     calibration_next = 0.0
+    calibration_preview = {}
+    calibration_images = {}
+    calibration_preview_version = 0
 
     def calibration_configuration_now():
         return get_auto_rules(), get_source()
@@ -843,6 +854,8 @@ def main():
                         and configuration == calibration_configuration):
                     return
                 calibration = Calibration(limit=limit, started=now)
+                calibration_preview.clear()
+                calibration_images.clear()
                 calibration_configuration = configuration
                 calibration_next = now
             wake_worker.set()
@@ -852,6 +865,7 @@ def main():
             if calibration is None:
                 return None
             status = calibration.status(time.monotonic())
+            status["preview"] = dict(calibration_preview)
             if not status["seconds"] and status["state"] in ("waiting", "testing"):
                 status["state"] = "timeout"
             if status["state"] == "saved":
@@ -860,8 +874,13 @@ def main():
                 status["proposal"] = calibration.best.settings()
             return status
 
+    def calibration_image(kind, version):
+        with settings_lock:
+            return next((content for revision, content in calibration_images.get(kind, ())
+                         if str(revision) == version), None)
+
     def run_calibration(active_rules, active_source, mode, base, camera, reference, source_key):
-        nonlocal calibration, calibration_next
+        nonlocal calibration, calibration_next, calibration_preview_version
         with settings_lock:
             now = time.monotonic()
             job = calibration
@@ -894,6 +913,19 @@ def main():
                 if calibration is job and job.state == "testing":
                     job.stage, job.variant, job.rotation = stage, variant, rotation
                     job.attempts = attempt.attempts
+
+        def report_image(kind, content, **details):
+            nonlocal calibration_preview_version
+            with settings_lock:
+                if calibration is not job or job.state != "testing":
+                    return
+                calibration_preview_version += 1
+                recent = calibration_images.setdefault(kind, [])
+                recent.append((calibration_preview_version, content))
+                del recent[:-2]
+                if kind == "frame":
+                    calibration_preview.clear()
+                calibration_preview.update(details, **{kind: calibration_preview_version})
 
         set_activity("working", "Selbsteinrichtung prüft Bildausschnitt und Drehung.")
         result = None
@@ -936,26 +968,63 @@ def main():
                             except (OSError, ValueError, Image.DecompressionBombError):
                                 pass
 
+                        previous_layout = None
+                        frame_ready = False
+                        readings = []
+                        whole = active_rules["integer_digits"]
+                        fraction = active_rules["fraction_digits"]
+
+                        def on_image():
+                            nonlocal frame_ready
+                            try:
+                                report_image("frame", calibration_jpeg(frame, (720, 540)))
+                                frame_ready = True
+                            except (OSError, ValueError):
+                                pass
+
+                        def report_crop(layout, register, reading):
+                            if not frame_ready:
+                                return
+                            box = layout.box
+                            region = [box[0] / frame.width, box[1] / frame.height,
+                                      (box[2] - box[0]) / frame.width, (box[3] - box[1]) / frame.height]
+                            try:
+                                preview = draw_test_preview(
+                                    *register[:4], reading, whole, fraction, readings=readings, pending=reading is None,
+                                )
+                                report_image("crop", calibration_jpeg(preview, (820, 300)),
+                                             region=region, reading=reading, angle=layout.rotation, approximate=not bool(layout.digit_boxes))
+                            except (OSError, ValueError):
+                                pass
+
                         def read(layout, profile):
+                            nonlocal previous_layout
                             register = select_register(
-                                frame, None, layout.box, layout.width, layout.rotation,
-                                active_rules["integer_digits"], active_rules["fraction_digits"], digit_boxes=layout.digit_boxes,
+                                frame, None, layout.box, layout.width, layout.rotation, whole, fraction,
+                                digit_boxes=layout.digit_boxes,
                             )
-                            return read_visible_digits(
+                            if layout != previous_layout:
+                                readings.clear()
+                                previous_layout = layout
+                                report_crop(layout, register, None)
+                            reading = read_visible_digits(
                                 *register[:4], options["helle_ziffern"], active_rules["polarity"], profile=profile,
-                                whole_digits=active_rules["integer_digits"],
-                                fraction_digits=active_rules["fraction_digits"], deadline=deadline,
+                                whole_digits=whole, fraction_digits=fraction, deadline=deadline,
                                 prefer_boxes=bool(layout.digit_boxes),
                             )
+                            readings.append(reading)
+                            report_crop(layout, register, reading)
+                            return reading
 
                         if attempt.verification_pending:
                             report_calibration("verify", rotation=attempt.candidate.rotation)
-                            selected = attempt.verify(frame, sample, captured, active_rules, read, stopped)
+                            selected = attempt.verify(frame, sample, captured, active_rules, read, stopped, on_image=on_image)
                         else:
                             report_calibration("search")
                             candidate = attempt.examine(
                                 frame, overlay, sample, captured, active_rules, read, stopped, baseline,
                                 on_attempt=lambda variant, rotation: report_calibration("ocr", variant, rotation),
+                                on_image=on_image,
                             )
                             attempt.verification_pending = candidate is not None
         except (OSError, ValueError, TypeError, Image.DecompressionBombError) as error:
@@ -994,6 +1063,7 @@ def main():
         get_activity=get_automatic_activity,
         get_auto_paused=get_auto_paused, save_auto_paused=save_auto_paused,
         settings_lock=settings_lock, get_calibration=calibration_status, control_calibration=control_calibration,
+        get_calibration_image=calibration_image,
     )
     reminder = Reminder(token)
     pending_image = None
@@ -1004,7 +1074,7 @@ def main():
     def perform_factory_reset():
         nonlocal history, configured_source, setup_pending, auto_rules, delivery, source_selected
         nonlocal pending_image, startup, published_standalone, snapshot
-        nonlocal handled_automatic_request
+        nonlocal handled_automatic_request, calibration
         try:
             reminder.clear_for_reset(history)
             paths = (
@@ -1028,7 +1098,10 @@ def main():
             atomic_write(EFFECTIVE_OPTIONS, json.dumps(snapshot, indent=2).encode("utf-8"), 0o600)
             handled_automatic_request = automatic_request
             reset_manual_progress()
-            control_calibration("cancel", 0)
+            with settings_lock:
+                calibration = None
+                calibration_preview.clear()
+                calibration_images.clear()
             reset_result["value"] = "done"
         except (OSError, ValueError, TypeError) as error:
             print(f"Werkreset konnte nicht abgeschlossen werden: {type(error).__name__}")

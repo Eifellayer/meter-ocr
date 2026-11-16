@@ -276,6 +276,81 @@ class StateTests(TestCase):
         self.assertEqual({"time": 220, "value": 12345120}, history["reflection_anchor"])
         self.assertNotIn("reflection_pending", history)
 
+    def test_calibration_preview_shows_real_ocr_on_a_rotated_synthetic_camera_image(self):
+        from threading import Event
+
+        class Done(Exception):
+            pass
+
+        class StopAfterFrame(Event):
+            def wait(self, timeout=None):
+                raise Done
+
+        folder = Path(self.enterContext(TemporaryDirectory()))
+        files = {name: folder / name for name in (
+            "OPTIONS", "HISTORY", "EFFECTIVE_OPTIONS", "AUTO_RULES", "AUTO_PAUSED",
+            "LANGUAGE_MODES", "SOURCE_SETTINGS", "NOTIFICATIONS", "DESTINATION",
+            "GOOD_IMAGE", "TEST_IMAGE", "AUTOMATIC_PREVIEW",
+        )}
+        files["OPTIONS"].write_text(json.dumps({"ausschnitt": "0,0,640,480", "vorkomma_breite": 350}))
+        files["SOURCE_SETTINGS"].write_text(json.dumps({
+            "mode": "camera", "url": "", "camera": "camera.meter", "reference": "sensor.meter",
+        }))
+        files["AUTO_RULES"].write_text(json.dumps({
+            "decimals": 0, "attempts": 2, "integer_digits": 5, "fraction_digits": 0,
+        }))
+        self.enterContext(patch.multiple(run, **files, Event=StopAfterFrame))
+        self.enterContext(patch.dict(os.environ, {"SUPERVISOR_TOKEN": "stub"}))
+        camera = Image.new("RGB", (640, 480), (80, 80, 80))
+        draw = ImageDraw.Draw(camera)
+        draw.rectangle((160, 180, 480, 285), fill="white")
+        draw.text((320, 235), "12345", font=ImageFont.truetype("DejaVuSansMono.ttf", 72),
+                  fill="black", anchor="mm")
+        photo = turn_crop(camera, 3)
+        recorded = datetime.now(timezone.utc)
+        measurement = {**sample(recorded), "raw_value": "12345", "actual_value": "12345",
+                       "reference_time": recorded.timestamp(), "reference_required": True}
+        self.enterContext(patch.object(run, "capture_camera", return_value=(
+            run.calibration_jpeg(photo, photo.size), None, measurement,
+        )))
+        access = {}
+
+        def fake_panel(*args, **kwargs):
+            access.update(status=kwargs["get_calibration"], image=kwargs["get_calibration_image"],
+                          control=kwargs["control_calibration"])
+            access["control"]("start", 4)
+            return None, None, None
+
+        self.enterContext(patch.object(run, "start_panel", fake_panel))
+        observed = []
+        recognize = run.read_visible_digits
+
+        def check_pending(*args, **kwargs):
+            status = access["status"]()
+            preview = status["preview"]
+            observed.append((status["stage"], preview["reading"], preview["crop"]))
+            return recognize(*args, **kwargs)
+
+        self.enterContext(patch.object(run, "read_visible_digits", side_effect=check_pending))
+        with self.assertRaises(Done):
+            run.main()
+        self.assertEqual(("ocr", None), observed[0][:2])
+        preview = access["status"]()["preview"]
+        self.assertEqual("12345", preview["reading"])
+        self.assertEqual(-3, preview["angle"])
+        self.assertEqual(4, len(preview["region"]))
+        self.assertGreater(preview["crop"], observed[0][2])
+        for kind in ("frame", "crop"):
+            content = access["image"](kind, str(preview[kind]))
+            with Image.open(BytesIO(content)) as image:
+                self.assertEqual("JPEG", image.format)
+                self.assertGreater(image.width, 10)
+        self.assertIsNone(access["image"]("frame", "0"))
+        access["control"]("cancel", 0)
+        access["control"]("start", 4)
+        self.assertEqual({}, access["status"]()["preview"])
+        self.assertIsNone(access["image"]("frame", str(preview["frame"])))
+
     def test_edge_camera_only_publishes_local_ocr_without_the_esp_reading(self):
         class StopLoop(Exception):
             pass

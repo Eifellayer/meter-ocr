@@ -32,6 +32,25 @@ SUPERVISOR_ADDRESS = "172.30.32.2"
 MAX_MANUAL_IMAGE_BYTES = 3_000_000
 MAX_MULTIPART_OVERHEAD = 16_384
 
+CALIBRATION_PREVIEW_HTML = """<details class="calibration-photo-panel" open hidden>
+<summary>Bilder der Selbsteinrichtung</summary>
+<div class="calibration-photo-grid">
+<figure>
+<div class="calibration-photo-frame">
+<img data-image="frame" alt="Kamerabild der Selbsteinrichtung" decoding="async">
+<span class="calibration-crop-region" hidden></span>
+</div>
+<figcaption>Aktuelles Kamerabild</figcaption>
+</figure>
+<figure class="calibration-crop-figure" hidden>
+<img data-image="crop" alt="Geprüfter Bildausschnitt mit einzelnen Ziffernrahmen" decoding="async">
+<figcaption>Geprüfter Ausschnitt <span class="calibration-preview-angle"></span></figcaption>
+<p class="calibration-preview-reading"></p>
+</figure>
+</div>
+<p class="calibration-preview-help">Die App sucht in diesem Bild nach der Ziffernreihe.</p>
+</details>"""
+
 PAGE = """<!doctype html>
 <html lang="{language}"><meta charset="utf-8"><meta name="viewport" content="width=device-width">
 <title>{app_name}</title>
@@ -149,6 +168,16 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .calibration-live[data-tone="error"],#calibration-state[data-tone="error"]{{color:light-dark(#86272d,#ffb6bb);background:light-dark(#fff0f0,#46252b);font-size:1.12rem;font-weight:750}}
 .calibration-live progress,.calibration-card progress{{display:block;width:100%;margin:.55rem 0;accent-color:#bb861b}}
 .calibration-card form{{margin-top:.75rem}}
+.calibration-photo-panel{{margin:.75rem 0 0;color:light-dark(#243b4b,#e5edf5);font-size:.9rem;font-weight:400}}
+.calibration-photo-panel summary{{cursor:pointer;font-weight:650}}
+.calibration-photo-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,17rem),1fr));gap:.8rem;margin:.7rem 0}}
+.calibration-photo-grid figure{{margin:0;min-width:0}}
+.calibration-photo-grid img{{display:block;max-width:100%;height:auto;border-radius:.4rem}}
+.calibration-photo-frame{{position:relative;width:fit-content;max-width:100%}}
+.calibration-crop-region{{position:absolute;border:2px solid #ffcd60;border-radius:.1rem;box-shadow:0 0 0 1px #151c23;pointer-events:none}}
+.calibration-photo-grid figcaption{{margin-top:.35rem;color:var(--muted)}}
+.calibration-photo-panel .calibration-preview-help{{font-size:.83rem;color:var(--muted);margin:.35rem 0 0}}
+.calibration-photo-panel .calibration-preview-reading{{overflow-wrap:anywhere;font-weight:650;font-variant-numeric:tabular-nums;margin:.25rem 0 0}}
 .source-mode-guide{{grid-column:1/-1;display:grid;gap:.75rem;grid-template-columns:repeat(auto-fit,minmax(min(100%,14rem),1fr))}}
 .source-mode-guide ul{{padding-inline-start:1.25rem;margin:0}}
 .source-mode-guide li + li{{margin-top:.35rem}}
@@ -270,6 +299,7 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <div id="calibration-overview" class="calibration-live" hidden>
 <p id="calibration-overview-state" role="status"></p>
 <progress id="calibration-overview-progress" aria-label="Verstrichene Zeit der Selbsteinrichtung"></progress>
+{calibration_preview_html}
 </div>
 {wizard_saved_notice}
 <div class="paused-notice" id="paused-notice" {paused_notice_hidden} role="status" aria-live="polite"><strong>Automatik pausiert</strong><p>Es starten keine neuen automatischen Prüfungen. Ein bereits laufender Durchlauf darf noch enden. Manuelle Tests bleiben verfügbar.</p><form method="post" action="automatik-pause" id="resume-auto-form"><input type="hidden" name="lang" value="{language}"><input type="hidden" name="mode" value="{language_mode}"><input type="hidden" name="csrf" value="{csrf}"><input type="hidden" name="paused" value="0"><button type="submit">Automatik fortsetzen</button></form></div>
@@ -451,6 +481,7 @@ name: Zählerstand (OCR)</code></pre>
 <p id="calibration-state" role="status" hidden></p>
 <button type="button" id="calibration-proposal" hidden>Gefundenen Rahmen im Test prüfen</button>
 <progress id="calibration-progress" aria-label="Verstrichene Zeit der Selbsteinrichtung" hidden></progress>
+{calibration_preview_html}
 <form method="post" action="selbsteinrichtung">
 <input type="hidden" name="lang" value="{language}">
 <input type="hidden" name="mode" value="{language_mode}">
@@ -1243,7 +1274,46 @@ calibrationProposal.addEventListener('click', () => {{
   document.querySelector('#open-manual-settings').click();
 }});
 
+function refreshCalibrationImages(preview) {{
+  for (const section of document.querySelectorAll('.calibration-photo-panel')) {{
+    section.hidden = !preview?.frame;
+    if (section.hidden) continue;
+    const frame = section.querySelector('[data-image="frame"]');
+    const crop = section.querySelector('[data-image="crop"]');
+    const region = section.querySelector('.calibration-crop-region');
+    const hasCrop = Boolean(preview.crop);
+    section.querySelector('.calibration-crop-figure').hidden = !hasCrop;
+    for (const [kind, img] of [['frame', frame], ['crop', crop]]) {{
+      const revision = preview[kind];
+      if (!revision) continue;
+      const url = 'lernvorschau.jpg?bild=' + kind + '&v=' + encodeURIComponent(revision);
+      if (img.getAttribute('src') !== url) {{
+        img.hidden = true;
+        img.onload = () => {{ img.hidden = false; }};
+        img.onerror = () => {{ img.hidden = true; img.removeAttribute('src'); }};
+        img.src = url;
+      }}
+    }}
+    region.hidden = !hasCrop || !Array.isArray(preview.region);
+    if (!region.hidden) {{
+      ['left', 'top', 'width', 'height'].forEach((part, index) => {{
+        region.style[part] = preview.region[index] * 100 + '%';
+      }});
+    }}
+    section.querySelector('.calibration-preview-angle').textContent = hasCrop ? ' · ' + preview.angle + '°' : '';
+    section.querySelector('.calibration-preview-reading').textContent = preview.reading ?
+      'OCR gelesen: ' + preview.reading : 'Ziffern werden gelesen …';
+    section.querySelector('.calibration-preview-help').textContent = !hasCrop ?
+      'Die App sucht in diesem Bild nach der Ziffernreihe.' : preview.reading ?
+      'Grün: gelesen. Gelb: OCR-Versuche weichen ab. Rot: unklar.' :
+      'Die blauen Rahmen zeigen, welche Stellen die App gerade prüft.';
+    if (hasCrop && preview.approximate) section.querySelector('.calibration-preview-help').append(
+      ' Die Position der Ziffernrahmen ist angenähert.');
+  }}
+}}
+
 function refreshCalibration(status) {{
+  refreshCalibrationImages(status?.preview);
   if (!status) return;
   const active = status.state === 'waiting' || status.state === 'testing';
   const label = document.querySelector('#calibration-state');
@@ -1649,7 +1719,7 @@ def start_panel(
     wake_worker=None, *, address=("0.0.0.0", 8099), test_source_image=None, automatic_preview=None,
     request_factory_reset=None, get_reset_status=None, skip_setup=None, get_activity=None,
     get_auto_paused=None, save_auto_paused=None, discover_sources=None,
-    settings_lock=None, get_calibration=None, control_calibration=None,
+    settings_lock=None, get_calibration=None, control_calibration=None, get_calibration_image=None,
 ):
     images = {"/aktuell.jpg": current_image, "/treffer.jpg": good_image,
               "/testvorschau.jpg": test_image}
@@ -1965,6 +2035,16 @@ def start_panel(
                 else:
                     self.reply(content, "image/jpeg")
                 return
+            if path == "/lernvorschau.jpg":
+                kind = query.get("bild", [""])[0]
+                version = query.get("v", [""])[0]
+                content = (get_calibration_image(kind, version)
+                           if get_calibration_image is not None and kind in ("frame", "crop") else None)
+                if content is None:
+                    self.send_error(404)
+                else:
+                    self.reply(content, "image/jpeg")
+                return
             if path == "/bildquellen":
                 sources = discover_sources() if discover_sources else []
                 self.reply(json.dumps(sources).encode("utf-8"), "application/json; charset=utf-8")
@@ -2123,6 +2203,8 @@ def start_panel(
                 language_options=select_options({"auto": automatic, "de": "Deutsch", "en": "English"}, mode),
                 settings_open="open" if saved in ("1", "crop", "crop-reset", "fallback") else "",
                 fallback_saved_notice=auto_saved_notice if saved == "fallback" else "",
+                calibration_preview_html=(translate_page(CALIBRATION_PREVIEW_HTML) if language == "en"
+                                          else CALIBRATION_PREVIEW_HTML),
                 calibration_saved_notice=auto_saved_notice if saved == "setup-calibration" else "",
                 calibration_hidden="" if control_calibration else "hidden",
                 calibration_min=MIN_IMAGE_LIMIT, calibration_max=MAX_IMAGES,

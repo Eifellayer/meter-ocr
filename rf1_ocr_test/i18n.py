@@ -123,6 +123,8 @@ EN_UI = {
     "Gefundenen Rahmen mit der normalen Prüfung gegenprüfen …": "Cross-checking the crop with the regular OCR check …",
     "Selbsteinrichtung fehlgeschlagen. Prüfe Bildausschnitt, Kamerawinkel und Beleuchtung.":
         "Automatic setup failed. Check the crop, camera angle and lighting.",
+    "Nachjustierung nach vier Minuten beendet. Der bisherige Rahmen bleibt gültig.":
+        "Automatic realignment ended after four minutes. The previous crop stays in use.",
     "Selbsteinrichtung nach 15 Minuten beendet. Keine Einstellung sicher bestätigt.":
         "Automatic setup ended after 15 minutes without finding a reliable crop and rotation.",
     "Selbsteinrichtung gestoppt.": "Automatic setup stopped.",

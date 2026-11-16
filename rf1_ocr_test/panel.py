@@ -1351,7 +1351,8 @@ function refreshCalibration(status) {{
     testing: 'Prüfe Ausschnitt und Drehung …',
     saved: 'Erfolgreich eingerichtet. Ausschnitt und Drehung sind übernommen.',
     failed: 'Selbsteinrichtung fehlgeschlagen. Prüfe Bildausschnitt, Kamerawinkel und Beleuchtung.',
-    timeout: 'Selbsteinrichtung nach 15 Minuten beendet. Keine Einstellung sicher bestätigt.',
+    timeout: status.automatic ? 'Nachjustierung nach vier Minuten beendet. Der bisherige Rahmen bleibt gültig.' :
+      'Selbsteinrichtung nach 15 Minuten beendet. Keine Einstellung sicher bestätigt.',
     cancelled: 'Selbsteinrichtung gestoppt.',
     save_failed: 'Ausschnitt und Drehung konnten nicht gespeichert werden.',
   }};

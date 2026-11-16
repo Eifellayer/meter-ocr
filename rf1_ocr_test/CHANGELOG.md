@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.12 Stable
+
+- Bei drei eingestellten Nachkommastellen kalibriert die Ersteinrichtung zunächst auf zwei bestätigte Stellen. Die dritte kann anschließend intensiv gesucht oder im Kamerabild manuell markiert werden.
+
 ## 0.5.11 Stable
 
 - Beim optionalen Startwert lässt sich ein Kamerabild schon vor dem Speichern der Einrichtung laden.

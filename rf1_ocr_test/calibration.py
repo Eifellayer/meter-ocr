@@ -247,6 +247,12 @@ def guided_layouts(frame, overlay, rules, offset, current, region):
         yield replace(layout, box=(a + left, b + top, c + left, d + top))
 
 
+def two_decimal_reading(value):
+    """Mask trailing digits so the comparison cannot round using an open slot."""
+    whole, separator, fraction = str(value).replace(",", ".").partition(".")
+    return f"{whole}.{fraction[:2]}?" if separator and len(fraction) >= 2 else value
+
+
 def reference_rejection(sample, status):
     if sample.get("reference_is_fallback") or not sample.get("reference_time"):
         return "reference_unavailable"
@@ -386,6 +392,8 @@ class Calibration:
     advanced: bool = False
     verification_pending: bool = False
     automatic: bool = False
+    simplified: bool = False
+    intensive: bool = False
     duration: int = TIME_LIMIT
     attempt_limit: int = MAX_ATTEMPTS
     previous_layout: Layout | None = None
@@ -407,10 +415,13 @@ class Calibration:
     def image_wait_expired(self, now):
         return now - (self.last_image_at if self.last_image_at is not None else self.started) >= IMAGE_WAIT_LIMIT
 
+    def precision(self, rules, has_reference):
+        return 2 if self.simplified else rules["decimals"] if has_reference else rules["fraction_digits"]
+
     def sweep_angles(self, layout, readings, sample, rules, read, stop, report, tested, frame_ceiling):
         whole, fraction = rules["integer_digits"], rules["fraction_digits"]
         referenced = sample.get("reference_required") is not False
-        precision = rules["decimals"] if referenced else fraction
+        precision = self.precision(rules, referenced)
 
         def score(candidate, values):
             prefixes = [meter_prefix(value, precision, whole) for value in values]
@@ -452,13 +463,14 @@ class Calibration:
                 "tested": len(self.seen), "limit": self.limit, "duration": self.duration,
                 "attempts": self.attempts, "max_attempts": self.attempt_limit, "automatic": self.automatic,
                 "confirmations": self.confirmations, "required": MIN_IMAGES,
+                "simplified": self.simplified, "intensive": self.intensive,
                 "seconds": max(0, ceil(self.remaining(now)))}
 
     def refine(self, layout, readings, sample, rules, read, stop, on_attempt, tested, frame_ceiling):
         on_attempt = on_attempt or (lambda *_: None)
         whole, fraction = rules["integer_digits"], rules["fraction_digits"]
         has_reference = sample.get("reference_required") is not False
-        precision = rules["decimals"] if has_reference else fraction
+        precision = self.precision(rules, has_reference)
 
         def score(values):
             rows = [str(value).replace(".", "").replace(",", "") for value in values]
@@ -488,12 +500,18 @@ class Calibration:
                 return None
 
         best = (score(readings), layout, readings)
-        weak = [index + 1 for index in uncertain_slots(readings, whole + fraction)]
+        search_readings = readings
+        if self.intensive:
+            prefix = meter_prefix(sample.get("actual_value"), 2, whole) if has_reference else meter_prefix(
+                readings[0], 2, whole)
+            if prefix is not None and all(meter_prefix(value, 2, whole) == prefix for value in readings):
+                search_readings = [two_decimal_reading(value) for value in readings]
+        weak = [index + 1 for index in uncertain_slots(search_readings, whole + fraction)]
         if not 1 <= len(weak) <= 3 or best[0][-1] < min(2, whole):
             return layout, readings
         # Bound the work per image, leaving budget for independent confirmations.
         budget = min(6, max(0, min(frame_ceiling, self.attempt_limit - MIN_IMAGES) - self.attempts))
-        variants = iter(refinement_layouts(layout, rules, readings))
+        variants = iter(refinement_layouts(layout, rules, search_readings))
         with ThreadPoolExecutor(max_workers=refinement_workers()) as pool:
             while budget and not stop():
                 batch = []
@@ -536,7 +554,7 @@ class Calibration:
         if on_image is not None:
             on_image()
         has_reference = sample.get("reference_required") is not False
-        precision = rules["decimals"] if has_reference else rules["fraction_digits"]
+        precision = self.precision(rules, has_reference)
         digits = rules["integer_digits"]
         rejection = "unreadable"
         try:
@@ -572,13 +590,13 @@ class Calibration:
             on_image()
         has_reference = sample.get("reference_required") is not False
         # Without an outside reference, read every displayed digit to check movement.
-        precision = rules["decimals"] if has_reference else rules["fraction_digits"]
+        precision = self.precision(rules, has_reference)
         digits = rules["integer_digits"]
         flow = rules["max_flow_lph"]
         seed = self.candidate or (self.previous_layout if self.automatic else None)
         candidates = (guided_layouts(frame, overlay, rules, len(self.seen) - 1, seed, self.region)
                       if self.region else layouts(frame, overlay, rules, len(self.seen) - 1, seed,
-                                                  prefer_configured=self.automatic, on_regions=on_regions))
+                                                  prefer_configured=self.automatic or self.intensive, on_regions=on_regions))
         # A geometry that produced a stable OCR string is a strong signal, even
         # when it did not yet match the external reference. Stay focused on it
         # for the next fresh image instead of spending attempts on rotations
@@ -692,7 +710,7 @@ class Calibration:
                         self.rejected_regions = [*self.rejected_regions[-15:], layout.box]
                         on_decision("position_error")
                         continue
-                    if reason and not self.focused:
+                    if reason and not self.focused and not self.intensive:
                         # Keep a candidate with two agreeing OCR profiles as
                         # the preferred geometry. The reference may be stale
                         # or the meter may simply not have advanced yet.

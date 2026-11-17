@@ -145,6 +145,15 @@ class IngressFixture(TestCase):
 
 
 class IngressTests(IngressFixture):
+    def test_demo_post_is_separate_from_the_main_meter(self):
+        values = {"csrf": self.csrf, "lang": "de", "reflection": "0"}
+        before = dict(self.rules)
+        with patch.object(panel, "run_demo", return_value={"reading": "12344.942"}) as demo:
+            self.assertEqual({"reading": "12344.942"}, json.loads(self.request("/zaehler-demo", data=values)[0]))
+        demo.assert_called_once_with(False)
+        self.assertEqual(before, self.rules)
+        self.assertFalse(self.history.exists())
+
     def test_setup_recommends_learning_first_and_keeps_a_saved_manual_choice(self):
         def choices(accept="de"):
             page, _ = self.request("/", accept=accept)

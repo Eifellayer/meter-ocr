@@ -57,7 +57,7 @@ def read_meter(previous, state, now):
     series = previous.get("series", {})
     scope = unit
     previous_step = series.get("samples", [[0, 0, 1]])[-1][2]
-    step = 3 - previous_step if reset else previous_step
+    step = 3 - previous_step if reset else previous_step  # Mark the discontinuity in the series.
     series = record_consumption_sample(series, scope, {
         "timestamp": stamp, "total_litres": total, "step_litres": step,
     })

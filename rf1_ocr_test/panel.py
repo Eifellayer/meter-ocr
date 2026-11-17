@@ -3809,32 +3809,6 @@ def start_panel(
             if len(supplied) != 1 or not compare_digest(supplied[0].encode(), csrf_token.encode()):
                 problem(403)
                 return
-            if path == "/zaehler-demo":
-                if not demo_lock.acquire(blocking=False):
-                    problem(503)
-                    return
-                try:
-                    result = run_demo(field("reflection") == "1")
-                    self.reply(json.dumps(result).encode("utf-8"), "application/json")
-                except (OSError, ValueError, subprocess.SubprocessError):
-                    problem(503)
-                finally:
-                    demo_lock.release()
-                return
-            if path == "/experimentelle-zaehler":
-                if experimental_meters is None:
-                    self.send_error(404)
-                    return
-                try:
-                    experimental_meters.configure(field("meters"))
-                except ValueError:
-                    problem(400)
-                    return
-                except OSError:
-                    problem(503)
-                    return
-                self.reply(b'{}', "application/json")
-                return
             if path == "/einrichtung-ueberspringen":
                 try:
                     if skip_setup is not None:
@@ -3894,6 +3868,32 @@ def start_panel(
                 selected = field("source_mode", default)
                 return "slfork_camera" if selected == "slfork" and field("esp_camera_only") == "1" else selected
 
+            if path == "/zaehler-demo":
+                if not demo_lock.acquire(blocking=False):
+                    problem(503)
+                    return
+                try:
+                    result = run_demo(field("reflection") == "1")
+                    self.reply(json.dumps(result).encode("utf-8"), "application/json")
+                except (OSError, ValueError, subprocess.SubprocessError):
+                    problem(503)
+                finally:
+                    demo_lock.release()
+                return
+            if path == "/experimentelle-zaehler":
+                if experimental_meters is None:
+                    self.send_error(404)
+                    return
+                try:
+                    experimental_meters.configure(field("meters"))
+                except ValueError:
+                    problem(400)
+                    return
+                except OSError:
+                    problem(503)
+                    return
+                self.reply(b'{}', "application/json")
+                return
             if path == "/einrichtungsbild":
                 try:
                     source = source_rules({"mode": selected_source_mode(), "url": field("url"),

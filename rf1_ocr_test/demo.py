@@ -3,6 +3,7 @@
 import base64
 from functools import lru_cache
 from io import BytesIO
+import time
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -34,8 +35,9 @@ def run_demo(reflection=False):
     dx, dy = (straight.width - image.width) // 2, (straight.height - image.height) // 2
     straight = straight.crop((dx, dy, dx + image.width, dy + image.height))
     reads = []
+    deadline = time.monotonic() + 15
     for profile in OCR_PROFILES[:2]:
-        row = "".join(read_register(straight.crop(box), True, 1, force_polarity=True, profile=profile) or "?"
+        row = "".join(read_register(straight.crop(box), True, 1, force_polarity=True, profile=profile, deadline=deadline) or "?"
                       for box in boxes)
         reads.append(row[:5] + "." + row[5:])
     result = "".join(a if a == b else "?" for a, b in zip(*reads))

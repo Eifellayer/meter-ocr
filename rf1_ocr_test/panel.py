@@ -2935,9 +2935,9 @@ def start_panel(
                     {key: label for key, label in (DECIMALS_EN if language == "en" else DECIMALS).items()
                      if int(key) <= auto_rules["fraction_digits"]}, str(auto_rules["decimals"])),
                 wizard_crop_options=radio_options("crop_mode", {
+                    **({"learn": "Learn crop and rotation (recommended)" if language == "en"
+                        else "Ausschnitt und Drehung lernen (empfohlen)"} if control_calibration else {}),
                     "auto": CROP_MODES_EN["auto"] if language == "en" else CROP_MODES["auto"],
-                    **({"learn": "Learn crop and rotation" if language == "en"
-                        else "Ausschnitt und Drehung lernen"} if control_calibration else {}),
                     "manual": "Enter crop coordinates" if language == "en" else "Bildkoordinaten eingeben",
                 }, "learn" if setup_pending and control_calibration else auto_rules["crop_mode"]),
                 fallback_value=html.escape(auto_rules["fallback_value"], quote=True),

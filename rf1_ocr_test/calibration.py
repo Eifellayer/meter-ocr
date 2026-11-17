@@ -535,7 +535,7 @@ class Calibration:
         return 2 if self.simplified else rules["decimals"] if has_reference else rules["fraction_digits"]
 
     def sweep_angles(self, layout, readings, sample, rules, read, stop, report, tested, frame_ceiling,
-                     *, accept_first=False):
+                     *, accept_first=False, offsets=None):
         whole, fraction = rules["integer_digits"], rules["fraction_digits"]
         referenced = sample.get("reference_required") is not False
         precision = self.precision(rules, referenced)
@@ -549,9 +549,9 @@ class Calibration:
             return match, agreement, percentage, -len(uncertain_slots(values, whole + fraction)), -abs(candidate.rotation)
 
         best = score(layout, readings), layout, readings
-        center = 0 if abs(layout.rotation) <= 3 else layout.rotation
+        center = 0 if offsets is None and abs(layout.rotation) <= 3 else layout.rotation
         l, t, r, b = layout.box
-        for offset in SMALL_ANGLES:
+        for offset in SMALL_ANGLES if offsets is None else offsets:
             if stop() or self.attempts >= min(frame_ceiling, self.attempt_limit - MIN_IMAGES):
                 break
             angle = center + offset
@@ -978,13 +978,19 @@ class Calibration:
         def required_rows(values):
             return [str(value).replace(".", "").replace(",", "")[:required_slots] for value in values]
 
-        def second_decimal_near_hit(values):
-            if not self.simplified or precision != 2 or digits < 3 or read_slot is None:
-                return False
+        def local_adjustment_slots(values):
+            if read_slot is None:
+                return []
             rows = required_rows(values)
-            if uncertain_slots(rows, required_slots) != [digits + 1]:
-                return False
-            return reference_digits is None or all(row[:-1] == reference_digits[:-1] for row in rows)
+            weak = uncertain_slots(rows, required_slots)
+            if not 1 <= len(weak) <= 2 or required_slots - len(weak) < 3:
+                return []
+            if reference_digits is not None and any(
+                row[index] != digit for row in rows for index, digit in enumerate(reference_digits)
+                if index not in weak
+            ):
+                return []
+            return weak
 
         confirming_followup = self.followup and self.confirmations > 0
         committed = self.confirmations >= 2 or confirming_followup
@@ -1082,10 +1088,10 @@ class Calibration:
                     agreement_percent(readings, sample, precision, digits))
 
         if self.rank_candidates and perfect is None and not any(reliable(score) for score, _, _ in coarse):
-            close_crops = [item for item in coarse if second_decimal_near_hit(item[2])]
+            close_crops = [item for item in coarse if local_adjustment_slots(item[2])]
             if close_crops:
                 coarse = [max(close_crops, key=ranked_crop)]
-        targeted = len(coarse) == 1 and second_decimal_near_hit(coarse[0][2])
+        targeted = len(coarse) == 1 and bool(local_adjustment_slots(coarse[0][2]))
 
         if (coarse and not targeted and perfect is None and self.rank_candidates
                 and angle_read is not None and not self.confirmations
@@ -1210,23 +1216,28 @@ class Calibration:
                     sample, compare_sample(sample, value, precision, integer_digits=digits)[0]) is None
                     for value in readings))
                 recovered_slot = False
-                if not matches and read_slot is not None:
-                    weak = uncertain_slots(required_rows(readings), required_slots)
-                    near_hit = second_decimal_near_hit(readings)
-                    leading = self.confirmations >= 2 and digits >= 3 and weak and weak[-1] < 2
-                    if near_hit or leading:
+                if not matches:
+                    weak = local_adjustment_slots(readings)
+                    if weak:
                         recovery = self.retry_digit_slots(
                             layout, readings, rules, weak, read_slot, stop, on_refine,
-                            frame_ceiling, reference_digits, fine_first=near_hit,
+                            frame_ceiling, reference_digits, fine_first=True,
                         )
-                        if recovery is not None:
-                            layout, readings = recovery
-                            recovered_slot = matches = True
-                            if on_selected is not None:
-                                on_selected(layout, readings)
-                        elif near_hit:
-                            on_decision("penultimate_unclear")
+                        if recovery is None and angle_read is not None and not stop():
+                            angle_sample = sample if has_reference else {**sample, "reference_required": False}
+                            trial, values = self.sweep_angles(
+                                layout, readings, angle_sample, rules, angle_read, stop, on_angle,
+                                tested, frame_ceiling, accept_first=True, offsets=(-1, 1),
+                            )
+                            if trial != layout and reliable(score_layout(trial, values)):
+                                recovery = trial, values
+                        if recovery is None:
+                            on_decision("unclear")
                             continue
+                        layout, readings = recovery
+                        recovered_slot = matches = True
+                        if on_selected is not None:
+                            on_selected(layout, readings)
                 if (refine_read is not None and self.intensive and precision == 3
                         and self.confirmations >= 2 and not matches):
                     issue = penultimate_issue(readings, sample, digits)

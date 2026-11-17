@@ -781,6 +781,32 @@ class CalibrationTests(TestCase):
         self.assertEqual("10462.84?", job.reference_reading)
         self.assertEqual(calls[-1], job.candidate.digit_boxes[6])
 
+    def test_near_hit_tries_small_shifts_then_a_degree_around_current_angle(self):
+        boxes = tuple((125 * index, 80, 125 * (index + 1), 920) for index in range(8))
+        layout = Layout((0, 0, 80, 20), -2, 50, boxes)
+        self.candidates.return_value = [layout]
+        job = Calibration(8, 0, simplified=True, rank_candidates=True)
+        rules = {**RULES, "decimals": 3, "fraction_digits": 3}
+        sample = {"reference_time": 100, "actual_value": "10462.84?", "raw_value": "10462.84?"}
+        steps = []
+
+        def read_slot(trial, index, _):
+            self.assertEqual(-2, trial.rotation)
+            self.assertEqual(boxes[:2] + boxes[3:], trial.digit_boxes[:2] + trial.digit_boxes[3:])
+            steps.append(("slot", index))
+            return "?"
+
+        def read_angle(trial, _):
+            steps.append(("angle", trial.rotation))
+            return "10462.84?" if trial.rotation == -1 else "10?62.84?"
+
+        job.examine(frame(1), None, sample, 101, rules, lambda *_: "10?62.84?", lambda: False,
+                    read_slot=read_slot, angle_read=read_angle)
+        self.assertEqual(("slot", 2), steps[0])
+        self.assertEqual({("slot", 2), ("angle", -3), ("angle", -1)}, set(steps))
+        self.assertEqual(-1, job.candidate.rotation)
+        self.assertEqual(1, job.confirmations)
+
     def test_optional_last_slot_after_verification_is_only_a_hint(self):
         boxes = tuple((125 * index, 80, 125 * (index + 1), 920) for index in range(8))
         current = Layout((0, 0, 80, 20), -2, 50, boxes)

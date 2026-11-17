@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.32 Stable
+
+- Wenn höchstens zwei Pflichtstellen offen sind und mindestens drei andere Stellen übereinstimmend lesbar sind, prüft die Selbsteinrichtung zuerst kleine Verschiebungen der betroffenen Einzelrahmen. Bei Bedarf testet sie danach nur die Winkel einen Grad links und rechts vom aktuellen Winkel.
+
 ## 0.5.31 Stable
 
 - Bei der vereinfachten Einrichtung führt ein sonst übereinstimmender Zählerstand mit offener zweiter Nachkommastelle zur gezielten Nachprüfung auf demselben Bild. Kleinste Verschiebungen des betreffenden Rahmens haben Vorrang.

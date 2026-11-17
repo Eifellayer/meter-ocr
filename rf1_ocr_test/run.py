@@ -2770,6 +2770,7 @@ def main():
                             history.get("consumption_statistics", {}), setup_source_id(active_source), new_consumption,
                             preserve_on_source_change=bool(history.get("statistics_preserved_after_reset")),
                         )
+                        updated.pop("statistics_preserved_after_reset", None)
                     if raw_fallback and outcome == "ocr_only":
                         updated["source_connection_detail"] = SLFORK_RAW_SUCCESS
                     if new_standalone is not None:

@@ -801,7 +801,7 @@ class BrowserTests(IngressFixture):
             self.assertFalse(page.locator("#calibration-complete-notice").is_visible())
             self.assertFalse(page.locator(".activity-status").is_visible())
             page.locator("#tab-settings").click()
-            page.locator("#calibration-diagnostics summary").click()
+            page.locator("#calibration-diagnostics > summary").click()
             page.locator("#calibration-state").filter(has_text="Erfolgreich eingerichtet").wait_for()
             browser.close()
 
@@ -1176,7 +1176,7 @@ class BrowserTests(IngressFixture):
             self.history.write_text(json.dumps({"status": "match", "check_status": "match",
                                                "check_detail": "Bestätigt", "comparison_decimals": 2}))
             page.goto(parent + "/?en")
-            frame.get_by_text("Meter reading confirmed", exact=True).wait_for()
+            frame.get_by_text("All good. Automatic checks running.", exact=True).wait_for()
             self.assertEqual("ok", frame.locator("#automatic-banner").get_attribute("data-tone"))
             self.history.write_text(json.dumps({"check_status": "slfork_unclear", "comparison_decimals": 2,
                                                "failure_since": time.time(), "last_reference": "12346.0416",

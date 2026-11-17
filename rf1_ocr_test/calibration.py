@@ -533,6 +533,7 @@ class Calibration:
     searching_since: float | None = None
     last_image_at: float | None = None
     refinement_seen: set = field(default_factory=set)
+    angle_compared: set = field(default_factory=set)
     rejected_regions: list = field(default_factory=list)
 
     def expired(self, now):
@@ -593,15 +594,16 @@ class Calibration:
             if any(meter_prefix(value, expected_precision, whole) != expected for value in values):
                 return -1
             if candidate not in stress_reads:
-                extras = []
-                for profile in OCR_PROFILES[2:5]:
+                stress_reads[candidate] = []
+            extras = stress_reads[candidate]
+            if len(extras) < 3:
+                for profile in OCR_PROFILES[2 + len(extras):5]:
                     if stop():
                         return -1
                     try:
                         extras.append(read(candidate, profile))
                     except (OSError, ValueError, subprocess.SubprocessError):
                         continue
-                stress_reads[candidate] = extras
             return sum(meter_prefix(value, expected_precision, whole) == expected for value in stress_reads[candidate])
 
         best = score(readings), layout, readings
@@ -638,6 +640,21 @@ class Calibration:
             if accept_first and (rank[0] if referenced else rank[1]):
                 break
         return best[1], best[2]
+
+    def compare_setup_angles(self, layout, readings, sample, rules, read, stop, report,
+                             tested, ceiling, stress_reads):
+        offsets = (-1, 1, -2, 2)
+        trial, values = self.sweep_angles(
+            layout, readings, sample, rules, read, stop, report, tested, ceiling,
+            offsets=offsets, stress_reads=stress_reads,
+        )
+        width, height = layout.box[2] - layout.box[0], layout.box[3] - layout.box[1]
+        complete = not stop() and all(replace(
+            layout, rotation=angle, width=min(layout.width, rotated_width(width, height, angle)),
+        ) in tested for angle in offsets)
+        if complete:
+            self.angle_compared.update((layout, trial))
+        return trial, values, complete
 
     def status(self, now):
         selected_score = self.shortlist.get(self.candidate, ())
@@ -929,11 +946,27 @@ class Calibration:
         candidates = [layout]
         if not self.verification_pending:
             left, top, right, bottom = layout.digit_boxes[-1]
-            dx, dy = max(1, (right - left) // 12), max(1, (bottom - top) // 16)
-            for x, y in ((-dx, 0), (dx, 0), (0, -dy), (0, dy)):
-                box = (left + x, top + y, right + x, bottom + y)
-                if min(box) < 0 or max(box) > 1000:
+            width, height = right - left, bottom - top
+            dx, dy = max(1, width // 12), max(1, height // 16)
+            shifts = [(0, dy), (0, -dy), (-dx, 0), (dx, 0)]
+            if len(layout.digit_boxes) >= 3:
+                before, neighbour = layout.digit_boxes[-3:-1]
+                predicted_x = neighbour[0] + neighbour[2] - (before[0] + before[2]) / 2
+                predicted_y = neighbour[1] + neighbour[3] - (before[1] + before[3]) / 2
+                shifts.append((round(predicted_x - (left + right) / 2),
+                               round(predicted_y - (top + bottom) / 2)))
+            shifts += [(x, y) for y in (height // 4, -height // 4, height // 2, -height // 2, 0)
+                       for x in (0, width // 4, -width // 4, width // 2, -width // 2)]
+            seen = {layout.digit_boxes[-1]}
+            for x, y in shifts:
+                if abs(x) > width // 2 or abs(y) > height // 2:
                     continue
+                x = max(-left, min(x, 1000 - right))
+                y = max(-top, min(y, 1000 - bottom))
+                box = (left + x, top + y, right + x, bottom + y)
+                if box in seen:
+                    continue
+                seen.add(box)
                 boxes = (*layout.digit_boxes[:-1], box)
                 try:
                     digit_box_settings(boxes, len(boxes))
@@ -1192,25 +1225,35 @@ class Calibration:
                 coarse = [max(close_crops, key=ranked_crop)]
         targeted = len(coarse) == 1 and bool(local_adjustment_slots(coarse[0][2]))
 
-        perfect_at_zero = perfect is not None and perfect.rotation == 0
         stress_reads = {}
-        if (coarse and not targeted and (perfect is None or perfect_at_zero) and self.rank_candidates
-                and angle_read is not None and not self.confirmations
-                and (perfect_at_zero or not any(
-                    layout == self.known_good_layout and reliable(score) for score, layout, _ in coarse))):
-            # Compare regions first and spend the angle budget on the strongest candidate.
-            index = -1 if perfect_at_zero else max(range(len(coarse)), key=lambda position: ranked_crop(coarse[position]))
+        best_index = max(range(len(coarse)), key=lambda position: ranked_crop(coarse[position])) if coarse else None
+        zero_readable = (best_index is not None and coarse[best_index][1].rotation == 0
+                         and reliable(coarse[best_index][0])
+                         and coarse[best_index][1] not in self.angle_compared)
+        if (coarse and self.rank_candidates and angle_read is not None
+                and (zero_readable or (
+                    not targeted and perfect is None and not self.confirmations
+                    and not any(layout == self.known_good_layout and reliable(score)
+                                for score, layout, _ in coarse)))):
+            # A seven-digit setup hit still needs the same angle comparison as a complete row.
+            index = best_index
             score, layout, readings = coarse[index]
-            check_zero_angle = layout.rotation == 0 and reliable(score)
             ceiling = frame_ceiling
             if collecting:
                 ceiling = min(ceiling, self.attempts + COARSE_LIMIT - self.coarse_attempts)
             previous_attempts = self.attempts
-            trial, values = self.sweep_angles(layout, readings, sample, rules, angle_read, stop,
-                                              on_angle, tested, ceiling, accept_first=not reliable(score),
-                                              offsets=(-1, 1, -2, 2) if perfect_at_zero else None,
-                                              stress_reads=stress_reads if check_zero_angle else None)
-            if perfect_at_zero:
+            if zero_readable:
+                trial, values, complete = self.compare_setup_angles(
+                    layout, readings, sample, rules, angle_read, stop, on_angle, tested, ceiling, stress_reads,
+                )
+                if not complete:
+                    return None
+            else:
+                trial, values = self.sweep_angles(
+                    layout, readings, sample, rules, angle_read, stop, on_angle, tested, ceiling,
+                    accept_first=not reliable(score),
+                )
+            if layout == perfect:
                 perfect = trial
             if collecting:
                 self.coarse_attempts += self.attempts - previous_attempts
@@ -1409,6 +1452,19 @@ class Calibration:
                             self.reject_region(layout)
                         on_decision(reason)
                         continue
+                if (self.rank_candidates and angle_read is not None and layout.rotation == 0
+                        and layout not in self.angle_compared):
+                    original = layout
+                    layout, readings, complete = self.compare_setup_angles(
+                        layout, readings, sample, rules, angle_read, stop, on_angle,
+                        tested, frame_ceiling, stress_reads,
+                    )
+                    if not complete:
+                        return None
+                    if original == perfect:
+                        perfect = layout
+                    if on_selected is not None:
+                        on_selected(layout, readings)
                 rejection = "implausible"
                 same = layout == self.candidate
                 anchor = self.counter if same or recovered_slot else baseline or {}

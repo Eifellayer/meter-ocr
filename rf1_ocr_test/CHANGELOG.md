@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.7 Stable
+
+- Die Ersteinrichtung speichert einen mit frischen Bildern und einer Gegenprobe bestätigten Sieben-Ziffern-Ausschnitt (fünf Vorkomma- und zwei Nachkommastellen) sofort und startet die reguläre Automatik.
+- Die zusätzliche intensive Suche nach der dritten Nachkommastelle beginnt anschließend im Hintergrund. Ein fehlerhafter oder verdeckter letzter Rollenwert blockiert die bereits funktionierende Einrichtung und den laufenden Verbrauchszähler nicht.
+- Dreht die siebte Rolle vorübergehend, behält die Einrichtung einen bereits einmal bestätigten Rahmen für bis zu drei weitere frische Bildversuche; unlesbare Bilder zählen nicht als erfolgreiche Bestätigungen. Anhaltend unklare Bilder führen weiterhin zur erneuten Rahmensuche.
+- Erst nach eindeutiger erfolgreicher Gegenprüfung der achten Ziffer wechselt die automatische Auswertung auf alle drei Nachkommastellen. Regressionstests prüfen die Trennung und die temporär unlesbare siebte Rolle.
+
 ## 0.6.6 Stable
 
 - Die Auswahl „In Home Assistant gefunden“ bleibt im Einrichtungsassistenten immer sichtbar, auch wenn nach einem Home-Assistant-Neustart vorübergehend keine Geräte erkannt werden. Im Auswahlfeld steht dann „Es wurden keine Geräte gefunden“.

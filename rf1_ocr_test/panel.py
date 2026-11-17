@@ -1,5 +1,6 @@
 """Home Assistant ingress panel for optical gas meter checks."""
 
+import base64
 import html
 from io import BytesIO
 from email.parser import BytesParser
@@ -7,6 +8,7 @@ from email.policy import default as email_policy
 import json
 import os
 import re
+import subprocess
 from datetime import datetime
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -21,16 +23,16 @@ from PIL import Image
 from app_channel import APP_NAME, NAMESPACE
 from calibration import (
     DEFAULT_INTENSIVE_AGREEMENT, DEFAULT_LIMIT, MIN_IMAGE_LIMIT, MAX_IMAGES,
-    search_region, valid_intensive_agreement,
+    layouts, search_region, valid_intensive_agreement,
 )
 from checks import (DEFAULT_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, WARNING_DETAIL_AFTER, meter_prefix,
-                    crop_register, LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, REFLECTION_SUGGEST_AFTER, STANDALONE_PENDING, STANDALONE_REJECTED_NOTICE,
+                    OCR_PROFILES, crop_register, read_register, LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, REFLECTION_SUGGEST_AFTER, STANDALONE_PENDING, STANDALONE_REJECTED_NOTICE,
                     STANDALONE_VERIFIED_NOTICE, last_check_at, reschedule_next_check,
                     setup_deadlines, setup_source_id, stabilization_interval, stationary_partial_active, valid_interval_minutes)
 from consumption import DEFAULT_FLOW_LPH, format_cubic_metres, parse_flow_limit
 from i18n import EN_UI, english_progress, english_result, translate_page
 from language import MODES, SUPPORTED, USER_ID, browser_locale, profile_script
-from layout import MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, digit_box_settings, turn_crop
+from layout import MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, digit_box_settings, scale_digit_boxes, turn_crop
 from meter_learning import suggest_single_digit_box
 from notification_settings import notification_rules
 from source_settings import source_rules
@@ -198,6 +200,8 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .calibration-photo-grid img{{display:block;max-width:100%;height:auto;border-radius:.4rem}}
 .calibration-photo-frame{{position:relative;width:fit-content;max-width:100%}}
 .calibration-crop-region{{position:absolute;border:2px solid #ffcd60;border-radius:.1rem;box-shadow:0 0 0 1px #151c23;pointer-events:none}}
+.calibration-candidates{{font-variant-numeric:tabular-nums;padding-inline-start:1.8rem;margin:.45rem 0}}
+.calibration-candidates li{{margin:.2rem 0}}
 .calibration-photo-grid figcaption{{margin-top:.35rem;color:var(--muted)}}
 .calibration-photo-panel .calibration-preview-help{{font-size:.83rem;color:var(--muted);margin:.35rem 0 0}}
 .calibration-photo-panel .calibration-preview-reading{{overflow-wrap:anywhere;font-weight:650;font-variant-numeric:tabular-nums;margin:.25rem 0 0}}
@@ -216,6 +220,7 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .digit-editor{{position:relative;display:table;max-width:100%;touch-action:none}}
 .digit-layer{{position:absolute;inset:0}}
 .digit-frame{{position:absolute;min-height:0;padding:0;border:1px solid #77d4cc;border-radius:0;background:#17383728;color:#fff;cursor:move;text-shadow:0 1px 3px #000}}
+.digit-frame[data-reflection="true"]{{border:2px solid #ffcf53;background:#ffcf5333}}
 .digit-frame[data-active="true"]{{border:2px solid #ffcf53;z-index:1}}
 .digit-correction{{width:min(46rem,calc(100% - 1.25rem));max-height:calc(100dvh - 1.25rem);overflow:auto}}
 .digit-adjustments{{display:grid;gap:.65rem;margin:.7rem 0}}
@@ -329,7 +334,7 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 </div>
 <div id="setup-stabilization" class="settings-note" role="status" hidden>
 <strong>Zähler erfolgreich eingerichtet</strong>
-<p>Die automatische Erkennung wird in den ersten 20 Minuten durch weitere Kontrollmessungen stabilisiert. Einzelne Messwerte können in dieser Zeit noch ungenau sein.</p>
+<p>In den ersten 20 Minuten prüft die App häufiger, ob der neu gespeicherte Rahmen zuverlässig lesbar ist. Danach gilt wieder dein eingestelltes Prüfintervall.</p>
 </div>
 <p id="calibration-complete-notice" class="settings-note" role="status" hidden></p>
 {digit_correction_notice}
@@ -367,6 +372,7 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 </dialog>
 <div id="calibration-overview" class="calibration-live" hidden>
 <p id="calibration-overview-state" role="status"></p>
+<details class="setup-help calibration-candidate-panel" hidden><summary>Kandidaten</summary><ol class="calibration-candidates"></ol></details>
 {calibration_skip_html}
 <p class="calibration-image-hint settings-note" hidden></p>
 <button type="button" id="calibration-open-region">Ziffernfeld manuell markieren</button>
@@ -548,12 +554,13 @@ name: Zählerstand (OCR)</code></pre>
 {reset_notice}
 <section class="panel calibration-card" id="calibration-settings" aria-labelledby="calibration-title" {calibration_hidden}>
 <h2 id="calibration-title" tabindex="-1">Selbsteinrichtung für Ausschnitt und Drehung</h2>
-<p>Die App tastet sich mit unterschiedlichen Bildern an einen passenden Rahmen und Winkel heran. Nach drei bestätigten Ablesungen prüft sie den gefundenen Rahmen mit einem weiteren Bild und übernimmt ihn dann. Nach 15 Minuten endet der Versuch automatisch.</p>
+<p>Die App sucht einen passenden Rahmen und Winkel. Nach drei bestätigten Aufnahmen übernimmt die Automatik die Gegenprüfung. Ziel sind fünf Minuten. Die Suche endet spätestens nach 20 Minuten.</p>
 <p>Ohne externen Vergleichswert hilft ein von Hand abgelesener Startwert. Ohne Startwert wartet die App zusätzlich auf einen plausiblen Zähleranstieg.</p>
 {calibration_saved_notice}
 <details id="calibration-diagnostics" open hidden>
 <summary>Diagnose der Selbsteinrichtung</summary>
 <p id="calibration-state" role="status" hidden></p>
+<ol class="calibration-candidates"></ol>
 {calibration_preview_html}
 </details>
 {calibration_skip_html}
@@ -657,7 +664,7 @@ name: Zählerstand (OCR)</code></pre>
 <div id="wizard-calibration-options" class="setup-help" hidden>
 <label>Höchstens so viele unterschiedliche Bilder
 <input name="image_limit" type="number" min="{calibration_min}" max="{calibration_max}" value="{calibration_limit}" required disabled></label>
-<p class="settings-note">Startet nach dem Speichern und endet spätestens nach 15 Minuten. Die App übernimmt den Rahmen nach drei Bestätigungen und einer abschließenden Gegenprüfung.</p>
+<p class="settings-note">Startet nach dem Speichern. Nach drei bestätigten Aufnahmen übernimmt die Automatik die Gegenprüfung.</p>
 </div>
 <div class="setup-help">
 <label class="check-option"><input type="checkbox" name="self_repair_enabled" value="1" {wizard_self_repair_checked}> Selbstreparatur bei wiederholten Fehlmessungen</label>
@@ -667,6 +674,16 @@ name: Zählerstand (OCR)</code></pre>
 <input type="hidden" name="reflection_option_present" value="1">
 <label class="check-option"><input type="checkbox" name="reflection_estimate_enabled" value="1" {reflection_enabled_checked}> Verdeckte Ziffern ergänzen</label>
 <p class="settings-note">Bei Spiegelungen hilfreich. Die App schätzt verdeckte Stellen nur, wenn Zählerstände und Durchfluss genau eine Ergänzung zulassen. Geschätzte Ziffern bleiben gelb.</p>
+<div id="wizard-reflection-options" hidden>
+<button type="button" id="wizard-reflection-load">Ziffernrahmen für Spiegelungen suchen</button>
+<figure class="crop-live-preview" id="wizard-reflection-preview" hidden>
+<figcaption>Gelbe Rahmen sind möglicherweise gespiegelt. Du kannst bis zu zwei Stellen markieren und die Rahmen ziehen.</figcaption>
+<div class="digit-editor"><canvas role="img" aria-label="Ziffernfeld mit markierten Spiegelungen"></canvas><div class="digit-layer"></div></div>
+<div class="crop-actions" id="wizard-reflection-choices"></div>
+</figure>
+<p id="wizard-reflection-status" class="settings-note" role="status"></p>
+<input type="hidden" name="reflection_geometry">
+</div>
 </div>
 <label>OCR-Versuche pro Bild<select name="attempts">{auto_attempt_options}</select></label>
 <label>Ziffernfarbe<select name="polarity">{auto_polarity_options}</select></label>
@@ -1026,6 +1043,89 @@ wizardImageButton.addEventListener('click', async () => {{
     wizardImageButton.disabled = false;
   }}
 }});
+const reflectionOption = setupForm.elements.reflection_estimate_enabled;
+const reflectionOptions = document.querySelector('#wizard-reflection-options');
+const reflectionPreview = document.querySelector('#wizard-reflection-preview');
+const reflectionButton = document.querySelector('#wizard-reflection-load');
+const reflectionStatus = document.querySelector('#wizard-reflection-status');
+const reflectionChoices = document.querySelector('#wizard-reflection-choices');
+let reflectionRevision = 0;
+function clearReflectionPreview() {{
+  reflectionRevision++;
+  reflectionOptions.hidden = !reflectionOption.checked;
+  reflectionPreview.hidden = true;
+  reflectionStatus.textContent = '';
+  setupForm.elements.reflection_geometry.value = '';
+}}
+for (const name of [...wizardSourceFields, 'integer_digits', 'fraction_digits', 'reflection_estimate_enabled']) {{
+  setupForm.elements[name].addEventListener('input', clearReflectionPreview);
+}}
+document.querySelector('#wizard-discovered-source').addEventListener('change', clearReflectionPreview);
+clearReflectionPreview();
+reflectionButton.addEventListener('click', async () => {{
+  clearReflectionPreview();
+  const revision = reflectionRevision;
+  const body = new URLSearchParams({{preview: 'reflection'}});
+  for (const name of [...wizardSourceFields, 'integer_digits', 'fraction_digits', 'polarity', 'csrf', 'lang', 'mode']) {{
+    const field = setupForm.elements[name];
+    if (field.type !== 'checkbox' || field.checked) body.set(name, field.value);
+  }}
+  reflectionButton.disabled = true;
+  reflectionStatus.textContent = 'Ziffernrahmen werden gesucht …';
+  try {{
+    const response = await fetch('einrichtungsbild', {{method: 'POST', body, cache: 'no-store'}});
+    if (!response.ok) throw new Error();
+    const result = await response.json();
+    const image = new Image();
+    image.src = 'data:image/jpeg;base64,' + result.image;
+    await image.decode();
+    if (revision !== reflectionRevision) return;
+    const whole = Number(setupForm.elements.integer_digits.value);
+    const count = whole + Number(setupForm.elements.fraction_digits.value);
+    const marked = new Set(result.suspected);
+    const field = {{value: JSON.stringify(result.layout.digit_boxes)}};
+    const canvas = reflectionPreview.querySelector('canvas');
+    drawRegister(canvas, image, [0, 0, image.naturalWidth, image.naturalHeight], 0);
+    const layer = reflectionPreview.querySelector('.digit-layer');
+    layer.replaceChildren();
+    const editor = digitFrameEditor(reflectionPreview, field, {{value: result.layout.width}}, null, count, whole);
+    editor.paint(editor.current());
+    function saveMarkings() {{
+      setupForm.elements.reflection_geometry.value = JSON.stringify({{
+        ...result.layout, digit_boxes: editor.current(), positions: [...marked],
+      }});
+      Array.from(reflectionChoices.children).forEach((button, index) => {{
+        const selected = marked.has(index);
+        button.setAttribute('aria-pressed', String(selected));
+        button.disabled = !selected && marked.size >= 2;
+        layer.children[index].dataset.reflection = String(selected);
+      }});
+    }}
+    reflectionPreview.addEventListener('digit-edit', () => {{
+      if (revision === reflectionRevision) saveMarkings();
+    }});
+    reflectionChoices.replaceChildren();
+    for (let index = 0; index < count; index++) {{
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = 'Stelle ' + (index + 1);
+      button.addEventListener('click', () => {{
+        if (marked.has(index)) marked.delete(index);
+        else if (marked.size < 2) marked.add(index);
+        saveMarkings();
+      }});
+      reflectionChoices.append(button);
+    }}
+    saveMarkings();
+    reflectionStatus.textContent = '';
+    reflectionPreview.hidden = false;
+  }} catch (_) {{
+    if (revision === reflectionRevision)
+      reflectionStatus.textContent = 'Kein Ziffernfeld gefunden. Du kannst die Einrichtung direkt fortsetzen.';
+  }} finally {{
+    reflectionButton.disabled = false;
+  }}
+}});
 let wizardTimeEdited = false;
 wizardReadingTime.addEventListener('input', () => {{ wizardTimeEdited = true; }});
 wizardReading.addEventListener('input', () => {{
@@ -1178,10 +1278,10 @@ function drawRegister(canvas, image, [left, top, right, bottom], rotation) {{
     context.drawImage(image, left, top, width, height,
       -width * scale / 2, -height * scale / 2, width * scale, height * scale);
 }}
-function digitFrameEditor(preview, boxField, widthField, position = null) {{
+function digitFrameEditor(preview, boxField, widthField, position = null,
+                          digitCount = {crop_digit_count}, wholeCount = {crop_integer_digits}) {{
   const canvas = preview.querySelector('canvas');
   const frameLayer = preview.querySelector('.digit-layer');
-  const digitCount = {crop_digit_count};
   let frameDrag = null;
   function select(index) {{
     if (!position) return;
@@ -1201,7 +1301,7 @@ function digitFrameEditor(preview, boxField, widthField, position = null) {{
     if (boxes.length === digitCount) return boxes;
     const width = Number(widthField.value);
     const total = Number(canvas.dataset.cropWidth);
-    const edge = {crop_integer_digits};
+    const edge = wholeCount;
     const whole = digitCount === edge ? 1000 : Math.max(edge * 12, Math.min(1000 - (digitCount - edge) * 12,
       Math.round(1000 * width / total)));
     const ends = Array.from({{length: digitCount + 1}}, (_, index) => index <= edge ?
@@ -1605,6 +1705,7 @@ function refreshCalibrationImages(preview) {{
     accepted: 'Dieser Rahmen wurde auf dem aktuellen Bild bestätigt.',
     roll_transition: 'Letzte Rolle dreht weiter. Warte auf eine eindeutige Ziffer.',
     optional_last_slot: 'Letzte Rolle auf diesem Bild gelesen. Sie ist noch nicht unabhängig bestätigt.',
+    reflected_geometry: 'Die sichtbaren Ziffern stützen den markierten Rahmen. Die verdeckten Stellen bleiben offen.',
     accepted_geometry: 'Ziffern bis zur zweiten Nachkommastelle gelesen. Der Rahmen zählt vorläufig. Der Vergleichswert fehlt.',
     accepted_partial: 'Bis zur zweiten Nachkommastelle bestätigt. Die dritte Stelle bleibt offen.',
     verified: 'Die abschließende Gegenprobe war erfolgreich.',
@@ -1685,12 +1786,13 @@ function refreshCalibration(status) {{
       'Ausschnitt und Drehung gespeichert. Zwei Nachkommastellen bestätigt, die dritte bleibt unbestätigt.' :
       status.intensive ? 'Dritte Nachkommastelle bestätigt. Die Ziffernrahmen sind übernommen.' :
       'Erfolgreich eingerichtet. Ausschnitt und Drehung sind übernommen.',
+    saved_reflection: 'Ausschnitt mit markierter Spiegelung vorläufig gespeichert. Die verdeckten Ziffern bleiben offen.',
     saved_stationary: 'Ausschnitt vorläufig gespeichert. Die Automatik prüft die sieben lesbaren Stellen. Die dritte Nachkommastelle bleibt vorerst offen.',
     saved_without_verification: 'Rahmen ohne Gegenprobe übernommen. Spätere Ablesungen können ungenauer sein.',
     failed: 'Selbsteinrichtung fehlgeschlagen. Prüfe Bildausschnitt, Kamerawinkel und Beleuchtung.',
     image_timeout: 'Kein neues Kamerabild erhalten. Prüfe die Bildquelle.',
     timeout: status.automatic ? 'Nachjustierung nach vier Minuten beendet. Der bisherige Rahmen bleibt gültig.' :
-      'Selbsteinrichtung nach 15 Minuten beendet. Keine Einstellung sicher bestätigt.',
+      'Selbsteinrichtung nach 20 Minuten beendet. Keine Einstellung sicher bestätigt.',
     cancelled: 'Selbsteinrichtung gestoppt.',
     save_failed: 'Ausschnitt und Drehung konnten nicht gespeichert werden.',
   }};
@@ -1717,6 +1819,15 @@ function refreshCalibration(status) {{
       'Prüfe Rahmen ' + status.variant + ' mit Drehung ' + status.rotation + '° …',
   }};
   const reason = status.preview?.reason;
+  for (const list of document.querySelectorAll('.calibration-candidates')) {{
+    list.replaceChildren(...(status.candidates || []).map(candidate => {{
+      const row = document.createElement('li');
+      row.textContent = candidate.percent + ' % · ' + (candidate.reading || '–');
+      return row;
+    }}));
+    const parent = list.closest('.calibration-candidate-panel');
+    if (parent) parent.hidden = !list.children.length;
+  }}
   let message = active && stages[status.stage] ? stages[status.stage] : messages[status.state] || '';
   if (status.state === 'waiting' && status.stage !== 'queued') {{
     if (reason === 'roll_transition') {{
@@ -1748,6 +1859,14 @@ function refreshCalibration(status) {{
         'Noch kein Ziffernbereich gefunden. Warte auf ein neues Bild …';
     }}
   }}
+  if (active && ['shortlist', 'refine', 'waiting'].includes(status.stage) && status.row_found) {{
+    message = 'Ziffernzeile gefunden · ' + status.row_found + ' % (' +
+      'Schwelle ' + status.agreement_threshold + ' %). ' + message;
+  }}
+  if (active && reason === 'reflected_geometry') {{
+    message = 'Markierter Rahmen mit sichtbaren Ziffern geprüft. Verdeckte Stellen bleiben offen.' +
+      ' ' + status.reflected_confirmations + '/' + status.required;
+  }}
   if (status.state === 'failed' && ['reference_mismatch', 'position_error'].includes(reason)) {{
     message = 'Der gelesene Bereich passt nicht zum Vergleichswert. Prüfe den Vergleichswert und markiere das Ziffernfeld.';
   }}
@@ -1760,7 +1879,7 @@ function refreshCalibration(status) {{
     message += ' Vorschlag für die letzte Rolle gefunden. Warte auf Bestätigung mit einem neuen Bild.';
   }}
   if (active && (status.awaiting_start_value || reason === 'await_movement')) {{
-    message += ' Ohne Vergleichswert wartet die App auf einen plausiblen Anstieg oder einen Startwert.';
+    message += ' Ohne Vergleichswert braucht die App einen plausiblen Anstieg oder einen Startwert.';
   }}
   if (active && status.simplified) {{
     message += ' Für den Rahmen zählen die ersten zwei Nachkommastellen.';
@@ -1769,20 +1888,18 @@ function refreshCalibration(status) {{
   const detail = 'Bilder geprüft: ' + status.tested +
     ' · Rahmen getestet: ' + status.attempts +
     confirmationLabel + status.confirmations + '/' + status.required +
-    (active && status.shortlist?.length ?
-      ' · Beste Kandidaten: ' + status.shortlist.map(percent => percent + '%').join(', ') : '') +
     (active ? (status.intensive && ['verify', 'verify_wait'].includes(status.stage) ?
       ' · Zeit für Gegenprobe: ' : ' · Rechenzeit übrig: ') + clock + ' min' : '');
   const weakSlots = status.stress_weak_slots || [];
   const stabilityNote = weakSlots.length ?
     ' · Schwankende Stellen im Intensivtest (von links): ' + weakSlots.join(', ') : '';
-  const tone = status.state === 'saved' ? 'ok' : ['saved_without_verification', 'saved_stationary'].includes(status.state) ? 'warning' :
+  const tone = status.state === 'saved' ? 'ok' : ['saved_without_verification', 'saved_stationary', 'saved_reflection'].includes(status.state) ? 'warning' :
     ['failed', 'timeout', 'image_timeout', 'save_failed'].includes(status.state) ? 'error' : '';
   label.textContent = (status.automatic ? 'Automatische Nachjustierung · ' : '') + message + ' ' + detail + stabilityNote;
   label.dataset.tone = tone;
   document.querySelector('#calibration-overview').dataset.tone = tone;
   document.querySelector('#calibration-overview-state').dataset.tone = tone;
-  const completed = ['saved', 'saved_without_verification', 'saved_stationary'].includes(status.state);
+  const completed = ['saved', 'saved_without_verification', 'saved_stationary', 'saved_reflection'].includes(status.state);
   document.querySelector('#calibration-overview').hidden = completed;
   const notice = document.querySelector('#calibration-complete-notice');
   notice.textContent = completed ? message : '';
@@ -1811,7 +1928,8 @@ function refreshCalibration(status) {{
     hint.hidden = completed || !imageNote;
     hint.textContent = imageNote ? 'Hinweis zum Kamerabild. ' + imageNote : '';
   }}
-  document.querySelector('#calibration-overview-state').textContent = label.textContent;
+  document.querySelector('#calibration-overview-state').textContent =
+    message + (active && status.confirmations ? ' · ' + status.confirmations + '/' + status.required : '');
   document.querySelector('.activity-status').hidden = active;
   for (const bar of [progress, document.querySelector('#calibration-overview-progress')]) {{
     bar.hidden = !active;
@@ -2350,6 +2468,46 @@ def radio_options(name, choices, chosen):
     )
 
 
+def reflection_setup_preview(content, whole, fraction, polarity):
+    if not 1 <= whole <= 9 or not 0 <= fraction <= 3 or polarity not in POLARITIES:
+        raise ValueError("Invalid meter format")
+    with Image.open(BytesIO(content)) as image:
+        image.load()
+        layout = next(layouts(image, None, {"integer_digits": whole, "fraction_digits": fraction}, 0), None)
+        if layout is None:
+            raise ValueError("No digit row found")
+        register = turn_crop(crop_register(image, layout.box), layout.rotation)
+    boxes = layout.digit_boxes
+    count = whole + fraction
+    if len(boxes) != count:
+        split = max(whole * 10, min(1000 - fraction * 10, round(1000 * layout.width / register.width)))
+        edges = [round(i * split / whole) for i in range(whole + 1)]
+        edges.extend(split + round((1000 - split) * i / fraction) for i in range(1, fraction + 1))
+        boxes = [(left, 0, right, 1000) for left, right in zip(edges, edges[1:])]
+    boxes = digit_box_settings(boxes, count)
+    deadline = time.monotonic() + 4
+    observed = []
+    for box in scale_digit_boxes(boxes, register.size):
+        if time.monotonic() >= deadline:
+            observed.append(None)
+            continue
+        digit = register.crop(box)
+        try:
+            votes = [read_register(digit, polarity != "dark", 1, force_polarity=polarity != "auto",
+                                   profile=profile, deadline=deadline) for profile in OCR_PROFILES[:2]]
+        except (OSError, ValueError, subprocess.SubprocessError):
+            observed.append(None)
+            continue
+        observed.append(bool(votes[0] and votes[0] == votes[1]))
+    readable = [index for index, result in enumerate(observed) if result is True]
+    suspected = ([index for index in range(readable[0] + 1, readable[-1]) if observed[index] is False][:2]
+                 if len(readable) >= 2 else [])
+    with BytesIO() as encoded:
+        register.convert("RGB").save(encoded, "JPEG")
+        jpeg = base64.b64encode(encoded.getvalue()).decode("ascii")
+    return {"image": jpeg, "layout": {**layout.settings(), "digit_boxes": boxes}, "suspected": suspected}
+
+
 def start_panel(
     history_path, current_image, good_image, requested, default_decimals, default_attempts,
     get_auto_rules, save_auto_rules, default_crop, default_width, test_image,
@@ -2587,6 +2745,14 @@ def start_panel(
             rotation_note = (f"Read with an image rotation of {adjustment:+d}°."
                              if language == "en" else f"Mit Bilddrehung von {adjustment:+d}° gelesen.")
             detail = " ".join(part for part in (detail, rotation_note) if part)
+        grace = (not precision_pending and history.get("setup_first_check_unclear")
+                 and history.get("failure_attempts") == 1 and tone == "warning")
+        if grace:
+            tone, icon, incident = "neutral", "", ""
+            heading = ("First automatic check still unclear" if language == "en" else
+                       "Erste automatische Prüfung noch unklar")
+            detail = ("The app will try again with a fresh image." if language == "en" else
+                      "Die App prüft mit einem frischen Bild erneut.")
         routine_ok = (tone == "ok" and not paused and not setup_pending
                       and history.get("source_connection_status") != "error")
         if routine_ok:
@@ -3207,10 +3373,16 @@ def start_panel(
                     return
                 try:
                     content = get_wizard_image(source)
+                    if field("preview") == "reflection":
+                        preview = reflection_setup_preview(content, int(field("integer_digits")),
+                                                           int(field("fraction_digits")), field("polarity"))
                 except (OSError, ValueError):
                     problem(503, "Das Kamerabild konnte nicht geladen werden.", "Could not load the camera image.")
                 else:
-                    self.reply(content, "image/jpeg")
+                    if field("preview") == "reflection":
+                        self.reply(json.dumps(preview).encode("utf-8"), "application/json; charset=utf-8")
+                    else:
+                        self.reply(content, "image/jpeg")
                 finally:
                     wizard_image_lock.release()
                 return
@@ -3303,6 +3475,28 @@ def start_panel(
                         "fraction_digits": fraction_digits, "meter_display": meter_display,
                         "fallback_value": fallback_value, "fallback_time": fallback_time,
                     }
+                    marked_text = field("reflection_geometry")
+                    rules_values["setup_reflection"] = None
+                    if learn_crop and rules_values["reflection_estimate_enabled"] and marked_text:
+                        marked = json.loads(marked_text)
+                        if not isinstance(marked, dict):
+                            raise ValueError("Invalid reflection geometry")
+                        positions = marked.get("positions")
+                        count = integer_digits + fraction_digits
+                        if (not isinstance(positions, list) or len(positions) > 2
+                                or any(type(value) is not int or not 0 <= value < count for value in positions)
+                                or len(set(positions)) != len(positions)):
+                            raise ValueError("Invalid reflected positions")
+                        if positions:
+                            boxes = digit_box_settings(marked.get("digit_boxes"), count)
+                            if not boxes:
+                                raise ValueError("Missing digit boxes")
+                            crop_coordinates(marked["crop"], marked["width"], marked["rotation"])
+                            rules_values["setup_reflection"] = {
+                                "source": setup_source_id({**source_values, "selected": True}),
+                                "positions": positions, "crop": marked["crop"], "width": marked["width"],
+                                "rotation": marked["rotation"], "digit_boxes": boxes,
+                            }
                     with source_lock, rules_lock:
                         if learn_crop and get_auto_paused and get_auto_paused():
                             problem(409, "Setze die Automatik fort und starte dann die Selbsteinrichtung.",
@@ -3319,7 +3513,7 @@ def start_panel(
                         save_auto_rules(rules_values)
                         if learn_crop:
                             control_calibration("setup" if initial_setup else "start", image_limit)
-                except (ValueError, TypeError):
+                except (ValueError, TypeError, KeyError):
                     problem(400, "Bitte prüfe Bildquelle, Ziffernaufteilung und Fallback-Wert.",
                             "Check the image source, digit layout and fallback reading.")
                     return

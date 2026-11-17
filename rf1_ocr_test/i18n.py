@@ -12,6 +12,25 @@ from layout import MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR
 
 
 EN_UI = {
+    "Ziffernrahmen für Spiegelungen suchen": "Find digit boxes for reflections",
+    "Gelbe Rahmen sind möglicherweise gespiegelt. Du kannst bis zu zwei Stellen markieren und die Rahmen ziehen.": "Yellow boxes may be affected by reflections. Mark up to two positions and drag the boxes to adjust them.",
+    "Ziffernfeld mit markierten Spiegelungen": "Meter digits with marked reflections",
+    "Ziffernrahmen werden gesucht …": "Finding digit boxes …",
+    "Kein Ziffernfeld gefunden. Du kannst die Einrichtung direkt fortsetzen.": "No digit row found. You can continue setup.",
+    "Ausschnitt mit markierter Spiegelung vorläufig gespeichert. Die verdeckten Ziffern bleiben offen.": "Crop with marked reflections saved provisionally. The obscured digits remain open.",
+    "Die sichtbaren Ziffern stützen den markierten Rahmen. Die verdeckten Stellen bleiben offen.": "The visible digits support the marked crop. The obscured digits remain open.",
+    "Markierter Rahmen mit sichtbaren Ziffern geprüft. Verdeckte Stellen bleiben offen.": "Marked crop checked using the visible digits. Obscured digits remain open.",
+    "Ziffernzeile gefunden · ": "Digit row found · ",
+    "Schwelle ": "Threshold ",
+    " Ohne Vergleichswert braucht die App einen plausiblen Anstieg oder einen Startwert.": " Without a reference, the app needs a plausible increase or a starting reading.",
+    "In den ersten 20 Minuten prüft die App häufiger, ob der neu gespeicherte Rahmen zuverlässig lesbar ist. Danach gilt wieder dein eingestelltes Prüfintervall.": "For the first 20 minutes, the app checks more often to see whether the new crop stays readable. It then returns to your configured interval.",
+    "Die App sucht einen passenden Rahmen und Winkel. Nach drei bestätigten Aufnahmen übernimmt die Automatik die Gegenprüfung. Ziel sind fünf Minuten. Die Suche endet spätestens nach 20 Minuten.": "The app looks for a suitable crop and angle. After three confirmed images, the regular reader takes over. The target is five minutes and the limit is 20 minutes.",
+    "Startet nach dem Speichern. Nach drei bestätigten Aufnahmen übernimmt die Automatik die Gegenprüfung.": "Starts after saving. After three confirmed images, the regular reader takes over.",
+    "Selbsteinrichtung nach 20 Minuten beendet. Keine Einstellung sicher bestätigt.": "Automatic setup ended after 20 minutes without confirming a reliable crop.",
+    "Nachprüfung: Dieselben Ziffern waren wiederholt unklar.": "Rechecking because the same digits were repeatedly unclear.",
+    ">Kandidaten</summary>": ">Candidates</summary>",
+    "button.textContent = 'Stelle '": "button.textContent = 'Position '",
+
     "Letzte Rolle auf diesem Bild gelesen. Sie ist noch nicht unabhängig bestätigt.":
         "Last wheel read on this image. Independent confirmation is still pending.",
     "Letzte Rolle dreht weiter. Warte auf eine eindeutige Ziffer.":

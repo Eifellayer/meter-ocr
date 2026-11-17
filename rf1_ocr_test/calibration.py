@@ -25,7 +25,7 @@ MIN_IMAGES = 3
 MIN_IMAGE_LIMIT = MIN_IMAGES + 1
 MAX_IMAGES = 100
 MAX_ATTEMPTS = 260
-TIME_LIMIT = 15 * 60
+TIME_LIMIT = 20 * 60
 IMAGE_WAIT_LIMIT = 360
 INTENSIVE_VERIFICATION_SECONDS = 4 * 60
 CAPTURE_INTERVAL = 5
@@ -485,6 +485,9 @@ class Calibration:
     coarse_attempts: int = 0
     optimizing: bool = False
     shortlist: dict = field(default_factory=dict)
+    candidate_readings: dict = field(default_factory=dict)
+    row_found: int = 0
+    agreement_threshold: int = DEFAULT_INTENSIVE_AGREEMENT
     confirmed_quality: list = field(default_factory=list)
     fine_evidence: tuple | None = None
     image_hints: list | None = None
@@ -494,6 +497,9 @@ class Calibration:
     attempt_limit: int = MAX_ATTEMPTS
     previous_layout: Layout | None = None
     known_good_layout: Layout | None = None
+    reflected_layout: Layout | None = None
+    reflected_positions: tuple = ()
+    reflected_confirmations: int = 0
     region: tuple | None = None
     focused: bool = False
     best_score: tuple = ()
@@ -509,6 +515,9 @@ class Calibration:
     def stationary_crop_ready(self):
         return (self.simplified and not self.automatic and self.candidate is not None
                 and self.confirmations >= MIN_IMAGES and not (self.anchored or self.advanced))
+
+    def reflection_crop_ready(self):
+        return self.reflected_layout is not None and self.reflected_confirmations >= MIN_IMAGES
 
     def begin_verification(self, now):
         self.verification_pending = True
@@ -526,6 +535,8 @@ class Calibration:
     def remaining(self, now):
         if self.verification_deadline is not None:
             return self.verification_deadline - now
+        if not self.intensive and not self.automatic:
+            return self.duration - (now - self.started)
         return self.duration - self.spent - (now - self.searching_since if self.searching_since is not None else 0)
 
     def image_wait_expired(self, now):
@@ -585,6 +596,8 @@ class Calibration:
                 "duration": INTENSIVE_VERIFICATION_SECONDS if self.verification_deadline is not None else self.duration,
                 "attempts": self.attempts, "max_attempts": self.attempt_limit, "automatic": self.automatic,
                 "confirmations": self.confirmations, "required": MIN_IMAGES,
+                "reflected_confirmations": self.reflected_confirmations,
+                "row_found": self.row_found, "agreement_threshold": self.agreement_threshold,
                 "full_hits": self.full_hits,
                 "image_hints": self.image_hints,
                 "known_good_available": self.known_good_layout is not None and self.region is None,
@@ -594,6 +607,8 @@ class Calibration:
                 "simplified": self.simplified, "intensive": self.intensive, "followup": self.followup,
                 "coarse_attempts": self.coarse_attempts, "coarse_limit": COARSE_LIMIT,
                 "shortlist": [score[0] for score in self.shortlist.values() if len(score) == 3],
+                "candidates": [{"percent": score[0], "reading": self.candidate_readings.get(layout, "")}
+                               for layout, score in self.shortlist.items() if len(score) == 3],
                 "candidate_agreement": selected_score[0] if len(selected_score) == 3 else None,
                 "seconds": max(0, ceil(self.remaining(now)))}
 
@@ -942,6 +957,15 @@ class Calibration:
             self.shortlist[layout] = (percentage, round(crop_quality(frame, layout), 2), required_agreement)
             self.shortlist = dict(sorted(self.shortlist.items(), key=lambda pair: pair[1], reverse=True)
                                   [:SHORTLIST_LIMIT])
+            rows = [str(value).replace(",", ".") for value in readings]
+            exemplar = max(rows, key=lambda value: sum(digit.isdigit() for digit in value))
+            self.candidate_readings[layout] = exemplar if all(row == exemplar for row in rows) else "".join(
+                digit if all(len(row) > index and row[index] == digit for row in rows) else "?"
+                for index, digit in enumerate(exemplar)
+            )
+            self.candidate_readings = {item: self.candidate_readings[item] for item in self.shortlist
+                                       if item in self.candidate_readings}
+
 
     def region_rejected(self, layout):
         return (self.confirmations < 2 and not self.followup
@@ -1082,6 +1106,23 @@ class Calibration:
             if reliable(score) and layout in (self.known_good_layout, self.candidate):
                 break
 
+        if self.reflected_layout is not None and not any(reliable(score) for score, _, _ in coarse):
+            for _, layout, readings in coarse:
+                if layout != self.reflected_layout:
+                    continue
+                rows = required_rows(readings)
+                weak = uncertain_slots(rows, required_slots)
+                visible = set(range(required_slots)) - set(weak)
+                if (weak and set(weak) <= set(self.reflected_positions) and len(visible) >= 3
+                        and (reference_digits is None or all(
+                            rows[0][index] == reference_digits[index] for index in visible))):
+                    self.reflected_confirmations += 1
+                    if on_selected is not None:
+                        on_selected(layout, readings)
+                    on_decision("reflected_geometry")
+                    return None
+            self.reflected_confirmations = 0
+
         def ranked_crop(item):
             score, layout, readings = item
             return (reliable(score), score[1], score[3], score[2],
@@ -1116,6 +1157,10 @@ class Calibration:
             for _, layout, readings in coarse:
                 self.record_intermediate(layout, readings, sample, precision, digits, rules["fraction_digits"], frame)
             coarse.sort(key=lambda item: self.shortlist.get(item[1], (0, 0)), reverse=True)
+            self.agreement_threshold = rules.get("intensive_agreement", DEFAULT_INTENSIVE_AGREEMENT)
+            found_percent = max((self.shortlist.get(layout, (0,))[0] for _, layout, _ in coarse), default=0)
+            if found_percent >= self.agreement_threshold:
+                self.row_found = max(self.row_found, found_percent)
             stable = [item for item in coarse if item[0][4]]
             if collecting:
                 found = any(reliable(score) for score, _, _ in coarse)

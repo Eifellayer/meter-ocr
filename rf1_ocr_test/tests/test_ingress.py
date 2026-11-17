@@ -161,6 +161,20 @@ class IngressTests(IngressFixture):
         self.rules["crop_mode"] = "manual"
         self.assertIn('value="manual" checked>', choices())
 
+    def test_reflection_preview_suggests_only_interior_gaps(self):
+        from calibration import Layout
+
+        boxes = tuple((125 * i, 0, 125 * (i + 1), 1000) for i in range(8))
+        layout = Layout((0, 0, 160, 35), 0, 100, boxes)
+        content = BytesIO()
+        Image.new("RGB", (160, 35)).save(content, "JPEG")
+        votes = [digit for digit in (None, "0", "4", None, "9", "8", "7", None) for _ in range(2)]
+        with (patch.object(panel, "layouts", return_value=iter([layout])),
+              patch.object(panel, "read_register", side_effect=votes)):
+            result = panel.reflection_setup_preview(content.getvalue(), 5, 3, "auto")
+        self.assertEqual([3], result["suspected"])
+        self.assertEqual([list(box) for box in boxes], result["layout"]["digit_boxes"])
+
     def test_wizard_image_uses_unsaved_camera_with_csrf_and_keeps_setup_pending(self):
         fields = dict(source_mode="esphome", camera="camera.unsaved")
         with self.assertRaises(HTTPError) as error:
@@ -957,19 +971,22 @@ class BrowserTests(IngressFixture):
             display = page.locator("#calibration-overview .calibration-photo-panel")
             display.get_by_text("Die App sucht in diesem Bild nach der Ziffernreihe.").wait_for()
             self.calibration.update(state="waiting", tested=1, attempts=5, shortlist=[100, 87],
+                                    candidates=[{"percent": 100, "reading": "12345.678"},
+                                                {"percent": 87, "reading": "12345.67?"}],
                                     preview={"frame": 15, "crop": 15, "reading": "12345.678",
                                              "reason": "reference_unavailable"})
             overview = page.locator("#calibration-overview-state")
             overview.filter(has_text="Grün bedeutet lesbar. Ein gültiger Vergleichswert").wait_for()
-            self.assertIn("Bestätigungen: 0/3", overview.inner_text())
-            self.assertIn("Beste Kandidaten: 100%, 87%", overview.inner_text())
+            cards = page.locator("#calibration-overview .calibration-candidate-panel")
+            cards.locator("summary").click()
+            self.assertEqual(["100 % · 12345.678", "87 % · 12345.67?"], cards.locator("li").all_text_contents())
             self.calibration.update(confirmations=1, candidate_agreement=100,
                                     preview={"frame": 15, "crop": 15, "reading": "12345.67?", "reason": "accepted"})
             overview.filter(has_text="Rahmen mit 100 % Übereinstimmung gefunden.").wait_for()
             display.get_by_text("Gelb mit ?: Stelle vermutet, Ziffer nicht lesbar.", exact=False).wait_for()
             self.calibration.update(state="waiting", confirmations=3, awaiting_start_value=True,
                                     preview={"frame": 15, "reason": "await_movement"})
-            overview.filter(has_text="auf einen plausiblen Anstieg oder einen Startwert").wait_for()
+            overview.filter(has_text="einen plausiblen Anstieg oder einen Startwert").wait_for()
             self.calibration.update(state="testing", stage="capture", preview={"frame": 15})
             overview.filter(has_text="Kamerabild wird abgerufen").filter(
                 has_text="auf einen plausiblen Anstieg oder einen Startwert").wait_for()

@@ -781,6 +781,19 @@ class CalibrationTests(TestCase):
         self.assertEqual("10462.84?", job.reference_reading)
         self.assertEqual(calls[-1], job.candidate.digit_boxes[6])
 
+    def test_marked_interior_reflection_can_confirm_geometry_without_reading(self):
+        self.candidates.return_value = [LAYOUT]
+        job = Calibration(8, 0, reflected_layout=LAYOUT, reflected_positions=(2,))
+        sample = {"reference_required": False}
+        reasons = []
+        for stamp in (101, 102, 103):
+            self.assertIsNone(job.examine(frame(stamp - 100), None, sample, stamp, RULES,
+                                          lambda *_: "12?45", lambda: False, on_decision=reasons.append))
+        self.assertEqual(["reflected_geometry"] * 3, reasons)
+        self.assertTrue(job.reflection_crop_ready())
+        self.assertIsNone(job.reference_reading)
+        self.assertEqual(0, job.confirmations)
+
     def test_near_hit_tries_small_shifts_then_a_degree_around_current_angle(self):
         boxes = tuple((125 * index, 80, 125 * (index + 1), 920) for index in range(8))
         layout = Layout((0, 0, 80, 20), -2, 50, boxes)

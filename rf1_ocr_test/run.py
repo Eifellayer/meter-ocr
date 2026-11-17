@@ -41,13 +41,13 @@ from checks import (
 )
 from calibration import (Calibration, Layout, CAPTURE_INTERVAL, PERFECT_CONFIRMATION_INTERVAL, MIN_IMAGES, MIN_IMAGE_LIMIT, MAX_IMAGES, MAX_ATTEMPTS,
                          DEFAULT_INTENSIVE_AGREEMENT, SHORTLIST_LIMIT, TIME_LIMIT, LAST_DIGIT_CAPTURE_INTERVAL,
-                         image_quality_hints, two_decimal_reading, valid_intensive_agreement)
+                         image_quality_hints, two_decimal_reading, uncertain_slots, valid_intensive_agreement)
 from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, MAX_FLOW_LPH, ImplausibleReading,
                          accumulate_consumption, fallback_detail, format_cubic_metres)
 from layout import (MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, find_digit_row,
                     digit_box_settings, find_raw_digit_row, normalize_digit_boxes, rotated_width, scale_digit_boxes, turn_crop)
-from meter_learning import (GEOMETRY_REPAIR_LIMIT, GEOMETRY_REPAIR_SECONDS, alignment_rollback, observe_alignment, observe_flow,
-                            observe_geometry_failures, propose_digit_boxes, suggested_interval)
+from meter_learning import (GEOMETRY_REPAIR_LIMIT, GEOMETRY_REPAIR_SECONDS, alignment_rollback, observe_flow,
+                            observe_geometry_failures, local_geometry_trials, note_local_issue, note_local_improvement, suggested_interval)
 from reminder import Reminder
 from notification_settings import (DEFAULT_DELIVERY_HOURS, DEFAULT_REVIEW_MINUTES, PUSH_SERVICE,
                                    notification_rules)
@@ -659,15 +659,17 @@ def publish_standalone(history, camera, token):
     last = history.get("standalone_reading")
     value = "unavailable"
     captured = None
+    is_fallback = False
     if last and last["camera"] == camera:
-        if history.get("check_status") in ("ocr_only", STANDALONE_PENDING):
-            digits = last.get("integer_digits", 5)
-            value = last["reading"][:digits + (last["decimals"] + 1 if last["decimals"] else 0)]
+        digits = last.get("integer_digits", 5)
+        value = last["reading"][:digits + (last["decimals"] + 1 if last["decimals"] else 0)]
         captured = last["image_time"]
+        is_fallback = history.get("check_status") != "ocr_only"
     payload = {
         "state": value,
         "attributes": {"friendly_name": "Meter OCR Zählerstand" + LABEL_SUFFIX, "unit_of_measurement": "m³",
-                       "device_class": "gas", "source_camera": camera, "last_successful_image": captured},
+                       "device_class": "gas", "source_camera": camera, "last_successful_image": captured,
+                       "is_fallback": is_fallback},
     }
     publish_state(f"http://supervisor/core/api/states/{OCR_ENTITY}", payload, token)
 
@@ -850,6 +852,7 @@ def main():
                           "calibration_reference": saved_rules.get("calibration_reference"),
                           "setup_completed": saved_rules.get("setup_completed"),
                           "setup_pending_source": saved_rules.get("setup_pending_source"),
+                          "setup_reflection": saved_rules.get("setup_reflection"),
                           "stationary_partial_scope": saved_rules.get("stationary_partial_scope"),
                           "intensive_agreement": intensive_agreement,
                           "fine_alignment_enabled": saved_rules.get("fine_alignment_enabled") is True,
@@ -1094,7 +1097,7 @@ def main():
     def calibration_configuration_now():
         return get_auto_rules(), get_source()
 
-    def save_calibration_layout(attempt, layout, *, provisional=False, verified=False):
+    def save_calibration_layout(attempt, layout, *, provisional=False, verified=False, reflected=False):
         rules = get_auto_rules()
         reference = rules.get("calibration_reference") if attempt.intensive else None
         if not provisional and attempt.reference_reading is not None:
@@ -1112,7 +1115,7 @@ def main():
         if verified and not previous_completion and not attempt.intensive and not attempt.automatic and reference:
             completed = {"source": setup_source_id(source), "time": time.time()}
         revision = str(time.time_ns())
-        partial = provisional or verified and attempt.simplified
+        partial = (provisional and not reflected) or verified and attempt.simplified
         partial_scope = calibration_source_id([source, revision]) if partial else None
         pending_source = setup_source_id(source) if provisional else rules.get("setup_pending_source")
         save_auto_rules({**rules, **layout.settings(), "crop_revision": revision,
@@ -1187,13 +1190,21 @@ def main():
                     previous = geometry_layout(rules, rules) if rules["crop_mode"] == "manual" else known_good
                     if previous is None:
                         raise ValueError("A saved crop is required for the last digit")
+                reflected_layout = None
+                reflected_positions = ()
+                marked = rules.get("setup_reflection")
+                if (not repair and not intensive and rules["reflection_estimate_enabled"]
+                        and isinstance(marked, dict) and marked.get("source") == setup_source_id(source)):
+                    reflected_layout = geometry_layout(marked, rules)
+                    reflected_positions = tuple(marked["positions"])
                 calibration = Calibration(limit=limit, started=now, automatic=repair,
                                           rank_candidates=not (repair or intensive), shortlist=shortlist,
                                           simplified=simplified, intensive=intensive,
                                           duration=GEOMETRY_REPAIR_SECONDS if repair else TIME_LIMIT,
                                           attempt_limit=GEOMETRY_REPAIR_LIMIT if repair else MAX_ATTEMPTS,
                                           previous_layout=previous, region=region,
-                                          known_good_layout=known_good)
+                                          known_good_layout=reflected_layout or known_good,
+                                          reflected_layout=reflected_layout, reflected_positions=reflected_positions)
                 calibration_preview.clear()
                 calibration_images.clear()
                 calibration_configuration = configuration
@@ -1213,8 +1224,9 @@ def main():
             elif status["state"] == "waiting" and calibration.image_wait_expired(time.monotonic()):
                 status["state"] = "image_timeout"
             same_configuration = calibration_configuration_now() == calibration_configuration
-            saved = status["state"] in ("saved", "saved_without_verification", "saved_stationary")
-            saved_layout = calibration.candidate if saved else calibration.previous_layout
+            saved = status["state"] in ("saved", "saved_without_verification", "saved_stationary", "saved_reflection")
+            saved_layout = (calibration.reflected_layout if status["state"] == "saved_reflection"
+                            else calibration.candidate if saved else calibration.previous_layout)
             if saved_layout and (saved or (calibration.followup and same_configuration)):
                 status["settings"] = {**saved_layout.settings(), "crop_revision": auto_rules["crop_revision"]}
             if same_configuration:
@@ -1295,6 +1307,7 @@ def main():
         result = None
         selected = None
         provisional = False
+        reflected = False
         stream_pictures = []
         try:
             if attempt.intensive and not attempt.stream_unavailable:
@@ -1522,6 +1535,19 @@ def main():
                                 picture, options["helle_ziffern"] if polarity == "auto" else polarity == "light",
                                 digits, profile=profile, force_polarity=polarity != "auto", deadline=fine_deadline))
 
+                        def preview_optional_slot(layout):
+                            nonlocal fine_deadline
+                            fine_deadline = min(deadline, time.monotonic() + 3)
+                            hint = attempt.probe_optional_last_slot(
+                                layout, active_rules, read_calibration_slot,
+                                lambda: stopped() or time.monotonic() >= fine_deadline, report_fine,
+                            )
+                            if hint is not None:
+                                trial, values = hint
+                                readings[:] = values
+                                report_crop(trial, register_for(trial), values[-1], tentative_last=True)
+                                report_decision("optional_last_slot")
+
                         if attempt.intensive:
                             earlier_frames = []
                             for stream_picture in stream_pictures[:-1]:
@@ -1591,17 +1617,6 @@ def main():
                             report_calibration("verify", rotation=attempt.candidate.rotation)
                             selected = attempt.verify(frame, sample, captured, active_rules, read, stopped,
                                                       on_image=on_image, on_decision=report_decision)
-                            if selected is not None and attempt.simplified:
-                                fine_deadline = min(deadline, time.monotonic() + 3)
-                                hint = attempt.probe_optional_last_slot(
-                                    selected, active_rules, read_calibration_slot,
-                                    lambda: stopped() or time.monotonic() >= fine_deadline, report_fine,
-                                )
-                                if hint is not None:
-                                    trial, values = hint
-                                    readings[:] = values
-                                    report_crop(trial, register_for(trial), values[-1], tentative_last=True)
-                                    report_decision("optional_last_slot")
                         else:
                             report_calibration("search")
                             candidate = attempt.examine(
@@ -1620,10 +1635,17 @@ def main():
                                     "shortlist", variant, rotation),
                             )
                             if candidate is not None:
-                                attempt.begin_verification(time.monotonic())
+                                if attempt.automatic:
+                                    attempt.begin_verification(time.monotonic())
+                                else:
+                                    selected = candidate
+                                    preview_optional_slot(selected)
                             elif attempt.stationary_crop_ready():
                                 selected = attempt.candidate
                                 provisional = True
+                            elif attempt.reflection_crop_ready():
+                                selected = attempt.reflected_layout
+                                provisional = reflected = True
                         if attempt.reference_reading is not None and attempt.counter.get("timestamp") == captured:
                             attempt.reference_image_id = hashlib.sha256(picture).hexdigest()
         except (OSError, ValueError, TypeError, Image.DecompressionBombError) as error:
@@ -1650,10 +1672,13 @@ def main():
                 attempt.state = "cancelled"
             elif selected:
                 try:
-                    save_calibration_layout(attempt, selected, provisional=provisional, verified=not provisional)
+                    save_calibration_layout(attempt, selected, provisional=provisional,
+                                            verified=not provisional, reflected=reflected)
                     if not provisional and not attempt.intensive:
                         remember_known_good_layout(get_auto_rules(), active_source, selected)
-                    attempt.state = "saved_stationary" if provisional else "saved"
+                    if not attempt.intensive and not attempt.automatic:
+                        history["setup_first_check_revision"] = get_auto_rules()["crop_revision"]
+                    attempt.state = "saved_reflection" if reflected else "saved_stationary" if provisional else "saved"
                 except (OSError, ValueError):
                     attempt.state = "save_failed"
             elif len(attempt.seen) >= attempt.limit or attempt.search_exhausted():
@@ -1845,6 +1870,8 @@ def main():
         new_standalone = None
         standalone_reference = None
         fine_update = None
+        fine_rotation = None
+        local_trial = None
         recover_geometry = False
         geometry_warning = False
         # Confirmations obtained with another precision are not valid evidence
@@ -1991,6 +2018,7 @@ def main():
                         atomic_write(TEST_SOURCE_IMAGE, picture, 0o600)
                     ocr_readings = []
                     ocr_error = None
+                    local_enabled = False
                     detect_raw = False
                     rotation_adjustment = 0
                     rotation_key = None
@@ -2112,15 +2140,18 @@ def main():
                         configured_attempts = manual_options["attempts"] if manual else max_attempts
                         if require_consensus:
                             configured_attempts = max(2, configured_attempts)
-                        extra_attempts = (10 if not manual and not optimization_paused and history.get("failure_attempts", 0) == 0
+                        local_enabled = (not manual and not optimization_paused and not raw_fallback
+                                         and active_rules["fine_alignment_enabled"] and crop_rules["crop_mode"] == "manual")
+                        extra_attempts = (10 if not manual and not local_enabled and not optimization_paused
+                                          and history.get("failure_attempts", 0) == 0
                                           and not history.get("retry_suppressed") else 0)
-                        ocr_limit = min(15, configured_attempts + extra_attempts)
+                        ocr_limit = min(15, configured_attempts + (5 if local_enabled else extra_attempts))
                         if live_source:
                             ocr_limit = min(ocr_limit, LIVE_CAPTURE_MAX_ATTEMPTS)
                         reserve_for_rotation = (2 * len(INTENSIVE_ROTATIONS)
                                                 if extra_attempts and source != "auto" and not custom_boxes
                                                 and not stationary_partial else 0)
-                        regular_limit = ocr_limit - reserve_for_rotation
+                        regular_limit = min(configured_attempts, ocr_limit) if local_enabled else ocr_limit - reserve_for_rotation
                         regular_attempts = min(configured_attempts, regular_limit)
                         comparison_decimals = manual_options["decimals"] if manual else decimals
 
@@ -2140,6 +2171,56 @@ def main():
                         )
                         regular_status, _ = compare_sample(sample, ocr, comparison_decimals,
                                                            ocr_confirmed=ocr_confirmed, integer_digits=integer_digits)
+                        if local_enabled:
+                            required = integer_digits + comparison_decimals
+                            rows = [str(value).replace(".", "").replace(",", "")[:required] for value in ocr_readings]
+                            weak = uncertain_slots(rows, required) if len(rows) >= 2 else []
+                            if (regular_status not in ("difference", "ocr_unclear") or not 1 <= len(weak) <= 2
+                                    or required - len(weak) < 3
+                                    or comparison_decimals == 3 and weak == [required - 1]):
+                                weak = []
+                            local_key = geometry_check_key(active_rules, source_key)
+                            issue = updated.setdefault("local_issue", {})
+                            stamp = read_state["captured"] or sample_timestamp(sample, zone)
+                            if read_state["captured"] is not None and note_local_issue(issue, local_key, stamp, weak):
+                                options_iter = list(local_geometry_trials(custom_boxes or [], weak))
+                                start = ((issue["count"] - 3) * 2) % len(options_iter)
+                                variants = (options_iter[start:] + options_iter[:start])[:2]
+                                with Image.open(io.BytesIO(read_state["picture"])) as original:
+                                    for adjustment, trial_boxes in variants:
+                                        if stop_ocr() or ocr_attempts + 2 > ocr_limit:
+                                            break
+                                        if adjustment:
+                                            left, top, right, bottom = manual_crop
+                                            width = min(manual_width, rotated_width(
+                                                right - left, bottom - top, rotation + base_adjustment + adjustment))
+                                        else:
+                                            width = manual_width
+                                        trial = select_register(
+                                            original, None, manual_crop, width, rotation + base_adjustment + adjustment,
+                                            integer_digits, fraction_digits, digit_boxes=trial_boxes,
+                                        )
+                                        set_activity("working", "Nachprüfung: Dieselben Ziffern waren wiederholt unklar.",
+                                                     completed=ocr_attempts, total=ocr_limit)
+                                        values = [read_layout(trial, profile) for profile in OCR_PROFILES[:2]]
+                                        ocr_attempts += len(values)
+                                        prefix = meter_prefix(values[0], comparison_decimals, integer_digits)
+                                        if prefix is None or prefix != meter_prefix(values[1], comparison_decimals, integer_digits):
+                                            continue
+                                        digits = str(prefix).zfill(required)
+                                        if any(row[index] != digits[index] for index in range(required)
+                                               if index not in weak for row in rows):
+                                            continue
+                                        if compare_sample(sample, values[0], comparison_decimals,
+                                                          integer_digits=integer_digits)[0] not in ("match", "ocr_only"):
+                                            continue
+                                        ocr, ocr_confirmed, ocr_readings = values[0], True, values
+                                        reg, width, whole, fractions, kind = trial
+                                        read_state.update(register=reg, integer_width=width, whole_boxes=whole,
+                                                          fraction_boxes=fractions, source=kind)
+                                        rotation_adjustment = base_adjustment + adjustment
+                                        local_trial = (local_key, [rotation + rotation_adjustment, trial_boxes], prefix)
+                                        break
                         if reserve_for_rotation and regular_status in ("difference", "ocr_unclear") and not stop_ocr():
                             with Image.open(io.BytesIO(read_state["picture"])) as original:
                                 for delta in INTENSIVE_ROTATIONS:
@@ -2409,7 +2490,8 @@ def main():
                             updated["last_slfork_match"] = {"reading": sample["actual_value"], "time": image_time}
                     data = {**sample, "crop_source": source, "ocr_attempts": ocr_attempts}
                     updated["ocr_rotation_adjustment"] = rotation_adjustment
-                    if (not optimization_paused and not stationary_partial and rotation_key is not None and not raw_fallback
+                    if (not optimization_paused and not stationary_partial and not local_enabled
+                            and rotation_key is not None and not raw_fallback
                             and (outcome == "match" or standalone_reference is not None and outcome == "ocr_only")):
                         updated["learned_rotation"] = {"crop": rotation_key, "adjustment": rotation_adjustment}
                     if rotation_adjustment:
@@ -2469,47 +2551,18 @@ def main():
                         interval_minutes = suggested_interval(
                             automatic_interval_minutes(active_rules["interval_minutes"], mode), flow, source_key, now.month,
                         )
-                    if (not optimization_paused and not stationary_partial and active_rules["fine_alignment_enabled"]
-                            and active_rules["crop_mode"] == "manual" and not raw_fallback):
+                    if (not optimization_paused and not raw_fallback and local_trial is not None and verified):
+                        trial_key, geometry, prefix = local_trial
+                        learning = updated.setdefault("local_improvement", {})
+                        if note_local_improvement(learning, trial_key, image_time, geometry, prefix):
+                            fine_rotation, fine_update = geometry
+                    elif not optimization_paused and active_rules["fine_alignment_enabled"] and not raw_fallback:
                         learning = updated.setdefault("fine_alignment", {})
                         key = [source_key, active_rules["crop"], active_rules["rotation"], active_rules["width"],
                                integer_digits, fraction_digits, active_rules["polarity"]]
-                        previous_boxes = active_rules["digit_boxes"]
-                        if outcome in ("ocr_unclear", "difference"):
-                            fine_update = alignment_rollback(learning, key, previous_boxes, True)
-                        if verified:
-                            alignment_rollback(learning, key, previous_boxes, False)
-                            trusted = sample.get("actual_value")
-                            known = fraction_digits if compare_sample(
-                                sample, trusted, fraction_digits, integer_digits=integer_digits
-                            )[0] == "match" else decimals
-                            expected = trusted if known == fraction_digits and sample.get("reference_required") is not False else ocr
-                            prefix = meter_prefix(expected, known, integer_digits)
-                            if prefix is not None and (known == fraction_digits or previous_boxes):
-                                digits = str(prefix).zfill(integer_digits + known)
-                                if known:
-                                    digits = digits[:integer_digits] + "." + digits[integer_digits:]
-                                candidate_boxes = (learning.get("candidate") if learning.get("key") == key else None)
-                                if not candidate_boxes:
-                                    candidate_boxes = propose_digit_boxes(
-                                        register, previous_boxes, integer_width, integer_digits, fraction_digits,
-                                    )
-                                trial = ""
-                                if candidate_boxes and candidate_boxes != previous_boxes:
-                                    boxes = scale_digit_boxes(candidate_boxes, register.size)
-                                    try:
-                                        trial = read_visible_digits(
-                                            register, integer_width, boxes[:integer_digits], boxes[integer_digits:],
-                                            options["helle_ziffern"], active_rules["polarity"],
-                                            profile=OCR_PROFILES[0], whole_digits=integer_digits,
-                                            fraction_digits=fraction_digits, prefer_boxes=True,
-                                            deadline=time.monotonic() + 5,
-                                        )
-                                    except (OSError, ValueError, subprocess.SubprocessError):
-                                        pass
-                                fine_update = observe_alignment(
-                                    learning, key, image_time, digits, ocr or "", previous_boxes, candidate_boxes, trial,
-                                )
+                        failed = outcome in ("ocr_unclear", "difference")
+                        if failed or verified:
+                            fine_update = alignment_rollback(learning, key, active_rules["digit_boxes"], failed)
                     if not raw_fallback and not optimization_paused:
                         geometry_key = geometry_check_key(active_rules, source_key)
                         recovery = updated.setdefault("geometry_recovery", {})
@@ -2584,6 +2637,15 @@ def main():
         if keep_schedule and not cached_standalone and data is None and history.get("next_check_at", 0) > now.timestamp():
             continue
         updated["slfork_diagnostics"] = diagnostics
+        if (not duplicate_cycle and not cached_standalone
+                and updated.pop("setup_first_check_revision", None) == active_rules["crop_revision"]):
+            updated["setup_first_check_unclear"] = outcome not in (*SUCCESSFUL_CHECKS, STANDALONE_PENDING)
+            if updated["setup_first_check_unclear"]:
+                updated.pop("failure_attempts", None)
+                updated.pop("failure_since", None)
+                updated.pop("retry_suppressed", None)
+        else:
+            updated.pop("setup_first_check_unclear", None)
         if cached_standalone:
             updated["check_status"] = STANDALONE_PENDING
             defer_duplicate_cycle(updated, now.timestamp(), interval_minutes)
@@ -2592,6 +2654,8 @@ def main():
             defer_duplicate_cycle(updated, now.timestamp(), interval_minutes)
         else:
             schedule_next_check(updated, outcome, now.timestamp(), interval_minutes)
+            if updated.get("setup_first_check_unclear") and mode != "slfork":
+                updated["next_check_at"] = now.timestamp() + 15
         try:
             atomic_write(HISTORY, json.dumps(updated).encode("utf-8"), 0o600)
         except OSError as error:
@@ -2604,7 +2668,17 @@ def main():
             with settings_lock:
                 if get_auto_rules() == active_rules and get_source()[0] == active_source:
                     try:
-                        save_auto_rules({**active_rules, "digit_boxes": fine_update, "crop_revision": str(time.time_ns())})
+                        revision = str(time.time_ns())
+                        values = {**active_rules, "digit_boxes": fine_update, "crop_revision": revision}
+                        if fine_rotation is not None:
+                            values["rotation"] = fine_rotation
+                            left, top, right, bottom = crop_coordinates(
+                                active_rules["crop"], active_rules["width"], active_rules["rotation"])
+                            values["width"] = min(active_rules["width"],
+                                                  rotated_width(right - left, bottom - top, fine_rotation))
+                        if stationary_partial:
+                            values["stationary_partial_scope"] = setup_source_id([active_source, revision])
+                        save_auto_rules(values, request_check=False)
                     except (OSError, ValueError):
                         print("Feinjustierung konnte nicht gespeichert werden.")
         set_activity("waiting", "Warte auf einen neuen Messzyklus vom ESP …" if duplicate_cycle else

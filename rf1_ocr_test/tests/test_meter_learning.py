@@ -10,10 +10,29 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from checks import OCR_PROFILES, lighting_ocr_profiles, provisional_digit_estimate
 from layout import digit_box_settings, scale_digit_boxes
-from meter_learning import alignment_rollback, observe_alignment, observe_flow, observe_geometry_failures, suggested_interval
+from meter_learning import local_geometry_trials, note_local_improvement, note_local_issue, alignment_rollback, observe_alignment, observe_flow, observe_geometry_failures, suggested_interval
 
 
 class MeterLearningTests(TestCase):
+    def test_background_local_trials_need_repeated_positions_on_fresh_frames(self):
+        state = {}
+        key = ["camera", "geometry"]
+        self.assertFalse(note_local_issue(state, key, 10, [0]))
+        self.assertFalse(note_local_issue(state, key, 20, [0]))
+        self.assertFalse(note_local_issue(state, key, 20, [0]))
+        self.assertTrue(note_local_issue(state, key, 30, [0]))
+        self.assertFalse(note_local_issue(state, key, 40, []))
+        boxes = [[20, 10, 280, 940], [300, 10, 590, 940], [620, 10, 970, 940]]
+        trials = list(local_geometry_trials(boxes, [0]))
+        self.assertEqual([0, 0, 0, 0, -1, 1, -2, 2], [angle for angle, _ in trials])
+        self.assertTrue(all(candidate[1:] == boxes[1:] for _, candidate in trials))
+        self.assertTrue(all(candidate[0][2] - candidate[0][0] == 260 for _, candidate in trials))
+
+        state = {}
+        for stamp, reading in ((10, 123), (20, 123), (30, 123)):
+            self.assertFalse(note_local_improvement(state, key, stamp, [1, boxes], reading))
+        self.assertTrue(note_local_improvement(state, key, 40, [1, boxes], 124))
+
     def test_shadow_profile_is_prioritized_for_dim_or_uneven_images(self):
         dim = Image.new("L", (180, 40), 45)
         self.assertEqual(OCR_PROFILES[2], lighting_ocr_profiles(dim)[1])

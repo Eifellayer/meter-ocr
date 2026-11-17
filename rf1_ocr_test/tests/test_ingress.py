@@ -1029,6 +1029,32 @@ class BrowserTests(IngressFixture):
             self.assertFalse(page.locator("#calibration-overview").is_visible())
             browser.close()
 
+    def test_device_discovery_remains_visible_without_results_and_supports_retry(self):
+        from playwright.sync_api import sync_playwright
+
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(executable_path=os.getenv("RF1_CHROMIUM"))
+            page = browser.new_page(locale="de-DE")
+            page.set_default_timeout(7000)
+            page.goto(self.base)
+            section = page.locator("#wizard-discovered-sources")
+            section.wait_for(state="visible")
+            self.assertTrue(page.locator("#wizard-discovered-source").is_disabled())
+            page.locator("#wizard-sources-status").filter(has_text="Keine Geräte gefunden.").wait_for()
+            self.suggestions = [{"mode": "slfork", "url": "http://192.168.2.35", "label": "Gasmeter"}]
+            page.locator("#wizard-refresh-sources").click()
+            page.locator("#wizard-sources-status").filter(has_text="1 Geräte in Home Assistant gefunden.").wait_for()
+            discovered = page.locator("#wizard-discovered-source")
+            self.assertTrue(discovered.is_enabled())
+            discovered.select_option(label="AI on the Edge · Gasmeter")
+            self.assertEqual("http://192.168.2.35", page.locator("#wizard-source-url input").input_value())
+            page.route("**/bildquellen", lambda route: route.fulfill(status=503, body="Unavailable"))
+            page.locator("#wizard-refresh-sources").click()
+            page.locator("#wizard-sources-status").filter(has_text="Gerätesuche fehlgeschlagen.").wait_for()
+            self.assertTrue(section.is_visible())
+            self.assertTrue(page.locator("#wizard-refresh-sources").is_enabled())
+            browser.close()
+
     def test_selecting_a_discovered_meter_prefills_the_wizard(self):
         from playwright.sync_api import sync_playwright
 

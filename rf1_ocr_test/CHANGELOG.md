@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.29 Stable
+
+- Die gezielte Nachprüfung der linken Ziffern verschiebt nur vorhandene Einzelrahmen. Breite und Höhe bleiben erhalten.
+- Geschätzte Ziffernfenster dienen nur zum Nachlesen. Sie ersetzen keinen gespeicherten Rahmen. Wenn die Nachprüfung scheitert, bleiben der bisherige Kandidat und seine Bestätigungen erhalten.
+
 ## 0.5.28 Stable
 
 - Nach zwei Rahmenbestätigungen prüft die App unklare linke Ziffern gezielt auf demselben Bild. Sie testet zusätzliche OCR-Profile und bei Bedarf kleine Verschiebungen der betreffenden Einzelrahmen.

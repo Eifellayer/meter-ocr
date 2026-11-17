@@ -245,7 +245,7 @@ def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace
         if index > 1 and stop_before_attempt and stop_before_attempt():
             break
         if progress:
-            progress(index - 1, f"OCR-Versuch {index} von {attempt_limit} läuft …")
+            progress(index - 1, f"Versuch {index} läuft (höchstens {attempt_limit}) …")
         try:
             value = read(profile)
         except subprocess.TimeoutExpired as error:
@@ -256,7 +256,7 @@ def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace
         if trace is not None:
             trace.append(str(value))
         if progress:
-            progress(index, f"OCR-Versuch {index} von {attempt_limit} abgeschlossen.")
+            progress(index, f"Versuch {index} abgeschlossen (höchstens {attempt_limit}).")
         # Stop immediately on a verified match.
         # Without a reference, a valid OCR result ends the read.
         if status == "match" or (status == "ocr_only" and not standalone and not force_all_attempts):

@@ -98,6 +98,7 @@ header{{display:flex;align-items:baseline;justify-content:space-between;gap:.5re
 .main-tabs button[aria-selected="true"]{{background:light-dark(#e7f0f5,#293b48);border-color:var(--edge);color:inherit}}
 .main-guide{{display:flex;align-items:center;justify-content:center;align-self:stretch;padding:.45rem .65rem;border-radius:.55rem;color:inherit;font-size:.9rem}}
 @media(max-width:400px){{.main-menu,.main-tabs{{gap:.2rem}}.main-tabs button,.main-guide{{padding-inline:.3rem}}}}
+@media(max-width:340px){{.main-menu{{flex-wrap:wrap}}.main-tabs{{flex-basis:100%}}}}
 .setup-dialog{{width:min(46rem,calc(100vw - 1.2rem));max-height:min(90dvh,52rem);overflow:auto;padding:1rem 1.2rem;border:1px solid var(--edge);border-radius:1rem;background:var(--surface);color:inherit;box-shadow:0 1rem 3rem #0004}}
 .setup-dialog::backdrop{{background:#07121dcc;backdrop-filter:blur(2px)}}
 .setup-dialog .manual-content{{margin-top:.5rem}}
@@ -132,6 +133,15 @@ header{{display:flex;align-items:baseline;justify-content:space-between;gap:.5re
 .activity-status{{margin:.15rem 0 0;color:var(--muted);font-size:.9rem;overflow-wrap:anywhere}}
 .activity-status[data-state="queued"], .activity-status[data-state="working"]{{margin:0 0 .75rem;padding:.7rem .85rem;border:1px solid var(--edge);border-radius:.75rem;color:inherit;font-size:1rem}}
 .activity-status p{{margin:0}}
+.activity-details{{margin-top:.4rem;font-size:.9rem;color:var(--muted)}}
+.activity-details p{{margin-top:.35rem}}
+.setup-success{{display:grid;grid-template-columns:auto minmax(0,1fr);gap:.8rem;margin:0 0 1rem;padding:clamp(.95rem,4vw,1.4rem);border:1px solid #65a986;border-radius:.85rem;background:light-dark(#edf8f0,#183a2a);color:light-dark(#155d39,#a2e5bc)}}
+.setup-success-icon{{font-size:1.5rem;font-weight:750;line-height:1.25}}
+.setup-success strong{{font-size:clamp(1.15rem,4vw,1.4rem)}}
+.setup-success p{{margin:.35rem 0 0}}
+#setup-duration{{font-variant-numeric:tabular-nums}}
+#recognition-tools{{margin-top:1rem;padding-top:.8rem;border-top:1px solid var(--edge)}}
+#recognition-tools .check-actions{{margin-top:.65rem}}
 #setup-image-test{{margin:.4rem 0 .8rem}}
 .setup-progress{{display:block;width:100%;height:.8rem;margin:.45rem 0;border:0;border-radius:99px;overflow:hidden;accent-color:#c28a25}}
 .setup-progress[value]::-webkit-progress-bar{{background:light-dark(#eee6d1,#473d29)}}
@@ -316,25 +326,27 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <button type="button" role="tab" id="tab-overview" aria-controls="view-overview" aria-selected="true">Übersicht</button>
 <button type="button" role="tab" id="tab-settings" aria-controls="view-settings" aria-selected="false" tabindex="-1">Einstellungen</button>
 </div>
+<a id="open-recognition-tools" class="main-guide" href="#recognition-tools">Werkzeuge</a>
 <a id="open-user-guide" class="main-guide" href="https://github.com/Eifellayer/meter-ocr/blob/main/docs/Bedienungsanleitung-AI-Meter-Reader.pdf" target="_blank" rel="noopener noreferrer" title="Bebilderte Bedienungsanleitung (PDF)">Anleitung</a>
 </nav>
 <main>
 <div class="tab-content" id="view-overview" role="tabpanel" aria-labelledby="tab-overview" {overview_hidden}>
 <div class="panel" id="check-overview">
-<div class="check-card-heading"><h2>Automatische Kontrolle</h2>
-<div class="check-actions">
-<button type="button" id="open-calibration" {calibration_hidden}>Selbsteinrichtung</button>
-<button type="button" id="open-digit-correction" {digit_correction_hidden}>Ziffernrahmen korrigieren</button>
-<button type="button" id="open-manual-settings">Test einstellen</button>
-<button id="start-check" type="submit" form="manual-form">Test starten</button>
-</div></div>
+<div class="check-card-heading"><h2>Automatische Kontrolle</h2></div>
+<div id="setup-success" class="setup-success" role="status" {setup_success_hidden}>
+<span class="setup-success-icon" aria-hidden="true">✓</span>
+<div><strong>Zähler erfolgreich eingerichtet</strong>
+<p id="setup-duration" {setup_duration_hidden}>{setup_duration}</p>
+<p>Die Automatik prüft als Nächstes den gespeicherten Rahmen. In den ersten 20 Minuten prüft sie häufiger.</p></div>
+</div>
 <div class="activity-status" data-state="{automatic_activity_state}" data-routine-ok="{automatic_routine_ok}">
 <p role="status" aria-live="polite"><strong>Automatik:</strong> <span id="automatic-activity">{automatic_activity}</span></p>
 <progress id="automatic-progress" class="setup-progress" aria-label="Fortschritt der automatischen Prüfung" {automatic_progress_hidden}></progress>
-</div>
-<div id="setup-stabilization" class="settings-note" role="status" hidden>
-<strong>Zähler erfolgreich eingerichtet</strong>
-<p>In den ersten 20 Minuten prüft die App häufiger, ob der neu gespeicherte Rahmen zuverlässig lesbar ist. Danach gilt wieder dein eingestelltes Prüfintervall.</p>
+<details id="automatic-activity-details" class="activity-details" {automatic_progress_hidden}>
+<summary>Prüfdetails</summary>
+<p id="automatic-attempt-info"></p>
+<p id="automatic-live-reading"></p>
+</details>
 </div>
 <p id="calibration-complete-notice" class="settings-note" role="status" hidden></p>
 {digit_correction_notice}
@@ -548,6 +560,15 @@ name: Zählerstand (OCR)</code></pre>
 <p>Die App verwendet das letzte vorhandene Zählerbild oder ein ausgewähltes eigenes JPG-/PNG-Testbild (bis 3 MB). Sie liest die Zahlen aus dem Bild und vergleicht sie mit dem Referenzwert. Sobald die Werte übereinstimmen, stoppt die Prüfung. Andernfalls werden höchstens so viele OCR-Versuche durchgeführt wie eingestellt (1–10). Der Test verändert die automatische Trefferzahl nicht.</p></details>
 </div></details>
 </div>
+<details id="recognition-tools">
+<summary>Werkzeuge zur Erkennung</summary>
+<div class="check-actions">
+<button type="button" id="open-calibration" {calibration_hidden}>Selbsteinrichtung</button>
+<button type="button" id="open-digit-correction" {digit_correction_hidden}>Ziffernrahmen korrigieren</button>
+<button type="button" id="open-manual-settings">Test einstellen</button>
+<button id="start-check" type="submit" form="manual-form">Test starten</button>
+</div>
+</details>
 </div>
 </div>
 <div class="tab-content" id="view-settings" role="tabpanel" aria-labelledby="tab-settings" {settings_hidden}>
@@ -953,6 +974,14 @@ document.querySelector('#open-setup').addEventListener('click', () => {{
   showSetupStep(0);
   if (!setupDialog.open) setupDialog.showModal();
   loadSourceSuggestions();
+}});
+document.querySelector('#open-recognition-tools').addEventListener('click', event => {{
+  event.preventDefault();
+  activateTab('overview');
+  const tools = document.querySelector('#recognition-tools');
+  tools.open = true;
+  tools.scrollIntoView({{block: 'nearest'}});
+  tools.querySelector('summary').focus({{preventScroll: true}});
 }});
 document.querySelector('#open-calibration').addEventListener('click', () => {{
   activateTab('settings');
@@ -1759,19 +1788,15 @@ function refreshCalibrationImages(preview) {{
 
 let calibrationWasActive = false;
 let previousCalibrationState = '';
-let stabilizingUntil = {setup_stabilizing_until};
 let routineOk = {automatic_routine_ok};
 let calibrationNoticeUntil = 0;
 function updateCalibrationNotice() {{
   const notice = document.querySelector('#calibration-complete-notice');
-  const stabilizing = previousCalibrationState === 'saved' && Date.now() < stabilizingUntil * 1000;
-  notice.hidden = routineOk || stabilizing || Date.now() >= calibrationNoticeUntil;
+  notice.hidden = routineOk || !document.querySelector('#setup-success').hidden ||
+    Date.now() >= calibrationNoticeUntil;
 }}
 function refreshCalibration(status) {{
   refreshCalibrationImages(status?.preview);
-  if (status && typeof status.stabilizing_until === 'number') stabilizingUntil = status.stabilizing_until;
-  const stabilizing = Date.now() < stabilizingUntil * 1000;
-  document.querySelector('#setup-stabilization').hidden = !stabilizing;
   for (const form of document.querySelectorAll('.calibration-skip')) {{
     form.elements.verification_id.value = status?.skip_verification_id || '';
     form.hidden = !form.elements.verification_id.value;
@@ -2124,7 +2149,14 @@ async function refreshTestStatus() {{
     recentCurrentImage = job.current_image || '';
     showRegionPhoto();
     showRegionChoices(job.calibration?.preview?.regions);
+    const success = document.querySelector('#setup-success');
+    success.hidden = !job.setup_success;
+    const duration = document.querySelector('#setup-duration');
+    duration.textContent = job.setup_success?.duration || '';
+    duration.hidden = !duration.textContent;
     refreshCalibration(job.calibration);
+    if (!success.hidden) calibrationNoticeUntil = 0;
+    updateCalibrationNotice();
     const calibrating = ['waiting', 'testing'].includes(job.calibration?.state);
     correctionOpen.hidden = !job.digit_correction;
     correctionOpen.disabled = calibrating;
@@ -2168,7 +2200,7 @@ async function refreshTestStatus() {{
     if (job.phase !== 'ocr') bar.removeAttribute('value');
     else bar.value = done;
     document.querySelector('#test-meta').textContent = active && job.phase === 'ocr' ?
-      'Versuche abgeschlossen: ' + done + ' / ' + max :
+      'Versuche abgeschlossen: ' + done :
       active ? 'Prüfung läuft …' :
       job.phase === 'done' ? (done === 1 ? '1 OCR-Versuch' : done + ' OCR-Versuche') : 'Bereit für den manuellen Test.';
 
@@ -2319,8 +2351,6 @@ async function refreshAutomatic() {{
     const response = await fetch('automatic?lang=' + lang, {{cache: 'no-store'}});
     if (!response.ok) throw new Error();
     const sample = await response.json();
-    stabilizingUntil = sample.stabilizing_until || 0;
-    document.querySelector('#setup-stabilization').hidden = Date.now() >= stabilizingUntil * 1000;
     automaticStatusFailures = 0;
     routineOk = sample.routine_ok;
     if (routineOk) calibrationNoticeUntil = 0;
@@ -2348,6 +2378,15 @@ async function refreshAutomatic() {{
     if (activityText.textContent !== sample.activity) activityText.textContent = sample.activity;
     const progress = document.querySelector('#automatic-progress');
     progress.hidden = !['queued', 'working'].includes(sample.activity_state);
+    const checkDetails = document.querySelector('#automatic-activity-details');
+    checkDetails.hidden = progress.hidden;
+    if (checkDetails.hidden) checkDetails.open = false;
+    document.querySelector('#automatic-attempt-info').textContent = sample.activity_total > 0
+      ? 'Versuche abgeschlossen: ' + (sample.activity_completed || 0) + ' · Höchstens ' + sample.activity_total
+      : 'Die Ziffernerkennung beginnt, sobald das Bild bereitsteht.';
+    document.querySelector('#automatic-live-reading').textContent = /[0-9]/.test(sample.activity_reading || '')
+      ? 'Zuletzt gelesen (noch unbestätigt): ' + sample.activity_reading
+      : 'Bisher keine Ziffer gelesen.';
     if (!progress.hidden) {{
       refreshDelay = 2000;
       if (sample.activity_total > 0 && sample.activity_completed != null) {{
@@ -2410,6 +2449,7 @@ async function refreshAutomatic() {{
     updateBannerVisibility();
     const status = document.querySelector('.activity-status');
     document.querySelector('#automatic-progress').hidden = true;
+    document.querySelector('#automatic-activity-details').hidden = true;
     status.dataset.state = 'unknown';
     const unavailable = automaticStatusFailures >= 3;
     status.dataset.offline = unavailable ? 'true' : 'pending';
@@ -2661,6 +2701,24 @@ def start_panel(
         message = "Die App beobachtet, ob die Erkennungsprobleme anhalten."
         return EN_UI[message] if language == "en" else message
 
+    def setup_success(history, rules, source, language):
+        if not setup_deadlines(rules, source)[0]:
+            return None
+        completed = rules["setup_completed"]
+        if "duration_seconds" not in completed:
+            return None
+        finished_check = history.get("automatic_completed_at")
+        if (type(finished_check) in (int, float) and finished_check > completed["time"]
+                and time.time() - completed["time"] >= 5):
+            return None
+        elapsed = completed["duration_seconds"]
+        if type(elapsed) is not int or elapsed < 0:
+            return {"duration": ""}
+        minutes, seconds = divmod(elapsed, 60)
+        duration = f"{minutes} min {seconds:02d} s" if minutes else f"{seconds} s"
+        label = "Setup duration" if language == "en" else "Einrichtungsdauer"
+        return {"duration": f"{label} · {duration}"}
+
     def automatic_summary(history, language, auto_rules):
         source, setup_pending = get_source()
         stabilizing_until, optimization_until = setup_deadlines(auto_rules, source)
@@ -2826,6 +2884,7 @@ def start_panel(
             "activity_state": activity.get("state", "waiting"),
             "activity_completed": activity.get("completed"),
             "activity_total": activity.get("total"),
+            "activity_reading": activity.get("reading"),
             "paused": paused,
             "source_connection": source_connection,
             "source_connection_state": history.get("source_connection_status", "unknown"),
@@ -2905,7 +2964,10 @@ def start_panel(
                 snapshot["manual_source_image"] = image_version(test_source_image)
                 snapshot["calibration"] = get_calibration() if get_calibration else None
                 with rules_lock:
-                    snapshot["digit_correction"] = digit_correction_settings(read_auto_rules(), get_source()[0])
+                    rules, source = read_auto_rules(), get_source()[0]
+                    snapshot["digit_correction"] = digit_correction_settings(rules, source)
+                snapshot["setup_success"] = (setup_success(read_history(), rules, source, language)
+                                             if rules.get("setup_completed") else None)
                 snapshot["digit_correction_image"] = str(snapshot["current_image"] or "")
                 snapshot["calibration_backup"] = bool(has_calibration_backup and has_calibration_backup())
                 if language == "en":
@@ -2981,6 +3043,8 @@ def start_panel(
                                    auto_rules["fraction_digits"])
             saved = query.get("saved", [""])[0]
             calibration = get_calibration() if get_calibration else None
+            success = setup_success(history, auto_rules, source, language)
+            duration = success["duration"] if success else ""
             reset_state = query.get("reset", [""])[0]
             if reset_state == "pending" and get_reset_status is not None:
                 reset_state = get_reset_status()
@@ -3059,7 +3123,9 @@ def start_panel(
                                           else CALIBRATION_PREVIEW_HTML),
                 calibration_skip_html=(translate_page(CALIBRATION_SKIP_HTML) if language == "en"
                                        else CALIBRATION_SKIP_HTML).format(language=language, mode=mode, csrf=csrf_token),
-                setup_stabilizing_until=setup_deadlines(auto_rules, source)[0],
+                setup_success_hidden="" if success else "hidden",
+                setup_duration_hidden="" if duration else "hidden",
+                setup_duration=html.escape(duration),
                 calibration_saved_notice=auto_saved_notice if saved in ("setup-calibration", "crop-restored") else "",
                 calibration_hidden="" if control_calibration else "hidden",
                 calibration_intensive_hidden="" if auto_rules["fraction_digits"] == 3 else "hidden",
@@ -3514,6 +3580,7 @@ def start_panel(
                         save_source(source_values)
                         if initial_setup and not learn_crop:
                             rules_values["setup_pending_source"] = setup_source_id(get_source()[0])
+                            rules_values["setup_pending_started"] = None
                         with delivery_lock:
                             save_delivery(delivery_values)
                         save_auto_rules(rules_values)

@@ -23,7 +23,15 @@ EN_UI = {
     "Ziffernzeile gefunden · ": "Digit row found · ",
     "Schwelle ": "Threshold ",
     " Ohne Vergleichswert braucht die App einen plausiblen Anstieg oder einen Startwert.": " Without a reference, the app needs a plausible increase or a starting reading.",
-    "In den ersten 20 Minuten prüft die App häufiger, ob der neu gespeicherte Rahmen zuverlässig lesbar ist. Danach gilt wieder dein eingestelltes Prüfintervall.": "For the first 20 minutes, the app checks more often to see whether the new crop stays readable. It then returns to your configured interval.",
+    "Die Automatik prüft als Nächstes den gespeicherten Rahmen. In den ersten 20 Minuten prüft sie häufiger.":
+        "The automatic check will verify the saved crop next. Checks run more often in the first 20 minutes.",
+    "Werkzeuge zur Erkennung": "Meter reading tools",
+    "Werkzeuge": "Tools",
+    "Prüfdetails": "Check details",
+    " · Höchstens ": " · Up to ",
+    "Die Ziffernerkennung beginnt, sobald das Bild bereitsteht.": "Digit recognition starts when the image is ready.",
+    "Zuletzt gelesen (noch unbestätigt): ": "Latest reading (unconfirmed): ",
+    "Bisher keine Ziffer gelesen.": "No digits read yet.",
     "Die App sucht einen passenden Rahmen und Winkel. Nach drei bestätigten Aufnahmen übernimmt die Automatik die Gegenprüfung. Ziel sind fünf Minuten. Die Suche endet spätestens nach 20 Minuten.": "The app looks for a suitable crop and angle. After three confirmed images, the regular reader takes over. The target is five minutes and the limit is 20 minutes.",
     "Startet nach dem Speichern. Nach drei bestätigten Aufnahmen übernimmt die Automatik die Gegenprüfung.": "Starts after saving. After three confirmed images, the regular reader takes over.",
     "Selbsteinrichtung nach 20 Minuten beendet. Keine Einstellung sicher bestätigt.": "Automatic setup ended after 20 minutes without confirming a reliable crop.",
@@ -732,9 +740,9 @@ def english_activity(state, detail):
     """Translate concise automatic worker activity, including attempt counters."""
     if detail in EN_UI:
         return EN_UI[detail]
-    match = re.fullmatch(r"Lese Zählerbild: OCR-Versuch (\d+) von (\d+) (?:läuft|abgeschlossen)\.", str(detail or ""))
+    match = re.fullmatch(r"Zählerbild wird gelesen · Versuch (\d+) \(höchstens (\d+)\)", str(detail or ""))
     if match:
-        return f"Reading meter image: OCR attempt {match[1]} of {match[2]}."
+        return f"Reading meter image · Attempt {match[1]} (up to {match[2]})"
     return "Automatic check in progress." if state == "working" else "Waiting for the next automatic check."
 
 
@@ -830,8 +838,8 @@ def english_progress(message):
         start = re.fullmatch(r"OCR-Prüfung gestartet \(max\. (\d+) Versuche\)\.", message)
         if start:
             return f"OCR analysis started (max. {start[1]} attempts)."
-        attempt = re.fullmatch(r"OCR-Versuch (\d+) von (\d+) (läuft …|abgeschlossen\.)", message)
+        attempt = re.fullmatch(r"Versuch (\d+) (läuft|abgeschlossen) \(höchstens (\d+)\)(?: …|\.)", message)
         if attempt:
-            return (f"OCR attempt {attempt[1]} of {attempt[2]} " +
-                    ("in progress …" if attempt[3] == "läuft …" else "completed."))
+            phase, end = ("in progress", " …") if attempt[2] == "läuft" else ("complete", ".")
+            return f"Attempt {attempt[1]} {phase} (up to {attempt[3]}){end}"
     return message or "No status message."

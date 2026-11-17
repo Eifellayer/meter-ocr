@@ -12,6 +12,8 @@ from layout import MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR
 
 
 EN_UI = {
+    "Letzte Rolle dreht weiter. Warte auf eine eindeutige Ziffer.":
+        "The last wheel is turning. Waiting for a clear digit.",
     "Ziffernrahmen korrigieren": "Adjust digit boxes",
     "Wähle eine Ziffer. Ziehe ihren Rahmen oder passe ihn mit den Tasten darunter an.": "Select a digit. Drag its box or use the buttons below.",
     "Zählerbild mit Ziffernrahmen": "Meter image with digit boxes",

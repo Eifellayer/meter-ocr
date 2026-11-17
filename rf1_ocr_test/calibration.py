@@ -478,6 +478,7 @@ class Calibration:
     automatic: bool = False
     simplified: bool = False
     intensive: bool = False
+    stream_unavailable: bool = False
     followup: bool = False
     followup_baseline: dict | None = None
     rank_candidates: bool = False

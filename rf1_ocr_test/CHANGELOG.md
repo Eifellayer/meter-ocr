@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.30 Stable
+
+- Die gezielte Feinprüfung der letzten Rolle nutzt bis zu drei Bilder aus dem MJPEG-Stream einer direkt eingebundenen ESP-Kamera oder einer Home-Assistant-Kamera mit lokaler OCR. Wenn der Stream ausfällt, verwendet sie Einzelbilder.
+- Erkennt die OCR in zwei Profilen einen Wechsel zwischen benachbarten Ziffern, wartet die Feinprüfung auf eine eindeutige Aufnahme. Ein Stream-Abruf zählt höchstens als eine Bestätigung.
+
 ## 0.5.29 Stable
 
 - Die gezielte Nachprüfung der linken Ziffern verschiebt nur vorhandene Einzelrahmen. Breite und Höhe bleiben erhalten.

@@ -1,6 +1,7 @@
 """Regression tests for the automatic worker, camera sources and local OCR."""
 
 from datetime import datetime, timedelta, timezone
+from email.message import Message
 from io import BytesIO
 import json
 import os
@@ -99,6 +100,59 @@ class SourceTests(TestCase):
                 self.assertEqual((b"jpeg", None, False), (picture, overlay, data["reference_required"]))
                 self.assertIsNone(data["actual_value"])
                 self.assertEqual(urls, [call.args[0] for call in fetch.call_args_list])
+
+    def test_last_wheel_reads_fragmented_mjpeg_from_esp_and_home_assistant(self):
+        def jpg(ink):
+            with BytesIO() as buffer:
+                Image.new("RGB", (80, 45), ink).save(buffer, "JPEG")
+                return buffer.getvalue()
+
+        class Stream(BytesIO):
+            def read1(self, size):
+                return super().read1(min(size, 23))
+
+        images = [jpg(ink) for ink in ("black", "gray", "white", "blue")]
+        for from_ha in (False, True):
+            with self.subTest(from_ha=from_ha):
+                feed = bytearray()
+                for picture in [b"\xff\xd8truncated\xff\xd9", images[0], *images]:
+                    feed.extend(b"\r\n--meter-feed\r\nContent-Type: image/jpeg\r\n")
+                    if not from_ha:
+                        feed.extend(f"Content-Length: {len(picture)}\r\n".encode())
+                    feed.extend(b"\r\n" + picture)
+                feed.extend(b"\r\n--meter-feed--\r\n")
+                stream = Stream(feed)
+                stream.headers = Message()
+                stream.headers["Content-Type"] = 'multipart/x-mixed-replace; boundary="meter-feed"'
+                token = "test-token" if from_ha else None
+                opener = "open_core" if from_ha else "urlopen"
+                with patch.object(run, opener, return_value=stream) as request:
+                    self.assertEqual(images[:3], run.read_last_wheel_stream("http://meter/stream", token=token))
+                self.assertTrue(stream.closed)
+                self.assertEqual("Bearer test-token" if from_ha else None,
+                                 request.call_args.args[0].get_header("Authorization"))
+
+    def test_ocr_follows_a_synthetic_five_to_six_image_sequence(self):
+        font = ImageFont.truetype("DejaVuSansMono-Bold.ttf", 47)
+        frames = []
+        for digit in ("5", "5", "6"):
+            frame = Image.new("L", (64, 68), 15)
+            ImageDraw.Draw(frame).text((14, 4), digit, 245, font=font)
+            with BytesIO() as encoded:
+                frame.save(encoded, "JPEG")
+                encoded.seek(0)
+                with Image.open(encoded) as decoded:
+                    frames.append(decoded.copy())
+        for profile in OCR_PROFILES[:2]:
+            values = [read_register(frame, True, 1, force_polarity=True, profile=profile) for frame in frames]
+            self.assertEqual(("5", "6"), run.last_wheel_transition(values))
+
+    def test_last_wheel_stream_transition_requires_a_forward_adjacent_pair(self):
+        for frames, observed in ((("5", "?", "6"), ("5", "6")), (("9", "0", "0"), ("9", "0")),
+                                 (("5", "5", "5"), None), (("5", "?", "5"), None),
+                                 (("6", "5"), None), (("4", "6"), None), (("5", "6", "5"), None)):
+            with self.subTest(frames=frames):
+                self.assertEqual(observed, run.last_wheel_transition(frames))
 
     def test_discovery_lists_only_camera_entities_and_valid_esp_addresses(self):
         sources = discovered_sources({

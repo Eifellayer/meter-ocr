@@ -1044,7 +1044,7 @@ class BrowserTests(IngressFixture):
             self.assertEqual(["Es wurden keine Geräte gefunden"], discovered.locator("option").all_text_contents())
             self.suggestions = [{"mode": "slfork", "url": "http://192.168.2.35", "label": "Gasmeter"}]
             page.reload()
-            discovered.locator("option").filter(has_text="AI on the Edge · Gasmeter").wait_for()
+            discovered.locator("option").filter(has_text="AI on the Edge · Gasmeter").wait_for(state="attached")
             self.assertTrue(discovered.is_enabled())
             discovered.select_option(label="AI on the Edge · Gasmeter")
             self.assertEqual("http://192.168.2.35", page.locator("#wizard-source-url input").input_value())

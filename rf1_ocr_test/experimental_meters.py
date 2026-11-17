@@ -89,10 +89,18 @@ class ExperimentalMeters:
         self.start()
         self.wake.set()
 
-    def reset(self):
+    def reset(self, *, keep_statistics=False):
         with self.lock:
-            self.path.unlink(missing_ok=True)
-            self.settings, self.states = {}, {}
+            if keep_statistics:
+                # Disable experimental monitoring but retain per-meter counters
+                # and dated series for reactivation of the same entities.
+                retained = {entity: {key: value for key, value in state.items()
+                                     if key in ("label", "unit", "reading", "total", "timestamp", "series")}
+                            for entity, state in self.states.items()}
+                self._save({}, retained)
+            else:
+                self.path.unlink(missing_ok=True)
+                self.settings, self.states = {}, {}
         self.wake.set()
 
     def start(self):

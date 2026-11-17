@@ -1448,8 +1448,8 @@ function filterWizardSources() {{
   sourceStatus.textContent = sourceSuggestions.length ?
     (discoveredSource.disabled ?
       (lang === 'en' ? 'No devices match the search.' : 'Keine passenden Geräte zur Suche gefunden.') :
-      (lang === 'en' ? sourceSuggestions.length + ' devices found in Home Assistant.' :
-        sourceSuggestions.length + ' Geräte in Home Assistant gefunden.')) :
+      (lang === 'en' ? sourceSuggestions.length + (sourceSuggestions.length === 1 ? ' device' : ' devices') + ' found in Home Assistant.' :
+        sourceSuggestions.length + (sourceSuggestions.length === 1 ? ' Gerät' : ' Geräte') + ' in Home Assistant gefunden.')) :
     (lang === 'en' ? 'No devices found. Retry or enter a source manually.' :
       'Keine Geräte gefunden. Erneut suchen oder die Bildquelle manuell eintragen.');
 }}

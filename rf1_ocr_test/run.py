@@ -61,6 +61,7 @@ from transport import open_core
 MAX_RESPONSE_BYTES = 3_000_000
 LAST_WHEEL_STREAM_FRAMES = 3
 LAST_WHEEL_STREAM_SECONDS = 2
+LAST_WHEEL_STREAM_SPACING = .35
 MAX_TRANSFER_BYTES = 11_000
 DESTINATION = Path(f"/media/{NAMESPACE}/kontrollbild.jpg")
 GOOD_IMAGE = Path(f"/media/{NAMESPACE}/letzter_treffer.jpg")
@@ -152,7 +153,8 @@ def capture_edge_camera(base, zone, *, fetch=None):
 
 def read_last_wheel_stream(url, *, token=None, stop=lambda: False):
     """Read a short, bounded multipart JPEG sequence from a direct ESP camera."""
-    deadline = time.monotonic() + LAST_WHEEL_STREAM_SECONDS
+    sample_after = time.monotonic()
+    deadline = sample_after + LAST_WHEEL_STREAM_SECONDS
     headers = {"Accept": "multipart/x-mixed-replace", "Cache-Control": "no-cache"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -190,12 +192,15 @@ def read_last_wheel_stream(url, *, token=None, stop=lambda: False):
                         break
                     picture = bytes(pending[start:data_end])
                     del pending[:data_end]
-                    if picture.startswith(b"\xff\xd8") and picture.endswith(b"\xff\xd9") and picture not in pictures:
+                    sampled_at = time.monotonic()
+                    if (sampled_at >= sample_after and picture.startswith(b"\xff\xd8")
+                            and picture.endswith(b"\xff\xd9") and picture not in pictures):
                         try:
                             with Image.open(io.BytesIO(picture)) as frame:
                                 if frame.width * frame.height <= MAX_IMAGE_PIXELS:
                                     frame.load()
                                     pictures.append(picture)
+                                    sample_after = sampled_at + LAST_WHEEL_STREAM_SPACING
                         except (OSError, ValueError, Image.DecompressionBombError):
                             pass
                     continue

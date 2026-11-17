@@ -108,12 +108,16 @@ class SourceTests(TestCase):
                 return buffer.getvalue()
 
         class Stream(BytesIO):
+            elapsed = 0
+
             def read1(self, size):
-                return super().read1(min(size, 23))
+                block = super().read1(min(size, 23))
+                self.elapsed += .004
+                return block
 
         images = [jpg(ink) for ink in ("black", "gray", "white", "blue")]
-        for from_ha in (False, True):
-            with self.subTest(from_ha=from_ha):
+        for from_ha, spacing in ((False, 0), (True, 0), (False, .35), (True, .35)):
+            with self.subTest(from_ha=from_ha, spacing=spacing):
                 feed = bytearray()
                 for picture in [b"\xff\xd8truncated\xff\xd9", images[0], *images]:
                     feed.extend(b"\r\n--meter-feed\r\nContent-Type: image/jpeg\r\n")
@@ -126,8 +130,11 @@ class SourceTests(TestCase):
                 stream.headers["Content-Type"] = 'multipart/x-mixed-replace; boundary="meter-feed"'
                 token = "test-token" if from_ha else None
                 opener = "open_core" if from_ha else "urlopen"
-                with patch.object(run, opener, return_value=stream) as request:
-                    self.assertEqual(images[:3], run.read_last_wheel_stream("http://meter/stream", token=token))
+                expected = [images[0], images[2]] if spacing else images[:3]
+                with (patch.object(run, opener, return_value=stream) as request,
+                      patch.object(run.time, "monotonic", side_effect=lambda: stream.elapsed),
+                      patch.object(run, "LAST_WHEEL_STREAM_SPACING", spacing)):
+                    self.assertEqual(expected, run.read_last_wheel_stream("http://meter/stream", token=token))
                 self.assertTrue(stream.closed)
                 self.assertEqual("Bearer test-token" if from_ha else None,
                                  request.call_args.args[0].get_header("Authorization"))

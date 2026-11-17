@@ -2226,7 +2226,11 @@ def main():
                         manual_width = options["vorkomma_breite"]
                         selected_overlay = overlay
                         rotation = 0
-                        detect_raw = crop_rules["crop_mode"] == "auto"
+                        # SLFork's raw camera image can have completely different
+                        # coordinates from its processed alg.jpg. Try detecting
+                        # the digit strip on the full raw image first, even if
+                        # the normal processed-image crop is saved manually.
+                        detect_raw = crop_rules["crop_mode"] == "auto" or (raw_fallback and not manual)
                         custom_boxes = crop_rules.get("digit_boxes") if not detect_raw else None
                         if crop_rules["crop_mode"] == "manual":
                             rotation = crop_rules.get("rotation", 0)

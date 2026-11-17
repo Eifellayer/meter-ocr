@@ -73,6 +73,20 @@ Nach der ersten Beta prüfen: Kamera und Hallsensor demselben Zähler als Haupt-
 | Einrichtung und Betrieb | Die vorhandene Plausibilitätsprüfung, Referenzspeicherung und grüne Erfolgsmeldung bleiben maßgeblich. Gemäß der neueren Anforderung folgt nach dem Erfolg eine sofortige reguläre Prüfung. Dieselbe Prüfung lässt sich jetzt auch von der Übersicht aus anfordern. |
 | Unklare Ziffern | Der Assistent bietet die vorhandene rechnerische Ergänzung für je eine Vor- und Nachkommastelle. Bei wiederholt unklaren Nachkommastellen kann die Vergleichsgenauigkeit nach Zustimmung sinken. Für echte Spiegelungen und wechselnde Beleuchtung steht der Langzeittest aus. |
 
+## Arbeitsfortschritt für ChatGPT Work sichern (verbindliche Übergabe)
+
+Diese Regeln gelten für längere Entwicklungsaufträge unabhängig davon, welcher Chat oder welche Work-Sitzung sie bearbeitet. Hintergrund: Ein Chat kann seine Kontext-/Nachrichtenbegrenzung oder Work sein Nutzungskontingent erreichen, bevor die Aufgabe fertig ist. Die exakten Restwerte sind dem ausführenden Modell gegebenenfalls nicht zugänglich.
+
+1. **Vor Arbeitsbeginn** aktuellen `main`, offene Issues/PRs, Tests und diesen Plan lesen. Bereits umgesetzte, überholte oder widersprüchliche Wünsche nicht erneut implementieren.
+2. **Früh einen eigenen Branch und einen Draft-PR anlegen**, sobald Codearbeit beginnt. Einen großen Auftrag in kleine, separat überprüfbare Schritte aufteilen.
+3. **Zwischenergebnisse fortlaufend committen und pushen**, insbesondere vor langen Tests, weiteren größeren Änderungen oder komplexen Arbeitsschritten. Unfertige Arbeit ausdrücklich als *WIP / nicht freigegeben* markieren; keine ungetesteten Änderungen in `main` übernehmen.
+4. **Den Draft-PR als Wiederaufnahmepunkt pflegen:** Ziel, bisherige Änderungen/Commit-SHAs, tatsächliche Testergebnisse, bekannte Fehler, offene Entscheidungen und den *konkret nächsten Schritt* festhalten. Auch bei einem Abbruch muss aus GitHub ersichtlich sein, wie man weiterarbeitet.
+5. **Wenn ein Abbruch oder knappes Kontingent erkennbar wird**, möglichst erst den aktuellen kleinen Arbeitsschritt zu einem konsistenten Zwischenstand bringen und sichern. Falls die Plattform sofort stoppt, können weder Abschluss noch Warnung garantiert werden; deshalb nicht auf eine Warnung verlassen.
+6. **Beim nächsten Work-Einsatz zuerst den vorhandenen Branch und Draft-PR fortsetzen**, statt bereits erledigte Arbeiten neu zu erzeugen. Erst nach erfolgreichen Prüfungen und Abgleich mit `main` veröffentlichen.
+7. **Nicht implementierte Ideen getrennt von erledigten Änderungen führen.** Release-Notes und Changelog beschreiben nur tatsächlich ausgelieferte Funktionen.
+
+**Verbesserungsidee für die ChatGPT-Work-Plattform (nicht Teil dieser App):** Vor Erreichen des Work-Kontingents oder einer Gesprächsgrenze rechtzeitig warnen; bereits begonnene kleine Arbeitsschritte möglichst noch geordnet abschließen lassen bzw. den aktuellen Stand automatisch sichern und zur späteren Fortsetzung anbieten. Dies ist ein Produktwunsch, keine zugesicherte Funktion und kein bereits eingereichtes OpenAI-Feedback.
+
 ## Vor 1.0 noch zu bestätigen
 
 1. GitHub Actions erfolgreich für AMD64 und ARM64.

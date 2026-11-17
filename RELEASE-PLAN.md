@@ -28,7 +28,7 @@ Einmal möglichst automatisch einrichten. Danach prüft die App eigenständig, �
 | --- | --- | --- |
 | P0 | Prüfung und Upgrade | Frische Einrichtung und Upgrade simulieren. Gemeldete Werte müssen bei fehlenden, alten, doppelten und unplausiblen Daten belastbar bleiben. In SLFork liegen reguläre Prüfungen mindestens fünf Minuten auseinander. Manuelle Tests und Grobeinrichtung laufen getrennt. |
 | P1 | Live-Bildbearbeitung | Bildausschnitt, Drehung und einzelne Ziffernrahmen stimmen zwischen Vorschau, manuellem Test und Automatik überein. Rot, Gelb und Grün behalten ihre Bedeutung. |
-| P1 | Grobeinrichtung | Höchstens 100 Rahmenversuche, 100 unterschiedliche Aufnahmen und 15 Minuten Laufzeit. Geprüfte Rahmen vergleichen und vor der Übernahme auf einem weiteren Bild bestätigen. Den besten brauchbaren Versuch bei Bedarf zur Korrektur anbieten. |
+| P1 | Grobeinrichtung | Bis zu 50 Grobversuche, bis zu 260 Rahmenversuche insgesamt und höchstens 20 Minuten für die normale Selbsteinrichtung. Verbesserungen über unabhängige Aufnahmen bestätigen. Den besten brauchbaren Versuch bei Bedarf zur Korrektur anbieten. |
 | P1 | Bedienung und Anleitung | Ergebnisse auf der Übersicht, Fallback mit Speichern, sichtbare optionale Ziffernergänzung und dezenter Spendenlink. Bebilderte Anleitung mit synthetischen Beispielen. |
 | P2 | Automatische Verbesserungen | Feinjustierung, Ziffernrekonstruktion und adaptive SLFork-Frequenz sind zuschaltbar. Langzeittests am echten Zähler stehen für diese Funktionen noch aus. Saisonprofile brauchen beobachtete Verbräuche aus den betreffenden Monaten. |
 
@@ -62,6 +62,16 @@ Nach der ersten Beta prüfen: Kamera und Hallsensor demselben Zähler als Haupt-
 - Je eine Vorkomma- und eine Nachkommastelle nur eindeutig aus bestätigtem Anker, erkannten Nachbarstellen und Durchflussgrenze ergänzen. Überträge und die Rückkehr zu vollständiger OCR prüfen.
 - Prüfintervalle anhand bestätigter Änderungen und erwarteter Rollenwechsel variieren. Doppelte SLFork-Zyklen verändern die Fehlerzählung nicht. Unklare Fälle bleiben sichtbar.
 - Weitere Zählertypen folgen anhand praktischer Tests.
+
+## Abgleich der Anforderungen seit 0.5.4
+
+| Bereich | Stand in 0.6.1 |
+| --- | --- |
+| Zählerfeld und Drehung | Mehrere Bildbereiche, große Ziffernreihen, manuell gewählter Suchbereich, Ziffernnachbarn, kleine Winkel und eine Rangliste waren bereits vorhanden. Kann die Grobsuche die erste Aufnahme so nicht zuverlässig lesen, prüft sie zusätzlich 180° und beide 90°-Drehungen. |
+| Suchbudget und Fortschritt | Bestehende parallele OCR derselben Aufnahme und begrenzte CPU- und Speichernutzung. Die Höchstdauer der normalen Einrichtung schließt Wartezeit ein. Die Anzeige benennt sie als Einrichtungszeit. Die Diagnose zeigt Rahmen, Winkel, Kandidaten und unabhängige Bestätigungen. |
+| Einzelziffer | Der bestehende Einzeltest läuft vor der OCR-Zusammensetzung. Normale Rahmen verschieben sich seitlich in gleicher Höhe und Größe. Die letzte Nachkommarolle wird bevorzugt vertikal geprüft. |
+| Einrichtung und Betrieb | Die vorhandene Plausibilitätsprüfung, Referenzspeicherung und grüne Erfolgsmeldung bleiben maßgeblich. Gemäß der neueren Anforderung folgt nach dem Erfolg eine sofortige reguläre Prüfung. Dieselbe Prüfung lässt sich jetzt auch von der Übersicht aus anfordern. |
+| Unklare Ziffern | Der Assistent bietet die vorhandene rechnerische Ergänzung für je eine Vor- und Nachkommastelle. Bei wiederholt unklaren Nachkommastellen kann die Vergleichsgenauigkeit nach Zustimmung sinken. Für echte Spiegelungen und wechselnde Beleuchtung steht der Langzeittest aus. |
 
 ## Vor 1.0 noch zu bestätigen
 

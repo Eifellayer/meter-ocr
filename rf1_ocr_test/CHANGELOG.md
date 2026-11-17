@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.1 Stable
+
+- Zehn Minuten sind für die Automatik vorausgewählt. Gespeicherte Intervalle bleiben frei einstellbar.
+- Die Übersicht kann einen regulären Automatiklauf anfordern. Bei erfolgreicher Zusatzprüfung bleibt der nächste bereits geplante Termin bestehen.
+- Wiederholt unklare Nachkommastellen führen zu einer Empfehlung. Erst die Bestätigung ändert die Vergleichsgenauigkeit.
+- Schon in der Grobsuche des ersten Bildes kommen 180° und ±90° infrage, wenn die übliche Ausrichtung keinen belastbaren Treffer liefert.
+- Die Einzelziffer-Nachprüfung verschiebt normale Rahmen seitlich. Bei der letzten Nachkommarolle kommen vertikale Varianten zuerst. Für isolierte Ziffern kann die OCR zwei alternative Segmentierungen vergleichen.
+
 ## 0.6.0 Stable
 
 - Die Automatik prüft zuerst einen verschobenen Einzelrahmen. Erst danach kann sie Ziffern aus übereinstimmenden OCR-Versuchen derselben Aufnahme zusammensetzen. Ein begrenzter früher Folgeabruf kann ein ungeeignetes Kamerabild ersetzen.

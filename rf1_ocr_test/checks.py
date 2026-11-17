@@ -14,7 +14,7 @@ from PIL import Image, ImageChops, ImageFilter, ImageOps
 
 WINDOW_SECONDS = 24 * 60 * 60
 REQUIRED_MATCHES = 5
-DEFAULT_INTERVAL_MINUTES = 30
+DEFAULT_INTERVAL_MINUTES = 10
 LEGACY_INTERVAL_MINUTES = 60
 MAX_INTERVAL_MINUTES = 24 * 60
 NORMAL_INTERVAL = DEFAULT_INTERVAL_MINUTES * 60
@@ -72,7 +72,7 @@ def crop_register(picture, crop):
 
 
 def read_register(picture, light_digits, digits=5, *, force_polarity=False, profile=OCR_PROFILES[0], deadline=None,
-                  process_env=None):
+                  process_env=None, isolated_digit=False):
     image = picture.convert("L")
     polarities = (light_digits,) if force_polarity else (light_digits, not light_digits)
     reads = set()
@@ -81,6 +81,8 @@ def read_register(picture, light_digits, digits=5, *, force_polarity=False, prof
         limits["deadline"] = deadline
     if process_env is not None:
         limits["process_env"] = process_env
+    if isolated_digit and digits == 1:
+        limits["isolated_digit"] = True
     for invert in polarities:
         gray = ImageOps.invert(image) if invert else image
         value = read_polarity(gray, digits, profile, **limits)
@@ -102,7 +104,7 @@ def reduce_uneven_lighting(image):
     return ImageChops.subtract(image, background, offset=255)
 
 
-def read_polarity(image, digits, profile, *, deadline=None, process_env=None):
+def read_polarity(image, digits, profile, *, deadline=None, process_env=None, isolated_digit=False):
     cutoff, sharpening, threshold, reduce_shadows = profile
     if reduce_shadows:
         image = reduce_uneven_lighting(image)
@@ -112,8 +114,7 @@ def read_polarity(image, digits, profile, *, deadline=None, process_env=None):
         gray.filter(ImageFilter.UnsharpMask(radius=2, percent=sharpening, threshold=2)),
         gray.point(lambda value: 255 if value >= threshold else 0),
     )
-    votes = Counter()
-    for variant in variants:
+    def read_variant(variant, segmentation):
         timeout = min(12, deadline - time.monotonic()) if deadline is not None else 12
         if timeout <= 0:
             raise TimeoutError("OCR deadline reached")
@@ -124,17 +125,31 @@ def read_polarity(image, digits, profile, *, deadline=None, process_env=None):
         with io.BytesIO() as png:
             prepared.save(png, "PNG")
             result = subprocess.run(
-                ["tesseract", "stdin", "stdout", "-l", "eng", "--psm", "10" if digits == 1 else "7",
+                ["tesseract", "stdin", "stdout", "-l", "eng", "--psm", str(segmentation),
                  "-c", "tessedit_char_whitelist=0123456789"],
                 input=png.getvalue(), capture_output=True, timeout=timeout, check=True,
                 **({"env": process_env} if process_env is not None else {}),
             ).stdout.decode("ascii", errors="ignore").strip()
-        if len(result) == digits and re.fullmatch(r"[0-9]+", result):
-            votes[result] += 1
+        return result if len(result) == digits and result.isascii() and result.isdigit() else None
+
+    votes = Counter(filter(None, (read_variant(variant, 10 if digits == 1 else 7) for variant in variants)))
     if len(votes) == 1:
         value, count = votes.most_common(1)[0]
         if count >= 2:
             return value
+    if isolated_digit and not votes:
+        # A tightly marked, high-contrast glyph can be missed by single-character
+        # segmentation. Accept the extra evidence only from an isolated shape.
+        binary = gray.point(lambda value: 255 if value >= min(148, max(140, threshold)) else 0)
+        ink = ImageOps.invert(binary)
+        bounds = ink.getbbox()
+        if bounds and 0.04 <= ink.histogram()[255] / (ink.width * ink.height) <= 0.42:
+            left, top, right, bottom = bounds
+            if (left > 0 and top > 0 and right < ink.width and bottom < ink.height
+                    and bottom - top >= ink.height * .35 and right - left >= ink.width * .15):
+                value = read_variant(binary, 8)
+                if value and value == read_variant(binary, 13):
+                    return value
     return None
 
 
@@ -398,6 +413,20 @@ def disputed_digit_pattern(readings, decimals, integer_digits):
         return None
     consensus = "".join(column[0] if len(set(column)) == 1 else "?" for column in zip(*rows))
     return consensus if consensus.count("?") == 1 else None
+
+
+def recommended_comparison_decimals(history, decimals, integer_digits):
+    """Offer a lower comparison precision after repeated trouble on one decimal place."""
+    if decimals < 2:
+        return None
+    if decimals == 3 and history.get("last_digit_failures", 0) >= 2:
+        return 2
+    issue = history.get("reflection_streak", {})
+    position = issue.get("position")
+    if (history.get("check_status") == "ocr_unclear" and issue.get("count", 0) >= 2
+            and type(position) is int and integer_digits + 2 <= position <= integer_digits + decimals):
+        return position - integer_digits - 1
+    return None
 
 
 def estimate_missing_digit(pattern, stamp, previous, following, decimals, max_flow_lph):

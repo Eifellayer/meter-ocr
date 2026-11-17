@@ -12,6 +12,10 @@ from layout import MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR
 
 
 EN_UI = {
+    "Automatische Prüfung angefordert.": "Automatic check requested.",
+    "Automatische Prüfung jetzt starten": "Run automatic check now",
+    "Eine Nachkommastelle blieb wiederholt unklar. Du kannst den Vergleich auf weniger Stellen begrenzen.":
+        "A decimal digit was repeatedly unclear. You can compare fewer digits.",
     "Zwei Profile stimmen überein, Prüfung akzeptiert den Kandidaten":
         "Two profiles agree and the candidate passes the OCR check",
     "Zwei Profile stimmen überein, Vergleich offen": "Two profiles agree, comparison unresolved",
@@ -193,6 +197,7 @@ EN_UI = {
     " · Rahmen getestet: ": " · Crops tested: ",
     " · Restzeit: ": " · Time remaining: ",
     " · Rechenzeit übrig: ": " · Processing time left: ",
+    " · Zeit für die Einrichtung: ": " · Setup time left: ",
     "Mehrere Ziffernfelder gefunden.": "Multiple digit rows found.",
     "Ziffernfelder ansehen": "Show digit rows",
     "Zählerstand kurz selbst ablesen (optional)": "Enter the current meter reading (optional)",

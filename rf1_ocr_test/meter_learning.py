@@ -80,10 +80,10 @@ def note_local_improvement(state, key, stamp, geometry, reading):
     return state["count"] >= 3 and len(state["readings"]) >= 2
 
 
-def local_geometry_trials(boxes, positions):
+def local_geometry_trials(boxes, positions, *, axes=(0, 1)):
     """Move only the uncertain cells, preserving their size and order."""
     if boxes:
-        for axis, sign in ((0, -1), (0, 1), (1, -1), (1, 1)):
+        for axis, sign in ((axis, sign) for axis in axes for sign in (-1, 1)):
             shifted = [list(box) for box in boxes]
             for index in positions:
                 box = shifted[index]

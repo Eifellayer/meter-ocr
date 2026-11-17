@@ -131,6 +131,24 @@ class NeighbourGeometryTests(TestCase):
         with self.assertRaises(ValueError):
             search_region("205,650,730,315")
 
+    def test_first_image_can_turn_a_sideways_or_upside_down_meter_upright(self):
+        from checks import read_register
+
+        def read(layout, profile):
+            register = turn_crop(photo.crop(layout.box), layout.rotation)
+            return read_register(register, False, force_polarity=True, profile=profile)
+
+        sample = {"reference_time": 100, "actual_value": "12345", "raw_value": "12345"}
+        for rotation in (90, -90, 180):
+            with self.subTest(rotation=rotation):
+                turned = turn_crop(irregular_meter("12345"), -rotation)
+                photo = Image.new("RGB", (680, 640), "#676767")
+                photo.paste(turned, (photo.width - turned.width, 0))
+                job = Calibration(5, 0, rank_candidates=True)
+                self.assertIsNone(job.examine(photo, None, sample, 100, RULES, read, lambda: False))
+                self.assertEqual(1, job.confirmations)
+                self.assertEqual(rotation, job.candidate.rotation)
+
     def test_serial_number_is_not_split_into_shorter_candidate_rows(self):
         photo = Image.new("RGB", (600, 240), "#676767")
         draw = ImageDraw.Draw(photo)

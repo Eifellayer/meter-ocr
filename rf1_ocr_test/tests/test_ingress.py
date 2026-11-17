@@ -68,6 +68,8 @@ class IngressFixture(TestCase):
         self.wizard_image_sources = []
         self.reset_state = "idle"
         self.activity = {"state": "waiting", "detail": "Wartet auf die nächste automatische Prüfung."}
+        self.automatic_available = False
+        self.automatic_requests = 0
         self.paused = False
         self.delivery = dict(enabled=False, review_minutes=240, delivery_hours=24, push="", target="")
         self.enterContext(patch.object(panel, "SUPERVISOR_ADDRESS", "127.0.0.1"))
@@ -92,6 +94,13 @@ class IngressFixture(TestCase):
                             "limit": limit, "tested": 0, "confirmations": 0, "required": 3,
                             "seconds": 900, "duration": 900, "stage": "queued", "attempts": 0, "max_attempts": 100,
                             "region": region}
+
+    def start_automatic(self):
+        if not self.automatic_available or self.paused:
+            return False
+        self.automatic_requests += 1
+        self.automatic_available = False
+        return True
 
     def start_panel(self):
         def wizard_image(source, *, full_size=False):
@@ -120,6 +129,8 @@ class IngressFixture(TestCase):
             get_calibration_image=lambda kind, version: self.calibration_images.get((kind, version)),
             get_auto_paused=lambda: self.paused,
             save_auto_paused=lambda value: setattr(self, "paused", value),
+            can_start_automatic=lambda: self.automatic_available and not self.paused,
+            start_automatic_check=self.start_automatic,
         )
         self.server = server
         self.addCleanup(server.server_close)
@@ -153,6 +164,29 @@ class IngressTests(IngressFixture):
         demo.assert_called_once_with(False)
         self.assertEqual(before, self.rules)
         self.assertFalse(self.history.exists())
+
+    def test_run_now_requests_automatik_and_rejects_a_duplicate(self):
+        self.automatic_available = True
+        self.assertTrue(json.loads(self.request("/automatic")[0])["can_start_automatic"])
+        self.assertEqual((303, "./?ui=overview"), self.submit("/automatik-jetzt"))
+        self.assertEqual(409, self.submit("/automatik-jetzt")[0])
+        self.assertEqual(1, self.automatic_requests)
+        self.assertTrue(self.requested.empty())
+
+    def test_comparison_changes_only_after_an_explicit_current_selection(self):
+        self.setup_pending = False
+        self.source_selected = True
+        self.rules["decimals"] = 3
+        self.rules["precision_mode"] = True
+        self.history.write_text(json.dumps({
+            "check_status": "ocr_unclear", "comparison_decimals": 3,
+            "reflection_streak": {"position": 7, "count": 2},
+        }))
+        self.assertEqual(1, json.loads(self.request("/automatic")[0])["precision_suggestion"])
+        self.assertEqual(3, self.rules["decimals"])
+        self.assertEqual(409, self.submit("/vergleichsgenauigkeit", decimals="2")[0])
+        self.assertEqual((303, "./?ui=overview"), self.submit("/vergleichsgenauigkeit", decimals="1"))
+        self.assertEqual((1, False), (self.rules["decimals"], self.rules["precision_mode"]))
 
     def test_setup_recommends_learning_first_and_keeps_a_saved_manual_choice(self):
         def choices(accept="de"):

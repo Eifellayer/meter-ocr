@@ -93,7 +93,7 @@ def neighbour_layout(frame, angle, detected, whole_digits, fraction_digits):
     return Layout(outer, angle, whole_width, tuple(map(tuple, normalized)), method="neighbours")
 
 
-def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False, on_regions=None):
+def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False, on_regions=None, *, upright=False):
     """Try a few geometry candidates per image, rotating the search across images."""
     emitted = set()
 
@@ -127,7 +127,8 @@ def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False
     # Reserve space for neighbour inference and, where possible, the regular crop.
     neighbour_limit = MAX_LAYOUTS_PER_IMAGE - int(configured is not None and not prefer_configured)
     raw_limit = neighbour_limit - 1
-    angles = SMALL_ANGLES if offset == 0 else (0, ANGLES[first], ANGLES[(first + 1) % len(ANGLES)])
+    angles = (0,) if upright else (
+        SMALL_ANGLES if offset == 0 else (0, ANGLES[first], ANGLES[(first + 1) % len(ANGLES)]))
     if len(emitted) < raw_limit:
         ranked = []
         for angle in angles:
@@ -201,7 +202,7 @@ def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False
                 if unique(layout):
                     yield layout
     whole, fraction = rules["integer_digits"], rules["fraction_digits"]
-    for angle in (0, ANGLES[first]):
+    for angle in (0,) if upright else (0, ANGLES[first]):
         if len(emitted) >= neighbour_limit:
             break
         adjusted = turn_crop(frame, angle, expand=False)
@@ -225,6 +226,29 @@ def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False
                 return
             if unique(trial):
                 yield trial
+
+
+def quarter_turn_layouts(frame, rules, region):
+    area = tuple(round(value * size / 1000) for value, size in zip(region, frame.size * 2)) if region else (
+        0, 0, frame.width, frame.height)
+    image = frame.crop(area)
+    width, height = image.size
+    if min(width, height) < 8:
+        return
+    local_rules = {key: value for key, value in rules.items() if key != "crop"}
+    for angle in (180, 90, -90):
+        turned = turn_crop(image, angle)
+        candidates = skip_small_labels(list(layouts(turned, None, local_rules, 0, upright=True)))
+        for layout in candidates:
+            left, top, right, bottom = layout.box
+            if angle == 90:
+                bounds = (top, height - right, bottom, height - left)
+            elif angle == -90:
+                bounds = (width - bottom, left, width - top, right)
+            else:
+                bounds = (width - right, height - bottom, width - left, height - top)
+            box = tuple(value + origin for value, origin in zip(bounds, area[:2] * 2))
+            yield replace(layout, box=box, rotation=angle)
 
 
 def search_region(value):
@@ -1031,6 +1055,12 @@ class Calibration:
         else:
             seed = self.candidate or (next(iter(self.shortlist), None) if collecting else self.previous_layout)
 
+            def detect(offset, current, report_regions=None):
+                return (guided_layouts(frame, overlay, rules, offset, current, self.region)
+                        if self.region else layouts(
+                            frame, overlay, rules, offset, current,
+                            prefer_configured=self.automatic or self.intensive, on_regions=report_regions))
+
             def search_candidates():
                 known = self.known_good_layout
                 if known is not None and not self.confirmations:
@@ -1044,11 +1074,11 @@ class Calibration:
                     a, b, c, d = known.box
                     if left <= a < c <= right and top <= b < d <= bottom:
                         yield known
-                detected = (guided_layouts(frame, overlay, rules, len(self.seen) - 1, seed, self.region)
-                            if self.region else layouts(
-                                frame, overlay, rules, len(self.seen) - 1, seed,
-                                prefer_configured=self.automatic or self.intensive, on_regions=on_regions))
-                yield from skip_small_labels(list(detected))
+                yield from skip_small_labels(list(detect(len(self.seen) - 1, seed, on_regions)))
+                if (len(self.seen) == 1 and not self.automatic and not self.intensive
+                        and not stop() and not any(reliable(score) for score, _, _ in coarse)):
+                    # Search the complete photo at right angles before asking for another image.
+                    yield from quarter_turn_layouts(frame, rules, self.region)
 
             candidates = search_candidates()
         examined = False

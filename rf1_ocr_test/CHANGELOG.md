@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.28 Stable
+
+- Nach zwei Rahmenbestätigungen prüft die App unklare linke Ziffern gezielt auf demselben Bild. Sie testet zusätzliche OCR-Profile und bei Bedarf kleine Verschiebungen der betreffenden Einzelrahmen.
+- Die übrigen Ziffernrahmen, der Ausschnitt und der Drehwinkel bleiben bei dieser Prüfung erhalten. Ein angepasster Rahmen sammelt eigene Bestätigungen.
+
 ## 0.5.27 Stable
 
 - Der Einrichtungsassistent zeigt „Ausschnitt und Drehung lernen“ als erste und empfohlene Auswahl. Bereits gespeicherte Einstellungen bleiben beim erneuten Öffnen vorausgewählt.

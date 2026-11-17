@@ -415,7 +415,7 @@ def refinement_workers():
         return 1
 
 
-def refinement_layouts(layout, rules, readings):
+def refinement_layouts(layout, rules, readings, *, positions=None):
     """Vary missing or disputed slots first, keeping neighbouring centers as guides."""
     whole, fraction = rules["integer_digits"], rules["fraction_digits"]
     count = whole + fraction
@@ -428,7 +428,7 @@ def refinement_layouts(layout, rules, readings):
         boxes = tuple((a, 0, b, 1000) for a, b in zip(edges, edges[1:]))
     else:
         boxes = layout.digit_boxes
-    weak = uncertain_slots(readings, count)
+    weak = uncertain_slots(readings, count) if positions is None else positions
     pitch = median(r - l for l, _, r, _ in boxes)
     shifts = (0, -1, 1, -2, 2)
     slot_sets = [{i} for i in weak]
@@ -721,6 +721,61 @@ class Calibration:
                 return reading
         return None
 
+    def retry_leading_digits(self, layout, readings, precision, rules, read_slot, layout_with_boxes,
+                             stop, on_attempt, frame_ceiling, expected=None):
+        """Re-read one or two weak leading slots while preserving the readable suffix."""
+        whole = rules["integer_digits"]
+        required = whole + precision
+        rows = [list(str(value).replace(".", "").replace(",", "")) for value in readings]
+        if whole < 3 or any(len(row) < required for row in rows):
+            return None
+        weak = uncertain_slots(["".join(row[:required]) for row in rows], required)
+        if not weak or weak[-1] >= 2:
+            return None
+
+        def read_pair(trial, index, profiles):
+            values = []
+            try:
+                for profile in profiles:
+                    if stop():
+                        return None
+                    values.append(read_slot(trial, index, profile))
+            except (OSError, ValueError, subprocess.SubprocessError):
+                return None
+            digit = values[0]
+            if digit and len(digit) == 1 and digit in "0123456789" and digit == values[1]:
+                if expected is None or digit == expected[index]:
+                    return digit
+            return None
+
+        if on_attempt is not None:
+            on_attempt(self.attempts, layout.rotation, [index + 1 for index in weak])
+        adjusted = layout
+        for index in weak:
+            digit = read_pair(adjusted, index, OCR_PROFILES[2:4])
+            if digit is None:
+                seed = adjusted if adjusted.digit_boxes else layout_with_boxes(adjusted)
+                if not seed.digit_boxes:
+                    return None
+                tried = {seed.digit_boxes}
+                for trial in refinement_layouts(seed, rules, (), positions=(index,)):
+                    if stop() or len(tried) > 4 or self.attempts >= min(frame_ceiling, self.attempt_limit - 1):
+                        break
+                    if trial.digit_boxes in tried:
+                        continue
+                    tried.add(trial.digit_boxes)
+                    self.attempts += 1
+                    digit = read_pair(trial, index, OCR_PROFILES[:2])
+                    if digit is not None:
+                        adjusted = trial
+                        break
+            if digit is None:
+                return None
+            for row in rows:
+                row[index] = digit
+        return adjusted, ["".join(row[:whole]) + ("." + "".join(row[whole:]) if len(row) > whole else "")
+                          for row in rows]
+
     def probe_open_digit(self, layout, sample, rules, read, stop, on_attempt):
         """Try the last slot on this image without adding an independent hit."""
         digits = rules["integer_digits"]
@@ -875,7 +930,8 @@ class Calibration:
 
     def examine(self, frame, overlay, sample, stamp, rules, read, stop, baseline=None, on_attempt=None,
                 on_image=None, on_decision=lambda reason: None, refine_read=None, on_refine=None, on_regions=None,
-                on_selected=None, angle_read=None, on_angle=None, on_shortlist=None):
+                on_selected=None, angle_read=None, on_angle=None, on_shortlist=None,
+                read_slot=None, layout_with_boxes=None):
         """Return a verified layout, checking two OCR profiles per distinct image."""
         if not self.remember_image(frame, stamp):
             return None
@@ -1113,6 +1169,20 @@ class Calibration:
                     sample, compare_sample(sample, value, precision, integer_digits=digits)[0]) is None
                     for value in readings))
                 recovered_slot = False
+                if (self.confirmations >= 2 and not matches and read_slot is not None
+                        and layout_with_boxes is not None):
+                    reference = sample.get("actual_value")
+                    expected_prefix = meter_prefix(reference, precision, digits) if has_reference else None
+                    recovery = self.retry_leading_digits(
+                        layout, readings, precision, rules, read_slot, layout_with_boxes, stop, on_refine,
+                        frame_ceiling, str(expected_prefix).zfill(digits + precision)
+                        if expected_prefix is not None else None,
+                    )
+                    if recovery is not None:
+                        layout, readings = recovery
+                        recovered_slot = matches = True
+                        if on_selected is not None:
+                            on_selected(layout, readings)
                 if (refine_read is not None and self.intensive and precision == 3
                         and self.confirmations >= 2 and not matches):
                     issue = penultimate_issue(readings, sample, digits)

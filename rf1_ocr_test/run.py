@@ -1,6 +1,7 @@
 """Bridge the latest matched SLFork picture and reading to Home Assistant."""
 
 import base64
+from dataclasses import replace
 from concurrent.futures import Future
 from copy import deepcopy
 from datetime import datetime
@@ -389,6 +390,11 @@ def calibration_jpeg(frame, max_size):
         return buffer.getvalue()
 
 
+def approximate_whole_boxes(width, height, count):
+    return [(width * index // count, 0, width * (index + 1) // count, height)
+            for index in range(count)]
+
+
 def draw_test_preview(register, integer_width, whole_boxes, fraction_boxes, reading,
                       whole_digits=5, fraction_digits=3, readings=None, composed=False, pending=False, suspected_slots=(), visible_slots=None):
     """Mark OCR digit regions and the actual read characters for manual diagnostics.
@@ -404,10 +410,8 @@ def draw_test_preview(register, integer_width, whole_boxes, fraction_boxes, read
     if w <= 0 or h <= 0:
         raise ValueError("Leerer OCR-Ausschnitt")
     whole_width = max(1, min(integer_width, w))
-    boxes = list(whole_boxes[:whole_digits]) if len(whole_boxes) >= whole_digits else [
-        (whole_width * i // whole_digits, 0, whole_width * (i + 1) // whole_digits, h)
-        for i in range(whole_digits)
-    ]
+    boxes = (list(whole_boxes[:whole_digits]) if len(whole_boxes) >= whole_digits
+             else approximate_whole_boxes(whole_width, h, whole_digits))
     fraction = list(fraction_boxes[:fraction_digits])
     if fraction_digits and not fraction and whole_width < w:
         fraction = [
@@ -1400,6 +1404,25 @@ def main():
                                 fine_deadline = min(deadline, time.monotonic() + 12)
                             report_calibration("refine", variant, rotation, positions)
 
+                        def layout_with_boxes(layout):
+                            register, width, whole_boxes, fraction_boxes, _ = register_for(layout)
+                            if not whole_boxes:
+                                whole_boxes = approximate_whole_boxes(width, register.height, whole)
+                            boxes = normalize_digit_boxes([*whole_boxes, *fraction_boxes], register.size)
+                            return replace(layout, digit_boxes=boxes) if len(boxes) == whole + fraction else layout
+
+                        def read_leading_slot(layout, index, profile):
+                            register, width, boxes, _, _ = register_for(layout)
+                            if not boxes:
+                                boxes = approximate_whole_boxes(width, register.height, whole)
+                            box = boxes[index]
+                            if box[2] <= box[0]:
+                                return "?"
+                            polarity = active_rules["polarity"]
+                            return read_digit(register, box, lambda picture, digits: cached_digit(
+                                picture, options["helle_ziffern"] if polarity == "auto" else polarity == "light",
+                                digits, profile=profile, force_polarity=polarity != "auto", deadline=fine_deadline))
+
                         if attempt.intensive:
                             layout = attempt.candidate or attempt.previous_layout
                             if layout and not layout.digit_boxes:
@@ -1448,6 +1471,7 @@ def main():
                                 on_refine=report_fine,
                                 on_regions=report_regions,
                                 on_selected=show_selected,
+                                read_slot=read_leading_slot, layout_with_boxes=layout_with_boxes,
                                 angle_read=read,
                                 on_angle=lambda variant, rotation: report_calibration("angle", variant, rotation),
                                 on_shortlist=lambda variant, rotation: report_calibration(

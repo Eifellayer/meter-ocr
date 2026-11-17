@@ -84,6 +84,8 @@ EN_UI = {
     "Ergebnis anzeigen": "Show the result",
     "Rahmen speichern und Automatik starten": "Save the crop and start automatic checks",
     "Geräte suchen": "Search devices",
+    "Geräte erneut suchen": "Search devices again",
+    "Gerätesuche wird vorbereitet …": "Preparing device search …",
     "z. B. Gaszähler": "e.g. gas meter",
     "1. Lade ein Bild deiner Kamera oder wähle ein Testbild derselben Kamera.": "1. Load a camera image or choose a test image from the same camera.",
     "Kamerabild für Rahmen laden": "Load camera image for the crop",

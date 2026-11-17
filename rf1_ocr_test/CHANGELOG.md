@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.31 Stable
+
+- Bei der vereinfachten Einrichtung führt ein sonst übereinstimmender Zählerstand mit offener zweiter Nachkommastelle zur gezielten Nachprüfung auf demselben Bild. Kleinste Verschiebungen des betreffenden Rahmens haben Vorrang.
+- Die dritte Nachkommastelle, die übrigen Rahmen und der bisherige Bildwinkel bleiben bei der Nachprüfung unberührt.
+
 ## 0.5.30 Stable
 
 - Die gezielte Feinprüfung der letzten Rolle nutzt bis zu drei Bilder aus dem MJPEG-Stream einer direkt eingebundenen ESP-Kamera oder einer Home-Assistant-Kamera mit lokaler OCR. Wenn der Stream ausfällt, verwendet sie Einzelbilder.

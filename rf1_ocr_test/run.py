@@ -1504,10 +1504,14 @@ def main():
                                 fine_deadline = min(deadline, time.monotonic() + 12)
                             report_calibration("refine", variant, rotation, positions)
 
-                        def read_leading_slot(layout, index, profile):
-                            register, width, boxes, _, _ = register_for(layout)
-                            if not boxes:
-                                boxes = approximate_whole_boxes(width, register.height, whole)
+                        def read_calibration_slot(layout, index, profile):
+                            register, width, whole_boxes, fraction_boxes, _ = register_for(layout)
+                            if index < whole:
+                                boxes = whole_boxes or approximate_whole_boxes(width, register.height, whole)
+                            else:
+                                boxes, index = fraction_boxes, index - whole
+                            if index >= len(boxes):
+                                return "?"
                             box = boxes[index]
                             if box[2] <= box[0]:
                                 return "?"
@@ -1596,7 +1600,7 @@ def main():
                                 on_refine=report_fine,
                                 on_regions=report_regions,
                                 on_selected=show_selected,
-                                read_slot=read_leading_slot,
+                                read_slot=read_calibration_slot,
                                 angle_read=read,
                                 on_angle=lambda variant, rotation: report_calibration("angle", variant, rotation),
                                 on_shortlist=lambda variant, rotation: report_calibration(

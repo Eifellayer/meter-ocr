@@ -12,7 +12,7 @@ Die ausführliche Einführung, Voraussetzungen, Installation und Konfiguration f
 
 ## Installation
 
-**AI Meter Reader 0.6.4** ist auf Stable. Nach erfolgloser Winkelkorrektur kann die Automatik bei direkt abrufbaren Kameras eine frische Aufnahme anfordern. Die optionalen Langzeitfunktionen bleiben zuschaltbar.
+**AI Meter Reader 0.6.5** ist auf Stable. Unter „App-Daten zurücksetzen“ stehen nun ein vollständiger Werksreset und ein zweiter Reset mit Erhalt der Zählerstands- und Verbrauchsstatistik zur Auswahl. Die optionalen Langzeitfunktionen bleiben zuschaltbar.
 
 Über **Einstellungen → Apps → App installieren → ⋮ → Repositories** den [Stable-Link](https://github.com/Eifellayer/meter-ocr#stable) hinzufügen und **AI Meter Reader** installieren. Im SLFork-Modus die `esp_url` eintragen, starten und die Weboberfläche öffnen.
 

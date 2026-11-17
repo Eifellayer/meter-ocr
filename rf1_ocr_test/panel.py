@@ -2096,7 +2096,7 @@ function refreshCalibration(status) {{
     waiting: 'Warte auf ein neues Kamerabild …',
     testing: 'Prüfe Ausschnitt und Drehung …',
     saved: status.simplified ?
-      'Einrichtung abgeschlossen: Sieben Ziffern bestätigt. Die dritte Nachkommastelle kann zusätzlich intensiv geprüft werden.' :
+      'Einrichtung abgeschlossen: Sieben Ziffern bestätigt. Die dritte Nachkommastelle wird zusätzlich intensiv geprüft.' :
       status.intensive ? 'Dritte Nachkommastelle bestätigt. Die Ziffernrahmen sind übernommen.' :
       'Erfolgreich eingerichtet. Ausschnitt und Drehung sind übernommen.',
     saved_reflection: 'Ausschnitt mit markierter Spiegelung vorläufig gespeichert. Die verdeckten Ziffern bleiben offen.',
@@ -2172,6 +2172,8 @@ function refreshCalibration(status) {{
       message = 'Grün bedeutet lesbar. Ein gültiger Vergleichswert für dieses Bild fehlt.';
     }} else if (reason === 'reference_mismatch') {{
       message = 'Grün bedeutet lesbar. Der abgelesene Stand passt noch nicht zum Vergleichswert.';
+    }} else if (reason === 'await_clear_roller') {{
+      message = 'Eine der ersten sieben Ziffern dreht gerade. Der gefundene Rahmen bleibt erhalten; ein frisches Bild wird geprüft.';
     }} else if (reason === 'await_movement') {{
       message = 'Ziffernfeld ist lesbar.';
     }} else if (reason === 'accepted' && status.candidate_agreement === 100) {{
@@ -2197,7 +2199,12 @@ function refreshCalibration(status) {{
   if (status.state === 'failed' && ['reference_mismatch', 'position_error'].includes(reason)) {{
     message = 'Der gelesene Bereich passt nicht zum Vergleichswert. Prüfe den Vergleichswert und markiere das Ziffernfeld.';
   }}
-  if (status.intensive && ['failed', 'timeout', 'image_timeout'].includes(status.state)) {{
+  if (status.background && active) {{
+    message = 'Sieben Ziffern bestätigt. Die Automatik läuft; die dritte Nachkommastelle wird im Hintergrund zusätzlich geprüft. ' + message;
+  }}
+  if (status.background && ['failed', 'timeout', 'image_timeout'].includes(status.state)) {{
+    message = 'Die Zusatzprüfung der dritten Nachkommastelle blieb offen. Die sieben bestätigten Ziffern und die Automatik bleiben erhalten.';
+  }} else if (status.intensive && ['failed', 'timeout', 'image_timeout'].includes(status.state)) {{
     message = status.confirmations >= status.required ?
       'Feinprüfung erfolgreich, Gegenprobe offen. Der beste Rahmen steht für den manuellen Test bereit.' :
       'Dritte Nachkommastelle bleibt unbestätigt. Du kannst später erneut suchen oder sie manuell markieren.';

@@ -995,7 +995,9 @@ class BrowserTests(IngressFixture):
             page.locator("#calibration-overview-state").filter(has_text="Noch kein Ziffernbereich gefunden").wait_for()
             self.calibration["tested"] = 73
             page.locator("#calibration-overview-state").filter(has_text="Grenze das Ziffernfeld im Kamerabild ein").wait_for()
-            self.assertIn("Bilder geprüft: 73 · Rahmen getestet: 0", page.locator("#calibration-overview-state").inner_text())
+            self.assertNotIn("Rahmen getestet", overview.inner_text())
+            page.locator("#calibration-state").filter(
+                has_text="Bilder geprüft: 73 · Rahmen getestet: 0").wait_for(state="attached")
             self.assertEqual(600, display.locator('[data-image="frame"]').evaluate(
                 "async image => { await image.decode(); return image.naturalWidth; }"))
             self.calibration["preview"] = {

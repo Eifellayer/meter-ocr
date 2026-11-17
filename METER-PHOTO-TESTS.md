@@ -49,3 +49,19 @@ Keiner der zehn Ausschnitte ergab einen vollständigen, mehrheitlich gelesenen S
 | Wasser `01405` m³ plus Zeiger | 566 × 500 | `135,93,314,154` · 179 | `?????.???` | [Home Assistant Community, johandijkstra](https://community.home-assistant.io/t/ai-solution-for-analog-water-meter/378457/10) |
 
 Die Ausschnitte und die erwarteten Ziffern wurden vor den OCR-Durchläufen am Foto festgelegt. Getestet wurde mit AI Meter Reader und Tesseract 5.5.0, automatischer Ziffernfarbe und fünf OCR-Profilen ohne Referenzwert. Für den Test der Rahmenerkennung diente das verfügbare Forumsbild zusätzlich als Rahmenbild. Bei vier Gaszählern wurde auch die lesbare Nachkommagenauigkeit getestet. Keiner der Zusatzdurchläufe erreichte die erforderliche Übereinstimmung. Die Aufnahmen bleiben bei ihren Quellen.
+
+## Wiederholung mit 0.6.0 und Tesseract 5.5.0
+
+Fünf der obigen Fotos wurden mit bis zu 15 OCR-Profilen erneut ausgewertet. Die Ausschnitte stammen aus dem früheren Test. Beim Wasserzähler wurde der engere Ausschnitt aus dem manuellen Versuch verwendet. Das Ziffernformat wurde pro Foto eingestellt. „Einzelrahmen“ nutzt aus dem Ausschnitt vorgeschlagene Rahmen als Ausgangspunkt.
+
+| Foto | Erwarteter Stand | Nur Ausschnitt | Mit Einzelrahmen |
+| --- | --- | --- | --- |
+| Apator G4 | `02846.794` | `?????.???` | `?????.???` |
+| Gas G2.5 | `01971.514` | `?????.???` | `??2??.???` |
+| istameter II | `00070` m³ | `?????` | `00070`, OCR-Mehrheit |
+| Stromzähler mit sechs Rollen | `019634` kWh | `??????` | `0?9634` |
+| Digitaler Stromzähler | `000000` kWh | `??????` | `??????` |
+
+Ergänzend wurde das erste Community-Bild aus Issue #570 mit dessen sichtbaren Einzelrahmen und zwei erforderlichen Nachkommastellen geprüft. Es ergab `3???8.08?` in allen 15 Profilen. Das Beispiel zeigt eine letzte Rolle im Übergang und eingezeichnete Rahmen. Eine echte Spiegelung wurde darin nicht als Ursache nachgewiesen. Auch ein angenommener Referenzwert reichte für die Rekonstruktion nicht aus, weil mehrere erforderliche Stellen offen waren.
+
+Die Demo ergänzt einen separaten Test mit einer künstlich ausgeblendeten Rolle. Im schrägen Beispiel konnte OCR nach Drehung `12344.942` lesen. In der verdeckten Variante blieb `12344.94?` übrig und die App konnte mit einer ausdrücklich simulierten Referenz eindeutig `12344.942` vorschlagen. Der Versuch belegt keine Rekonstruktion aus einem einzelnen Foto ohne Referenz. Die veröffentlichten Fotos bleiben bei ihren Quellen.

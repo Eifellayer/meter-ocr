@@ -32,14 +32,17 @@ Einmal möglichst automatisch einrichten. Danach prüft die App eigenständig, �
 | P1 | Bedienung und Anleitung | Ergebnisse auf der Übersicht, Fallback mit Speichern, sichtbare optionale Ziffernergänzung und dezenter Spendenlink. Bebilderte Anleitung mit synthetischen Beispielen. |
 | P2 | Automatische Verbesserungen | Feinjustierung, Ziffernrekonstruktion und adaptive SLFork-Frequenz sind zuschaltbar. Langzeittests am echten Zähler stehen für diese Funktionen noch aus. Saisonprofile brauchen beobachtete Verbräuche aus den betreffenden Monaten. |
 
-## 0.6 Beta – geplante Funktionen
+## 0.6 – experimentelle Funktionen in Stable
 
-- [ ] Mehrzähler-Unterstützung mit Auswahl und getrennten Verläufen.
+- [x] Zusätzliche kumulative Home-Assistant-Entitäten mit eigenem Intervall und Verlauf überwachen.
+- [ ] Kamera, OCR und Rahmen je zusätzlichem Zähler einrichten.
 - [ ] Hallsensor als ESPHome-Quelle integrieren. Die Kamera und der Hallsensor können am selben oder an getrennten ESPs hängen.
-- [ ] Oberfläche modernisieren. Zählerübersicht, Statusanzeigen und Verbrauchsdiagramme für kleine Bildschirme überarbeiten.
-- [ ] Status pro Zähler mit aktiver Quelle, letzter gültiger Ablesung und Hinweis bei Ausfall anzeigen.
+- [x] Experimentelle Zählerkarten mit Status und Stundenverlauf anzeigen.
+- [ ] Reguläre Übersicht und Einstellungen weiter modernisieren.
+- [x] Quelle, letzte gültige Ablesung und Ausfallstatus für zusätzliche Home-Assistant-Zähler anzeigen.
 - [ ] Impulsfaktor pro Zähler einstellen und Testergebnisse für eingehende Impulse, Dubletten und Neustarts sichtbar machen.
-- [ ] Beta als separate Home-Assistant-App mit einem Upgrade-Test von Stable vorbereiten.
+- [x] Stable-App mit einem klar gekennzeichneten experimentellen Bereich ausliefern.
+- [ ] Mehrzählerbetrieb mit realen Sensoren und Neustarts erproben.
 
 Nach der ersten Beta prüfen: Kamera und Hallsensor demselben Zähler als Haupt- und Kontrollquelle zuordnen. Eine Verbrauchsbuchung hat genau eine Hauptquelle.
 

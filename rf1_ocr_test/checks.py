@@ -233,7 +233,7 @@ def explain_uncertain_positions(readings, decimals, integer_digits=5):
 
 def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace=None, *, standalone=False,
                       integer_digits=5, stop_before_attempt=None, force_all_attempts=False,
-                      extra_attempts=0, profiles=OCR_PROFILES):
+                      extra_attempts=0, profiles=OCR_PROFILES, defer_composition=False):
     """Read one image up to max_attempts times; stop on the first valid agreement."""
     if type(max_attempts) is not int or not 1 <= max_attempts <= MAX_CONFIGURED_OCR_ATTEMPTS:
         raise ValueError("OCR-Versuche müssen zwischen 1 und 10 liegen")
@@ -271,6 +271,15 @@ def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace
             if stable is not None:
                 return next(item for item in readings if item.startswith(stable)), True, index
 
+    value, confirmed = resolve_ocr_readings(
+        readings, decimals, integer_digits, standalone=standalone,
+        standalone_composition=attempt_limit > max_attempts, compose=not defer_composition,
+    )
+    return value, confirmed, len(readings)
+
+
+def resolve_ocr_readings(readings, decimals, integer_digits, *, standalone=False,
+                         standalone_composition=False, compose=True):
     # Keep stable complete reads, then compose only strict-majority digits.
     majority = len(readings) // 2 + 1
     minimum_votes = max(2, majority) if standalone else majority
@@ -278,6 +287,10 @@ def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace
     prefixes = Counter(value[:prefix_length] for value in readings
                        if meter_prefix(value, decimals, integer_digits) is not None)
     prefix = next((value for value, count in prefixes.items() if count >= minimum_votes), None)
+    if not compose:
+        if prefix is not None:
+            return next(value for value in readings if value.startswith(prefix)), True
+        return max(readings, key=lambda value: sum(ch.isdigit() for ch in value[:prefix_length]), default=""), False
     display = []
     for column in zip(*readings):
         digit, count = Counter(column).most_common(1)[0]
@@ -304,9 +317,9 @@ def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace
     complete = len(combined) == len(positions)
     if standalone:
         return "".join(display), prefix is not None or (
-            attempt_limit > max_attempts and len(readings) >= 2 and complete
-        ), len(readings)
-    return "".join(display), prefix is not None or complete, len(readings)
+            standalone_composition and len(readings) >= 2 and complete
+        )
+    return "".join(display), prefix is not None or complete
 
 
 def compare_sample(data, ocr, decimals, *, ocr_confirmed=True, integer_digits=5):
@@ -374,6 +387,17 @@ def single_missing_digit(ocr, readings, decimals, integer_digits):
         if digit.isdigit() and sum(len(value) > index and value[index] == digit for value in readings) < votes:
             return None
     return pattern
+
+
+def disputed_digit_pattern(readings, decimals, integer_digits):
+    """A frame is worth rechecking when exactly one required position lacks agreement."""
+    length = integer_digits + (decimals + 1 if decimals else 0)
+    rows = [value[:length] for value in readings]
+    shape = rf"[0-9?]{{{integer_digits}}}" + (rf"\.[0-9?]{{{decimals}}}" if decimals else "")
+    if len(rows) < 2 or any(not re.fullmatch(shape, row) for row in rows):
+        return None
+    consensus = "".join(column[0] if len(set(column)) == 1 else "?" for column in zip(*rows))
+    return consensus if consensus.count("?") == 1 else None
 
 
 def estimate_missing_digit(pattern, stamp, previous, following, decimals, max_flow_lph):

@@ -30,7 +30,7 @@ class AppIdentityTests(unittest.TestCase):
     def test_release_metadata_preserves_stable_app_identity(self):
         config = yaml.safe_load((APP / "config.yaml").read_text(encoding="utf-8"))
         repository = yaml.safe_load((APP.parent / "repository.yaml").read_text(encoding="utf-8"))
-        self.assertEqual("0.5.37", config["version"])
+        self.assertEqual("0.6.0", config["version"])
         self.assertEqual("rf1_ocr_test", config["slug"])
         self.assertEqual("AI Meter Reader", config["name"])
         self.assertNotIn("stage", config)
@@ -172,6 +172,29 @@ class ComparisonTests(unittest.TestCase):
             lambda _: next(values), {"reference_required": False}, 3, max_attempts=10,
             force_all_attempts=True)
         self.assertEqual(("12345.120", True, 10), (value, confirmed, attempts))
+
+    def test_automatic_composition_can_be_deferred_until_after_frame_recheck(self):
+        from checks import disputed_digit_pattern, resolve_ocr_readings
+
+        reads = ["12344.94?", "12344.942", "12344.942", "12344.942"]
+        trace = []
+        data = {"raw_value": "99999.999", "actual_value": "99999.999"}
+        value, confirmed, attempts = read_with_retries(
+            lambda _: reads[len(trace)],
+            data, 3, max_attempts=4, trace=trace, defer_composition=True,
+        )
+        self.assertEqual(("12344.942", True, 4), (value, confirmed, attempts))
+        self.assertEqual("12344.94?", disputed_digit_pattern(trace, 3, 5))
+        partials = ["12344.94?", "12344.9?2", "12344.?42"]
+        trace.clear()
+        value, confirmed, attempts = read_with_retries(
+            lambda _: partials[len(trace)], {"reference_required": False}, 3,
+            max_attempts=3, trace=trace, standalone=True, defer_composition=True,
+        )
+        self.assertFalse(confirmed)
+        self.assertEqual(("12344.942", True), resolve_ocr_readings(
+            trace, 3, 5, standalone=True, standalone_composition=True,
+        ))
 
     def test_conflicting_reads_do_not_become_a_confirmed_match(self):
         values = iter(["12345.100", "12395.100", "12365.100"])

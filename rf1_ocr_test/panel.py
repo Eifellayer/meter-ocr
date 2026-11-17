@@ -30,6 +30,7 @@ from checks import (DEFAULT_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, WARNING_DETA
                     STANDALONE_VERIFIED_NOTICE, last_check_at, reschedule_next_check,
                     setup_deadlines, setup_source_id, stabilization_interval, stationary_partial_active, valid_interval_minutes)
 from consumption import DEFAULT_FLOW_LPH, consumption_statistics, format_cubic_metres, parse_flow_limit
+from demo import run_demo
 from i18n import EN_UI, english_progress, english_result, translate_page
 from language import MODES, SUPPORTED, USER_ID, browser_locale, profile_script
 from layout import MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, digit_box_settings, scale_digit_boxes, turn_crop
@@ -136,6 +137,16 @@ header{{display:flex;align-items:baseline;justify-content:space-between;gap:.5re
 .activity-details{{margin-top:.4rem;font-size:.9rem;color:var(--muted)}}
 .activity-details p{{margin-top:.35rem}}
 .setup-success{{display:grid;grid-template-columns:auto minmax(0,1fr);gap:.8rem;margin:0 0 1rem;padding:clamp(.95rem,4vw,1.4rem);border:1px solid #65a986;border-radius:.85rem;background:light-dark(#edf8f0,#183a2a);color:light-dark(#155d39,#a2e5bc)}}
+.demo-grid{{display:grid;gap:.8rem;grid-template-columns:repeat(auto-fit,minmax(min(100%,13rem),1fr))}}
+.demo-grid figure{{margin:0}}
+.demo-grid img{{width:100%;background:#101b23;border-radius:.6rem}}
+#experimental summary{{cursor:pointer;font-weight:650}}
+#experimental-meter-list{{margin-top:1rem}}
+.experimental-meter-card{{padding:.85rem;margin:.65rem 0;border:1px solid var(--edge);border-radius:.75rem}}
+.experimental-meter-card p{{margin:.35rem 0}}
+.experimental-hour-chart{{display:flex;gap:3px;align-items:end;height:4.5rem;margin-top:.6rem;border-bottom:1px solid var(--edge)}}
+.experimental-hour-chart span{{flex:1;min-width:0;background:#64c8ac;border-radius:3px 3px 0 0}}
+#experimental-form textarea{{display:block;width:100%;font:inherit;padding:.5rem;background:var(--surface);color:inherit;border:1px solid var(--edge);border-radius:.5rem}}
 .setup-success-icon{{font-size:1.5rem;font-weight:750;line-height:1.25}}
 .setup-success strong{{font-size:clamp(1.15rem,4vw,1.4rem)}}
 .setup-success p{{margin:.35rem 0 0}}
@@ -362,10 +373,13 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <details id="automatic-activity-details" class="activity-details" {automatic_progress_hidden}>
 <summary>Prüfdetails</summary>
 <p id="automatic-attempt-info"></p>
-<p id="automatic-live-reading"></p>
+<p id="automatic-live-reading"></p><ol id="live-ocr-candidates" hidden></ol>
 </details>
 </div>
-<button type="button" id="resume-setup" {resume_setup_hidden}>Einrichtung fortsetzen</button>
+<div class="crop-actions" id="setup-start-actions" {resume_setup_hidden}>
+<button type="button" id="resume-setup">Einrichtung fortsetzen</button>
+<button type="button" id="open-demo-overview">Demo ohne Kamera ausprobieren</button>
+</div>
 <p id="calibration-complete-notice" class="settings-note" role="status" hidden></p>
 {digit_correction_notice}
 <dialog class="setup-dialog digit-correction" id="digit-correction" aria-labelledby="digit-correction-title">
@@ -499,6 +513,11 @@ name: Zählerstand (OCR)</code></pre>
 <div class="preview" id="test-preview" {automatic_preview_hidden}>
 <h2 id="preview-heading">Letztes Testbild</h2>
 <img id="test-preview-image"{automatic_preview_src} alt="Letztes Testbild">
+<p id="ocr-method" class="settings-note" hidden></p>
+<details id="ocr-candidate-details" hidden>
+<summary>Beste Kandidaten der Rahmen-Nachprüfung</summary>
+<ol id="ocr-candidates"></ol>
+</details>
 <p class="legend" id="preview-legend" {preview_legend_hidden}><span class="green-key">Grün:</span> Ziffer gelesen · <span class="yellow-key">Gelb:</span> Ziffer schwankte zwischen OCR-Versuchen oder wurde aus mehreren Versuchen zusammengesetzt · <span class="red-key">Rot:</span> Ziffer weiterhin unklar. Die Farben zeigen OCR-Sicherheit, nicht die Übereinstimmung mit dem Referenzstand. Ohne automatisch erkannte Ziffernrahmen sind die Bereiche nur näherungsweise aufgeteilt.</p>
 </div>
 </details>
@@ -599,6 +618,7 @@ name: Zählerstand (OCR)</code></pre>
 <details id="recognition-tools">
 <summary>Werkzeuge zur Erkennung</summary>
 <div class="check-actions">
+<button type="button" id="open-demo-tools">Demo ohne Kamera ausprobieren</button>
 <button type="button" id="open-calibration" {calibration_hidden}>Selbsteinrichtung</button>
 <button type="button" id="open-digit-correction" {digit_correction_hidden}>Ziffernrahmen korrigieren</button>
 <button type="button" id="open-manual-settings">Test einstellen</button>
@@ -666,6 +686,7 @@ name: Zählerstand (OCR)</code></pre>
 <input type="hidden" name="csrf" value="{csrf}">
 <button type="submit" id="setup-skip">Später einrichten</button></form></div>
 <p class="settings-note">Du kannst die Einrichtung jederzeit über „Einrichtung öffnen“ erneut starten.</p>
+<button type="button" id="open-demo-setup">Demo ohne Kamera ausprobieren</button>
 <div class="manual-content">
 <p class="settings-note">Einmal Schritt für Schritt einrichten oder später einzelne Angaben ändern. Deine aktuellen Einstellungen sind vorausgefüllt.</p>
 <form method="post" action="einrichtung" id="setup-form">
@@ -966,6 +987,34 @@ Bei anhaltenden Problemen benachrichtigen
 <button type="button" id="open-reset">Auf Werkseinstellungen zurücksetzen</button>
 </div></details>
 </div>
+<details class="panel" id="experimental" {extra_meter_open}><summary>Experimentell · Mehrere Zähler</summary>
+<p>Zusätzliche Home-Assistant-Sensoren beobachten. Diese Funktion ist experimentell. Praxistests stehen noch aus.</p>
+<p class="settings-note">Unterstützt fortlaufend steigende Zähler in m³ oder kWh. Pro Zeile eine Entität und optional das Prüfintervall in Minuten, z. B. <code>sensor.wasserzaehler, 15</code>.</p>
+<form id="experimental-form" method="post" action="experimentelle-zaehler">
+<input type="hidden" name="csrf" value="{csrf}"><input type="hidden" name="lang" value="{language}">
+<input type="hidden" name="mode" value="{language_mode}">
+<label>Zusätzliche Zähler<textarea rows="3" name="meters" maxlength="640">{extra_meter_config}</textarea></label>
+<button type="submit">Zähler speichern</button>
+<p role="status" id="experimental-status"></p>
+</form>
+<div id="experimental-meter-list"></div>
+</details>
+<dialog class="setup-dialog" id="demo-dialog" aria-labelledby="demo-title">
+<div class="dialog-heading"><h2 id="demo-title">Zähler-Demo</h2><button type="button" id="close-demo">Schließen</button></div>
+<p>Probiere die Erkennung mit einem künstlichen Gaszählerbild. Deine echte Einrichtung und Verbrauchsdaten bleiben getrennt.</p>
+<div class="crop-actions">
+<button type="button" id="run-demo-clear">Schräges Bild prüfen</button>
+<button type="button" id="run-demo-glare">Spiegelung ausprobieren</button>
+</div>
+<p id="demo-status" role="status"></p>
+<div id="demo-results" hidden>
+<p id="demo-reading"></p><p id="demo-estimate"></p>
+<div class="demo-grid">
+<figure><img id="demo-original" alt="Schräges künstliches Zählerbild"><figcaption>Originalbild</figcaption></figure>
+<figure><img id="demo-aligned" alt="Gerader Ausschnitt mit Ziffernrahmen"><figcaption>Ausgerichteter Ausschnitt</figcaption></figure>
+</div>
+</div>
+</dialog>
 <dialog class="setup-dialog" id="reset-dialog" aria-labelledby="reset-title">
 <h2 id="reset-title">Werkseinstellungen wiederherstellen?</h2>
 <p>Gespeicherte Bildquelle, OCR- und Benachrichtigungseinstellungen, Prüfhistorie und Testbilder werden zurückgesetzt. Home-Assistant-App-Konfiguration und Entitätsnamen bleiben erhalten.</p>
@@ -1084,6 +1133,51 @@ if (setupDialog.dataset.firstRun === 'true' && localStorage.getItem(setupDismiss
   activateTab('settings', false);
   setupDialog.showModal();
 }}
+const demoDialog = document.querySelector('#demo-dialog');
+document.body.appendChild(demoDialog);
+const demoStatus = document.querySelector('#demo-status');
+const demoResults = document.querySelector('#demo-results');
+let closeDemoToSetup = false;
+function openDemo(fromSetup) {{
+  closeDemoToSetup = fromSetup;
+  demoDialog.showModal();
+  if (demoResults.hidden) checkDemo(false);
+}}
+document.querySelector('#open-demo-setup').addEventListener('click', () => openDemo(true));
+document.querySelector('#open-demo-tools').addEventListener('click', () => openDemo(false));
+document.querySelector('#open-demo-overview').addEventListener('click', () => openDemo(false));
+document.querySelector('#close-demo').addEventListener('click', () => demoDialog.close());
+demoDialog.addEventListener('close', () => {{
+  if (closeDemoToSetup) document.querySelector('#open-demo-setup').focus();
+}});
+async function checkDemo(reflection) {{
+  const buttons = demoDialog.querySelectorAll('.crop-actions button');
+  buttons.forEach(button => button.disabled = true);
+  demoResults.hidden = true;
+  demoStatus.textContent = 'Demo-Bild wird geprüft …';
+  try {{
+    const fields = new URLSearchParams({{csrf: '{csrf}', lang, reflection: reflection ? '1' : '0'}});
+    const reply = await fetch('zaehler-demo', {{method: 'POST', body: fields}});
+    if (!reply.ok) throw Error();
+    const result = await reply.json();
+    document.querySelector('#demo-original').src = 'data:image/jpeg;base64,' + result.image;
+    document.querySelector('#demo-aligned').src = 'data:image/jpeg;base64,' + result.aligned;
+    document.querySelector('#demo-reading').textContent =
+      'Abgelesen ' + result.reading + ' m³ · Drehung ' + result.angle + '° · ' +
+      (result.reading === result.expected ? 'Alle Ziffern erkannt.' :
+       'Mindestens eine Ziffer blieb offen.');
+    document.querySelector('#demo-estimate').textContent = result.estimate ?
+      'Aus einem Beispiel-Referenzwert geschätzt: ' + result.estimate + ' m³.' : '';
+    demoStatus.textContent = '';
+    demoResults.hidden = false;
+  }} catch (_) {{
+    demoStatus.textContent = 'Die Demo konnte nicht geladen werden. Bitte erneut versuchen.';
+  }} finally {{
+    buttons.forEach(button => button.disabled = false);
+  }}
+}}
+document.querySelector('#run-demo-clear').addEventListener('click', () => checkDemo(false));
+document.querySelector('#run-demo-glare').addEventListener('click', () => checkDemo(true));
 const resetDialog = document.querySelector('#reset-dialog');
 const resetForm = document.querySelector('#reset-form');
 const resetProgress = document.querySelector('#reset-progress');
@@ -2133,7 +2227,7 @@ function refreshCalibration(status) {{
   document.querySelector('#calibration-overview-state').textContent =
     message + (active && status.confirmations ? ' · ' + status.confirmations + '/' + status.required : '');
   document.querySelector('.activity-status').hidden = active;
-  document.querySelector('#resume-setup').hidden = active ||
+  document.querySelector('#setup-start-actions').hidden = active ||
     document.querySelector('.activity-status').dataset.state !== 'setup_wait';
   for (const bar of [progress, document.querySelector('#calibration-overview-progress')]) {{
     bar.hidden = !active;
@@ -2313,6 +2407,26 @@ async function submitDigitCorrection(action) {{
 }}
 correctionSearch.addEventListener('click', () => submitDigitCorrection('search'));
 correctionSave.addEventListener('click', () => submitDigitCorrection('save'));
+function renderOcrCandidates(list, candidates) {{
+  const evidence = {{
+    accepted: 'Zwei Profile stimmen überein, Prüfung akzeptiert den Kandidaten',
+    agreement: 'Zwei Profile stimmen überein, Vergleich offen',
+    disagreement: 'Profile lesen unterschiedlich',
+    unclear: 'Ziffer blieb offen',
+  }};
+  const key = JSON.stringify(candidates || []);
+  if (list.dataset.candidates === key) return;
+  list.dataset.candidates = key;
+  list.replaceChildren(...(candidates || []).slice(0, 3).map(candidate => {{
+    const item = document.createElement('li');
+    const [left, top, right, bottom] = candidate.box;
+    item.textContent = 'Ziffernposition ' + candidate.position + ' · ' + candidate.angle + '° · ' +
+      'Rahmen im Ausschnitt (px) ' + left + ', ' + top + ' · ' + (right - left) + ' × ' +
+      (bottom - top) + ' · ' + evidence[candidate.evidence];
+    return item;
+  }}));
+  list.hidden = !list.children.length;
+}}
 async function refreshTestStatus() {{
   if (statusPending || sendingCheck) return;
   statusPending = true;
@@ -2411,6 +2525,15 @@ async function refreshTestStatus() {{
     const version = showManual ? job.checked_at : automaticVersion;
     const file = showManual ? 'testvorschau.jpg' : job.automatic_preview ? 'automatikvorschau.jpg' : 'aktuell.jpg';
     previewLegend.hidden = !marked;
+    const method = document.querySelector('#ocr-method');
+    method.textContent = showManual || !job.automatic_preview ? '' : ({{
+      shifted: 'Die fehlende Ziffer wurde im verschobenen Rahmen direkt gelesen.',
+      composed: 'Ziffern aus übereinstimmenden OCR-Versuchen zusammengesetzt.',
+    }}[job.ocr_method] || '');
+    method.hidden = !method.textContent;
+    const candidateList = document.querySelector('#ocr-candidates');
+    renderOcrCandidates(candidateList, showManual || !job.automatic_preview ? [] : job.ocr_candidates);
+    document.querySelector('#ocr-candidate-details').hidden = candidateList.hidden;
     if (!version) {{
       preview.hidden = true;
       previewEmpty.hidden = false;
@@ -2552,6 +2675,77 @@ function renderConsumption(data) {{
   }}
 }}
 
+const experimental = document.querySelector('#experimental');
+const extraForm = document.querySelector('#experimental-form');
+const extraStatus = document.querySelector('#experimental-status');
+async function refreshExperimental() {{
+  if (!experimental.open) return;
+  const reply = await fetch('experimentelle-zaehler', {{cache:'no-store'}});
+  if (!reply.ok) return;
+  const rows = await reply.json();
+  const grid = document.querySelector('#experimental-meter-list');
+  const snapshot = JSON.stringify(rows);
+  if (grid.dataset.snapshot === snapshot) return;
+  grid.dataset.snapshot = snapshot;
+  const states = {{
+    waiting: 'Wartet auf Daten', ok: 'Aktuell', stale: 'Wartet auf neuen Sensorwert',
+    reset: 'Neuer Ausgangswert gespeichert', reset_pending: 'Möglicher Zählerrücksprung',
+    unavailable: 'Kein gültiger Sensorwert',
+  }};
+  grid.replaceChildren(...rows.map(meter => {{
+    const card = document.createElement('article');
+    card.className = 'experimental-meter-card';
+    const heading = document.createElement('strong');
+    heading.textContent = meter.label;
+    const status = document.createElement('p');
+    status.textContent = states[meter.status] + ' · ' + meter.id;
+    const last = document.createElement('p');
+    const value = amount => amount == null ? '–' : consumptionFormat.format(amount / 1000) + ' ' + meter.unit;
+    last.textContent = 'Letzte Ablesung ' + value(meter.reading) +
+      (meter.timestamp ? ' · ' + formatStamp(meter.timestamp) : '');
+    const usage = document.createElement('p');
+    const format = bucket => (bucket.estimated ? '≈ ' : '') + value(bucket.litres) +
+      (bucket.partial ? ' · teilweise' : '');
+    usage.textContent = 'Diese Stunde ' + format(meter.usage.hours[0]) + ' · Heute ' + format(meter.usage.days[0]);
+    const chart = document.createElement('div');
+    chart.className = 'experimental-hour-chart';
+    chart.setAttribute('role', 'img');
+    chart.setAttribute('aria-label', 'Verbrauch je Stunde');
+    const hours = meter.usage.hours.slice().reverse();
+    const max = Math.max(1, ...hours.map(entry => entry.litres || 0));
+    for (const entry of hours) {{
+      const bar = document.createElement('span');
+      bar.title = entry.label + ' · ' + format(entry);
+      bar.style.height = entry.litres === null ? '0%' : Math.max(3, 100 * entry.litres / max) + '%';
+      chart.append(bar);
+    }}
+    const days = document.createElement('details');
+    const daysLabel = document.createElement('summary');
+    daysLabel.textContent = 'Verlauf nach Tag';
+    days.append(daysLabel);
+    for (const entry of meter.usage.days) {{
+      const day = document.createElement('p');
+      day.textContent = entry.label + ' · ' + format(entry);
+      days.append(day);
+    }}
+    card.append(heading, status, last, usage, chart, days);
+    return card;
+  }}));
+}}
+experimental.addEventListener('toggle', () => refreshExperimental().catch(() => {{}}));
+extraForm.addEventListener('submit', async event => {{
+  event.preventDefault();
+  try {{
+    const response = await fetch('experimentelle-zaehler', {{
+      method: 'POST', body: new URLSearchParams(new FormData(extraForm)),
+    }});
+    if (!response.ok) throw Error();
+    extraStatus.textContent = 'Zähler gespeichert.';
+    await refreshExperimental();
+  }} catch (_) {{
+    extraStatus.textContent = 'Bitte Sensor-IDs und Prüfintervalle überprüfen.';
+  }}
+}});
 async function refreshAutomatic() {{
   let refreshDelay = 15000;
   try {{
@@ -2564,6 +2758,7 @@ async function refreshAutomatic() {{
     updateCalibrationNotice();
     next = sample.next_check;
     renderConsumption(sample.consumption);
+    if (experimental.open) refreshExperimental().catch(() => {{}});
     document.querySelector('#paused-notice').hidden = !sample.paused;
     document.querySelector('#pause-auto-form').hidden = sample.paused;
     automaticBanner.dataset.tone = sample.tone;
@@ -2581,12 +2776,13 @@ async function refreshAutomatic() {{
     const activityStatus = document.querySelector('.activity-status');
     activityStatus.dataset.offline = 'false';
     activityStatus.dataset.state = sample.activity_state;
-    document.querySelector('#resume-setup').hidden = sample.activity_state !== 'setup_wait' || activityStatus.hidden;
+    document.querySelector('#setup-start-actions').hidden = sample.activity_state !== 'setup_wait' || activityStatus.hidden;
     activityStatus.dataset.routineOk = String(routineOk);
     const activityText = document.querySelector('#automatic-activity');
     if (activityText.textContent !== sample.activity) activityText.textContent = sample.activity;
     const progress = document.querySelector('#automatic-progress');
     progress.hidden = !['queued', 'working'].includes(sample.activity_state);
+    renderOcrCandidates(document.querySelector('#live-ocr-candidates'), sample.activity_candidates);
     const checkDetails = document.querySelector('#automatic-activity-details');
     checkDetails.hidden = progress.hidden;
     if (checkDetails.hidden) checkDetails.open = false;
@@ -2767,7 +2963,7 @@ def start_panel(
     request_factory_reset=None, get_reset_status=None, skip_setup=None, get_activity=None,
     get_auto_paused=None, save_auto_paused=None, discover_sources=None,
     settings_lock=None, get_calibration=None, control_calibration=None, get_calibration_image=None,
-    has_calibration_backup=None, get_wizard_image=None, statistics_zone=timezone.utc,
+    has_calibration_backup=None, get_wizard_image=None, statistics_zone=timezone.utc, experimental_meters=None,
 ):
     images = {"/aktuell.jpg": current_image, "/treffer.jpg": good_image,
               "/testvorschau.jpg": test_image}
@@ -2783,6 +2979,7 @@ def start_panel(
     delivery_lock = Lock()
     wizard_image_lock = Lock()
     digit_search_lock = Lock()
+    demo_lock = Lock()
     def read_auto_rules():
         return {"integer_digits": 5, "fraction_digits": 3, "meter_display": "rollers",
                 "fallback_value": "", "fallback_time": "", "digit_boxes": [], **get_auto_rules()}
@@ -2913,7 +3110,9 @@ def start_panel(
     def setup_success(history, rules, source, language):
         if not setup_deadlines(rules, source)[0]:
             return None
-        completed = rules["setup_completed"]
+        completed = rules.get("setup_success") or rules["setup_completed"]
+        if completed.get("source") != setup_source_id(source):
+            completed = rules["setup_completed"]
         if "duration_seconds" not in completed:
             return None
         finished_check = history.get("automatic_completed_at")
@@ -3105,6 +3304,7 @@ def start_panel(
             "activity_completed": activity.get("completed"),
             "activity_total": activity.get("total"),
             "activity_reading": activity.get("reading"),
+            "activity_candidates": activity.get("candidates"),
             "paused": paused,
             "source_connection": source_connection,
             "source_connection_state": history.get("source_connection_status", "unknown"),
@@ -3186,8 +3386,10 @@ def start_panel(
                 with rules_lock:
                     rules, source = read_auto_rules(), get_source()[0]
                     snapshot["digit_correction"] = digit_correction_settings(rules, source)
-                snapshot["setup_success"] = (setup_success(read_history(), rules, source, language)
-                                             if rules.get("setup_completed") else None)
+                history = read_history()
+                snapshot["setup_success"] = setup_success(history, rules, source, language)
+                snapshot["ocr_candidates"] = history.get("ocr_candidates", [])
+                snapshot["ocr_method"] = history.get("ocr_method")
                 snapshot["digit_correction_image"] = str(snapshot["current_image"] or "")
                 snapshot["calibration_backup"] = bool(has_calibration_backup and has_calibration_backup())
                 if language == "en":
@@ -3199,6 +3401,9 @@ def start_panel(
                             snapshot.get("readings"),
                         )
                 self.reply(json.dumps(snapshot).encode("utf-8"), "application/json; charset=utf-8")
+                return
+            if path == "/experimentelle-zaehler" and experimental_meters is not None:
+                self.reply(json.dumps(experimental_meters.snapshot()).encode("utf-8"), "application/json")
                 return
             if path not in ("/", "/automatic"):
                 self.send_error(404)
@@ -3229,6 +3434,7 @@ def start_panel(
             automatic += f" (Home Assistant: {source_name})" if source_name else " (Home Assistant)"
             scripts = f"<script>{profile_script(user)}</script>" if user and mode == "auto" else ""
             summary = automatic_summary(history, language, auto_rules)
+            extra_meters = experimental_meters.snapshot() if experimental_meters is not None else []
             delivery = get_delivery()
             source, setup_pending = get_source()
             source_selected = source.get("selected", not setup_pending)
@@ -3340,6 +3546,10 @@ def start_panel(
                 anonymous_banner_key=f"{NAMESPACE}-ignored-warning",
                 ignore_hidden="" if summary["incident"] else "hidden",
                 profile_script=scripts,
+                extra_meter_config=html.escape("\n".join(
+                    f"{meter['id']}, {meter['minutes']}" for meter in extra_meters
+                )),
+                extra_meter_open="open" if extra_meters else "",
                 overview_hidden="hidden" if settings_tab_active else "",
                 settings_hidden="" if settings_tab_active else "hidden",
                 language_options=select_options({"auto": automatic, "de": "Deutsch", "en": "English"}, mode),
@@ -3515,7 +3725,7 @@ def start_panel(
             if path not in ("/pruefen", "/automatik", "/ausschnitt-uebernehmen", "/sprache",
                             "/benachrichtigungen", "/bildquelle", "/einrichtung", "/einrichtungsbild",
                             "/einrichtung-ueberspringen", "/werkreset", "/automatik-pause",
-                            "/spiegelungs-hinweis-ausblenden", "/ergaenzte-ziffer-bestaetigen", "/selbsteinrichtung", "/fallback", "/ziffernrahmen"):
+                            "/spiegelungs-hinweis-ausblenden", "/ergaenzte-ziffer-bestaetigen", "/selbsteinrichtung", "/fallback", "/ziffernrahmen", "/zaehler-demo", "/experimentelle-zaehler"):
                 self.send_error(404)
                 return
             fallback = browser_locale(self.headers.get("Accept-Language", ""))
@@ -3658,6 +3868,32 @@ def start_panel(
                 selected = field("source_mode", default)
                 return "slfork_camera" if selected == "slfork" and field("esp_camera_only") == "1" else selected
 
+            if path == "/zaehler-demo":
+                if not demo_lock.acquire(blocking=False):
+                    problem(503)
+                    return
+                try:
+                    result = run_demo(field("reflection") == "1")
+                    self.reply(json.dumps(result).encode("utf-8"), "application/json")
+                except (OSError, ValueError, subprocess.SubprocessError):
+                    problem(503)
+                finally:
+                    demo_lock.release()
+                return
+            if path == "/experimentelle-zaehler":
+                if experimental_meters is None:
+                    self.send_error(404)
+                    return
+                try:
+                    experimental_meters.configure(field("meters"))
+                except ValueError:
+                    problem(400)
+                    return
+                except OSError:
+                    problem(503)
+                    return
+                self.reply(b'{}', "application/json")
+                return
             if path == "/einrichtungsbild":
                 try:
                     source = source_rules({"mode": selected_source_mode(), "url": field("url"),

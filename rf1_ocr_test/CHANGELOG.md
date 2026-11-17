@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0 Stable
+
+- Die Automatik prüft zuerst einen verschobenen Einzelrahmen. Erst danach kann sie Ziffern aus übereinstimmenden OCR-Versuchen derselben Aufnahme zusammensetzen. Ein begrenzter früher Folgeabruf kann ein ungeeignetes Kamerabild ersetzen.
+- Die Diagnose nennt bis zu drei Rahmenkandidaten mit Position, Drehung und OCR-Übereinstimmung. Nach erneut bestätigter Selbsteinrichtung erscheint die grüne Erfolgskarte wieder.
+- Die Zähler-Demo zeigt mit einem künstlichen schrägen Bild, wie Ausrichtung, OCR und Spiegelungsergänzung funktionieren.
+- Der optionale Bereich „Experimentell“ beobachtet zusätzliche kumulative Home-Assistant-Zähler in m³ und kWh mit jeweils eigenem Intervall und Verlauf. Praxistests stehen aus.
+
 ## 0.5.37 Stable
 
 - Fehlt bei einer Automatikprüfung genau eine erforderliche Ziffer, prüft die App ihren Rahmen im selben Bild mit kleinen Verschiebungen. Zwei OCR-Profile müssen die Ziffer gleich lesen. Zusammen bleiben reguläre Prüfung und Nachprüfung bei höchstens 15 Versuchen.

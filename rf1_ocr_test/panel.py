@@ -716,9 +716,9 @@ name: Zählerstand (OCR)</code></pre>
 <li><strong>AI on the Edge / SLFork:</strong> Die App prüft den ESP-Messwert. Du kannst den ESP auch nur als Kamera verwenden.</li>
 </ul>
 </div>
-<div id="wizard-discovered-sources" class="setup-help" hidden>
+<div id="wizard-discovered-sources" class="setup-help">
 <label>Geräte suchen<input type="search" id="wizard-camera-search" placeholder="z. B. Gaszähler"></label>
-<label>In Home Assistant gefunden<select id="wizard-discovered-source"><option value="">Gerät auswählen …</option></select></label>
+<label>In Home Assistant gefunden<select id="wizard-discovered-source" disabled><option value="">Es wurden keine Geräte gefunden</option></select></label>
 </div>
 <label id="wizard-source-url">ESP-Adresse<input name="url" value="{source_url}" maxlength="150" placeholder="http://esp-gaszaehler.local"></label>
 <div id="wizard-esp-camera-only" class="setup-help" hidden>
@@ -1412,12 +1412,14 @@ async function loadSourceSuggestions() {{
   loadingSourceSuggestions = true;
   try {{
     const response = await fetch('bildquellen', {{cache: 'no-store'}});
-    if (!response.ok) return;
-    sourceSuggestions = await response.json();
+    if (!response.ok) throw Error('Device discovery failed');
+    const suggestions = await response.json();
+    if (!Array.isArray(suggestions)) throw Error('Invalid device list');
+    sourceSuggestions = suggestions;
     filterWizardSources();
-    document.querySelector('#wizard-discovered-sources').hidden = !sourceSuggestions.length;
   }} catch (_) {{
-    // Manual entry remains available when Home Assistant cannot return suggestions.
+    // Keep the selector visible and disabled when Home Assistant is not ready.
+    filterWizardSources();
   }} finally {{
     loadingSourceSuggestions = false;
   }}
@@ -1431,8 +1433,12 @@ function filterWizardSources() {{
     const type = source.mode === 'slfork' ? 'AI on the Edge' : (lang === 'en' ? 'Camera' : 'Kamera');
     discoveredSource.add(new Option(type + ' · ' + source.label, String(index)));
   }});
+  const available = discoveredSource.options.length > 1;
+  discoveredSource.options[0].textContent = available ?
+    (lang === 'en' ? 'Choose a device …' : 'Gerät auswählen …') :
+    (lang === 'en' ? 'No devices found' : 'Es wurden keine Geräte gefunden');
   if ([...discoveredSource.options].some(option => option.value === selected)) discoveredSource.value = selected;
-  discoveredSource.disabled = discoveredSource.options.length === 1;
+  discoveredSource.disabled = !available;
 }}
 cameraSearch.addEventListener('input', filterWizardSources);
 discoveredSource.addEventListener('change', () => {{

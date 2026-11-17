@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.6 Stable
+
+- Die Auswahl „In Home Assistant gefunden“ bleibt im Einrichtungsassistenten immer sichtbar, auch wenn nach einem Home-Assistant-Neustart vorübergehend keine Geräte erkannt werden. Im Auswahlfeld steht dann „Es wurden keine Geräte gefunden“.
+- Die Gerätesuche wird bei erneutem Öffnen der Einrichtung wiederholt, falls sie zuvor leer war. Kein zusätzlicher Suchbutton oder Statusbereich.
+- Wenn die Home-Assistant-Template-Abfrage keine Geräte liefert, versucht die App die bestehende Geräteerkennung zusätzlich über die Zustands-API. Regressionstests sichern die Anzeige und das Fallback ab.
+
 ## 0.6.5 Stable
 
 - Zusätzlicher Button „Factory Reset – Statistik behalten“ im Bereich „App-Daten zurücksetzen“. Der bisherige vollständige Reset bleibt unverändert.

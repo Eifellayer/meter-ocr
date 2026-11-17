@@ -40,6 +40,15 @@ def synthetic_meter():
 
 
 class SourceTests(TestCase):
+    def test_discovery_falls_back_to_state_api_when_template_has_no_results(self):
+        states = [{"entity_id": "camera.meter",
+                   "attributes": {"friendly_name": "Meter camera"}, "state": "idle"}]
+        with patch.object(run, "open_core", return_value=BytesIO(b'{"cameras": [], "devices": []}')):
+            with patch.object(run, "get_bytes", return_value=json.dumps(states).encode()) as fallback:
+                self.assertEqual([{"mode": "esphome", "camera": "camera.meter", "label": "Meter camera"}],
+                                 run.discover_ha_sources("test-token"))
+        fallback.assert_called_once_with("http://supervisor/core/api/states", "test-token", timeout=5)
+
     def test_optional_factory_reset_keeps_only_consumption_statistics(self):
         original = {
             "consumption": {"source": ["camera", "camera.meter"], "total_litres": 1240,

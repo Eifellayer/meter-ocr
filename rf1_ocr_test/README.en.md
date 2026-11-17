@@ -12,7 +12,7 @@ This is an additional plausibility check, **not a certified measurement device**
 
 ## Installation
 
-**AI Meter Reader 0.6.5** is on the Stable channel. The app now offers a second factory reset that preserves the verified meter and consumption statistics. Optional long-term features remain configurable.
+**AI Meter Reader 0.6.6** is on the Stable channel. The setup wizard now keeps the Home Assistant device selector visible even when discovery is temporarily empty after a Home Assistant restart. Optional long-term features remain configurable.
 
 Add **Add-ons by Eifellayer** under **Settings → Apps → Install app → ⋮ → Repositories** using the [Stable link](https://github.com/Eifellayer/meter-ocr#stable), then install **AI Meter Reader**. Set `esp_url` for SLFork, or configure `kamera_entitaet` and an optional `referenz_entitaet` sensor.
 

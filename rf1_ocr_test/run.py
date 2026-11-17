@@ -248,7 +248,9 @@ def discover_ha_sources(token):
     try:
         with open_core(request, timeout=5) as response:
             data = json.loads(response.read(512_001))
-        return discovered_sources(data)
+        suggestions = discovered_sources(data)
+        if suggestions:
+            return suggestions
     except (OSError, ValueError, TypeError, AttributeError) as error:
         print(f"Bildquellen aus Home Assistant konnten nicht geladen werden: {type(error).__name__}")
     # The state API can still provide cameras and meters with the standard MQTT sensors.

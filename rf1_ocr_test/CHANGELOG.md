@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.2 Stable
+
+- Die Selbsteinrichtung prüft bei einem vollständigen Treffer bei 0° zusätzlich ±1° und ±2°. Bei derselben Ablesung gewinnt der Winkel mit mehr übereinstimmenden OCR-Profilen. Gleich gute Varianten behalten den Ausgangswinkel.
+
 ## 0.6.1 Stable
 
 - Zehn Minuten sind für die Automatik vorausgewählt. Gespeicherte Intervalle bleiben frei einstellbar.

@@ -523,6 +523,34 @@ class CalibrationTests(TestCase):
         self.assertEqual(LAYOUT, self.job.candidate)
         self.assertEqual(2, self.job.confirmations)
 
+    def test_complete_zero_angle_hit_still_compares_small_rotations(self):
+        base = Layout((0, 0, 90, 25), 0, 90)
+        self.candidates.return_value = [base]
+        sample = {"reference_time": 100, "raw_value": "12345", "actual_value": "12345"}
+        profiles = calibration.OCR_PROFILES
+
+        for improved, expected in ((True, 2), (False, 0)):
+            with self.subTest(improved=improved):
+                job = Calibration(5, 0, rank_candidates=True, known_good_layout=base)
+                angles = []
+                calls = []
+
+                def read(layout, profile):
+                    calls.append((layout.rotation, profile))
+                    if layout.rotation == -2:
+                        return "12346"
+                    if improved and layout.rotation != 2 and profile in profiles[2:5]:
+                        return "1234?"
+                    return "12345"
+
+                job.examine(frame(1), None, sample, 100, RULES, read, lambda: False,
+                            angle_read=read, on_angle=lambda _, angle: angles.append(angle))
+                self.assertEqual([-1, 1, -2, 2], angles)
+                self.assertEqual(expected, job.candidate.rotation)
+                self.assertEqual(5, job.coarse_attempts)
+                self.assertEqual(1, job.confirmations)
+                self.assertEqual(list(profiles[:5]), [profile for angle, profile in calls if angle == expected])
+
     def test_green_reading_without_reference_gets_extra_profiles_but_no_confirmation(self):
         self.job = Calibration(5, 0, rank_candidates=True)
         sample = {"reference_time": None, "raw_value": "12345", "actual_value": "12345"}

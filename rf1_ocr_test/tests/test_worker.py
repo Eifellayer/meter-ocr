@@ -506,7 +506,7 @@ class StateTests(TestCase):
         def check_pending(*args, **kwargs):
             status = access["status"]()
             preview = status["preview"]
-            observed.append((status["stage"], preview["reading"], preview["crop"]))
+            observed.append((status["stage"], preview["reading"], preview["crop"], preview["angle"]))
             return recognize(*args, **kwargs)
 
         self.enterContext(patch.object(run, "read_visible_digits", side_effect=check_pending))
@@ -524,7 +524,9 @@ class StateTests(TestCase):
         self.assertEqual(("ocr", None), observed[0][:2])
         preview = access["status"]()["preview"]
         self.assertEqual("12345", preview["reading"])
-        self.assertEqual(0, preview["angle"])
+        tried_angles = {angle for stage, _, _, angle in observed if stage == "angle"}
+        self.assertTrue({-2, -1, 1, 2} <= tried_angles)
+        self.assertIn(preview["angle"], tried_angles | {0})
         self.assertEqual(4, len(preview["region"]))
         self.assertGreater(preview["crop"], observed[0][2])
         for kind in ("frame", "crop"):

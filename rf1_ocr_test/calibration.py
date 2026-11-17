@@ -572,20 +572,39 @@ class Calibration:
         return 2 if self.simplified else rules["decimals"] if has_reference else rules["fraction_digits"]
 
     def sweep_angles(self, layout, readings, sample, rules, read, stop, report, tested, frame_ceiling,
-                     *, accept_first=False, offsets=None):
+                     *, accept_first=False, offsets=None, stress_reads=None):
         whole, fraction = rules["integer_digits"], rules["fraction_digits"]
         referenced = sample.get("reference_required") is not False
         precision = self.precision(rules, referenced)
 
-        def score(candidate, values):
+        def score(values):
             prefixes = [meter_prefix(value, precision, whole) for value in values]
             agreement = prefixes[0] is not None and prefixes[0] == prefixes[1]
             match = referenced and agreement and all(reference_rejection(
                 sample, compare_sample(sample, value, precision, integer_digits=whole)[0]) is None for value in values)
             percentage = agreement_percent(values, sample, precision, whole)
-            return match, agreement, percentage, -len(uncertain_slots(values, whole + fraction)), -abs(candidate.rotation)
+            return match, agreement, percentage, -len(uncertain_slots(values, whole + fraction))
 
-        best = score(layout, readings), layout, readings
+        expected = meter_prefix(readings[0], fraction, whole)
+        expected_precision = fraction if expected is not None else precision
+        expected = meter_prefix(readings[0], expected_precision, whole)
+
+        def stress_score(candidate, values):
+            if any(meter_prefix(value, expected_precision, whole) != expected for value in values):
+                return -1
+            if candidate not in stress_reads:
+                extras = []
+                for profile in OCR_PROFILES[2:5]:
+                    if stop():
+                        return -1
+                    try:
+                        extras.append(read(candidate, profile))
+                    except (OSError, ValueError, subprocess.SubprocessError):
+                        continue
+                stress_reads[candidate] = extras
+            return sum(meter_prefix(value, expected_precision, whole) == expected for value in stress_reads[candidate])
+
+        best = score(readings), layout, readings
         center = 0 if offsets is None and abs(layout.rotation) <= 3 else layout.rotation
         l, t, r, b = layout.box
         for offset in SMALL_ANGLES if offsets is None else offsets:
@@ -608,8 +627,13 @@ class Calibration:
                 values.append(read(trial, OCR_PROFILES[1]))
             except (OSError, ValueError, subprocess.SubprocessError):
                 continue
-            rank = score(trial, values)
-            if rank > best[0]:
+            rank = score(values)
+            if rank == best[0] and stress_reads is not None:
+                best_support = stress_score(best[1], best[2])
+                trial_support = stress_score(trial, values) if best_support < 3 else -1
+                if trial_support > best_support and not stop():
+                    best = rank, trial, values
+            elif (rank, -abs(trial.rotation)) > (best[0], -abs(best[1].rotation)):
                 best = rank, trial, values
             if accept_first and (rank[0] if referenced else rank[1]):
                 break
@@ -1168,18 +1192,26 @@ class Calibration:
                 coarse = [max(close_crops, key=ranked_crop)]
         targeted = len(coarse) == 1 and bool(local_adjustment_slots(coarse[0][2]))
 
-        if (coarse and not targeted and perfect is None and self.rank_candidates
+        perfect_at_zero = perfect is not None and perfect.rotation == 0
+        stress_reads = {}
+        if (coarse and not targeted and (perfect is None or perfect_at_zero) and self.rank_candidates
                 and angle_read is not None and not self.confirmations
-                and not any(layout == self.known_good_layout and reliable(score) for score, layout, _ in coarse)):
+                and (perfect_at_zero or not any(
+                    layout == self.known_good_layout and reliable(score) for score, layout, _ in coarse))):
             # Compare regions first and spend the angle budget on the strongest candidate.
-            index = max(range(len(coarse)), key=lambda position: ranked_crop(coarse[position]))
+            index = -1 if perfect_at_zero else max(range(len(coarse)), key=lambda position: ranked_crop(coarse[position]))
             score, layout, readings = coarse[index]
+            check_zero_angle = layout.rotation == 0 and reliable(score)
             ceiling = frame_ceiling
             if collecting:
                 ceiling = min(ceiling, self.attempts + COARSE_LIMIT - self.coarse_attempts)
             previous_attempts = self.attempts
             trial, values = self.sweep_angles(layout, readings, sample, rules, angle_read, stop,
-                                              on_angle, tested, ceiling, accept_first=not reliable(score))
+                                              on_angle, tested, ceiling, accept_first=not reliable(score),
+                                              offsets=(-1, 1, -2, 2) if perfect_at_zero else None,
+                                              stress_reads=stress_reads if check_zero_angle else None)
+            if perfect_at_zero:
+                perfect = trial
             if collecting:
                 self.coarse_attempts += self.attempts - previous_attempts
             coarse[index] = score_layout(trial, values), trial, values
@@ -1223,9 +1255,10 @@ class Calibration:
                 self.attempts += 1
                 if on_shortlist is not None:
                     on_shortlist(index, layout.rotation)
-                extras = []
+                extras = stress_reads.get(layout, [])
                 profile_end = 5 if layout == perfect or (score[4] and not reliable(score)) else 3
-                for profile in OCR_PROFILES[2:profile_end]:
+                profiles = () if layout in stress_reads else OCR_PROFILES[2:profile_end]
+                for profile in profiles:
                     if stop():
                         break
                     try:

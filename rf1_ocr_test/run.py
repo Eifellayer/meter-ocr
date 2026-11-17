@@ -87,7 +87,7 @@ LIVE_CAPTURE_WINDOW_SECONDS = 20
 LIVE_CAPTURE_MAX_ATTEMPTS = 10
 INTENSIVE_ROTATIONS = (-6, 6)
 MAX_LEARNED_ROTATION = 18
-FRESH_OCR_NOTICE = "Die bisherigen OCR-Versuche reichen nicht aus. Ein frisches Kamerabild folgt in Kürze."
+FRESH_OCR_NOTICE = "Der Zählerstand konnte nicht bestätigt werden. Ein frisches Kamerabild folgt in Kürze."
 SINGLE_DIGIT_RECHECK = "Automatik-Nachprüfung: Die App prüft die fehlende Ziffer mit leicht verschobenem Rahmen."
 INTENSIVE_ROTATION_STATUS = "Intensivtest: Prüfe eine leicht gedrehte Aufnahme."
 

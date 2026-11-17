@@ -1872,6 +1872,7 @@ def main():
         fine_update = None
         fine_rotation = None
         local_trial = None
+        restoring_local = False
         recover_geometry = False
         geometry_warning = False
         # Confirmations obtained with another precision are not valid evidence
@@ -2551,12 +2552,26 @@ def main():
                         interval_minutes = suggested_interval(
                             automatic_interval_minutes(active_rules["interval_minutes"], mode), flow, source_key, now.month,
                         )
-                    if (not optimization_paused and not raw_fallback and local_trial is not None and verified):
+                    local_backup = updated.get("local_geometry_backup", {})
+                    if (not optimization_paused and active_rules["fine_alignment_enabled"]
+                            and local_backup.get("revision") == active_rules["crop_revision"]
+                            and local_backup.get("source") == source_key and not raw_fallback):
+                        if verified and local_trial is None:
+                            local_backup["failures"] = 0
+                        elif outcome in ("ocr_unclear", "difference") and not validation_detail and not ocr_error:
+                            local_backup["failures"] = local_backup.get("failures", 0) + 1
+                            if local_backup["failures"] >= 2:
+                                fine_rotation = local_backup["rotation"]
+                                fine_update = local_backup["digit_boxes"]
+                                restoring_local = True
+                    if (not optimization_paused and not raw_fallback and local_trial is not None and verified
+                            and fine_update is None):
                         trial_key, geometry, prefix = local_trial
                         learning = updated.setdefault("local_improvement", {})
                         if note_local_improvement(learning, trial_key, image_time, geometry, prefix):
                             fine_rotation, fine_update = geometry
-                    elif not optimization_paused and active_rules["fine_alignment_enabled"] and not raw_fallback:
+                    elif (fine_update is None and not optimization_paused
+                          and active_rules["fine_alignment_enabled"] and not raw_fallback):
                         learning = updated.setdefault("fine_alignment", {})
                         key = [source_key, active_rules["crop"], active_rules["rotation"], active_rules["width"],
                                integer_digits, fraction_digits, active_rules["polarity"]]
@@ -2645,7 +2660,8 @@ def main():
                 updated.pop("failure_since", None)
                 updated.pop("retry_suppressed", None)
         else:
-            updated.pop("setup_first_check_unclear", None)
+            if not cached_standalone and not duplicate_cycle:
+                updated.pop("setup_first_check_unclear", None)
         if cached_standalone:
             updated["check_status"] = STANDALONE_PENDING
             defer_duplicate_cycle(updated, now.timestamp(), interval_minutes)
@@ -2679,6 +2695,15 @@ def main():
                         if stationary_partial:
                             values["stationary_partial_scope"] = setup_source_id([active_source, revision])
                         save_auto_rules(values, request_check=False)
+                        if restoring_local:
+                            updated.pop("local_geometry_backup", None)
+                        elif fine_rotation is not None:
+                            updated["local_geometry_backup"] = {
+                                "revision": revision, "source": source_key, "rotation": active_rules["rotation"],
+                                "digit_boxes": active_rules["digit_boxes"], "failures": 0,
+                            }
+                        if fine_rotation is not None:
+                            atomic_write(HISTORY, json.dumps(updated).encode("utf-8"), 0o600)
                     except (OSError, ValueError):
                         print("Feinjustierung konnte nicht gespeichert werden.")
         set_activity("waiting", "Warte auf einen neuen Messzyklus vom ESP …" if duplicate_cycle else

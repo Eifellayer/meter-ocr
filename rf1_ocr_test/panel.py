@@ -667,6 +667,8 @@ name: Zählerstand (OCR)</code></pre>
 <p class="settings-note">Startet nach dem Speichern. Nach drei bestätigten Aufnahmen übernimmt die Automatik die Gegenprüfung.</p>
 </div>
 <div class="setup-help">
+<input type="hidden" name="fine_alignment_option_present" value="1">
+<label class="check-option"><input type="checkbox" name="fine_alignment_enabled" value="1" {wizard_fine_alignment_checked}> Ziffernrahmen langfristig feinjustieren</label>
 <label class="check-option"><input type="checkbox" name="self_repair_enabled" value="1" {wizard_self_repair_checked}> Selbstreparatur bei wiederholten Fehlmessungen</label>
 <p class="settings-note">Die App sucht frühestens nach zwei Stunden anhaltender Erkennungsprobleme einen besseren Rahmen. Probleme nur an der letzten Rolle zählen dabei nicht mit. Der bisherige Rahmen gilt bis zur erfolgreichen Gegenprobe.</p>
 </div>
@@ -1878,7 +1880,7 @@ function refreshCalibration(status) {{
   if (active && status.preview?.last_digit_hint) {{
     message += ' Vorschlag für die letzte Rolle gefunden. Warte auf Bestätigung mit einem neuen Bild.';
   }}
-  if (active && (status.awaiting_start_value || reason === 'await_movement')) {{
+  if (active && !status.intensive && !status.simplified && (status.awaiting_start_value || reason === 'await_movement')) {{
     message += ' Ohne Vergleichswert braucht die App einen plausiblen Anstieg oder einen Startwert.';
   }}
   if (active && status.simplified) {{
@@ -3068,6 +3070,7 @@ def start_panel(
                 geometry_warning_text=html.escape(summary["geometry_warning"]),
                 calibration_restore_hidden="" if has_calibration_backup and has_calibration_backup() else "hidden",
                 self_repair_checked="checked" if auto_rules.get("self_repair_enabled") else "",
+                wizard_fine_alignment_checked="checked" if setup_pending or auto_rules.get("fine_alignment_enabled") else "",
                 wizard_self_repair_checked="checked" if setup_pending or auto_rules.get("self_repair_enabled") else "",
                 calibration_min=MIN_IMAGE_LIMIT, calibration_max=MAX_IMAGES,
                 calibration_limit=calibration["limit"] if calibration else DEFAULT_LIMIT,
@@ -3468,6 +3471,9 @@ def start_panel(
                         ) else [], "max_flow_lph": max_flow,
                         "precision_mode": field("precision_mode") == "1",
                         "self_repair_enabled": field("self_repair_enabled") == "1",
+                        "fine_alignment_enabled": (field("fine_alignment_enabled") == "1"
+                                                  if field("fine_alignment_option_present") == "1"
+                                                  else old_rules.get("fine_alignment_enabled", False)),
                         "reflection_estimate_enabled": (field("reflection_estimate_enabled") == "1"
                                                         if field("reflection_option_present") == "1"
                                                         else old_rules.get("reflection_estimate_enabled", False)),

@@ -352,8 +352,14 @@ EN_UI = {
     LAST_DIGIT_NOTICE: "Only the third decimal digit is unclear or differs.",
     "Dritte Nachkommastelle intensiv suchen": "Run intensive search for the third decimal digit",
     "Dritte Nachkommastelle manuell markieren": "Mark the third decimal digit manually",
-    "Einrichtung abgeschlossen: Sieben Ziffern bestätigt. Die dritte Nachkommastelle kann zusätzlich intensiv geprüft werden.":
-        "Setup complete: Seven digits confirmed. The third decimal can be checked separately.",
+    "Einrichtung abgeschlossen: Sieben Ziffern bestätigt. Die dritte Nachkommastelle wird zusätzlich intensiv geprüft.":
+        "Setup complete: Seven digits confirmed. The third decimal is being checked additionally.",
+    "Eine der ersten sieben Ziffern dreht gerade. Der gefundene Rahmen bleibt erhalten; ein frisches Bild wird geprüft.":
+        "One of the first seven digits is moving. The crop is retained while a fresh image is checked.",
+    "Sieben Ziffern bestätigt. Die Automatik läuft; die dritte Nachkommastelle wird im Hintergrund zusätzlich geprüft. ":
+        "Seven digits confirmed. Automatic checks are running; the third decimal is checked in the background. ",
+    "Die Zusatzprüfung der dritten Nachkommastelle blieb offen. Die sieben bestätigten Ziffern und die Automatik bleiben erhalten.":
+        "The optional third-decimal check remains unconfirmed. The seven verified digits and automatic checks are retained.",
     "Die Einrichtung bestätigt zuerst sieben Ziffern. Die dritte Nachkommastelle kann anschließend separat geprüft werden.":
         "Setup confirms seven digits first. The third decimal can then be checked separately.",
     "Die dritte Nachkommastelle ist bei Rollen oft schwer zu erkennen. „Automatische Selbsteinrichtung“ bestätigt bei der Ersteinrichtung die ersten zwei Stellen. Die dritte bleibt unbestätigt und kann später intensiv gesucht oder im Kamerabild manuell markiert werden.":

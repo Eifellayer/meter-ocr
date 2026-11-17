@@ -12,6 +12,39 @@ from layout import MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR
 
 
 EN_UI = {
+    "Roadmap und geplante Funktionen": "Roadmap and planned features",
+    "Für die 0.6-Beta geplant": "Planned for the 0.6 beta",
+    "Mehrere Zähler mit eigenen Quellen, Einstellungen und Verläufen.": "Multiple meters with their own sources, settings and history.",
+    "Hallsensor über ESPHome, am selben oder an einem zweiten ESP.": "Hall sensor via ESPHome on the same ESP or a second ESP.",
+    "Modernere Zählerübersicht mit Verbrauchsdiagrammen.": "A refreshed meter overview with consumption charts.",
+    "Die Funktionen sind in Planung. Ein Veröffentlichungstermin steht noch aus.": "These features are planned. A release date has yet to be set.",
+    "Vollständige Roadmap ansehen": "View the full roadmap",
+    "Automatik wartet auf die Einrichtung. Du kannst sie automatisch oder manuell abschließen.": "Automatic checks are waiting for setup. You can finish setup automatically or manually.",
+    "Automatik wartet auf Einrichtung": "Automatic checks are waiting for setup",
+    "Selbsteinrichtung wird vorbereitet …": "Preparing automatic setup …",
+    "Einrichtung fortsetzen": "Continue setup",
+    "Aktueller Schritt": "Current step",
+    "Nächster Schritt": "Next step",
+    "Kamerabild laden": "Load the camera image",
+    "Ziffernreihe finden": "Find the digit row",
+    "Rahmen und Drehung prüfen": "Check crop and rotation",
+    "Rahmen bestätigen": "Confirm the crop",
+    "Letzte Rolle prüfen": "Check the last roller",
+    "Ergebnis gegenprüfen": "Verify the result",
+    "Ergebnis anzeigen": "Show the result",
+    "Rahmen speichern und Automatik starten": "Save the crop and start automatic checks",
+    "Geräte suchen": "Search devices",
+    "z. B. Gaszähler": "e.g. gas meter",
+    "1. Lade ein Bild deiner Kamera oder wähle ein Testbild derselben Kamera.": "1. Load a camera image or choose a test image from the same camera.",
+    "Kamerabild für Rahmen laden": "Load camera image for the crop",
+    "Eigenes Bild für den Rahmen": "Use your own image for the crop",
+    "2. Ziehe einen Rahmen um die gesamte Ziffernreihe. Lass etwas Rand und spare die Seriennummer aus.": "2. Draw a box around all the meter digits. Leave a small margin and exclude the serial number.",
+    "Kamerabild zum Zeichnen des Ziffernrahmens": "Camera image for drawing the digit crop",
+    "3. Bilddrehung bei Bedarf (°)": "3. Rotate the image if needed (°)",
+    "Koordinaten und Breite bearbeiten": "Edit coordinates and width",
+    "4. Prüfe die Vorschau und bestätige den Rahmen.": "4. Check the preview and confirm the crop.",
+    "Dieser Rahmen umfasst die Ziffernreihe": "This crop covers the digit row",
+    "Kein Bild verfügbar. Prüfe die Bildquelle oder wähle ein Testbild.": "No image available. Check the source or choose a test image.",
     "Ziffernrahmen für Spiegelungen suchen": "Find digit boxes for reflections",
     "Gelbe Rahmen sind möglicherweise gespiegelt. Du kannst bis zu zwei Stellen markieren und die Rahmen ziehen.": "Yellow boxes may be affected by reflections. Mark up to two positions and drag the boxes to adjust them.",
     "Ziffernfeld mit markierten Spiegelungen": "Meter digits with marked reflections",
@@ -269,7 +302,7 @@ EN_UI = {
     "Dritte Nachkommastelle manuell markieren": "Mark the third decimal digit manually",
     "Ausschnitt und Drehung gespeichert. Zwei Nachkommastellen bestätigt, die dritte bleibt unbestätigt.":
         "Crop and rotation saved. Two decimal digits confirmed. The third remains unconfirmed.",
-    "Die dritte Nachkommastelle ist bei Rollen oft schwer zu erkennen. „Ausschnitt und Drehung lernen“ bestätigt bei der Ersteinrichtung die ersten zwei Stellen. Die dritte bleibt unbestätigt und kann später intensiv gesucht oder im Kamerabild manuell markiert werden.":
+    "Die dritte Nachkommastelle ist bei Rollen oft schwer zu erkennen. „Automatische Selbsteinrichtung“ bestätigt bei der Ersteinrichtung die ersten zwei Stellen. Die dritte bleibt unbestätigt und kann später intensiv gesucht oder im Kamerabild manuell markiert werden.":
         "The third decimal digit on a roller can be hard to read. During initial setup, Learn crop and rotation confirms the first two decimal digits. The third remains unconfirmed. You can run an intensive search or mark it manually on the camera image later.",
     "Dritte Nachkommastelle bestätigt. Die Ziffernrahmen sind übernommen.":
         "Third decimal digit confirmed. The digit frames have been saved.",

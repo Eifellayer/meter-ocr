@@ -45,7 +45,7 @@ A Home Assistant installation with Supervisor is required on **AMD64 or ARM64**.
 
 On first open, a compact setup wizard guides you through the image source, meter type, digit format, crop, schedule and notifications. You can reopen it later; saved values are prefilled for quick edits. Explanations expand on demand. Automatic checks remain separate from manual diagnostics.
 
-Choose an image source first. If you are starting with a camera, **ESPHome / camera** is the recommended choice. The guide next to the selector explains when to use the other modes. **Found in Home Assistant** offers existing cameras and reported AI on the Edge addresses. If you skip setup, automatic checks wait until you save an image source.
+Choose an image source first. If you are starting with a camera, **ESPHome / camera** is the recommended choice. The guide next to the selector explains when to use the other modes. **Found in Home Assistant** offers existing cameras and reported AI on the Edge addresses. Gas meters are listed first. Automatic checks wait for a source and a confirmed crop, a saved starting reading or a checked test image.
 
 Under **AI on the Edge / SLFork**, enable **Use the ESP as a camera only** and enter its address. AI Meter Reader requests a fresh image and reads the meter locally, even if alignment or recognition fails on the ESP. Configure a fixed crop from the raw image if needed.
 
@@ -77,7 +77,9 @@ The [photo test report (German)](METER-PHOTO-TESTS.md) documents simulated OCR r
 
 ### Automatic crop and rotation setup
 
-In the setup wizard, select **Learn crop and rotation** under **Image region**. The search starts after saving. You can also start it at any time under **Overview → Automatic setup**. The app shows the remaining time, number of images and rotation being tested. **Automatic setup images** shows the camera frame, highlighted region, rotated crop and OCR reading. A question mark indicates an unclear digit. Choose the maximum number of distinct images to check (4 to 100, default 100). The app tries different crops and angles and saves a setting after three confirmations on distinct images and a final regular OCR check on one more fresh image. Without an external reference or a manually entered starting reading, the meter must show a plausible increase. The search ends after 15 minutes, 100 crop attempts, or when it reaches the image limit. If unsuccessful, it keeps your existing settings. You can stop the search at any time.
+Select **Automatic setup (recommended)** under **Image region**. The search starts when you save. The current and next steps appear next to the preview. You can also start it under **Overview → Tools → Automatic setup** or stop it at any time. After three confirmed images, the app saves the crop and hands the verification over to automatic checks.
+
+With **Set up manually**, load a camera image or use a test image from the same camera. Draw a box around the digits, check its rotation if needed and confirm the crop before saving.
 
 ## Plausibility check and Energy dashboard
 

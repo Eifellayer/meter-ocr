@@ -53,7 +53,7 @@ from notification_settings import (DEFAULT_DELIVERY_HOURS, DEFAULT_REVIEW_MINUTE
                                    notification_rules)
 from settings import DEFAULTS, SCHEMA_VERSION, load_options
 from source_settings import (CAMERA, DISCOVERY_TEMPLATE, ESP_ADDRESS_MODES, REFERENCE,
-                             discovered_sources, source_rules)
+                             discovered_sources, source_check_key, source_rules)
 from panel import start_panel
 from language import load_preferences
 from transport import open_core
@@ -439,7 +439,7 @@ def read_visible_digits(register, integer_width, whole_boxes, fraction_boxes, li
     return f"{whole}.{fraction.ljust(fraction_digits, '?')}" if fraction_digits else whole
 
 
-def wizard_camera_preview(source, token, zone):
+def wizard_camera_preview(source, token, zone, *, full_size=False):
     mode = source["mode"]
     if mode == "slfork":
         base = source["url"].rstrip("/")
@@ -458,7 +458,7 @@ def wizard_camera_preview(source, token, zone):
         with Image.open(io.BytesIO(picture)) as frame:
             if frame.width * frame.height > MAX_IMAGE_PIXELS:
                 raise ValueError("Kamerabild hat zu viele Pixel")
-            return calibration_jpeg(frame, (960, 720))
+            return calibration_jpeg(frame, frame.size if full_size else (960, 720))
     except Image.DecompressionBombError as error:
         raise ValueError("Kamerabild hat zu viele Pixel") from error
 
@@ -713,6 +713,28 @@ def check_reminder(reminder, history, now, review_after=REVIEW_AFTER):
             print(f"Meter-OCR-Erinnerung konnte nicht gespeichert werden: {type(error).__name__}")
 
 
+SETUP_WAIT_NOTICE = "Automatik wartet auf die Einrichtung. Du kannst sie automatisch oder manuell abschließen."
+
+
+def automatic_inputs_ready(rules, source, history, *, legacy_crop=False):
+    if not source["selected"]:
+        return False
+    scope = setup_source_id(source)
+    key = source_check_key(source)
+    if (setup_deadlines(rules, source)[0] or history.get("consumption", {}).get("source") == key
+            or (history.get("check_source") == key and history.get("last_match_at"))
+            or history.get("manual_setup_source") == scope):
+        return True
+    saved_scope = rules.get("setup_input_source")
+    if saved_scope is not None:
+        return saved_scope == scope and bool(
+            rules["crop_mode"] == "manual" or rules.get("fallback_value") and rules.get("fallback_time")
+        )
+    return history.get("check_source", key) == key and bool(
+        rules["crop_mode"] == "manual" or rules.get("fallback_value") and rules.get("fallback_time") or legacy_crop
+    )
+
+
 def main():
     raw_options = json.loads(OPTIONS.read_text(encoding="utf-8"))
     # The Supervisor remains the source of truth for values edited in its UI.
@@ -720,8 +742,8 @@ def main():
     snapshot = json.loads(EFFECTIVE_OPTIONS.read_text(encoding="utf-8")) if EFFECTIVE_OPTIONS.exists() else {}
     options = load_options(raw_options, snapshot)
     configured = bool(options.get("kamera_entitaet")) or options["esp_url"] != DEFAULTS["esp_url"]
-    setup_pending = not configured and snapshot.get(
-        "setup_pending", not EFFECTIVE_OPTIONS.exists() and not HISTORY.exists())
+    setup_pending = snapshot.get(
+        "setup_pending", not configured and not EFFECTIVE_OPTIONS.exists() and not HISTORY.exists())
     atomic_write(EFFECTIVE_OPTIONS, json.dumps({
         "schema_version": SCHEMA_VERSION, "options": options, "setup_pending": setup_pending,
     }, indent=2).encode("utf-8"), 0o600)
@@ -742,7 +764,7 @@ def main():
                   camera=camera, reference=reference)
     default_source = dict(configured_source)
     initial_setup_pending = setup_pending
-    initial_source_key = [configured_source["mode"], camera or configured_source["url"].rstrip("/"), reference if camera else ""]
+    initial_source_key = source_check_key(configured_source)
     try:
         configured_source = source_rules(json.loads(SOURCE_SETTINGS.read_text(encoding="utf-8")))
         source_selected = True
@@ -758,6 +780,8 @@ def main():
     def save_source(values):
         nonlocal configured_source, setup_pending, source_selected
         validated = source_rules(values)
+        if source_check_key(validated) != source_check_key(configured_source) and not auto_rules.get("setup_input_source"):
+            save_auto_rules({**auto_rules, "setup_input_source": setup_source_id(get_source()[0])}, request_check=False)
         atomic_write(SOURCE_SETTINGS, json.dumps(validated).encode("utf-8"), 0o600)
         configured_source, setup_pending = validated, False
         source_selected = True
@@ -851,6 +875,7 @@ def main():
                           "precision_mode": saved_rules.get("precision_mode") is True,
                           "calibration_reference": saved_rules.get("calibration_reference"),
                           "setup_completed": saved_rules.get("setup_completed"),
+                          "setup_input_source": saved_rules.get("setup_input_source"),
                           "setup_pending_source": saved_rules.get("setup_pending_source"),
                           "setup_pending_started": saved_rules.get("setup_pending_started"),
                           "setup_pending_metrics": saved_rules.get("setup_pending_metrics"),
@@ -1018,7 +1043,13 @@ def main():
         activity.update(state=state, detail=detail, updated_at=time.time(), completed=completed, total=total,
                         reading=reading)
 
+    def ready_for_automatic(rules, source):
+        explicit_crop = options["ausschnitt"] != DEFAULTS["ausschnitt"]
+        return automatic_inputs_ready(rules, source, history, legacy_crop=explicit_crop and not setup_pending)
+
     def get_automatic_activity():
+        if not get_auto_paused() and not ready_for_automatic(get_auto_rules(), get_source()[0]):
+            return {"state": "setup_wait", "detail": SETUP_WAIT_NOTICE}
         if not get_auto_paused() and automatic_request is not handled_automatic_request:
             return {"state": "queued", "detail": "Einstellungen gespeichert. Prüfung startet gleich."}
         return dict(activity)
@@ -1127,6 +1158,7 @@ def main():
         pending_started = finished - elapsed if provisional else rules.get("setup_pending_started")
         pending_metrics = metrics if provisional else rules.get("setup_pending_metrics")
         save_auto_rules({**rules, **layout.settings(), "crop_revision": revision,
+                         "setup_input_source": setup_source_id(source),
                          "calibration_reference": reference, "stationary_partial_scope": partial_scope,
                          "setup_completed": completed,
                          "setup_pending_source": None if completed else pending_source,
@@ -1190,9 +1222,7 @@ def main():
                 shortlist = {} if repair else load_calibration_candidates(scope, rules)
                 known_good = load_known_good_layout(rules, source)
                 if known_good is None:
-                    camera = source["camera"] if source["mode"] not in ESP_ADDRESS_MODES else ""
-                    source_key = [source["mode"], camera or source["url"].rstrip("/"),
-                                  source["reference"] if source["mode"] == "camera" else ""]
+                    source_key = source_check_key(source)
                     verified_geometry = last_verified_configured_geometry(history, rules, source_key)
                     if verified_geometry:
                         known_good = geometry_layout(verified_geometry, rules)
@@ -1777,8 +1807,9 @@ def main():
             continue
         requested_automatic_check = automatic_request
         run_automatic_now = requested_automatic_check is not handled_automatic_request
-        active_rules = get_auto_rules()
-        active_source, waiting_for_setup = get_source()
+        with settings_lock:
+            active_rules = get_auto_rules()
+            active_source, _ = get_source()
         mode = active_source["mode"]
         interval_minutes = automatic_interval_minutes(active_rules["interval_minutes"], mode)
         esp_camera_only = mode == "slfork_camera"
@@ -1786,7 +1817,7 @@ def main():
         base = active_source["url"].rstrip("/")
         camera = active_source["camera"] if mode not in ESP_ADDRESS_MODES else ""
         reference = active_source["reference"] if mode == "camera" else ""
-        source_key = [mode, camera or base, reference]
+        source_key = source_check_key(active_source)
         now = datetime.now(zone)
         stabilizing_until, optimization_until = setup_deadlines(active_rules, active_source)
         optimization_paused = now.timestamp() < optimization_until
@@ -1837,8 +1868,8 @@ def main():
             set_activity("paused", "Automatik pausiert. Manuelle Tests bleiben verfügbar.")
             wake_worker.wait(timeout=15)
             continue
-        if (waiting_for_setup or not active_source["selected"]) and not manual:
-            set_activity("waiting", "Einrichtung erforderlich. Bitte Bildquelle festlegen.")
+        if not manual and not ready_for_automatic(active_rules, active_source):
+            set_activity("setup_wait", SETUP_WAIT_NOTICE)
             wake_worker.wait(timeout=2)
             continue
         if remaining > 0 and not startup and not manual and not source_changed and not run_automatic_now:
@@ -1924,6 +1955,7 @@ def main():
         duplicate_cycle = False
         cached_standalone = False
         setup_finished_in_check = False
+        decoded_test_image = False
         image_id = None
         automatic_preview_ready = False
         live_deadline = (time.monotonic() + LIVE_CAPTURE_WINDOW_SECONDS
@@ -2035,6 +2067,7 @@ def main():
                             frame.convert("RGB").save(normalized, "JPEG", quality=95)
                             picture = normalized.getvalue()
                     frame.load()
+                    decoded_test_image = manual_upload
                     if manual:
                         atomic_write(TEST_SOURCE_IMAGE, picture, 0o600)
                     ocr_readings = []
@@ -2662,6 +2695,11 @@ def main():
                                  slfork_diagnostics=diagnostics)
             try:
                 next_history = {**history, "manual_result": manual_result}
+                unlock_automatic = (not ready_for_automatic(active_rules, active_source)
+                                    and active_source.get("selected") and active_source == get_source()[0]
+                                    and (decoded_test_image or manual_options.get("manual_reference")))
+                if unlock_automatic:
+                    next_history["manual_setup_source"] = setup_source_id(active_source)
                 # A manual image that cannot clear an automatic incident must not
                 # postpone its short retry or change its one-hour cooldown.
                 if (manual_result.get("status") in SUCCESSFUL_CHECKS
@@ -2675,6 +2713,8 @@ def main():
                             next_history[key] = updated[key]
                 atomic_write(HISTORY, json.dumps(next_history).encode("utf-8"), 0o600)
                 history = next_history
+                if unlock_automatic:
+                    request_automatic_check()
             except OSError as error:
                 print(f"Manueller Test konnte nicht gespeichert werden: {type(error).__name__}")
                 manual_result.update(status="storage_error", can_apply_crop=False, preview=False,

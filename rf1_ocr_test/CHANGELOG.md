@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.36 Stable
+
+- Automatische Prüfungen warten auf die Einrichtung. Ein bestätigter Rahmen, ein gespeicherter Startwert oder ein gültiges, manuell geprüftes Testbild kann die Automatik freigeben.
+- Die empfohlene automatische Selbsteinrichtung zeigt den aktuellen und nächsten Schritt. Der manuelle Assistent führt vom Kamerabild über einen gezeichneten Rahmen zur Vorschau und Bestätigung.
+- Größere Bedienelemente, Gerätesuche und Vorrang für Gaszähler in der Quellenliste erleichtern die Auswahl auf dem Handy.
+- Die Roadmap zeigt die geplanten Funktionen der 0.6-Beta in der App.
+
 ## 0.5.35 Stable
 
 - Die Verbrauchsübersicht zeigt die aktuelle Stunde und den heutigen Tag in m³. Der aufklappbare Verlauf zeigt 24 Stunden und sieben Tage anhand bestätigter Ablesungen.

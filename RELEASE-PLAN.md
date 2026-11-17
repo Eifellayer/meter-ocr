@@ -32,12 +32,33 @@ Einmal möglichst automatisch einrichten. Danach prüft die App eigenständig, �
 | P1 | Bedienung und Anleitung | Ergebnisse auf der Übersicht, Fallback mit Speichern, sichtbare optionale Ziffernergänzung und dezenter Spendenlink. Bebilderte Anleitung mit synthetischen Beispielen. |
 | P2 | Automatische Verbesserungen | Feinjustierung, Ziffernrekonstruktion und adaptive SLFork-Frequenz sind zuschaltbar. Langzeittests am echten Zähler stehen für diese Funktionen noch aus. Saisonprofile brauchen beobachtete Verbräuche aus den betreffenden Monaten. |
 
+## 0.6 Beta – geplante Funktionen
+
+- [ ] Mehrzähler-Unterstützung mit Auswahl und getrennten Verläufen.
+- [ ] Hallsensor als ESPHome-Quelle integrieren. Die Kamera und der Hallsensor können am selben oder an getrennten ESPs hängen.
+- [ ] Oberfläche modernisieren. Zählerübersicht, Statusanzeigen und Verbrauchsdiagramme für kleine Bildschirme überarbeiten.
+- [ ] Status pro Zähler mit aktiver Quelle, letzter gültiger Ablesung und Hinweis bei Ausfall anzeigen.
+- [ ] Impulsfaktor pro Zähler einstellen und Testergebnisse für eingehende Impulse, Dubletten und Neustarts sichtbar machen.
+- [ ] Beta als separate Home-Assistant-App mit einem Upgrade-Test von Stable vorbereiten.
+
+Nach der ersten Beta prüfen: Kamera und Hallsensor demselben Zähler als Haupt- und Kontrollquelle zuordnen. Eine Verbrauchsbuchung hat genau eine Hauptquelle.
+
+### Abnahmekriterien für 0.6
+
+| Arbeit | Abnahme |
+| --- | --- |
+| Mehrzähler | Jeder Zähler erhält eine stabile ID, eigene Quelle, Einstellungen, Referenz, Prüfzeiten und Historie. Die Übersicht lässt sich pro Zähler öffnen. |
+| ESPHome-Hallsensor | Einen kumulativen ESPHome-Pulssensor als Home-Assistant-Entität pro Zähler auswählen. Ein gemeinsamer oder separater ESP ist möglich. Impulsfaktor und Entprellung werden pro Gerät geprüft. |
+| Oberfläche | Zählerwechsel, Status und Stunden- und Tagesverläufe sind mobil und am Desktop gut lesbar. Fehlende und geschätzte Angaben bleiben erkennbar. |
+| Verbrauch | Doppelte Sensorwerte und Wiederverbindungen erzeugen keinen Mehrverbrauch. Zählerrücksetzung und Sensorneustart werden getrennt geprüft. |
+| Beta parallel zu Stable | Eigene App-ID und getrennte Entitäten, Einstellungen und Medien. Der bestehende OCR-Zähler und seine Historie behalten ihre IDs. |
+
 ## Geplante Langzeit-Abnahme
 
 - Ziffernstellungen und Beleuchtung über mehrere Messzyklen beobachten. Eine Rahmenänderung muss auf frischen Bildern besser abschneiden. Bei nachlassender Erkennung auf die zuletzt funktionierenden Rahmen zurückgehen.
 - Je eine Vorkomma- und eine Nachkommastelle nur eindeutig aus bestätigtem Anker, erkannten Nachbarstellen und Durchflussgrenze ergänzen. Überträge und die Rückkehr zu vollständiger OCR prüfen.
 - Prüfintervalle anhand bestätigter Änderungen und erwarteter Rollenwechsel variieren. Doppelte SLFork-Zyklen verändern die Fehlerzählung nicht. Unklare Fälle bleiben sichtbar.
-- Mehrere Zähler und zusätzliche Zählertypen folgen als eigene Erweiterungen. Der Pulszähler-Entwurf wird frühestens für **0.6** weiterentwickelt.
+- Weitere Zählertypen folgen anhand praktischer Tests.
 
 ## Vor 1.0 noch zu bestätigen
 

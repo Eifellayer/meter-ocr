@@ -94,10 +94,10 @@ class IngressFixture(TestCase):
                             "region": region}
 
     def start_panel(self):
-        def wizard_image(source):
+        def wizard_image(source, *, full_size=False):
             self.wizard_image_sources.append(source)
             with BytesIO() as stream:
-                Image.new("RGB", (80, 40), "gray").save(stream, "JPEG")
+                Image.new("RGB", (640, 320) if full_size else (80, 40), "gray").save(stream, "JPEG")
                 return stream.getvalue()
 
         def request_reset():
@@ -153,8 +153,8 @@ class IngressTests(IngressFixture):
         german = choices()
         self.assertEqual(["learn", "auto", "manual"],
                          re.findall(r'name="crop_mode" value="([^"]+)"', german))
-        self.assertIn('value="learn" checked>Ausschnitt und Drehung lernen (empfohlen)', german)
-        self.assertIn("Learn crop and rotation (recommended)", choices("en"))
+        self.assertIn('value="learn" checked>Automatische Selbsteinrichtung (empfohlen)', german)
+        self.assertIn("Automatic setup (recommended)", choices("en"))
 
         self.setup_pending = False
         self.source_selected = True
@@ -598,6 +598,24 @@ class IngressTests(IngressFixture):
         self.assertEqual("slfork", self.source["mode"])
         self.assertEqual("http://new-meter", self.source["url"])
 
+    def test_roadmap_exposes_the_planned_beta_features_in_both_languages(self):
+        german = self.request("/")[0]
+        english = self.request("/", accept="en")[0]
+        self.assertIn('id="roadmap"', german)
+        self.assertIn("Hallsensor über ESPHome", german)
+        self.assertIn("Modernere Zählerübersicht mit Verbrauchsdiagrammen.", german)
+        self.assertIn("Roadmap and planned features", english)
+        self.assertIn("Multiple meters with their own sources", english)
+
+    def test_automatic_setup_remains_the_default_while_the_camera_waits_for_setup(self):
+        self.setup_pending = False
+        self.source_selected = True
+        self.activity = {"state": "setup_wait", "detail": "Automatik wartet auf die Einrichtung."}
+        page = self.request("/")[0]
+        self.assertIn('value="learn" checked>Automatische Selbsteinrichtung (empfohlen)', page)
+        self.assertIn('id="resume-setup" >Einrichtung fortsetzen', page)
+        self.assertIsNone(json.loads(self.request("/automatic")[0])["next_check"])
+
     def test_setup_wizard_saves_source_meter_format_crop_schedule_and_notifications(self):
         page = self.request("/")[0]
         self.assertIn('id="setup-dialog"', page)
@@ -609,12 +627,15 @@ class IngressTests(IngressFixture):
             "url": "http://meter", "meter_display": "mixed", "integer_digits": 6,
             "fraction_digits": 2, "decimals": 1, "attempts": 4, "polarity": "dark",
             "crop_mode": "manual", "crop": "10,10,410,110", "width": 300, "rotation": 0,
+            "confirm_manual_crop": "1",
             "interval_minutes": 30, "max_flow": "6.5", "fallback_value": "123456.7",
             "fallback_time": time.strftime("%Y-%m-%dT%H:%M", time.localtime()),
             "notifications_enabled": 1, "review_minutes": 60, "delivery_hours": 0,
             "push": "notify.mobile_app_phone", "target": "notify.email",
         }
+        self.assertEqual(400, self.submit("/einrichtung", **{**values, "confirm_manual_crop": ""})[0])
         self.assertEqual((303, "./?saved=setup&ui=overview"), self.submit("/einrichtung", **values))
+        self.assertEqual(setup_source_id({**self.source, "selected": True}), self.rules["setup_input_source"])
         page = self.request("/?saved=setup&ui=overview")[0]
         self.assertNotIn('aria-labelledby="tab-overview" hidden', page)
         self.assertIn('id="automatic-progress"', page)
@@ -909,7 +930,7 @@ class BrowserTests(IngressFixture):
             page.set_default_timeout(7000)
             page.goto(self.base)
             form = page.locator("#calibration-overview .calibration-skip")
-            page.locator("#calibration-overview-state").filter(has_text="Selbsteinrichtung startet").wait_for()
+            page.locator("#calibration-overview-state").filter(has_text="Selbsteinrichtung wird vorbereitet").wait_for()
             self.assertFalse(form.is_visible())
             self.calibration.update(state="timeout", stage="verify_wait", intensive=True, confirmations=3,
                                     skip_verification_id="current")
@@ -952,7 +973,11 @@ class BrowserTests(IngressFixture):
             mode = page.locator("#wizard-source-mode")
             self.assertEqual("", mode.input_value())
             discovered = page.locator("#wizard-discovered-source")
+            search = page.locator("#wizard-camera-search")
+            search.fill("gas")
             discovered.select_option(label="AI on the Edge · Gas meter")
+            self.assertEqual(2, discovered.locator("option").count())
+            search.clear()
             self.assertEqual("slfork", mode.input_value())
             self.assertEqual("http://esp-meter", page.locator("#wizard-source-url input").input_value())
             page.locator("#wizard-esp-camera-only input").check()
@@ -972,7 +997,7 @@ class BrowserTests(IngressFixture):
                 page.locator(f'.setup-step[data-step="{step}"] .setup-next').click()
             choices = page.locator('#wizard-crop-options input[type="radio"]')
             self.assertEqual(["learn", "auto", "manual"], choices.evaluate_all("(items) => items.map(item => item.value)"))
-            self.assertTrue(page.get_by_role("radio", name="Ausschnitt und Drehung lernen (empfohlen)").is_checked())
+            self.assertTrue(page.get_by_role("radio", name="Automatische Selbsteinrichtung (empfohlen)").is_checked())
             page.locator("#wizard-calibration-options input").fill("18")
             page.locator('#setup-form [name="reflection_estimate_enabled"]').check()
             page.locator('.setup-step[data-step="2"] .setup-next').click()
@@ -983,6 +1008,8 @@ class BrowserTests(IngressFixture):
             self.assertEqual("12345,67", self.rules["fallback_value"])
             self.calibration.update(state="testing", stage="ocr", rotation=-6, variant=2, seconds=880)
             page.locator("#calibration-state").filter(has_text="Prüfe Rahmen 2 mit Drehung -6°").wait_for()
+            page.locator("#calibration-settings .setup-current-step").filter(has_text="Ziffernreihe finden").wait_for()
+            page.locator("#calibration-settings .setup-next-step").filter(has_text="Rahmen und Drehung prüfen").wait_for()
             self.assertEqual("20", page.locator("#calibration-progress").get_attribute("value"))
             page.locator("#tab-overview").click()
             page.locator("#calibration-overview-progress").wait_for(state="visible")
@@ -1049,6 +1076,41 @@ class BrowserTests(IngressFixture):
             for actual, expected in zip(self.calibration["region"], (200, 300, 800, 700)):
                 self.assertAlmostEqual(actual, expected, delta=4)
 
+            browser.close()
+
+    def test_manual_wizard_draws_a_crop_and_saves_without_calibrating(self):
+        from playwright.sync_api import sync_playwright
+
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(executable_path=os.getenv("RF1_CHROMIUM"))
+            page = browser.new_page(viewport={"width": 390, "height": 844}, locale="de-DE")
+            page.set_default_timeout(7000)
+            page.goto(self.base)
+            page.locator("#wizard-source-mode").select_option("esphome")
+            page.locator('#setup-form [name="camera"]').fill("camera.gasmeter")
+            for step in (0, 1):
+                page.locator(f'.setup-step[data-step="{step}"] .setup-next').click()
+            page.get_by_role("radio", name="Manuell einrichten").check()
+            page.locator("#wizard-crop-load").click()
+            area = page.locator("#wizard-manual-draw .crop-draw-image")
+            area.wait_for()
+            area.scroll_into_view_if_needed()
+            self.assertEqual(640, area.locator("img").evaluate("image => image.naturalWidth"))
+            box = area.bounding_box()
+            page.mouse.move(box["x"] + box["width"] * .2, box["y"] + box["height"] * .25)
+            page.mouse.down()
+            page.mouse.move(box["x"] + box["width"] * .8, box["y"] + box["height"] * .75)
+            page.mouse.up()
+            page.locator("#wizard-manual-draw canvas").wait_for()
+            page.get_by_role("checkbox", name="Dieser Rahmen umfasst die Ziffernreihe").check()
+            page.locator('.setup-step[data-step="2"] .setup-next').click()
+            page.locator('#setup-form button[type="submit"]').click()
+            page.get_by_text("Einrichtung gespeichert.", exact=True).wait_for()
+            self.assertEqual("manual", self.rules["crop_mode"])
+            self.assertEqual("camera.gasmeter", self.source["camera"])
+            self.assertIsNone(self.calibration)
+            for actual, expected in zip(map(int, self.rules["crop"].split(",")), (128, 80, 512, 240)):
+                self.assertAlmostEqual(expected, actual, delta=3)
             browser.close()
 
     def test_automatic_status_and_image_update_when_a_check_runs(self):

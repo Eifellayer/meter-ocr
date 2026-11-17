@@ -48,7 +48,7 @@ Technisch werden die Web-Einstellungen separat im App-Datenverzeichnis (`/data/a
 
 Beim ersten Öffnen führt ein kompakter Einrichtungsassistent durch Bildquelle, Zählertyp, Stellenformat, Bildbereich, Prüfplan und Benachrichtigungen. Die Einrichtung kann jederzeit erneut geöffnet werden; aktuelle Werte sind vorausgefüllt, sodass sich einzelne Einstellungen schnell ändern lassen. Hilfetexte sind bei Bedarf aufklappbar. Die automatische Prüfung bleibt klar vom manuellen Diagnosebereich getrennt.
 
-Wähle zuerst deine Bildquelle. Wer neu mit einer Kamera startet, wählt am einfachsten **ESPHome / Kamera**. Neben der Auswahl steht, wann die anderen Modi passen. **In Home Assistant gefunden** bietet vorhandene Kameras und gemeldete AI-on-the-Edge-Adressen an. Überspringst du die Einrichtung, wartet die Automatik, bis du eine Bildquelle speicherst.
+Wähle zuerst deine Bildquelle. Wer neu mit einer Kamera startet, wählt am einfachsten **ESPHome / Kamera**. Neben der Auswahl steht, wann die anderen Modi passen. **In Home Assistant gefunden** bietet vorhandene Kameras und gemeldete AI-on-the-Edge-Adressen an. Gaszähler stehen in der Liste oben. Die Automatik wartet auf eine Bildquelle und einen bestätigten Rahmen, einen gespeicherten Startwert oder ein geprüftes Testbild.
 
 | Modus | Wann passt er? |
 | --- | --- |
@@ -78,7 +78,9 @@ Unter **Automatische Prüfung → Spiegelungen und verdeckte Ziffern** kannst du
 
 ### Selbsteinrichtung für Ausschnitt und Drehung
 
-Wähle im Einrichtungsassistenten unter **Bildbereich** die Option **Ausschnitt und Drehung lernen**. Nach dem Speichern startet die Suche. Du kannst sie auch jederzeit über **Übersicht → Selbsteinrichtung** starten. Währenddessen zeigt die App Restzeit, Bildanzahl und den gerade geprüften Winkel. Unter **Bilder der Selbsteinrichtung** siehst du das aktuelle Kamerabild mit dem markierten Bereich, den gedrehten Ausschnitt und die bisher gelesenen Ziffern. Ein Fragezeichen steht für eine unklare Stelle. Wähle, wie viele unterschiedliche Bilder die App prüfen darf (4 bis 100, Vorgabe 100). Die App probiert passende Rahmen und Winkel und speichert eine Einstellung nach drei Bestätigungen mit unterschiedlichen Bildern und einer zusätzlichen normalen OCR-Gegenprüfung auf einem weiteren frischen Bild. Ohne externen Vergleichswert oder einen von Hand abgelesenen Startwert muss sich der Zähler plausibel weiterdrehen. War die Suche nach 15 Minuten, 100 Rahmenversuchen oder beim Erreichen des Bildlimits erfolglos, endet sie und die vorherige Einstellung gilt weiter. Die Suche lässt sich jederzeit stoppen.
+Wähle **Automatische Selbsteinrichtung (empfohlen)** unter **Bildbereich**. Die Suche startet beim Speichern. Der aktuelle und der nächste Schritt stehen neben der Vorschau. Du kannst die Suche auch über **Übersicht → Werkzeuge → Selbsteinrichtung** starten oder jederzeit stoppen. Nach drei bestätigten Aufnahmen speichert die App den Rahmen und übergibt die Gegenprüfung an die Automatik.
+
+Bei **Manuell einrichten** lädst du ein Kamerabild oder wählst ein Testbild derselben Kamera. Ziehe einen Rahmen um die Ziffern, prüfe bei Bedarf die Drehung und bestätige den Rahmen vor dem Speichern.
 
 ## Plausibilitätsprüfung und Energie-Dashboard
 

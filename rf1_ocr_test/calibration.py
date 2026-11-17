@@ -722,17 +722,11 @@ class Calibration:
                 return reading
         return None
 
-    def retry_leading_digits(self, layout, readings, precision, rules, read_slot, stop,
-                             on_attempt, frame_ceiling, expected=None):
-        """Re-read one or two weak leading slots while preserving the readable suffix."""
+    def retry_digit_slots(self, layout, readings, rules, weak, read_slot, stop,
+                          on_attempt, frame_ceiling, expected=None, *, fine_first=False):
+        """Retry only the designated cells and preserve all other readings."""
         whole = rules["integer_digits"]
-        required = whole + precision
         rows = [list(str(value).replace(".", "").replace(",", "")) for value in readings]
-        if whole < 3 or any(len(row) < required for row in rows):
-            return None
-        weak = uncertain_slots(["".join(row[:required]) for row in rows], required)
-        if not weak or weak[-1] >= 2:
-            return None
 
         def read_pair(trial, index, profiles):
             values = []
@@ -759,7 +753,11 @@ class Calibration:
                 tried = {adjusted.digit_boxes[index]}
                 x_step = max(1, (right - left) // 8)
                 y_step = max(1, (bottom - top) // 12)
-                for dx, dy in ((-x_step, 0), (x_step, 0), (0, -y_step), (0, y_step)):
+                shifts = [(-x_step, 0), (x_step, 0), (0, -y_step), (0, y_step)]
+                if fine_first:
+                    x_fine, y_fine = max(1, x_step // 3), max(1, y_step // 2)
+                    shifts[:0] = [(-x_fine, 0), (x_fine, 0), (0, -y_fine), (0, y_fine)]
+                for dx, dy in shifts:
                     if stop() or self.attempts >= min(frame_ceiling, self.attempt_limit - 1):
                         break
                     dx = max(-left, min(dx, 1000 - right))
@@ -786,6 +784,20 @@ class Calibration:
                 row[index] = digit
         return adjusted, ["".join(row[:whole]) + ("." + "".join(row[whole:]) if len(row) > whole else "")
                           for row in rows]
+
+    def probe_optional_last_slot(self, layout, rules, read_slot, stop, on_attempt=None):
+        """Try a preview-only reading after the two-decimal verification succeeds."""
+        if not self.simplified or rules["fraction_digits"] != 3:
+            return None
+        whole = rules["integer_digits"]
+        reading = self.reference_reading
+        if (meter_prefix(reading, 2, whole) is None or not isinstance(reading, str)
+                or not reading.endswith("?")):
+            return None
+        return self.retry_digit_slots(
+            layout, [reading, reading], rules, [whole + 2], read_slot, stop,
+            on_attempt, self.attempts + 4, fine_first=True,
+        )
 
     def probe_open_digit(self, layout, sample, rules, read, stop, on_attempt):
         """Try the last slot on this image without adding an independent hit."""
@@ -959,6 +971,21 @@ class Calibration:
                                   or meter_prefix(sample.get("raw_value"), precision, digits) is None))
         if reference_pending:
             has_reference = False
+        required_slots = digits + precision
+        reference = meter_prefix(sample.get("actual_value"), precision, digits) if has_reference else None
+        reference_digits = str(reference).zfill(required_slots) if reference is not None else None
+
+        def required_rows(values):
+            return [str(value).replace(".", "").replace(",", "")[:required_slots] for value in values]
+
+        def second_decimal_near_hit(values):
+            if not self.simplified or precision != 2 or digits < 3 or read_slot is None:
+                return False
+            rows = required_rows(values)
+            if uncertain_slots(rows, required_slots) != [digits + 1]:
+                return False
+            return reference_digits is None or all(row[:-1] == reference_digits[:-1] for row in rows)
+
         confirming_followup = self.followup and self.confirmations > 0
         committed = self.confirmations >= 2 or confirming_followup
         preferred = (self.confirmations == 1 and self.rank_candidates
@@ -1054,7 +1081,14 @@ class Calibration:
             return (reliable(score), score[1], score[3], score[2],
                     agreement_percent(readings, sample, precision, digits))
 
-        if (coarse and perfect is None and self.rank_candidates and angle_read is not None and not self.confirmations
+        if self.rank_candidates and perfect is None and not any(reliable(score) for score, _, _ in coarse):
+            close_crops = [item for item in coarse if second_decimal_near_hit(item[2])]
+            if close_crops:
+                coarse = [max(close_crops, key=ranked_crop)]
+        targeted = len(coarse) == 1 and second_decimal_near_hit(coarse[0][2])
+
+        if (coarse and not targeted and perfect is None and self.rank_candidates
+                and angle_read is not None and not self.confirmations
                 and not any(layout == self.known_good_layout and reliable(score) for score, layout, _ in coarse)):
             # Compare regions first and spend the angle budget on the strongest candidate.
             index = max(range(len(coarse)), key=lambda position: ranked_crop(coarse[position]))
@@ -1080,7 +1114,6 @@ class Calibration:
             if collecting:
                 found = any(reliable(score) for score, _, _ in coarse)
                 threshold = rules.get("intensive_agreement", DEFAULT_INTENSIVE_AGREEMENT)
-                required_slots = digits + precision
                 almost_complete = round(100 * (required_slots - 1) / required_slots)
 
                 def promising_candidate(layout, values):
@@ -1089,12 +1122,9 @@ class Calibration:
                         return True
                     if required_slots < 2 or score[-1] < almost_complete:
                         return False
-                    required_rows = [
-                        str(value).replace(".", "").replace(",", "")[:required_slots] for value in values
-                    ]
-                    return len(uncertain_slots(required_rows, required_slots)) == 1
+                    return len(uncertain_slots(required_rows(values), required_slots)) == 1
 
-                promising = any(promising_candidate(layout, values) for _, layout, values in coarse)
+                promising = targeted or any(promising_candidate(layout, values) for _, layout, values in coarse)
                 self.optimizing = self.coarse_attempts >= COARSE_LIMIT or found or promising
                 if self.coarse_attempts >= COARSE_LIMIT and not (found or self.simplified and promising):
                     # Re-read the full ranked list against the next image and its reference.
@@ -1180,19 +1210,23 @@ class Calibration:
                     sample, compare_sample(sample, value, precision, integer_digits=digits)[0]) is None
                     for value in readings))
                 recovered_slot = False
-                if self.confirmations >= 2 and not matches and read_slot is not None:
-                    reference = sample.get("actual_value")
-                    expected_prefix = meter_prefix(reference, precision, digits) if has_reference else None
-                    recovery = self.retry_leading_digits(
-                        layout, readings, precision, rules, read_slot, stop, on_refine,
-                        frame_ceiling, str(expected_prefix).zfill(digits + precision)
-                        if expected_prefix is not None else None,
-                    )
-                    if recovery is not None:
-                        layout, readings = recovery
-                        recovered_slot = matches = True
-                        if on_selected is not None:
-                            on_selected(layout, readings)
+                if not matches and read_slot is not None:
+                    weak = uncertain_slots(required_rows(readings), required_slots)
+                    near_hit = second_decimal_near_hit(readings)
+                    leading = self.confirmations >= 2 and digits >= 3 and weak and weak[-1] < 2
+                    if near_hit or leading:
+                        recovery = self.retry_digit_slots(
+                            layout, readings, rules, weak, read_slot, stop, on_refine,
+                            frame_ceiling, reference_digits, fine_first=near_hit,
+                        )
+                        if recovery is not None:
+                            layout, readings = recovery
+                            recovered_slot = matches = True
+                            if on_selected is not None:
+                                on_selected(layout, readings)
+                        elif near_hit:
+                            on_decision("penultimate_unclear")
+                            continue
                 if (refine_read is not None and self.intensive and precision == 3
                         and self.confirmations >= 2 and not matches):
                     issue = penultimate_issue(readings, sample, digits)

@@ -1604,6 +1604,7 @@ function refreshCalibrationImages(preview) {{
     await_movement: 'Der Rahmen ist lesbar. Die App wartet auf einen plausiblen Zähleranstieg.',
     accepted: 'Dieser Rahmen wurde auf dem aktuellen Bild bestätigt.',
     roll_transition: 'Letzte Rolle dreht weiter. Warte auf eine eindeutige Ziffer.',
+    optional_last_slot: 'Letzte Rolle auf diesem Bild gelesen. Sie ist noch nicht unabhängig bestätigt.',
     accepted_geometry: 'Ziffern bis zur zweiten Nachkommastelle gelesen. Der Rahmen zählt vorläufig. Der Vergleichswert fehlt.',
     accepted_partial: 'Bis zur zweiten Nachkommastelle bestätigt. Die dritte Stelle bleibt offen.',
     verified: 'Die abschließende Gegenprobe war erfolgreich.',

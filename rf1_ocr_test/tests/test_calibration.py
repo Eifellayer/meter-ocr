@@ -750,6 +750,62 @@ class CalibrationTests(TestCase):
         self.assertEqual(OTHER_LAYOUT, self.job.candidate)
         self.assertEqual(1, self.job.confirmations)
 
+    def test_simplified_near_hit_moves_only_second_decimal_on_same_image(self):
+        boxes = tuple((125 * index, 80, 125 * (index + 1), 920) for index in range(8))
+        current = Layout((0, 0, 80, 20), -2, 50, boxes)
+        self.candidates.return_value = [current, OTHER_LAYOUT]
+        job = Calibration(8, 0, simplified=True, rank_candidates=True)
+        rules = {**RULES, "decimals": 3, "fraction_digits": 3}
+        sample = {"reference_time": 100, "actual_value": "10462.84?", "raw_value": "10462.84?"}
+        calls, angles, positions = [], [], []
+
+        def read(layout, _):
+            return "10462.8??" if layout == current else "1????.???"
+
+        def read_slot(layout, index, _):
+            calls.append(layout.digit_boxes[index])
+            self.assertEqual(6, index)
+            self.assertEqual(boxes[:6] + boxes[7:], layout.digit_boxes[:6] + layout.digit_boxes[7:])
+            self.assertEqual((-2, current.box), (layout.rotation, layout.box))
+            left, top, right, bottom = boxes[index]
+            return "4" if layout.digit_boxes[index] == (left + 5, top, right + 5, bottom) else "?"
+
+        self.assertIsNone(job.examine(
+            frame(1), None, sample, 101, rules, read, lambda: False, read_slot=read_slot,
+            angle_read=lambda *args: angles.append(args), on_refine=lambda _, __, slots: positions.append(slots),
+        ))
+        self.assertEqual([], angles)
+        self.assertEqual([[7]], positions)
+        self.assertEqual(1, len(job.seen))
+        self.assertEqual(1, job.confirmations)
+        self.assertEqual("10462.84?", job.reference_reading)
+        self.assertEqual(calls[-1], job.candidate.digit_boxes[6])
+
+    def test_optional_last_slot_after_verification_is_only_a_hint(self):
+        boxes = tuple((125 * index, 80, 125 * (index + 1), 920) for index in range(8))
+        current = Layout((0, 0, 80, 20), -2, 50, boxes)
+        self.candidates.return_value = [current]
+        job = Calibration(8, 0, simplified=True)
+        rules = {**RULES, "decimals": 3, "fraction_digits": 3, "attempts": 3}
+        sample = {"reference_time": 100, "actual_value": "10462.87?", "raw_value": "10462.87?"}
+        for stamp in (101, 102, 103):
+            job.examine(frame(stamp - 100), None, sample, stamp, rules, lambda *_: "10462.87?", lambda: False)
+        verified = job.verify(frame(4), sample, 104, rules, lambda *_: "10462.87?", lambda: False)
+        visited = []
+
+        def read_slot(layout, index, _):
+            visited.append(index)
+            self.assertEqual(boxes[:-1], layout.digit_boxes[:-1])
+            return "2" if layout.digit_boxes[-1] != boxes[-1] else "?"
+
+        trial, readings = job.probe_optional_last_slot(verified, rules, read_slot, lambda: False)
+        self.assertEqual(["10462.872"] * 2, readings)
+        self.assertEqual({7}, set(visited))
+        self.assertNotEqual(boxes[-1], trial.digit_boxes[-1])
+        self.assertEqual(3, job.confirmations)
+        self.assertEqual(current, job.candidate)
+        self.assertEqual("10462.87?", job.reference_reading)
+
     def test_only_one_open_required_slot_triggers_intensive_search(self):
         self.job = Calibration(5, 0, rank_candidates=True, simplified=True)
         rules = {**RULES, "decimals": 3, "fraction_digits": 3}

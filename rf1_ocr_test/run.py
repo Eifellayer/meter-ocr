@@ -1156,7 +1156,8 @@ def main():
 
     def automatic_check_available():
         source, _ = get_source()
-        calibrating = calibration is not None and calibration.state in ("waiting", "testing")
+        calibrating = (calibration is not None and not calibration.background
+                       and calibration.state in ("waiting", "testing"))
         return (not get_auto_paused() and not calibrating and activity["state"] != "working"
                 and automatic_request is handled_automatic_request and ready_for_automatic(get_auto_rules(), source))
 
@@ -1348,9 +1349,11 @@ def main():
                             reflected_layout, reflected_positions = layout, positions
                     except (ValueError, TypeError, KeyError):
                         pass
+                background = intensive and stationary_partial_active(rules, source)
                 calibration = Calibration(limit=limit, started=now, automatic=repair,
                                           rank_candidates=not (repair or intensive), shortlist=shortlist,
                                           simplified=simplified, intensive=intensive,
+                                          background=background, followup=background,
                                           duration=GEOMETRY_REPAIR_SECONDS if repair else TIME_LIMIT,
                                           attempt_limit=GEOMETRY_REPAIR_LIMIT if repair else MAX_ATTEMPTS,
                                           previous_layout=previous, region=region,
@@ -1816,17 +1819,26 @@ def main():
             elif calibration_configuration_now() != calibration_configuration or get_auto_paused():
                 attempt.state = "cancelled"
             elif selected:
-                # A verified seven-digit result must finish setup immediately.
-                # The optional third-decimal intensive check can be launched
-                # separately; it must never hold the saved crop hostage.
                 try:
+                    # A verified seven-digit setup is committed BEFORE any
+                    # optional eighth-digit check. The fine check is independent
+                    # of normal automatic consumption readings.
                     save_calibration_layout(attempt, selected, provisional=provisional,
                                             verified=not provisional, reflected=reflected)
-                    if not provisional and (not attempt.intensive or attempt.setup_last_digit):
+                    if not provisional and not attempt.automatic:
                         remember_known_good_layout(get_auto_rules(), active_source, selected)
-                    if (not attempt.intensive or attempt.setup_last_digit) and not attempt.automatic:
                         history["setup_first_check_revision"] = get_auto_rules()["crop_revision"]
                     attempt.state = "saved_reflection" if reflected else "saved_stationary" if provisional else "saved"
+                    if attempt.simplified and not provisional and not reflected and not attempt.automatic:
+                        calibration = Calibration(
+                            limit=attempt.limit, started=now, intensive=True,
+                            background=True, followup=True, previous_layout=selected,
+                            duration=TIME_LIMIT, attempt_limit=MAX_ATTEMPTS,
+                        )
+                        calibration_configuration = calibration_configuration_now()
+                        calibration_next = now + LAST_DIGIT_CAPTURE_INTERVAL
+                        wake_worker.set()
+                        return True
                 except (OSError, ValueError):
                     attempt.state = "save_failed"
             elif len(attempt.seen) >= attempt.limit or attempt.search_exhausted():
@@ -1970,12 +1982,16 @@ def main():
             update_progress(request_id, "running", "Lade Zählerbild und Referenzdaten …")
         if (not manual and calibration is not None and calibration.state in ("waiting", "testing")
                 and time.monotonic() >= calibration_next
+                and (not calibration.background
+                     or (not startup and remaining > LAST_DIGIT_CAPTURE_INTERVAL
+                         and not run_automatic_now))
                 and (calibration_worker is None or not calibration_worker.is_alive())):
             calibration_worker = Thread(target=run_calibration,
                                         args=(active_rules, active_source, mode, base, camera, reference, source_key),
                                         daemon=True, name="meter-calibration")
             calibration_worker.start()
         if (not manual and calibration is not None and not calibration.automatic
+                and not calibration.background
                 and calibration.state in ("waiting", "testing")):
             wake_worker.wait(timeout=LAST_DIGIT_CAPTURE_INTERVAL if calibration.intensive else CAPTURE_INTERVAL)
             continue

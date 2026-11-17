@@ -598,6 +598,15 @@ class IngressTests(IngressFixture):
         self.assertEqual("slfork", self.source["mode"])
         self.assertEqual("http://new-meter", self.source["url"])
 
+    def test_automatic_setup_remains_the_default_while_the_camera_waits_for_setup(self):
+        self.setup_pending = False
+        self.source_selected = True
+        self.activity = {"state": "setup_wait", "detail": "Automatik wartet auf die Einrichtung."}
+        page = self.request("/")[0]
+        self.assertIn('value="learn" checked>Automatische Selbsteinrichtung (empfohlen)', page)
+        self.assertIn('id="resume-setup" >Einrichtung fortsetzen', page)
+        self.assertIsNone(json.loads(self.request("/automatic")[0])["next_check"])
+
     def test_setup_wizard_saves_source_meter_format_crop_schedule_and_notifications(self):
         page = self.request("/")[0]
         self.assertIn('id="setup-dialog"', page)

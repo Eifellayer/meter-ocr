@@ -1681,8 +1681,11 @@ function clearWizardCrop() {{
   wizardCropRevision++;
   setupForm.elements.confirm_manual_crop.checked = false;
   setupForm.elements.digit_boxes.value = '[]';
-  wizardManualPanel.querySelector('.crop-draw-image').hidden = true;
+  const area = wizardManualPanel.querySelector('.crop-draw-image');
+  area.hidden = true;
+  area.querySelector('img').removeAttribute('src');
   wizardManualPanel.querySelector('.crop-live-preview').hidden = true;
+  wizardCropStatus.hidden = true;
 }}
 for (const name of [...wizardSourceFields, 'integer_digits', 'fraction_digits']) {{
   setupForm.elements[name].addEventListener('input', clearWizardCrop);
@@ -3392,7 +3395,8 @@ def start_panel(
                         else "Automatische Selbsteinrichtung (empfohlen)"} if control_calibration else {}),
                     "auto": CROP_MODES_EN["auto"] if language == "en" else CROP_MODES["auto"],
                     "manual": "Set up manually" if language == "en" else "Manuell einrichten",
-                }, "learn" if setup_pending and control_calibration else auto_rules["crop_mode"]),
+                }, "learn" if control_calibration and (setup_pending or summary["activity_state"] == "setup_wait")
+                   else auto_rules["crop_mode"]),
                 wizard_digit_boxes=html.escape(json.dumps(auto_rules["digit_boxes"]), quote=True),
                 fallback_value=html.escape(auto_rules["fallback_value"], quote=True),
                 fallback_time=html.escape(auto_rules["fallback_time"], quote=True),

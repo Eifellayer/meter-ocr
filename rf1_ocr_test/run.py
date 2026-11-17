@@ -1815,11 +1815,10 @@ def main():
                 attempt.state = "timeout"
             elif calibration_configuration_now() != calibration_configuration or get_auto_paused():
                 attempt.state = "cancelled"
-            elif (selected and attempt.simplified and active_rules["decimals"] == 3
-                  and not attempt.automatic and not reflected):
-                attempt.begin_setup_last_digit(selected)
-                attempt.state = "waiting"
             elif selected:
+                # A verified seven-digit result must finish setup immediately.
+                # The optional third-decimal intensive check can be launched
+                # separately; it must never hold the saved crop hostage.
                 try:
                     save_calibration_layout(attempt, selected, provisional=provisional,
                                             verified=not provisional, reflected=reflected)

@@ -67,6 +67,7 @@ class IngressFixture(TestCase):
         self.calibration_images = {}
         self.wizard_image_sources = []
         self.reset_state = "idle"
+        self.reset_keep_statistics = False
         self.activity = {"state": "waiting", "detail": "Wartet auf die nächste automatische Prüfung."}
         self.automatic_available = False
         self.automatic_requests = 0
@@ -109,7 +110,8 @@ class IngressFixture(TestCase):
                 Image.new("RGB", (640, 320) if full_size else (80, 40), "gray").save(stream, "JPEG")
                 return stream.getvalue()
 
-        def request_reset():
+        def request_reset(*, keep_statistics=False):
+            self.reset_keep_statistics = keep_statistics
             self.reset_state = "pending"
             return self.reset_state
 
@@ -361,6 +363,23 @@ class IngressTests(IngressFixture):
         page = self.request("/")[0]
         self.assertIn('class="reflection-estimate" >', page)
         self.assertIn('<mark id="reflection-value-digit" title="Berechnete Ziffer">1</mark>', page)
+
+    def test_statistics_preserving_factory_reset_has_separate_confirmed_action(self):
+        page = self.request("/")[0]
+        self.assertIn('id="open-reset-keep"', page)
+        self.assertIn('id="open-reset"', page)
+        self.assertIn('name="keep_statistics" id="reset-keep-statistics" value="0"', page)
+        self.assertIn('id="reset-keep-info" hidden', page)
+        self.assertIn("Factory Reset – Keep Statistics", self.request("/?lang=en", accept="en")[0])
+        self.assertEqual(400, self.submit("/werkreset", keep_statistics="invalid")[0])
+        self.assertEqual(400, self.submit("/werkreset", keep_statistics=["1", "0"])[0])
+        self.assertEqual((303, "./?reset=pending&ui=settings&keep_statistics=1"),
+                         self.submit("/werkreset", keep_statistics="1"))
+        self.assertTrue(self.reset_keep_statistics)
+        self.reset_state = "done"
+        finished = self.request("/?reset=pending&ui=settings&keep_statistics=1")[0]
+        self.assertIn("Verbrauchsstatistik und Gesamtverbrauch sind erhalten", finished)
+        self.assertIn('data-first-run="true"', finished)
 
     def test_factory_reset_clears_manual_result_after_pending_response(self):
         self.setup_pending = False

@@ -318,6 +318,45 @@ class CalibrationTests(TestCase):
         self.assertEqual(LAYOUT, job.verify(frame(5), sample, 105, rules, read, stop))
         self.assertEqual(20, job.attempts)
 
+    def test_two_confirmations_trigger_same_image_search_for_leading_digits(self):
+        boxes = tuple((125 * index, 80, 125 * (index + 1), 920) for index in range(8))
+        current = Layout((0, 0, 80, 20), -1, 50, boxes)
+        rules = {**RULES, "decimals": 3, "fraction_digits": 3}
+        sample = {"reference_time": 100, "actual_value": "10459.982", "raw_value": "10459.982"}
+        self.candidates.return_value = [current]
+        for adjusted in (False, True):
+            with self.subTest(adjusted=adjusted):
+                job = Calibration(7, 0, rank_candidates=True)
+                for index in (1, 2):
+                    job.examine(frame(index), None, sample, 100 + index, rules,
+                                lambda *_: "10459.982", lambda: False)
+                self.assertEqual(2, job.confirmations)
+                visited, positions = [], []
+
+                def read_slot(layout, index, _):
+                    visited.append(index)
+                    self.assertEqual(current.box, layout.box)
+                    self.assertEqual(current.rotation, layout.rotation)
+                    self.assertEqual(boxes[2:], layout.digit_boxes[2:])
+                    if adjusted and layout.digit_boxes[index] == boxes[index]:
+                        return "?"
+                    return "10"[index]
+
+                accepted = job.examine(frame(3), None, sample, 103, rules, lambda *_: "??459.982",
+                                       lambda: False, read_slot=read_slot, layout_with_boxes=lambda layout: layout,
+                                       on_refine=lambda _, __, slots: positions.append(slots))
+                self.assertEqual({0, 1}, set(visited))
+                self.assertEqual([[1, 2]], positions)
+                self.assertEqual(3, len(job.seen))
+                if adjusted:
+                    self.assertIsNone(accepted)
+                    self.assertEqual(1, job.confirmations)
+                    self.assertEqual(current, job.best)
+                    self.assertNotEqual(boxes[:2], job.candidate.digit_boxes[:2])
+                else:
+                    self.assertEqual(current, accepted)
+                    self.assertEqual(3, job.confirmations)
+
     def test_fine_check_retries_only_the_penultimate_digit_and_keeps_the_same_frame_hits(self):
         job = Calibration(7, 0, intensive=True, followup=True, previous_layout=LAYOUT, attempt_limit=20)
         rules = {**RULES, "decimals": 3, "fraction_digits": 3}

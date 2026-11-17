@@ -40,6 +40,15 @@ def synthetic_meter():
 
 
 class SourceTests(TestCase):
+    def test_failed_angle_correction_requests_fresh_image_for_mismatch_or_uncertainty(self):
+        for outcome in ("difference", "ocr_unclear"):
+            with self.subTest(outcome=outcome):
+                self.assertTrue(run.failed_angle_requires_fresh_image(1, outcome))
+        for outcome in ("match", "ocr_only", "standalone_pending", "stale_sample"):
+            with self.subTest(outcome=outcome):
+                self.assertFalse(run.failed_angle_requires_fresh_image(1, outcome))
+        self.assertFalse(run.failed_angle_requires_fresh_image(0, "difference"))
+
     def test_row_ocr_only_fills_a_missing_cell_when_other_digits_agree(self):
         boxes = [(x, 2, x + 15, 28) for x in range(0, 75, 15)]
         image = Image.new("RGB", (75, 30), "white")

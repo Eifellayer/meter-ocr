@@ -90,6 +90,12 @@ MAX_LEARNED_ROTATION = 18
 FRESH_OCR_NOTICE = "Die bisherigen OCR-Versuche reichen nicht aus. Ein frisches Kamerabild folgt in Kürze."
 SINGLE_DIGIT_RECHECK = "Automatik-Nachprüfung: Die App prüft die fehlende Ziffer mit leicht verschobenem Rahmen."
 INTENSIVE_ROTATION_STATUS = "Intensivtest: Prüfe eine leicht gedrehte Aufnahme."
+
+
+def failed_angle_requires_fresh_image(trials, outcome):
+    """Retry on a fresh image if tested angle variants still give an uncertain or wrong reading."""
+    return trials > 0 and outcome in ("ocr_unclear", "difference")
+
 SLFORK_RAW_SOURCE = "slfork_raw"
 SLFORK_RAW_NOTICE = "Aufbereitetes ESP-Bild fehlt oder ist zu alt. Die App prüft ein frisches Rohbild."
 SLFORK_RAW_SUCCESS = "Rohbild gelesen. Mögliche Ursache: Bildausrichtung oder Referenzmarken in AI on the Edge."
@@ -2052,6 +2058,7 @@ def main():
         ocr_candidates = []
         ocr_method = None
         exhausted_ocr = False
+        rotation_trials = 0
         decoded_test_image = False
         image_id = None
         automatic_preview_ready = False
@@ -2508,6 +2515,8 @@ def main():
                                         stop_before_attempt=stop_ocr,
                                     )
                                     ocr_attempts += attempts
+                                    if attempts:
+                                        rotation_trials += 1
                                     rotated_status, _ = compare_sample(
                                         sample, value, comparison_decimals, ocr_confirmed=confirmed,
                                         integer_digits=integer_digits,
@@ -2786,8 +2795,10 @@ def main():
                     if outcome in SUCCESSFUL_CHECKS or not active_rules["reflection_estimate_enabled"]:
                         updated.pop("reflection_rechecks", None)
                     verified = outcome == "match" or standalone_reference is not None and outcome == "ocr_only"
-                    exhausted_ocr = (outcome == "ocr_unclear" and not ocr_confirmed and not validation_detail
-                                     and not ocr_error and ocr_attempts > 0 and not raw_fallback)
+                    exhausted_ocr = (outcome in ("ocr_unclear", "difference") and not validation_detail
+                                     and not ocr_error and ocr_attempts > 0 and not raw_fallback
+                                     and ((outcome == "ocr_unclear" and not ocr_confirmed)
+                                          or failed_angle_requires_fresh_image(rotation_trials, outcome)))
                     if (verified and not raw_fallback and not stabilizing_until
                             and active_rules.get("setup_pending_source") == setup_source):
                         whole, _, fraction = ocr.replace(",", ".").partition(".")

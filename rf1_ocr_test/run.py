@@ -852,6 +852,7 @@ def main():
                           "calibration_reference": saved_rules.get("calibration_reference"),
                           "setup_completed": saved_rules.get("setup_completed"),
                           "setup_pending_source": saved_rules.get("setup_pending_source"),
+                          "setup_pending_started": saved_rules.get("setup_pending_started"),
                           "setup_reflection": saved_rules.get("setup_reflection"),
                           "stationary_partial_scope": saved_rules.get("stationary_partial_scope"),
                           "intensive_agreement": intensive_agreement,
@@ -1012,8 +1013,9 @@ def main():
                            "Einrichtung erforderlich. Bitte Bildquelle festlegen." if setup_pending else
                            "App läuft. Wartet auf die nächste automatische Prüfung.")}
 
-    def set_activity(state, detail, *, completed=None, total=None):
-        activity.update(state=state, detail=detail, updated_at=time.time(), completed=completed, total=total)
+    def set_activity(state, detail, *, completed=None, total=None, reading=None):
+        activity.update(state=state, detail=detail, updated_at=time.time(), completed=completed, total=total,
+                        reading=reading)
 
     def get_automatic_activity():
         if not get_auto_paused() and automatic_request is not handled_automatic_request:
@@ -1112,16 +1114,20 @@ def main():
         source, _ = get_source()
         completed = rules.get("setup_completed")
         previous_completion, _ = setup_deadlines(rules, source)
+        finished = time.time()
+        elapsed = max(0, round(time.monotonic() - attempt.started))
         if verified and not previous_completion and not attempt.intensive and not attempt.automatic and reference:
-            completed = {"source": setup_source_id(source), "time": time.time()}
+            completed = {"source": setup_source_id(source), "time": finished, "duration_seconds": elapsed}
         revision = str(time.time_ns())
         partial = (provisional and not reflected) or verified and attempt.simplified
         partial_scope = calibration_source_id([source, revision]) if partial else None
         pending_source = setup_source_id(source) if provisional else rules.get("setup_pending_source")
+        pending_started = finished - elapsed if provisional else rules.get("setup_pending_started")
         save_auto_rules({**rules, **layout.settings(), "crop_revision": revision,
                          "calibration_reference": reference, "stationary_partial_scope": partial_scope,
                          "setup_completed": completed,
-                         "setup_pending_source": None if completed else pending_source})
+                         "setup_pending_source": None if completed else pending_source,
+                         "setup_pending_started": None if completed else pending_started})
 
     def control_calibration(action, limit, region=None, *, verification_id=None):
         nonlocal calibration, calibration_configuration, calibration_next
@@ -1225,7 +1231,6 @@ def main():
                 return None
             status = calibration.status(time.monotonic())
             status["preview"] = dict(calibration_preview)
-            status["stabilizing_until"] = setup_deadlines(get_auto_rules(), get_source()[0])[0]
             if not status["seconds"] and status["state"] in ("waiting", "testing"):
                 status["state"] = "timeout"
             elif status["state"] == "waiting" and calibration.image_wait_expired(time.monotonic()):
@@ -2143,9 +2148,9 @@ def main():
                             else:
                                 running = "läuft" in message
                                 current_attempt = attempts + 1 if running else attempts
-                                state = "läuft." if running else "abgeschlossen."
-                                set_activity("working", f"Lese Zählerbild: OCR-Versuch {current_attempt} von {ocr_limit} {state}",
-                                             completed=attempts, total=ocr_limit)
+                                set_activity("working", f"Zählerbild wird gelesen · Versuch {current_attempt} (höchstens {ocr_limit})",
+                                             completed=attempts, total=ocr_limit,
+                                             reading=ocr_readings[-1] if ocr_readings else None)
                         require_consensus = (raw_fallback and not manual_reference) or (standalone and not manual)
                         configured_attempts = manual_options["attempts"] if manual else max_attempts
                         if require_consensus:
@@ -2214,7 +2219,8 @@ def main():
                                             integer_digits, fraction_digits, digit_boxes=trial_boxes,
                                         )
                                         set_activity("working", "Nachprüfung: Dieselben Ziffern waren wiederholt unklar.",
-                                                     completed=ocr_attempts, total=ocr_limit)
+                                                     completed=ocr_attempts, total=ocr_limit,
+                                                     reading=ocr_readings[-1] if ocr_readings else None)
                                         values = [read_layout(trial, profile) for profile in OCR_PROFILES[:2]]
                                         ocr_attempts += len(values)
                                         prefix = meter_prefix(values[0], comparison_decimals, integer_digits)
@@ -2253,7 +2259,8 @@ def main():
 
                                     def report_rotation(attempts, _):
                                         set_activity("working", INTENSIVE_ROTATION_STATUS,
-                                                     completed=ocr_attempts + attempts, total=ocr_limit)
+                                                     completed=ocr_attempts + attempts, total=ocr_limit,
+                                                     reading=(tilted_readings or ocr_readings or [None])[-1])
 
                                     value, confirmed, attempts = read_with_retries(
                                         lambda profile: read_layout(tilted, profile), sample, comparison_decimals,
@@ -2533,10 +2540,15 @@ def main():
                         with settings_lock:
                             if get_auto_rules() == active_rules and get_source()[0] == active_source:
                                 try:
+                                    started = active_rules.get("setup_pending_started")
+                                    finished = now.timestamp()
+                                    duration = (round(finished - started) if type(started) in (int, float)
+                                                and 0 < started <= finished else None)
                                     save_auto_rules({
                                         **active_rules,
-                                        "setup_completed": {"source": setup_source, "time": now.timestamp()},
-                                        "setup_pending_source": None,
+                                        "setup_completed": {"source": setup_source, "time": finished,
+                                                            "duration_seconds": duration},
+                                        "setup_pending_source": None, "setup_pending_started": None,
                                         "calibration_reference": {
                                             "reading": reading, "time": image_time, "precision": decimals,
                                             "source": setup_source, "integer_digits": integer_digits,
@@ -2682,6 +2694,8 @@ def main():
             defer_duplicate_cycle(updated, now.timestamp(), interval_minutes)
         else:
             schedule_next_check(updated, outcome, now.timestamp(), interval_minutes)
+            if outcome != STANDALONE_PENDING:
+                updated["automatic_completed_at"] = now.timestamp()
             if updated.get("setup_first_check_unclear") and mode != "slfork":
                 updated["next_check_at"] = now.timestamp() + 15
         try:

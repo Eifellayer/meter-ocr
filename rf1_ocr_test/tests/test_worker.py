@@ -995,13 +995,20 @@ class StateTests(TestCase):
         files["AUTO_RULES"].write_text(json.dumps({
             "decimals": 0, "attempts": 1, "crop_mode": "manual",
             "crop": "0,0,500,100", "width": 350, "setup_pending_source": run.setup_source_id(source),
+            "setup_pending_started": datetime.now(timezone.utc).timestamp() - 60,
         }))
-        self.assertEqual("standalone_pending", check("12346.???")["check_status"])
+        pending = check("12346.???")
+        self.assertEqual("standalone_pending", pending["check_status"])
+        self.assertNotIn("automatic_completed_at", pending)
         self.assertIsNone(json.loads(files["AUTO_RULES"].read_text()).get("setup_completed"))
-        self.assertEqual("ocr_only", check("12346.???")["check_status"])
+        verified = check("12346.???")
+        self.assertEqual("ocr_only", verified["check_status"])
         completed = json.loads(files["AUTO_RULES"].read_text())
         self.assertEqual("12346", completed["calibration_reference"]["reading"])
         self.assertIsNone(completed["setup_pending_source"])
+        self.assertIsNone(completed["setup_pending_started"])
+        self.assertGreaterEqual(completed["setup_completed"]["duration_seconds"], 60)
+        self.assertEqual(verified["automatic_completed_at"], completed["setup_completed"]["time"])
         self.assertGreater(run.setup_deadlines(completed, source)[1], datetime.now(timezone.utc).timestamp())
         files["HISTORY"].unlink()
         files["AUTO_RULES"].write_text(json.dumps({

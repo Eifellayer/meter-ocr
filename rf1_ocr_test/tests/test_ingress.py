@@ -23,7 +23,7 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import panel
-from checks import FALLBACK_NOTICE, STANDALONE_PENDING_NOTICE, STANDALONE_VERIFIED_NOTICE
+from checks import FALLBACK_NOTICE, STANDALONE_PENDING_NOTICE, STANDALONE_VERIFIED_NOTICE, setup_source_id
 from consumption import FALLBACK_PLAUSIBLE
 from language import browser_locale, load_preferences
 from run import atomic_write
@@ -491,12 +491,12 @@ class IngressTests(IngressFixture):
                     crop="1925,5,2005,390", width=220, rotation=90)
         self.assertEqual((303, "./?test=queued"), self.submit("/pruefen", **form))
         job = self.requested.get_nowait()
-        self.update(job["request_id"], "ocr", "OCR-Versuch 2 von 3 läuft …", 1)
+        self.update(job["request_id"], "ocr", "Versuch 2 läuft (höchstens 3) …", 1)
         self.assertEqual((303, "./?test=busy"), self.submit("/pruefen", **form))
         self.assertTrue(self.requested.empty())
         status = json.loads(self.request("/status?lang=en")[0])
         self.assertEqual("ocr", status["phase"])
-        self.assertIn("2 of 3", status["message"])
+        self.assertIn("Attempt 2 in progress (up to 3)", status["message"])
         self.assertEqual(409, self.submit("/ausschnitt-uebernehmen", checked_at="100.0")[0])
         self.preview.write_bytes(b"test image")
         self.history.write_text(json.dumps({"manual_result": {
@@ -804,6 +804,9 @@ class BrowserTests(IngressFixture):
             page = browser.new_page(viewport={"width": 390, "height": 844}, locale="de-DE")
             page.set_default_timeout(7000)
             page.goto(self.base + "/")
+            self.assertFalse(page.locator("#open-digit-correction").is_visible())
+            page.get_by_role("link", name="Werkzeuge", exact=True).click()
+            self.assertTrue(page.locator("#recognition-tools > summary").evaluate("element => element === document.activeElement"))
             page.locator("#open-digit-correction").click()
             page.locator("#digit-correction-position").select_option("7")
             page.locator('#digit-correction [data-box-move="-1,0"]').click()
@@ -814,20 +817,37 @@ class BrowserTests(IngressFixture):
             self.assertEqual([*boxes[:-1], [865, 100, 990, 900]], self.rules["digit_boxes"])
             browser.close()
 
-    def test_overview_hides_old_setup_success_after_a_regular_check(self):
+    def test_setup_success_is_visible_until_the_first_finished_automatic_check(self):
         from playwright.sync_api import sync_playwright
 
         self.setup_pending = False
         self.source_selected = True
         self.control_calibration("start", 8)
         self.calibration.update(state="saved", confirmations=3)
-        self.history.write_text(json.dumps({"check_status": "ocr_only", "check_detail": STANDALONE_VERIFIED_NOTICE}))
+        now = time.time() - 10
+        self.rules["setup_completed"] = {
+            "source": setup_source_id({**self.source, "selected": True}),
+            "time": now, "duration_seconds": 134,
+        }
+        self.history.write_text(json.dumps({"check_status": "standalone_pending", "last_check_at": now + 2}))
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(executable_path=os.getenv("RF1_CHROMIUM"))
             page = browser.new_page(viewport={"width": 390, "height": 844}, locale="de-DE")
             page.set_default_timeout(7000)
             page.goto(self.base)
+            success = page.locator("#setup-success")
+            success.get_by_text("Zähler erfolgreich eingerichtet", exact=True).wait_for()
+            self.assertIn("Einrichtungsdauer · 2 min 14 s", success.inner_text())
+            page.reload()
+            success.wait_for(state="visible")
+            self.history.write_text(json.dumps({
+                "check_status": "ocr_only", "check_detail": STANDALONE_VERIFIED_NOTICE,
+                "automatic_completed_at": now + 4,
+            }))
+            success.wait_for(state="hidden")
+            page.reload()
             page.get_by_text("Alles OK. Automatik läuft.", exact=True).wait_for()
+            self.assertFalse(success.is_visible())
             self.assertFalse(page.locator("#calibration-complete-notice").is_visible())
             self.assertFalse(page.locator(".activity-status").is_visible())
             page.locator("#tab-settings").click()
@@ -904,8 +924,12 @@ class BrowserTests(IngressFixture):
             self.calibration.update(state="testing", stage="search", image_hints=["dark", "low_contrast"])
             hint = page.locator("#calibration-settings .calibration-image-hint")
             hint.filter(has_text="Das Ziffernfeld wirkt dunkel.").filter(has_text="wenig Kontrast").wait_for()
-            self.calibration.update(state="saved", stabilizing_until=time.time() + 1200)
-            success = page.locator("#setup-stabilization")
+            self.rules["setup_completed"] = {
+                "source": setup_source_id({**self.source, "selected": True}),
+                "time": time.time(), "duration_seconds": 60,
+            }
+            self.calibration.update(state="saved", intensive=False)
+            success = page.locator("#setup-success")
             success.get_by_text("Zähler erfolgreich eingerichtet", exact=True).wait_for()
             self.assertIn("20 Minuten", success.inner_text())
             self.assertIsNone(page.locator("#calibration-diagnostics").get_attribute("open"))
@@ -1008,6 +1032,7 @@ class BrowserTests(IngressFixture):
             self.assertEqual(300, display.locator('[data-image="crop"]').evaluate(
                 "async image => { await image.decode(); return image.naturalWidth; }"))
             self.assertEqual("20%", display.locator(".calibration-crop-region").evaluate("box => box.style.left"))
+            page.locator("#open-recognition-tools").click()
             page.locator("#open-calibration").click()
             page.locator("#calibration-title").wait_for()
             page.locator("#calibration-region summary").click()
@@ -1045,7 +1070,14 @@ class BrowserTests(IngressFixture):
             self.assertFalse(page.locator("#preview-legend").is_visible())
             page.wait_for_function("document.querySelector('.activity-status').dataset.offline === 'false'")
             Image.new("RGB", (200, 45), "white").save(self.automatic_preview, "JPEG")
-            self.activity = {"state": "working", "detail": "Bild wird vorbereitet.", "completed": 2, "total": 5}
+            self.activity = {"state": "working", "detail": "Zählerbild wird gelesen · Versuch 3 (höchstens 5)",
+                             "completed": 2, "total": 5, "reading": "12345.6??"}
+            page.get_by_text("Zählerbild wird gelesen · Versuch 3 (höchstens 5)", exact=True).wait_for()
+            details = page.locator("#automatic-activity-details")
+            self.assertIsNone(details.get_attribute("open"))
+            details.locator("summary").click()
+            details.get_by_text("Versuche abgeschlossen: 2 · Höchstens 5", exact=True).wait_for()
+            details.get_by_text("Zuletzt gelesen (noch unbestätigt): 12345.6??", exact=True).wait_for()
             page.wait_for_function("document.querySelector('#automatic-progress').value === 2")
             page.wait_for_function("document.querySelector('#test-preview-image').naturalWidth === 200")
             self.assertTrue(page.locator("#preview-legend").is_visible())
@@ -1150,6 +1182,7 @@ class BrowserTests(IngressFixture):
             expect_language("en")
             if frame.locator("#setup-dialog").evaluate("dialog => dialog.open"):
                 frame.locator("#setup-skip").click()
+            frame.locator("#open-recognition-tools").click()
             frame.locator("#open-manual-settings").click()
             frame.locator("#manual-form select[name=crop_mode]").select_option("manual")
             frame.locator("#manual-form input[name=crop]").fill("0,0,90,400")
@@ -1202,6 +1235,7 @@ class BrowserTests(IngressFixture):
             expect_language("en")
             page.set_viewport_size({"width": 1280, "height": 900})
             self.assertIsNone(frame.locator("#manual-panel").get_attribute("open"))
+            frame.locator("#open-recognition-tools").click()
             frame.locator("#start-check").click()
             frame.get_by_text("Request accepted", exact=True).wait_for()
             self.assertEqual("neutral", frame.locator("#test-box").get_attribute("data-result"))

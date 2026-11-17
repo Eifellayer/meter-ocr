@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.34 Stable
+
+- Die Übersicht zeigt nach der Ersteinrichtung eine grüne Erfolgskarte mit der Dauer. Sie verschwindet nach dem ersten vollständigen Automatiklauf.
+- Der OCR-Status nennt das Versuchslimit. Aufklappbare Prüfdetails zeigen abgeschlossene Versuche und die letzte vorläufige Ablesung.
+- Selbsteinrichtung, Ziffernrahmenkorrektur und manuelle Tests stehen unten im Werkzeugbereich. Ein Link in der Navigation öffnet ihn direkt.
+
 ## 0.5.33 Stable
 
 - Die Selbsteinrichtung schlägt mögliche Spiegelungsstellen zwischen lesbaren Nachbarziffern vor. Bis zu zwei Positionen lassen sich markieren und die Rahmen korrigieren. Drei passende Bilder erlauben einen vorläufigen Rahmen mit offenen Ziffern.

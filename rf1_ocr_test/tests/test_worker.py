@@ -1277,7 +1277,21 @@ class StateTests(TestCase):
                 "reading": "12346", "time": datetime.now(timezone.utc).timestamp() - 10,
             },
         }))
+        # After a statistics-preserving reset, a newly configured camera may
+        # use a fresh calibration reference. It must retain the previous total.
+        prior_time = datetime.now(timezone.utc).timestamp() - 120
+        files["HISTORY"].write_text(json.dumps({
+            "consumption": {"source": ["esphome", "camera.old", ""], "timestamp": prior_time,
+                            "reading_litres": 12345000, "anchor_litres": 12345000,
+                            "step_litres": 1000, "total_litres": 2100},
+            "consumption_statistics": {"source": "old-camera", "samples": [[prior_time, 2100, 1000]]},
+            "statistics_preserved_after_reset": True,
+        }))
         started = check("12346.???")
+        self.assertEqual(2100, started["consumption"]["total_litres"])
+        self.assertEqual([2100, 2100], [sample[1] for sample in
+                                          started["consumption_statistics"]["samples"]])
+        self.assertNotIn("statistics_preserved_after_reset", started)
         self.assertEqual("ocr_only", started["check_status"])
         self.assertEqual("12346", started["last_reference"])
         self.assertEqual(5, started["check_interval_minutes"])

@@ -507,6 +507,8 @@ class Calibration:
     setup_last_digit: bool = False
     stream_unavailable: bool = False
     followup: bool = False
+    background: bool = False  # Fine check does not suspend confirmed seven-digit readings.
+    unclear_frames: int = 0
     followup_baseline: dict | None = None
     rank_candidates: bool = False
     coarse_attempts: int = 0
@@ -674,6 +676,7 @@ class Calibration:
                 "coarse_complete": self.full_hits >= MIN_IMAGES,
                 "awaiting_start_value": self.confirmations >= MIN_IMAGES and not (self.anchored or self.advanced),
                 "simplified": self.simplified, "intensive": self.intensive, "setup_last_digit": self.setup_last_digit, "followup": self.followup,
+                "background": self.background,
                 "coarse_attempts": self.coarse_attempts, "coarse_limit": COARSE_LIMIT,
                 "shortlist": [score[0] for score in self.shortlist.values() if len(score) == 3],
                 "candidates": [{"percent": score[0], "reading": self.candidate_readings.get(layout, "")}
@@ -1529,6 +1532,7 @@ class Calibration:
                 "reading_litres" in anchor and
                 counter["reading_litres"] > anchor["reading_litres"]))
             self.candidate, self.counter = layout, counter
+            self.unclear_frames = 0
             self.reference_reading = readings[0]
             self.focused = False
             if self.confirmations > self.best_confirmations:
@@ -1546,8 +1550,17 @@ class Calibration:
             # Preserve a reproducible candidate and test it on the next photograph.
             return None
         if not committed and not stop():
+            if self.simplified and self.candidate is not None and self.confirmations:
+                # The seventh roller may be unreadable during a transition.
+                # Hold a once-confirmed crop for up to three fresh images.
+                # An unreadable frame never increases the confirmation count.
+                self.unclear_frames += 1
+                if self.unclear_frames <= 3:
+                    on_decision("await_clear_roller")
+                    return None
             if not examined:
                 on_decision("no_region")
+            self.unclear_frames = 0
             self.candidate, self.counter = None, {}
             self.focused = False
             self.confirmations, self.anchored, self.advanced = 0, False, False

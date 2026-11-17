@@ -1195,8 +1195,15 @@ def main():
                 marked = rules.get("setup_reflection")
                 if (not repair and not intensive and rules["reflection_estimate_enabled"]
                         and isinstance(marked, dict) and marked.get("source") == setup_source_id(source)):
-                    reflected_layout = geometry_layout(marked, rules)
-                    reflected_positions = tuple(marked["positions"])
+                    try:
+                        layout = geometry_layout(marked, rules)
+                        positions = tuple(marked["positions"])
+                        if (layout.digit_boxes and 1 <= len(positions) <= 2
+                                and all(type(index) is int and 0 <= index < len(layout.digit_boxes)
+                                        for index in positions)):
+                            reflected_layout, reflected_positions = layout, positions
+                    except (ValueError, TypeError, KeyError):
+                        pass
                 calibration = Calibration(limit=limit, started=now, automatic=repair,
                                           rank_candidates=not (repair or intensive), shortlist=shortlist,
                                           simplified=simplified, intensive=intensive,
@@ -1289,6 +1296,8 @@ def main():
                 if calibration is job and job.state == "testing":
                     job.stage, job.variant, job.rotation = stage, variant, rotation
                     job.attempts = attempt.attempts
+                    job.row_found = attempt.row_found
+                    job.agreement_threshold = attempt.agreement_threshold
                     calibration_preview["weak_positions"] = positions or []
 
         def report_image(kind, content, **details):
@@ -2191,14 +2200,17 @@ def main():
                                     for adjustment, trial_boxes in variants:
                                         if stop_ocr() or ocr_attempts + 2 > ocr_limit:
                                             break
+                                        angle = rotation + base_adjustment + adjustment
+                                        if not -180 <= angle <= 180:
+                                            continue
                                         if adjustment:
                                             left, top, right, bottom = manual_crop
                                             width = min(manual_width, rotated_width(
-                                                right - left, bottom - top, rotation + base_adjustment + adjustment))
+                                                right - left, bottom - top, angle))
                                         else:
                                             width = manual_width
                                         trial = select_register(
-                                            original, None, manual_crop, width, rotation + base_adjustment + adjustment,
+                                            original, None, manual_crop, width, angle,
                                             integer_digits, fraction_digits, digit_boxes=trial_boxes,
                                         )
                                         set_activity("working", "Nachprüfung: Dieselben Ziffern waren wiederholt unklar.",

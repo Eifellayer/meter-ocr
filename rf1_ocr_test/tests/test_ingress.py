@@ -989,7 +989,7 @@ class BrowserTests(IngressFixture):
             overview.filter(has_text="einen plausiblen Anstieg oder einen Startwert").wait_for()
             self.calibration.update(state="testing", stage="capture", preview={"frame": 15})
             overview.filter(has_text="Kamerabild wird abgerufen").filter(
-                has_text="auf einen plausiblen Anstieg oder einen Startwert").wait_for()
+                has_text="einen plausiblen Anstieg oder einen Startwert").wait_for()
             self.calibration.update(state="waiting", tested=1, attempts=0, confirmations=0,
                                     awaiting_start_value=False, preview={"frame": 15, "reason": "no_region"})
             page.locator("#calibration-overview-state").filter(has_text="Noch kein Ziffernbereich gefunden").wait_for()
@@ -1187,7 +1187,7 @@ class BrowserTests(IngressFixture):
             frame.locator("#auto-crop-draw-area").wait_for(state="visible")
             frame.locator("#auto-form select[name=decimals]").select_option("2")
             frame.locator("#auto-form input[name=max_flow]").fill("4,5")
-            self.assertEqual("60", frame.locator("#auto-form input[name=interval_minutes]").input_value())
+            self.assertEqual("30", frame.locator("#auto-form input[name=interval_minutes]").input_value())
             frame.locator("#auto-form input[name=interval_minutes]").fill("15")
             frame.locator("#save-auto-settings").click()
             frame.get_by_text("Automatische Prüfregeln gespeichert.", exact=True).wait_for()

@@ -145,6 +145,22 @@ class IngressFixture(TestCase):
 
 
 class IngressTests(IngressFixture):
+    def test_setup_recommends_learning_first_and_keeps_a_saved_manual_choice(self):
+        def choices(accept="de"):
+            page, _ = self.request("/", accept=accept)
+            return page.split('id="wizard-crop-options"', 1)[1].split("</fieldset>", 1)[0]
+
+        german = choices()
+        self.assertEqual(["learn", "auto", "manual"],
+                         re.findall(r'name="crop_mode" value="([^"]+)"', german))
+        self.assertIn('value="learn" checked>Ausschnitt und Drehung lernen (empfohlen)', german)
+        self.assertIn("Learn crop and rotation (recommended)", choices("en"))
+
+        self.setup_pending = False
+        self.source_selected = True
+        self.rules["crop_mode"] = "manual"
+        self.assertIn('value="manual" checked>', choices())
+
     def test_wizard_image_uses_unsaved_camera_with_csrf_and_keeps_setup_pending(self):
         fields = dict(source_mode="esphome", camera="camera.unsaved")
         with self.assertRaises(HTTPError) as error:
@@ -916,7 +932,9 @@ class BrowserTests(IngressFixture):
             self.assertTrue(page.locator('#setup-form [name="fallback_time"]').input_value())
             for step in (0, 1):
                 page.locator(f'.setup-step[data-step="{step}"] .setup-next').click()
-            self.assertTrue(page.get_by_role("radio", name="Ausschnitt und Drehung lernen").is_checked())
+            choices = page.locator('#wizard-crop-options input[type="radio"]')
+            self.assertEqual(["learn", "auto", "manual"], choices.evaluate_all("(items) => items.map(item => item.value)"))
+            self.assertTrue(page.get_by_role("radio", name="Ausschnitt und Drehung lernen (empfohlen)").is_checked())
             page.locator("#wizard-calibration-options input").fill("18")
             page.locator('#setup-form [name="reflection_estimate_enabled"]').check()
             page.locator('.setup-step[data-step="2"] .setup-next').click()

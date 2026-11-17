@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.27 Stable
+
+- Der Einrichtungsassistent zeigt „Ausschnitt und Drehung lernen“ als erste und empfohlene Auswahl. Bereits gespeicherte Einstellungen bleiben beim erneuten Öffnen vorausgewählt.
+
 ## 0.5.26 Stable
 
 - Die Übersicht zeigt nach erfolgreicher regulärer Ablesung kurz und bündig „Alles OK. Automatik läuft.“. Einrichtungsmeldungen laufen aus und bleiben in der Diagnose nachlesbar.

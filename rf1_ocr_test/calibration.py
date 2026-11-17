@@ -785,6 +785,20 @@ class Calibration:
         return adjusted, ["".join(row[:whole]) + ("." + "".join(row[whole:]) if len(row) > whole else "")
                           for row in rows]
 
+    def probe_optional_last_slot(self, layout, rules, read_slot, stop, on_attempt=None):
+        """Try a preview-only reading after the two-decimal verification succeeds."""
+        if not self.simplified or rules["fraction_digits"] != 3:
+            return None
+        whole = rules["integer_digits"]
+        reading = self.reference_reading
+        if (meter_prefix(reading, 2, whole) is None or not isinstance(reading, str)
+                or not reading.endswith("?")):
+            return None
+        return self.retry_digit_slots(
+            layout, [reading, reading], rules, [whole + 2], read_slot, stop,
+            on_attempt, self.attempts + 4, fine_first=True,
+        )
+
     def probe_open_digit(self, layout, sample, rules, read, stop, on_attempt):
         """Try the last slot on this image without adding an independent hit."""
         digits = rules["integer_digits"]

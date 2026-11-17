@@ -1399,7 +1399,7 @@ def main():
                             except (OSError, ValueError):
                                 pass
 
-                        def report_crop(layout, register, reading, *, last_only=False):
+                        def report_crop(layout, register, reading, *, last_only=False, tentative_last=False):
                             if not frame_ready:
                                 return
                             box = layout.box
@@ -1417,7 +1417,9 @@ def main():
                             try:
                                 digits = (reading or "").replace(".", "")
                                 suspected = ()
-                                if len(digits) == whole + fraction and digits.count("?") == 1:
+                                if tentative_last:
+                                    suspected = (whole + 2,)
+                                elif len(digits) == whole + fraction and digits.count("?") == 1:
                                     # One open slot between or next to otherwise readable digits.
                                     suspected = (digits.index("?"),)
                                 painted = "?" * whole + ".??" + (reading or "?") if last_only else reading
@@ -1589,6 +1591,17 @@ def main():
                             report_calibration("verify", rotation=attempt.candidate.rotation)
                             selected = attempt.verify(frame, sample, captured, active_rules, read, stopped,
                                                       on_image=on_image, on_decision=report_decision)
+                            if selected is not None and attempt.simplified:
+                                fine_deadline = min(deadline, time.monotonic() + 3)
+                                hint = attempt.probe_optional_last_slot(
+                                    selected, active_rules, read_calibration_slot,
+                                    lambda: stopped() or time.monotonic() >= fine_deadline, report_fine,
+                                )
+                                if hint is not None:
+                                    trial, values = hint
+                                    readings[:] = values
+                                    report_crop(trial, register_for(trial), values[-1], tentative_last=True)
+                                    report_decision("optional_last_slot")
                         else:
                             report_calibration("search")
                             candidate = attempt.examine(

@@ -781,6 +781,31 @@ class CalibrationTests(TestCase):
         self.assertEqual("10462.84?", job.reference_reading)
         self.assertEqual(calls[-1], job.candidate.digit_boxes[6])
 
+    def test_optional_last_slot_after_verification_is_only_a_hint(self):
+        boxes = tuple((125 * index, 80, 125 * (index + 1), 920) for index in range(8))
+        current = Layout((0, 0, 80, 20), -2, 50, boxes)
+        self.candidates.return_value = [current]
+        job = Calibration(8, 0, simplified=True)
+        rules = {**RULES, "decimals": 3, "fraction_digits": 3, "attempts": 3}
+        sample = {"reference_time": 100, "actual_value": "10462.87?", "raw_value": "10462.87?"}
+        for stamp in (101, 102, 103):
+            job.examine(frame(stamp - 100), None, sample, stamp, rules, lambda *_: "10462.87?", lambda: False)
+        verified = job.verify(frame(4), sample, 104, rules, lambda *_: "10462.87?", lambda: False)
+        visited = []
+
+        def read_slot(layout, index, _):
+            visited.append(index)
+            self.assertEqual(boxes[:-1], layout.digit_boxes[:-1])
+            return "2" if layout.digit_boxes[-1] != boxes[-1] else "?"
+
+        trial, readings = job.probe_optional_last_slot(verified, rules, read_slot, lambda: False)
+        self.assertEqual(["10462.872"] * 2, readings)
+        self.assertEqual({7}, set(visited))
+        self.assertNotEqual(boxes[-1], trial.digit_boxes[-1])
+        self.assertEqual(3, job.confirmations)
+        self.assertEqual(current, job.candidate)
+        self.assertEqual("10462.87?", job.reference_reading)
+
     def test_only_one_open_required_slot_triggers_intensive_search(self):
         self.job = Calibration(5, 0, rank_candidates=True, simplified=True)
         rules = {**RULES, "decimals": 3, "fraction_digits": 3}

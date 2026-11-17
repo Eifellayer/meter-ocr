@@ -12,6 +12,8 @@ from layout import MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR
 
 
 EN_UI = {
+    "Letzte Rolle auf diesem Bild gelesen. Sie ist noch nicht unabhängig bestätigt.":
+        "Last wheel read on this image. Independent confirmation is still pending.",
     "Letzte Rolle dreht weiter. Warte auf eine eindeutige Ziffer.":
         "The last wheel is turning. Waiting for a clear digit.",
     "Ziffernrahmen korrigieren": "Adjust digit boxes",

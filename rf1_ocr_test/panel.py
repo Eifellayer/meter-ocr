@@ -718,9 +718,7 @@ name: Zählerstand (OCR)</code></pre>
 </div>
 <div id="wizard-discovered-sources" class="setup-help">
 <label>Geräte suchen<input type="search" id="wizard-camera-search" placeholder="z. B. Gaszähler"></label>
-<label>In Home Assistant gefunden<select id="wizard-discovered-source" disabled><option value="">Gerät auswählen …</option></select></label>
-<button type="button" id="wizard-refresh-sources">Geräte erneut suchen</button>
-<p id="wizard-sources-status" class="settings-note" role="status" aria-live="polite">Gerätesuche wird vorbereitet …</p>
+<label>In Home Assistant gefunden<select id="wizard-discovered-source" disabled><option value="">Es wurden keine Geräte gefunden</option></select></label>
 </div>
 <label id="wizard-source-url">ESP-Adresse<input name="url" value="{source_url}" maxlength="150" placeholder="http://esp-gaszaehler.local"></label>
 <div id="wizard-esp-camera-only" class="setup-help" hidden>
@@ -1407,16 +1405,11 @@ function showWizardSource() {{
 wizardSourceMode.addEventListener('change', showWizardSource); showWizardSource();
 const discoveredSource = document.querySelector('#wizard-discovered-source');
 const cameraSearch = document.querySelector('#wizard-camera-search');
-const sourceStatus = document.querySelector('#wizard-sources-status');
-const sourceRefresh = document.querySelector('#wizard-refresh-sources');
 let sourceSuggestions = [];
 let loadingSourceSuggestions = false;
-async function loadSourceSuggestions(force = false) {{
-  if (loadingSourceSuggestions || (sourceSuggestions.length && !force)) return;
+async function loadSourceSuggestions() {{
+  if (loadingSourceSuggestions || sourceSuggestions.length) return;
   loadingSourceSuggestions = true;
-  sourceRefresh.disabled = true;
-  sourceStatus.textContent = lang === 'en' ? 'Searching Home Assistant for devices …' :
-    'Suche Geräte in Home Assistant …';
   try {{
     const response = await fetch('bildquellen', {{cache: 'no-store'}});
     if (!response.ok) throw Error('Device discovery failed');
@@ -1425,12 +1418,9 @@ async function loadSourceSuggestions(force = false) {{
     sourceSuggestions = suggestions;
     filterWizardSources();
   }} catch (_) {{
-    // Keep the chooser visible so the user can retry or enter a source manually.
-    sourceStatus.textContent = lang === 'en' ?
-      'Device search failed. Retry or enter your source manually.' :
-      'Gerätesuche fehlgeschlagen. Erneut suchen oder die Bildquelle manuell eintragen.';
+    // Keep the selector visible and disabled when Home Assistant is not ready.
+    filterWizardSources();
   }} finally {{
-    sourceRefresh.disabled = false;
     loadingSourceSuggestions = false;
   }}
 }}
@@ -1443,17 +1433,13 @@ function filterWizardSources() {{
     const type = source.mode === 'slfork' ? 'AI on the Edge' : (lang === 'en' ? 'Camera' : 'Kamera');
     discoveredSource.add(new Option(type + ' · ' + source.label, String(index)));
   }});
+  const available = discoveredSource.options.length > 1;
+  discoveredSource.options[0].textContent = available ?
+    (lang === 'en' ? 'Choose a device …' : 'Gerät auswählen …') :
+    (lang === 'en' ? 'No devices found' : 'Es wurden keine Geräte gefunden');
   if ([...discoveredSource.options].some(option => option.value === selected)) discoveredSource.value = selected;
-  discoveredSource.disabled = discoveredSource.options.length === 1;
-  sourceStatus.textContent = sourceSuggestions.length ?
-    (discoveredSource.disabled ?
-      (lang === 'en' ? 'No devices match the search.' : 'Keine passenden Geräte zur Suche gefunden.') :
-      (lang === 'en' ? sourceSuggestions.length + (sourceSuggestions.length === 1 ? ' device' : ' devices') + ' found in Home Assistant.' :
-        sourceSuggestions.length + (sourceSuggestions.length === 1 ? ' Gerät' : ' Geräte') + ' in Home Assistant gefunden.')) :
-    (lang === 'en' ? 'No devices found. Retry or enter a source manually.' :
-      'Keine Geräte gefunden. Erneut suchen oder die Bildquelle manuell eintragen.');
+  discoveredSource.disabled = !available;
 }}
-sourceRefresh.addEventListener('click', () => loadSourceSuggestions(true));
 cameraSearch.addEventListener('input', filterWizardSources);
 discoveredSource.addEventListener('change', () => {{
   if (discoveredSource.value === '') return;

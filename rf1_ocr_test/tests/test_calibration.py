@@ -1041,6 +1041,52 @@ class CalibrationTests(TestCase):
         self.assertEqual(["accepted_geometry"] * 3, reasons)
         self.assertTrue(job.stationary_crop_ready())
 
+    def test_temporarily_rotating_seventh_digit_uses_fresh_image_not_a_failed_setup(self):
+        job = Calibration(8, 0, simplified=True, rank_candidates=True)
+        rules = {**RULES, "decimals": 3, "fraction_digits": 3}
+        sample = {"reference_time": 100, "actual_value": "12345.230",
+                  "raw_value": "12345.230"}
+        events = []
+
+        def check(number, reading):
+            return job.examine(
+                frame(number), None, sample, 100 + number, rules,
+                lambda *_: reading, lambda: False, on_decision=events.append,
+            )
+
+        self.assertIsNone(check(1, "12345.23?"))
+        first = job.candidate
+        self.assertIsNotNone(first)
+        self.assertEqual(1, job.confirmations)
+        # Only the second decimal/7th roller is obscured mid-transition.
+        self.assertIsNone(check(2, "12345.2??"))
+        self.assertEqual(first, job.candidate)
+        self.assertEqual(1, job.confirmations)
+        self.assertIn("await_clear_roller", events)
+        self.assertIsNone(check(3, "12345.23?"))
+        self.assertEqual(2, job.confirmations)
+        self.assertEqual(0, job.unclear_frames)
+        self.assertEqual(first, check(4, "12345.23?"))
+        self.assertEqual(3, job.confirmations)
+
+    def test_repeated_unreadable_seventh_digit_eventually_releases_bad_candidate(self):
+        job = Calibration(10, 0, simplified=True, rank_candidates=True)
+        rules = {**RULES, "decimals": 3, "fraction_digits": 3}
+        sample = {"reference_time": 100, "actual_value": "12345.230",
+                  "raw_value": "12345.230"}
+        job.examine(frame(1), None, sample, 101, rules,
+                    lambda *_: "12345.23?", lambda: False)
+        self.assertIsNotNone(job.candidate)
+        for n in (2, 3, 4):
+            job.examine(frame(n), None, sample, 100 + n, rules,
+                        lambda *_: "12345.2??", lambda: False)
+            self.assertIsNotNone(job.candidate)
+            self.assertEqual(1, job.confirmations)
+        job.examine(frame(5), None, sample, 105, rules,
+                    lambda *_: "12345.2??", lambda: False)
+        self.assertEqual(0, job.confirmations)
+        self.assertIsNone(job.candidate)
+
     def test_ranked_simplified_setup_uses_extra_profile_for_a_matching_prefix(self):
         job = Calibration(8, 0, simplified=True, rank_candidates=True)
         rules = {**RULES, "decimals": 3, "fraction_digits": 3}

@@ -2613,6 +2613,10 @@ def main():
                                         active_rules["max_flow_lph"], integer_digits,
                                     )
                                     if previous_consumption.get("source") != source_key:
+                                        if history.get("statistics_preserved_after_reset"):
+                                            # A new image source establishes a fresh meter-reading baseline,
+                                            # but must not reset the preserved cumulative consumption total.
+                                            setup_counter["total_litres"] = previous_consumption.get("total_litres", 0)
                                         previous_consumption = setup_counter
                                 new_consumption = accumulate_consumption(
                                     previous_consumption, source_key, captured,

@@ -241,6 +241,8 @@ def quarter_turn_layouts(frame, rules, region):
         candidates = skip_small_labels(list(layouts(turned, None, local_rules, 0, upright=True)))
         for layout in candidates:
             left, top, right, bottom = layout.box
+            if not (0 <= left < right <= turned.width and 0 <= top < bottom <= turned.height):
+                continue
             if angle == 90:
                 bounds = (top, height - right, bottom, height - left)
             elif angle == -90:
@@ -1104,7 +1106,9 @@ class Calibration:
                 return None
             if not confirming_followup and self.attempts >= min(self.attempt_limit, frame_ceiling):
                 break
-            if self.region_rejected(layout) or layout.box[2] > frame.width or layout.box[3] > frame.height:
+            left, top, right, bottom = layout.box
+            if self.region_rejected(layout) or not (
+                    0 <= left < right <= frame.width and 0 <= top < bottom <= frame.height):
                 continue
             if collecting and self.coarse_attempts >= COARSE_LIMIT:
                 break

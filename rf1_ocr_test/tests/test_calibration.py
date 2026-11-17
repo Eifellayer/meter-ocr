@@ -175,6 +175,7 @@ class CalibrationTests(TestCase):
     def setUp(self):
         self.job = Calibration(5, 0)
         self.candidates = self.enterContext(patch.object(calibration, "layouts", return_value=[LAYOUT]))
+        self.rotated_candidates = self.enterContext(patch.object(calibration, "quarter_turn_layouts", return_value=[]))
 
     def examine(self, number, time, reading="12345", *, reference=True, fallback=False, stop=lambda: False):
         sample = {"reference_required": reference, "reference_is_fallback": fallback,
@@ -591,6 +592,22 @@ class CalibrationTests(TestCase):
                          on_decision=reasons.append)
         self.assertEqual(["position_error"], reasons)
         self.assertEqual(0, self.job.confirmations)
+
+    def test_first_photo_tries_a_quarter_turn_after_an_unreliable_candidate(self):
+        sample = {"reference_time": 100, "actual_value": "12345", "raw_value": "12345"}
+        rotated = Layout((0, 0, 20, 30), 90, 30)
+        invalid = Layout((0, -1, 20, 30), 90, 31)
+        self.rotated_candidates.return_value = [invalid, rotated]
+        image = frame(1)
+
+        def read(layout, profile):
+            return "12345" if layout == rotated else "23456"
+
+        self.job.examine(image, None, sample, 100, RULES, read, lambda: False)
+        self.rotated_candidates.assert_called_once_with(image, RULES, None)
+        self.assertEqual(rotated, self.job.candidate)
+        self.assertEqual(1, self.job.confirmations)
+        self.assertEqual(2, self.job.attempts)
 
     def test_thirty_attempts_include_coarse_and_fine_work(self):
         self.candidates.return_value = [Layout((x, 0, x + 80, 20), 0, 80) for x in range(4)]

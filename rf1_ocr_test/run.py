@@ -408,6 +408,25 @@ def read_digit(register, box, read, trim_vertical=False):
         return "?"
 
 
+def single_digit_frames(boxes, index, size, *, last_roller=False):
+    normalized = list(map(list, normalize_digit_boxes(boxes, size)))
+    left, top, right, bottom = boxes[index]
+    if last_roller and top == 0 and bottom == size[1]:
+        # Full-height frames cannot move vertically. Try exposing more of either half of the wheel.
+        margin = max(1, (bottom - top) // 14)
+        yield left, top, right, bottom - margin
+        yield left, top + margin, right, bottom
+    axes = (1, 0) if last_roller else (0,)
+    for angle, shifted in local_geometry_trials(normalized, [index], axes=axes):
+        if angle:
+            break
+        dx, dy = (round((moved - old) * length / 1000)
+                  for moved, old, length in zip(shifted[index][:2], normalized[index][:2], size))
+        dx = max(-left, min(dx, size[0] - right))
+        dy = max(-top, min(dy, size[1] - bottom))
+        yield left + dx, top + dy, right + dx, bottom + dy
+
+
 def recover_single_digit(layout, pattern, current, whole_digits, fraction_digits, read, available, report, stop, accept):
     """Probe the missing slot on this register, with two agreeing OCR profiles."""
     register, width, whole_boxes, fraction_boxes = layout
@@ -417,14 +436,13 @@ def recover_single_digit(layout, pattern, current, whole_digits, fraction_digits
     boxes = [*whole, *fraction_boxes]
     if len(boxes) != whole_digits + fraction_digits:
         return None, 0
-    normalized = list(map(list, normalize_digit_boxes(boxes, register.size)))
     seen = {boxes[index]}
     attempted = 0
-    for angle, shifted in local_geometry_trials(normalized, [index]):
-        if angle or attempted + 2 > available or stop():
+    last_roller = fraction_digits > 0 and index == len(boxes) - 1
+    for box in single_digit_frames(boxes, index, register.size, last_roller=last_roller):
+        if attempted + 2 > available or stop():
             break
-        box = scale_digit_boxes([shifted[index]], register.size)[0]
-        if box in seen:
+        if box in seen or box[2] - box[0] < 8 or box[3] - box[1] < 12:
             continue
         seen.add(box)
         report(attempted)
@@ -834,9 +852,9 @@ def main():
     wake_worker = Event()
     automatic_request = handled_automatic_request = None
 
-    def request_automatic_check():
+    def request_automatic_check(*, on_demand=False):
         nonlocal automatic_request
-        automatic_request = object()
+        automatic_request = (on_demand,)
         wake_worker.set()
 
     auto_rules = {"decimals": default_decimals, "attempts": default_attempts, "polarity": "auto",
@@ -1095,7 +1113,9 @@ def main():
         if not get_auto_paused() and not ready_for_automatic(get_auto_rules(), get_source()[0]):
             return {"state": "setup_wait", "detail": SETUP_WAIT_NOTICE}
         if not get_auto_paused() and automatic_request is not handled_automatic_request:
-            return {"state": "queued", "detail": "Einstellungen gespeichert. Prüfung startet gleich."}
+            detail = ("Automatische Prüfung angefordert." if automatic_request[0] else
+                      "Einstellungen gespeichert. Prüfung startet gleich.")
+            return {"state": "queued", "detail": detail}
         return dict(activity)
 
     settings_lock = RLock()
@@ -1109,6 +1129,19 @@ def main():
     geometry_backup = HISTORY.with_name("geometry-backup.json")
     calibration_candidates_path = HISTORY.with_name("calibration-candidates.json")
     known_good_geometry_path = HISTORY.with_name("known-good-geometry.json")
+
+    def automatic_check_available():
+        source, _ = get_source()
+        calibrating = calibration is not None and calibration.state in ("waiting", "testing")
+        return (not get_auto_paused() and not calibrating and activity["state"] != "working"
+                and automatic_request is handled_automatic_request and ready_for_automatic(get_auto_rules(), source))
+
+    def start_automatic_now():
+        with settings_lock:
+            if not automatic_check_available():
+                return False
+            request_automatic_check(on_demand=True)
+            return True
 
     def known_good_scope(rules, source):
         format_keys = ("integer_digits", "fraction_digits", "meter_display", "polarity")
@@ -1808,6 +1841,7 @@ def main():
         settings_lock=settings_lock, get_calibration=calibration_status, control_calibration=control_calibration,
         get_calibration_image=calibration_image, has_calibration_backup=lambda: read_geometry_backup() is not None,
         statistics_zone=zone, experimental_meters=extra_meters,
+        can_start_automatic=automatic_check_available, start_automatic_check=start_automatic_now,
     )
     reminder = Reminder(token)
     pending_image = None
@@ -1859,9 +1893,9 @@ def main():
             reset_requested.clear()
             perform_factory_reset()
             continue
-        requested_automatic_check = automatic_request
-        run_automatic_now = requested_automatic_check is not handled_automatic_request
         with settings_lock:
+            requested_automatic_check = automatic_request
+            run_automatic_now = requested_automatic_check is not handled_automatic_request
             active_rules = get_auto_rules()
             active_source, _ = get_source()
         mode = active_source["mode"]
@@ -1950,11 +1984,15 @@ def main():
                                          and calibration.state in ("waiting", "testing") else RETRY_INTERVAL))
             continue
 
+        if not manual:
+            with settings_lock:
+                requested_automatic_check = automatic_request
+                run_automatic_now = requested_automatic_check is not handled_automatic_request
+                set_activity("working", "Automatische Prüfung startet …")
+                handled_automatic_request = requested_automatic_check
         keep_schedule = startup and remaining > 0 and not source_changed and not run_automatic_now
         startup = startup and manual
-        if not manual:
-            set_activity("working", "Automatische Prüfung startet …")
-            handled_automatic_request = requested_automatic_check
+        on_demand = run_automatic_now and requested_automatic_check[0]
         data = None
         outcome = "capture_unavailable"
         source_history = dict(history)
@@ -2356,6 +2394,7 @@ def main():
                                     return read_digit(register_for_digit, box, lambda picture, digits: read_register(
                                         picture, options["helle_ziffern"] if polarity == "auto" else polarity == "light",
                                         digits, profile=profile, force_polarity=polarity != "auto", deadline=digit_deadline,
+                                        isolated_digit=True,
                                     ))
 
                                 recovery, used = recover_single_digit(
@@ -2926,10 +2965,16 @@ def main():
             updated["next_check_at"] = now.timestamp() + STANDALONE_CACHED_CAPTURE_DELAY
         elif duplicate_cycle:
             defer_duplicate_cycle(updated, now.timestamp(), interval_minutes)
+            if on_demand and not source_changed and history.get("next_check_at", 0) > now.timestamp():
+                updated["next_check_at"] = history["next_check_at"]
         else:
             updated.pop("reflection_retry_at", None)
             updated.pop("fresh_ocr_retry_at", None)
             schedule_next_check(updated, outcome, now.timestamp(), interval_minutes)
+            if (on_demand and not source_changed and outcome in SUCCESSFUL_CHECKS
+                    and history.get("check_status") in SUCCESSFUL_CHECKS
+                    and history.get("next_check_at", 0) > now.timestamp()):
+                updated["next_check_at"] = history["next_check_at"]
             if outcome != STANDALONE_PENDING and not setup_finished_in_check:
                 updated["automatic_completed_at"] = now.timestamp()
             if updated.get("setup_first_check_unclear") and mode != "slfork":

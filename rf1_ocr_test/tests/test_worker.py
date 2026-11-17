@@ -317,6 +317,17 @@ class OCRTests(TestCase):
         self.assertIn("Keine Ziffern lesbar", detail)
         self.assertNotIn("Vorkommastelle", detail)
 
+    def test_isolated_digit_needs_agreement_between_alternate_segmentation_modes(self):
+        image = Image.new("L", (40, 60), "white")
+        ImageDraw.Draw(image).line([(9, 17), (29, 17), (17, 46)], fill=0, width=4)
+        for alternate, expected in ((b"7", "7"), (b"1", None)):
+            with self.subTest(alternate=alternate), patch("checks.subprocess.run") as process:
+                process.side_effect = [Mock(stdout=result) for result in (b"", b"", b"", b"7", alternate)]
+                self.assertEqual(expected, read_register(image, False, 1, force_polarity=True,
+                                                         isolated_digit=True))
+                self.assertEqual(["10", "10", "10", "8", "13"],
+                                 [call.args[0][6] for call in process.call_args_list])
+
 
 class SingleDigitRecheckTests(TestCase):
     def test_reads_only_the_shifted_second_decimal_and_preserves_the_other_boxes(self):
@@ -347,6 +358,48 @@ class SingleDigitRecheckTests(TestCase):
         )
         self.assertIsNone(result)
         self.assertEqual(4, used)
+    def test_moves_a_missing_whole_or_decimal_digit_horizontally_with_fixed_size(self):
+        image = Image.new("RGB", (400, 100))
+        boxes = [(50 * index + 5, 20, 50 * index + 45, 80) for index in range(8)]
+        layout = (image, 250, boxes[:5], boxes[5:])
+        value = "10465.942"
+        for index in (1, 6):
+            position = index + (index >= 5)
+            digit = value[position]
+            pattern = value[:position] + "?" + value[position + 1:]
+            left, top, right, bottom = boxes[index]
+            self.assertEqual([(left - 2, top, right - 2, bottom), (left + 2, top, right + 2, bottom)],
+                             list(run.single_digit_frames(boxes, index, image.size)))
+            for dx in (-2, 2):
+                with self.subTest(index=index, dx=dx):
+                    preferred = (left + dx, top, right + dx, bottom)
+                    read = Mock(side_effect=lambda box, _: digit if box == preferred else "?")
+                    result, _ = run.recover_single_digit(
+                        layout, pattern, pattern, 5, 3, read, 10, lambda *_: None,
+                        lambda: False, lambda candidate: candidate == value,
+                    )
+                    recovered, whole, fraction = result
+                    expected = boxes.copy()
+                    expected[index] = preferred
+                    self.assertEqual(value, recovered)
+                    self.assertEqual(expected, [*whole, *fraction])
+                    for call in read.call_args_list:
+                        x0, y0, x1, y1 = call.args[0]
+                        self.assertEqual((right - left, bottom - top), (x1 - x0, y1 - y0))
+
+    def test_last_roller_can_be_checked_higher_or_lower_without_changing_neighbours(self):
+        image = Image.new("RGB", (400, 100))
+        boxes = [(50 * index + 5, 0, 50 * index + 45, 100) for index in range(8)]
+        layout = (image, 250, boxes[:5], boxes[5:])
+        left, top, right, bottom = boxes[7]
+        preferred = (left, top + 7, right, bottom)
+        read = Mock(side_effect=lambda box, _: "2" if box == preferred else "?")
+        result, used = run.recover_single_digit(layout, "10465.94?", "10465.94?", 5, 3, read, 6,
+                                                 lambda *_: None, lambda: False, lambda _: True)
+        self.assertEqual("10465.942", result[0])
+        self.assertEqual(3, used)
+        self.assertEqual(boxes[:7], [*result[1], *result[2][:-1]])
+        self.assertEqual(preferred, result[2][-1])
 
 
 class StateTests(TestCase):
@@ -720,6 +773,12 @@ class StateTests(TestCase):
                 self.assertNotIn("last_digit_failures", history)
 
     def test_saving_settings_bypasses_the_previous_interval(self):
+        self.check_interactive_automatic_run(on_demand=False)
+
+    def test_requested_automatic_run_uses_regular_checks_and_keeps_the_next_deadline(self):
+        self.check_interactive_automatic_run(on_demand=True)
+
+    def check_interactive_automatic_run(self, *, on_demand):
         class StopLoop(Exception):
             pass
 
@@ -744,7 +803,8 @@ class StateTests(TestCase):
         rules = {}
 
         def fake_panel(*args, **kwargs):
-            rules.update(read=args[6], save=args[7], activity=kwargs["get_activity"])
+            rules.update(read=args[6], save=args[7], activity=kwargs["get_activity"],
+                         start=kwargs["start_automatic_check"])
             return None, None, None
 
         self.enterContext(patch.object(run, "start_panel", fake_panel))
@@ -759,7 +819,11 @@ class StateTests(TestCase):
         def publish(history, _):
             published.append(dict(history))
             if len(published) == 1:
-                rules["save"]({**rules["read"](), "interval_minutes": 120})
+                if on_demand:
+                    self.assertTrue(rules["start"]())
+                    self.assertFalse(rules["start"]())
+                else:
+                    rules["save"]({**rules["read"](), "interval_minutes": 120})
                 self.assertEqual("queued", rules["activity"]()["state"])
             else:
                 raise StopLoop
@@ -768,7 +832,10 @@ class StateTests(TestCase):
         with self.assertRaises(StopLoop):
             run.main()
         self.assertEqual(2, capture.call_count)
-        self.assertEqual(120, published[-1]["check_interval_minutes"])
+        if on_demand:
+            self.assertEqual(published[0]["next_check_at"], published[1]["next_check_at"])
+        else:
+            self.assertEqual(120, published[-1]["check_interval_minutes"])
         self.assertEqual("match", published[-1]["check_status"])
 
     def test_startup_upgrade_keeps_values_and_supervisor_overrides(self):

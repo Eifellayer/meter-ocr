@@ -27,7 +27,7 @@ from calibration import (
 )
 from checks import (DEFAULT_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, WARNING_DETAIL_AFTER, meter_prefix,
                     OCR_PROFILES, crop_register, read_register, LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, REFLECTION_SUGGEST_AFTER, STANDALONE_PENDING, STANDALONE_REJECTED_NOTICE,
-                    STANDALONE_VERIFIED_NOTICE, last_check_at, reschedule_next_check,
+                    STANDALONE_VERIFIED_NOTICE, last_check_at, recommended_comparison_decimals, reschedule_next_check,
                     setup_deadlines, setup_source_id, stabilization_interval, stationary_partial_active, valid_interval_minutes)
 from consumption import DEFAULT_FLOW_LPH, consumption_statistics, format_cubic_metres, parse_flow_limit
 from demo import run_demo
@@ -36,7 +36,7 @@ from language import MODES, SUPPORTED, USER_ID, browser_locale, profile_script
 from layout import MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, digit_box_settings, scale_digit_boxes, turn_crop
 from meter_learning import suggest_single_digit_box
 from notification_settings import notification_rules
-from source_settings import source_rules
+from source_settings import source_check_key, source_rules
 
 SUPERVISOR_ADDRESS = "172.30.32.2"
 MAX_MANUAL_IMAGE_BYTES = 3_000_000
@@ -160,6 +160,8 @@ header{{display:flex;align-items:baseline;justify-content:space-between;gap:.5re
 .consumption-history li span:last-child{{text-align:right}}
 #recognition-tools{{margin-top:1rem;padding-top:.8rem;border-top:1px solid var(--edge)}}
 #recognition-tools .check-actions{{margin-top:.65rem}}
+#start-automatic-form{{margin:.55rem 0}}
+#comparison-suggestion{{flex-wrap:wrap}}
 #setup-image-test{{margin:.4rem 0 .8rem}}
 .setup-progress{{display:block;width:100%;height:.8rem;margin:.45rem 0;border:0;border-radius:99px;overflow:hidden;accent-color:#c28a25}}
 .setup-progress[value]::-webkit-progress-bar{{background:light-dark(#eee6d1,#473d29)}}
@@ -437,6 +439,18 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <button id="ignore-automatic-warning" type="button" {ignore_hidden}
  title="Blendet diesen Hinweis hier aus. Prüfungen und Benachrichtigungen laufen weiter.">Ignorieren</button>
 </div>
+<form method="post" action="vergleichsgenauigkeit" class="automatic-interval-hint" id="comparison-suggestion" {comparison_suggestion_hidden}>
+<input type="hidden" name="csrf" value="{csrf}"><input type="hidden" name="lang" value="{language}">
+<input type="hidden" name="mode" value="{language_mode}">
+<input type="hidden" name="decimals" value="{suggested_decimals}">
+<span>Eine Nachkommastelle blieb wiederholt unklar. Du kannst den Vergleich auf weniger Stellen begrenzen.</span>
+<button type="submit">{comparison_suggestion_label}</button>
+</form>
+<form method="post" action="automatik-jetzt" id="start-automatic-form" {start_automatic_hidden}>
+<input type="hidden" name="csrf" value="{csrf}"><input type="hidden" name="lang" value="{language}">
+<input type="hidden" name="mode" value="{language_mode}">
+<button type="submit" id="start-automatic" {start_automatic_disabled}>Automatische Prüfung jetzt starten</button>
+</form>
 <div class="automatic-interval-hint" id="automatic-interval-hint" hidden><span>Wiederholte Fehlablesung? Ein kürzeres Prüfintervall kann helfen, wenn sich der Zähler nach einer Weile wieder klarer ablesen lässt.</span><button type="button" id="open-interval-settings">Prüfintervall ändern</button></div>
 <form method="post" action="automatik-pause" id="pause-auto-form" {pause_button_hidden}><input type="hidden" name="lang" value="{language}"><input type="hidden" name="mode" value="{language_mode}"><input type="hidden" name="csrf" value="{csrf}"><input type="hidden" name="paused" value="1"><button type="submit">Automatik pausieren</button></form>
 <p class="connection-status" id="source-connection" data-state="{source_connection_state}">Quelle: {source_connection}</p>
@@ -2185,7 +2199,8 @@ function refreshCalibration(status) {{
     ' · Rahmen getestet: ' + status.attempts +
     confirmationLabel + status.confirmations + '/' + status.required +
     (active ? (status.intensive && ['verify', 'verify_wait'].includes(status.stage) ?
-      ' · Zeit für Gegenprobe: ' : ' · Rechenzeit übrig: ') + clock + ' min' : '');
+      ' · Zeit für Gegenprobe: ' : (status.intensive || status.automatic ?
+      ' · Rechenzeit übrig: ' : ' · Zeit für die Einrichtung: ')) + clock + ' min' : '');
   const weakSlots = status.stress_weak_slots || [];
   const stabilityNote = weakSlots.length ?
     ' · Schwankende Stellen im Intensivtest (von links): ' + weakSlots.join(', ') : '';
@@ -2761,6 +2776,11 @@ async function refreshAutomatic() {{
     if (experimental.open) refreshExperimental().catch(() => {{}});
     document.querySelector('#paused-notice').hidden = !sample.paused;
     document.querySelector('#pause-auto-form').hidden = sample.paused;
+    document.querySelector('#start-automatic').disabled = !sample.can_start_automatic;
+    const comparison = document.querySelector('#comparison-suggestion');
+    comparison.hidden = sample.precision_suggestion == null;
+    comparison.elements.decimals.value = sample.precision_suggestion ?? '';
+    comparison.querySelector('button').textContent = sample.precision_suggestion_label;
     automaticBanner.dataset.tone = sample.tone;
     automaticBanner.dataset.incident = sample.incident;
     document.querySelector('#automatic-interval-hint').hidden = !(sample.failure_attempts > 0 && sample.tone !== 'ok');
@@ -2964,6 +2984,7 @@ def start_panel(
     get_auto_paused=None, save_auto_paused=None, discover_sources=None,
     settings_lock=None, get_calibration=None, control_calibration=None, get_calibration_image=None,
     has_calibration_backup=None, get_wizard_image=None, statistics_zone=timezone.utc, experimental_meters=None,
+    can_start_automatic=None, start_automatic_check=None,
 ):
     images = {"/aktuell.jpg": current_image, "/treffer.jpg": good_image,
               "/testvorschau.jpg": test_image}
@@ -3276,6 +3297,19 @@ def start_panel(
                                  and not auto_rules.get("reflection_suggestion_hidden", False)
                                  and status == "ocr_unclear"
                                  and history.get("reflection_streak", {}).get("count", 0) >= REFLECTION_SUGGEST_AFTER)
+        source_key = source_check_key(source)
+        precision_suggestion = (
+            recommended_comparison_decimals(history, decimals, auto_rules["integer_digits"])
+            if not precision_pending and not setup_pending and source.get("selected")
+            and history.get("check_source", source_key) == source_key and activity.get("state") != "setup_wait" else None
+        )
+        if precision_suggestion:
+            if language == "en":
+                precision_label = f"Compare {precision_suggestion} decimal " + ("place" if precision_suggestion == 1 else "places")
+            else:
+                precision_label = f"Mit {precision_suggestion} " + ("Nachkommastelle" if precision_suggestion == 1 else "Nachkommastellen") + " vergleichen"
+        else:
+            precision_label = ""
         return {
             "detail": (detail if detail is not None else
                        "No automatic result yet." if language == "en" else "Noch kein automatisches Prüfergebnis."),
@@ -3301,6 +3335,8 @@ def start_panel(
             "reflection_suggestion": reflection_suggestion,
             "activity": activity.get("detail", "Wartet auf die nächste automatische Prüfung."),
             "activity_state": activity.get("state", "waiting"),
+            "can_start_automatic": bool(can_start_automatic and can_start_automatic()),
+            "precision_suggestion": precision_suggestion, "precision_suggestion_label": precision_label,
             "activity_completed": activity.get("completed"),
             "activity_total": activity.get("total"),
             "activity_reading": activity.get("reading"),
@@ -3538,6 +3574,11 @@ def start_panel(
                 language=language,
                 app_name=APP_NAME,
                 language_mode=mode,
+                start_automatic_hidden="" if start_automatic_check else "hidden",
+                start_automatic_disabled="" if summary["can_start_automatic"] else "disabled",
+                comparison_suggestion_hidden="" if summary["precision_suggestion"] else "hidden",
+                suggested_decimals=summary["precision_suggestion"] or "",
+                comparison_suggestion_label=html.escape(summary["precision_suggestion_label"]),
                 automatic_progress_hidden="" if summary["activity_state"] in ("queued", "working") else "hidden",
                 resume_setup_hidden="" if summary["activity_state"] == "setup_wait" else "hidden",
                 automatic_tone=summary["tone"], automatic_heading=summary["heading"],
@@ -3725,7 +3766,7 @@ def start_panel(
             if path not in ("/pruefen", "/automatik", "/ausschnitt-uebernehmen", "/sprache",
                             "/benachrichtigungen", "/bildquelle", "/einrichtung", "/einrichtungsbild",
                             "/einrichtung-ueberspringen", "/werkreset", "/automatik-pause",
-                            "/spiegelungs-hinweis-ausblenden", "/ergaenzte-ziffer-bestaetigen", "/selbsteinrichtung", "/fallback", "/ziffernrahmen", "/zaehler-demo", "/experimentelle-zaehler"):
+                            "/spiegelungs-hinweis-ausblenden", "/ergaenzte-ziffer-bestaetigen", "/selbsteinrichtung", "/fallback", "/ziffernrahmen", "/zaehler-demo", "/experimentelle-zaehler", "/automatik-jetzt", "/vergleichsgenauigkeit"):
                 self.send_error(404)
                 return
             fallback = browser_locale(self.headers.get("Accept-Language", ""))
@@ -3868,6 +3909,28 @@ def start_panel(
                 selected = field("source_mode", default)
                 return "slfork_camera" if selected == "slfork" and field("esp_camera_only") == "1" else selected
 
+            if path == "/automatik-jetzt":
+                if not start_automatic_check or not start_automatic_check():
+                    problem(409, "Die automatische Prüfung kann gerade nicht gestartet werden.",
+                            "An automatic check cannot be started right now.")
+                    return
+                self.redirect("?ui=overview" + keep_mode)
+                return
+            if path == "/vergleichsgenauigkeit":
+                try:
+                    with rules_lock:
+                        rules = read_auto_rules()
+                        suggested = automatic_summary(read_history(), language, rules)["precision_suggestion"]
+                        if suggested is None or field("decimals") != str(suggested):
+                            problem(409, "Bitte die aktuelle Empfehlung neu laden.",
+                                    "Reload the current precision suggestion.")
+                            return
+                        save_auto_rules({**rules, "decimals": suggested, "precision_mode": False})
+                except (OSError, ValueError):
+                    problem(503)
+                    return
+                self.redirect("?ui=overview" + keep_mode)
+                return
             if path == "/zaehler-demo":
                 if not demo_lock.acquire(blocking=False):
                     problem(503)

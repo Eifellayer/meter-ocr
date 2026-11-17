@@ -131,6 +131,24 @@ class NeighbourGeometryTests(TestCase):
         with self.assertRaises(ValueError):
             search_region("205,650,730,315")
 
+    def test_first_image_can_turn_a_sideways_or_upside_down_meter_upright(self):
+        from checks import read_register
+
+        def read(layout, profile):
+            register = turn_crop(photo.crop(layout.box), layout.rotation)
+            return read_register(register, False, force_polarity=True, profile=profile)
+
+        sample = {"reference_time": 100, "actual_value": "12345", "raw_value": "12345"}
+        for rotation in (90, -90, 180):
+            with self.subTest(rotation=rotation):
+                turned = turn_crop(irregular_meter("12345"), -rotation)
+                photo = Image.new("RGB", (680, 640), "#676767")
+                photo.paste(turned, (photo.width - turned.width, 0))
+                job = Calibration(5, 0, rank_candidates=True)
+                self.assertIsNone(job.examine(photo, None, sample, 100, RULES, read, lambda: False))
+                self.assertEqual(1, job.confirmations)
+                self.assertEqual(rotation, job.candidate.rotation)
+
     def test_serial_number_is_not_split_into_shorter_candidate_rows(self):
         photo = Image.new("RGB", (600, 240), "#676767")
         draw = ImageDraw.Draw(photo)
@@ -157,6 +175,7 @@ class CalibrationTests(TestCase):
     def setUp(self):
         self.job = Calibration(5, 0)
         self.candidates = self.enterContext(patch.object(calibration, "layouts", return_value=[LAYOUT]))
+        self.rotated_candidates = self.enterContext(patch.object(calibration, "quarter_turn_layouts", return_value=[]))
 
     def examine(self, number, time, reading="12345", *, reference=True, fallback=False, stop=lambda: False):
         sample = {"reference_required": reference, "reference_is_fallback": fallback,
@@ -573,6 +592,22 @@ class CalibrationTests(TestCase):
                          on_decision=reasons.append)
         self.assertEqual(["position_error"], reasons)
         self.assertEqual(0, self.job.confirmations)
+
+    def test_first_photo_tries_a_quarter_turn_after_an_unreliable_candidate(self):
+        sample = {"reference_time": 100, "actual_value": "12345", "raw_value": "12345"}
+        rotated = Layout((0, 0, 20, 30), 90, 30)
+        invalid = Layout((0, -1, 20, 30), 90, 31)
+        self.rotated_candidates.return_value = [invalid, rotated]
+        image = frame(1)
+
+        def read(layout, profile):
+            return "12345" if layout == rotated else "23456"
+
+        self.job.examine(image, None, sample, 100, RULES, read, lambda: False)
+        self.rotated_candidates.assert_called_once_with(image, RULES, None)
+        self.assertEqual(rotated, self.job.candidate)
+        self.assertEqual(1, self.job.confirmations)
+        self.assertEqual(2, self.job.attempts)
 
     def test_thirty_attempts_include_coarse_and_fine_work(self):
         self.candidates.return_value = [Layout((x, 0, x + 80, 20), 0, 80) for x in range(4)]

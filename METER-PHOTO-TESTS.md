@@ -65,3 +65,15 @@ Fünf der obigen Fotos wurden mit bis zu 15 OCR-Profilen erneut ausgewertet. Die
 Ergänzend wurde das erste Community-Bild aus Issue #570 mit dessen sichtbaren Einzelrahmen und zwei erforderlichen Nachkommastellen geprüft. Es ergab `3???8.08?` in allen 15 Profilen. Das Beispiel zeigt eine letzte Rolle im Übergang und eingezeichnete Rahmen. Eine echte Spiegelung wurde darin nicht als Ursache nachgewiesen. Auch ein angenommener Referenzwert reichte für die Rekonstruktion nicht aus, weil mehrere erforderliche Stellen offen waren.
 
 Die Demo ergänzt einen separaten Test mit einer künstlich ausgeblendeten Rolle. Im schrägen Beispiel konnte OCR nach Drehung `12344.942` lesen. In der verdeckten Variante blieb `12344.94?` übrig und die App konnte mit einer ausdrücklich simulierten Referenz eindeutig `12344.942` vorschlagen. Der Versuch belegt keine Rekonstruktion aus einem einzelnen Foto ohne Referenz. Die veröffentlichten Fotos bleiben bei ihren Quellen.
+
+## Einzelziffer-Nachprüfung in 0.6.1
+
+Tesseract 5.5.0 las dieselben Ziffernausschnitte mit und ohne die alternative Segmentierung. Pro Ausschnitt liefen die ersten fünf OCR-Profile mit hellen Ziffern. Für beide Community-Fotos wurden zwei unterschiedlich enge Ausschnitte je Rolle probiert. Die Automatik setzt die zusätzliche Segmentierung gezielt bei genau einer offenen Pflichtziffer ein. Für die Übernahme müssen zwei OCR-Profile denselben Wert liefern und die vorhandene Plausibilitätsprüfung bestehen.
+
+| Probe | Ergebnis |
+| --- | --- |
+| [Gaszähler mit markierten Rahmen, Issue #570](https://github.com/jomjol/AI-on-the-edge-device/issues/570) | Bei 2 Pixeln Innenabstand zu den vorhandenen Rahmen blieben alle drei Siebener mit der bisherigen Segmentierung leer. Die alternative Segmentierung las sie in 2/5, 2/5 und 5/5 Profilen. Die letzte Rolle im Übergang blieb bei diesem Zuschnitt in allen fünf Profilen offen. |
+| [Gaszähler mit ungleichmäßiger Beleuchtung, Issue #767](https://github.com/jomjol/AI-on-the-edge-device/issues/767) | Bei einem engeren Zuschnitt wurde eine sichtbare Eins in einem Profil zusätzlich als Vier gelesen. Die alternative Auswertung fand für diese Vier kein zweites Profil. |
+| 51 künstliche Einzelbilder | Die Tests umfassten klare Ziffern, Schatten, seitlich verschobene Ziffern, künstliche Reflexe, eine leere Zelle und Rollen im Übergang. Die alternative Auswertung ergänzte fünf richtige Achten über verschiedene Beleuchtungen, Positionen und Profile. Bei einer teilweise überstrahlten Neun lieferte ein Profil zusätzlich eine Zwei. Diese neue Fehlablesung erhielt keine zweite Bestätigung. |
+
+Die drei sichtbaren Siebener zeigen den Nutzen auf Einzelziffer-Ebene. Das Foto aus Issue #570 hat mehrere offene Pflichtstellen und löst diesen gezielten Nachprüfschritt als Ganzes nicht aus. Die kamerafreie Demo lieferte erneut `12344.942` sowie `12344.94?` mit verdeckter Rolle. Aus der simulierten Referenz wurde `12344.942` vorgeschlagen. Die reale Spiegelungskorrektur über mehrere Kamerabilder bleibt offen.

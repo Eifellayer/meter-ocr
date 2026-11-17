@@ -598,6 +598,15 @@ class IngressTests(IngressFixture):
         self.assertEqual("slfork", self.source["mode"])
         self.assertEqual("http://new-meter", self.source["url"])
 
+    def test_roadmap_exposes_the_planned_beta_features_in_both_languages(self):
+        german = self.request("/")[0]
+        english = self.request("/", accept="en")[0]
+        self.assertIn('id="roadmap"', german)
+        self.assertIn("Hallsensor über ESPHome", german)
+        self.assertIn("Modernere Zählerübersicht mit Verbrauchsdiagrammen.", german)
+        self.assertIn("Roadmap and planned features", english)
+        self.assertIn("Multiple meters with their own sources", english)
+
     def test_automatic_setup_remains_the_default_while_the_camera_waits_for_setup(self):
         self.setup_pending = False
         self.source_selected = True

@@ -32,12 +32,24 @@ Einmal möglichst automatisch einrichten. Danach prüft die App eigenständig, �
 | P1 | Bedienung und Anleitung | Ergebnisse auf der Übersicht, Fallback mit Speichern, sichtbare optionale Ziffernergänzung und dezenter Spendenlink. Bebilderte Anleitung mit synthetischen Beispielen. |
 | P2 | Automatische Verbesserungen | Feinjustierung, Ziffernrekonstruktion und adaptive SLFork-Frequenz sind zuschaltbar. Langzeittests am echten Zähler stehen für diese Funktionen noch aus. Saisonprofile brauchen beobachtete Verbräuche aus den betreffenden Monaten. |
 
-## 0.6 Beta – mehrere Zähler und ESPHome-Hallsensor
+## 0.6 Beta – geplante Funktionen
+
+- [ ] Mehrzähler-Unterstützung mit Auswahl und getrennten Verläufen.
+- [ ] Hallsensor als ESPHome-Quelle integrieren. Die Kamera und der Hallsensor können am selben oder an getrennten ESPs hängen.
+- [ ] Oberfläche modernisieren. Zählerübersicht, Statusanzeigen und Verbrauchsdiagramme für kleine Bildschirme überarbeiten.
+- [ ] Status pro Zähler mit aktiver Quelle, letzter gültiger Ablesung und Hinweis bei Ausfall anzeigen.
+- [ ] Impulsfaktor pro Zähler einstellen und Testergebnisse für eingehende Impulse, Dubletten und Neustarts sichtbar machen.
+- [ ] Beta als separate Home-Assistant-App mit einem Upgrade-Test von Stable vorbereiten.
+
+Nach der ersten Beta prüfen: Kamera und Hallsensor demselben Zähler als Haupt- und Kontrollquelle zuordnen. Eine Verbrauchsbuchung hat genau eine Hauptquelle.
+
+### Abnahmekriterien für 0.6
 
 | Arbeit | Abnahme |
 | --- | --- |
 | Mehrzähler | Jeder Zähler erhält eine stabile ID, eigene Quelle, Einstellungen, Referenz, Prüfzeiten und Historie. Die Übersicht lässt sich pro Zähler öffnen. |
 | ESPHome-Hallsensor | Einen kumulativen ESPHome-Pulssensor als Home-Assistant-Entität pro Zähler auswählen. Ein gemeinsamer oder separater ESP ist möglich. Impulsfaktor und Entprellung werden pro Gerät geprüft. |
+| Oberfläche | Zählerwechsel, Status und Stunden- und Tagesverläufe sind mobil und am Desktop gut lesbar. Fehlende und geschätzte Angaben bleiben erkennbar. |
 | Verbrauch | Doppelte Sensorwerte und Wiederverbindungen erzeugen keinen Mehrverbrauch. Zählerrücksetzung und Sensorneustart werden getrennt geprüft. |
 | Beta parallel zu Stable | Eigene App-ID und getrennte Entitäten, Einstellungen und Medien. Der bestehende OCR-Zähler und seine Historie behalten ihre IDs. |
 

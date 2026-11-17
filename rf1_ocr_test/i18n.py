@@ -12,6 +12,13 @@ from layout import MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR
 
 
 EN_UI = {
+    "Roadmap und geplante Funktionen": "Roadmap and planned features",
+    "Für die 0.6-Beta geplant": "Planned for the 0.6 beta",
+    "Mehrere Zähler mit eigenen Quellen, Einstellungen und Verläufen.": "Multiple meters with their own sources, settings and history.",
+    "Hallsensor über ESPHome, am selben oder an einem zweiten ESP.": "Hall sensor via ESPHome on the same ESP or a second ESP.",
+    "Modernere Zählerübersicht mit Verbrauchsdiagrammen.": "A refreshed meter overview with consumption charts.",
+    "Die Funktionen sind in Planung. Ein Veröffentlichungstermin steht noch aus.": "These features are planned. A release date has yet to be set.",
+    "Vollständige Roadmap ansehen": "View the full roadmap",
     "Automatik wartet auf die Einrichtung. Du kannst sie automatisch oder manuell abschließen.": "Automatic checks are waiting for setup. You can finish setup automatically or manually.",
     "Automatik wartet auf Einrichtung": "Automatic checks are waiting for setup",
     "Selbsteinrichtung wird vorbereitet …": "Preparing automatic setup …",

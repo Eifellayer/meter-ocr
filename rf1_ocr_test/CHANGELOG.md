@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.4 Stable
+
+- Bleibt die automatische Zählerprüfung nach tatsächlich durchgeführten kleinen Winkelkorrekturen weiterhin unklar oder abweichend, fordert die App bei direkt abrufbaren Kameras einmalig nach 15 Sekunden ein neues Bild an. Die vorhandene Fehlerbegrenzung und Prüfung auf unabhängige Aufnahmen bleiben bestehen.
+- Die Statusmeldung für die schnelle Bildnachprüfung wurde verständlicher formuliert.
+
 ## 0.6.3 Stable
 
 - Bei drei ausgewählten Nachkommastellen prüft die Einrichtung die letzte Rolle automatisch und bestätigt abschließend den vollständigen Stand auf einem frischen Bild. Bei weniger Stellen entfällt diese Feinprüfung. Die Oberfläche erklärt die gewählte Prüfung.

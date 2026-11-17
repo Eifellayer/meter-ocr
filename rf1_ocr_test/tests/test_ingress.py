@@ -491,12 +491,12 @@ class IngressTests(IngressFixture):
                     crop="1925,5,2005,390", width=220, rotation=90)
         self.assertEqual((303, "./?test=queued"), self.submit("/pruefen", **form))
         job = self.requested.get_nowait()
-        self.update(job["request_id"], "ocr", "Versuch 2 läuft (höchstens 3) …", 1)
+        self.update(job["request_id"], "ocr", "Versuch 2 von 3 läuft …", 1)
         self.assertEqual((303, "./?test=busy"), self.submit("/pruefen", **form))
         self.assertTrue(self.requested.empty())
         status = json.loads(self.request("/status?lang=en")[0])
         self.assertEqual("ocr", status["phase"])
-        self.assertIn("Attempt 2 in progress (up to 3)", status["message"])
+        self.assertIn("Attempt 2 of 3 in progress", status["message"])
         self.assertEqual(409, self.submit("/ausschnitt-uebernehmen", checked_at="100.0")[0])
         self.preview.write_bytes(b"test image")
         self.history.write_text(json.dumps({"manual_result": {
@@ -827,7 +827,7 @@ class BrowserTests(IngressFixture):
         now = time.time() - 10
         self.rules["setup_completed"] = {
             "source": setup_source_id({**self.source, "selected": True}),
-            "time": now, "duration_seconds": 134,
+            "time": now, "duration_seconds": 134, "frames_tested": 12, "images_checked": 4,
         }
         self.history.write_text(json.dumps({"check_status": "standalone_pending", "last_check_at": now + 2}))
         with sync_playwright() as playwright:
@@ -837,7 +837,7 @@ class BrowserTests(IngressFixture):
             page.goto(self.base)
             success = page.locator("#setup-success")
             success.get_by_text("Zähler erfolgreich eingerichtet", exact=True).wait_for()
-            self.assertIn("Einrichtungsdauer · 2 min 14 s", success.inner_text())
+            self.assertIn("Einrichtungsdauer · 2 min 14 s · Rahmenversuche 12 · Geprüfte Bilder 4", success.inner_text())
             page.reload()
             success.wait_for(state="visible")
             self.history.write_text(json.dumps({
@@ -1070,20 +1070,30 @@ class BrowserTests(IngressFixture):
             self.assertFalse(page.locator("#preview-legend").is_visible())
             page.wait_for_function("document.querySelector('.activity-status').dataset.offline === 'false'")
             Image.new("RGB", (200, 45), "white").save(self.automatic_preview, "JPEG")
-            self.activity = {"state": "working", "detail": "Zählerbild wird gelesen · Versuch 3 (höchstens 5)",
+            self.activity = {"state": "working", "detail": "Zählerbild wird gelesen · Versuch 3 von 5",
                              "completed": 2, "total": 5, "reading": "12345.6??"}
-            page.get_by_text("Zählerbild wird gelesen · Versuch 3 (höchstens 5)", exact=True).wait_for()
+            page.get_by_text("Zählerbild wird gelesen · Versuch 3 von 5", exact=True).wait_for()
             details = page.locator("#automatic-activity-details")
             self.assertIsNone(details.get_attribute("open"))
             details.locator("summary").click()
-            details.get_by_text("Versuche abgeschlossen: 2 · Höchstens 5", exact=True).wait_for()
+            details.get_by_text("Versuche abgeschlossen: 2 von 5", exact=True).wait_for()
             details.get_by_text("Zuletzt gelesen (noch unbestätigt): 12345.6??", exact=True).wait_for()
             page.wait_for_function("document.querySelector('#automatic-progress').value === 2")
             page.wait_for_function("document.querySelector('#test-preview-image').naturalWidth === 200")
             self.assertTrue(page.locator("#preview-legend").is_visible())
+            hour_start = (int(time.time()) // 3600 - 1) * 3600
+            self.history.write_text(json.dumps({"consumption_statistics": {
+                "source": setup_source_id({**self.source, "selected": self.source_selected}),
+                "samples": [[hour_start, 0, 1], [hour_start + 1800, 60, 1]],
+            }}))
             self.activity = {"state": "waiting", "detail": "Wartet auf die nächste automatische Prüfung."}
             page.locator("#automatic-progress").wait_for(state="hidden")
             self.assertEqual("false", page.locator(".activity-status").get_attribute("data-offline"))
+            consumption = page.locator("#consumption-details")
+            consumption.locator("summary").click()
+            page.locator("#consumption-hours li").filter(has_text="0,06 m³ · teilweise").wait_for()
+            self.assertEqual(24, page.locator("#consumption-hours li").count())
+            self.assertEqual(7, page.locator("#consumption-days li").count())
             browser.close()
 
     def test_profile_and_manual_override_on_a_narrow_screen(self):

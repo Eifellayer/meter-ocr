@@ -28,7 +28,17 @@ EN_UI = {
     "Werkzeuge zur Erkennung": "Meter reading tools",
     "Werkzeuge": "Tools",
     "Prüfdetails": "Check details",
-    " · Höchstens ": " · Up to ",
+    ">Verbrauch</h2>": ">Consumption</h2>",
+    "Diese Stunde": "This hour",
+    ">Heute</dt>": ">Today</dt>",
+    "Die Statistik füllt sich mit bestätigten Ablesungen.": "The history grows as readings are confirmed.",
+    "Verlauf nach Stunde und Tag": "Hourly and daily history",
+    "An Zeitgrenzen wird der Verbrauch zwischen zwei Ablesungen geschätzt. Lücken bleiben offen.":
+        "Usage at period boundaries is estimated between two readings. Gaps are left blank.",
+    "Letzte 24 Stunden": "Last 24 hours",
+    "Letzte 7 Tage": "Last 7 days",
+    " · teilweise": " · partial",
+    " + ' von ' + sample.activity_total": " + ' of ' + sample.activity_total",
     "Die Ziffernerkennung beginnt, sobald das Bild bereitsteht.": "Digit recognition starts when the image is ready.",
     "Zuletzt gelesen (noch unbestätigt): ": "Latest reading (unconfirmed): ",
     "Bisher keine Ziffer gelesen.": "No digits read yet.",
@@ -740,9 +750,9 @@ def english_activity(state, detail):
     """Translate concise automatic worker activity, including attempt counters."""
     if detail in EN_UI:
         return EN_UI[detail]
-    match = re.fullmatch(r"Zählerbild wird gelesen · Versuch (\d+) \(höchstens (\d+)\)", str(detail or ""))
+    match = re.fullmatch(r"Zählerbild wird gelesen · Versuch (\d+) von (\d+)", str(detail or ""))
     if match:
-        return f"Reading meter image · Attempt {match[1]} (up to {match[2]})"
+        return f"Reading meter image · Attempt {match[1]} of {match[2]}"
     return "Automatic check in progress." if state == "working" else "Waiting for the next automatic check."
 
 
@@ -838,8 +848,8 @@ def english_progress(message):
         start = re.fullmatch(r"OCR-Prüfung gestartet \(max\. (\d+) Versuche\)\.", message)
         if start:
             return f"OCR analysis started (max. {start[1]} attempts)."
-        attempt = re.fullmatch(r"Versuch (\d+) (läuft|abgeschlossen) \(höchstens (\d+)\)(?: …|\.)", message)
+        attempt = re.fullmatch(r"Versuch (\d+) von (\d+) (läuft|abgeschlossen)(?: …|\.)", message)
         if attempt:
-            phase, end = ("in progress", " …") if attempt[2] == "läuft" else ("complete", ".")
-            return f"Attempt {attempt[1]} {phase} (up to {attempt[3]}){end}"
+            phase, end = ("in progress", " …") if attempt[3] == "läuft" else ("complete", ".")
+            return f"Attempt {attempt[1]} of {attempt[2]} {phase}{end}"
     return message or "No status message."

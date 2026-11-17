@@ -30,7 +30,7 @@ class AppIdentityTests(unittest.TestCase):
     def test_release_metadata_preserves_stable_app_identity(self):
         config = yaml.safe_load((APP / "config.yaml").read_text(encoding="utf-8"))
         repository = yaml.safe_load((APP.parent / "repository.yaml").read_text(encoding="utf-8"))
-        self.assertEqual("0.5.34", config["version"])
+        self.assertEqual("0.5.35", config["version"])
         self.assertEqual("rf1_ocr_test", config["slug"])
         self.assertEqual("AI Meter Reader", config["name"])
         self.assertNotIn("stage", config)
@@ -244,7 +244,7 @@ class PanelTests(unittest.TestCase):
         self.assertNotIn("Test starten", page)
 
     def test_english_status_and_specific_digit_diagnostics(self):
-        self.assertIn("Attempt 2 in progress (up to 5)", english_progress("Versuch 2 läuft (höchstens 5) …"))
+        self.assertIn("Attempt 2 of 5 in progress", english_progress("Versuch 2 von 5 läuft …"))
         self.assertIn("rounded to 2 decimal places", english_result(
             "Bestätigt: Zählerstand und Referenzwert stimmen überein.",
             "match", 2))

@@ -1,5 +1,7 @@
 """Check automatic readings and keep a restart-safe cumulative gas consumption counter."""
 
+from bisect import bisect_left, bisect_right
+from datetime import datetime, time, timedelta
 import re
 
 from checks import FALLBACK_NOTICE, meter_prefix
@@ -100,3 +102,61 @@ def fallback_detail(sample, image_time, ocr, readings, previous, source, max_flo
     except ImplausibleReading as error:
         return f"{FALLBACK_NOTICE} OCR: {error}"
     return f"{FALLBACK_NOTICE} {FALLBACK_PLAUSIBLE}"
+
+
+STATISTICS_DAYS = 7
+STATISTICS_HOURS = 24
+MAX_STATISTICS_GAP = 2 * 3600
+
+
+def record_consumption_sample(series, source, counter):
+    """Keep dated snapshots of the accepted cumulative counter with a boundary anchor."""
+    stamp, total, step = (counter[key] for key in ("timestamp", "total_litres", "step_litres"))
+    samples = series.get("samples", []) if series.get("source") == source else []
+    if samples and stamp <= samples[-1][0]:
+        return series
+    cutoff = stamp - (STATISTICS_DAYS + 1) * 86400
+    first = max(0, bisect_left(samples, cutoff, key=lambda sample: sample[0]) - 1)
+    return {"source": source, "samples": [*samples[first:], [stamp, total, step]]}
+
+
+def consumption_statistics(series, source, now, zone):
+    """Calculate local hourly and daily consumption from confirmed intervals."""
+    samples = series.get("samples", []) if series.get("source") == source else []
+    samples = samples[:bisect_right(samples, now, key=lambda sample: sample[0])]
+    local = datetime.fromtimestamp(now, zone)
+    hour = local.replace(minute=0, second=0, microsecond=0).timestamp()
+    hour_starts = [hour - offset * 3600 for offset in range(STATISTICS_HOURS)]
+    day_starts = [datetime.combine(local.date() - timedelta(days=offset), time.min, zone).timestamp()
+                  for offset in range(STATISTICS_DAYS)]
+    hour_labels = [datetime.fromtimestamp(stamp, zone).strftime("%d.%m. %H:%M") for stamp in hour_starts]
+
+    def summarize(start, end, label):
+        litres = covered = 0
+        estimated = False
+        begin = max(0, bisect_right(samples, start, key=lambda sample: sample[0]) - 1)
+        stop = bisect_left(samples, end, key=lambda sample: sample[0])
+        for left, right in zip(samples[begin:stop], samples[begin + 1:stop + 1]):
+            first, previous, step = left
+            last, current, next_step = right
+            overlap = min(end, last) - max(start, first)
+            if overlap <= 0 or step != next_step or current < previous:
+                continue
+            duration = last - first
+            if overlap < duration and duration > MAX_STATISTICS_GAP:
+                continue
+            covered += overlap
+            litres += (current - previous) * overlap / duration
+            estimated |= overlap < duration and current > previous
+        return {"label": label, "litres": round(litres) if covered else None,
+                "partial": 0 < covered < end - start - .001, "estimated": estimated}
+
+    hours = []
+    for index, (stamp, label) in enumerate(zip(hour_starts, hour_labels)):
+        if hour_labels.count(label) > 1:
+            label += datetime.fromtimestamp(stamp, zone).strftime(" (%z)")
+        hours.append(summarize(stamp, hour_starts[index - 1] if index else now, label))
+    days = [summarize(stamp, day_starts[index - 1] if index else now,
+                      datetime.fromtimestamp(stamp, zone).strftime("%d.%m.%Y"))
+            for index, stamp in enumerate(day_starts)]
+    return {"hours": hours, "days": days}

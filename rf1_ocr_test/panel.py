@@ -9,7 +9,7 @@ import json
 import os
 import re
 import subprocess
-from datetime import datetime
+from datetime import datetime, timezone
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from queue import Empty, Full
@@ -29,7 +29,7 @@ from checks import (DEFAULT_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, WARNING_DETA
                     OCR_PROFILES, crop_register, read_register, LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, REFLECTION_SUGGEST_AFTER, STANDALONE_PENDING, STANDALONE_REJECTED_NOTICE,
                     STANDALONE_VERIFIED_NOTICE, last_check_at, reschedule_next_check,
                     setup_deadlines, setup_source_id, stabilization_interval, stationary_partial_active, valid_interval_minutes)
-from consumption import DEFAULT_FLOW_LPH, format_cubic_metres, parse_flow_limit
+from consumption import DEFAULT_FLOW_LPH, consumption_statistics, format_cubic_metres, parse_flow_limit
 from i18n import EN_UI, english_progress, english_result, translate_page
 from language import MODES, SUPPORTED, USER_ID, browser_locale, profile_script
 from layout import MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, digit_box_settings, scale_digit_boxes, turn_crop
@@ -140,6 +140,13 @@ header{{display:flex;align-items:baseline;justify-content:space-between;gap:.5re
 .setup-success strong{{font-size:clamp(1.15rem,4vw,1.4rem)}}
 .setup-success p{{margin:.35rem 0 0}}
 #setup-duration{{font-variant-numeric:tabular-nums}}
+.consumption-summary{{display:flex;gap:.75rem 1.8rem;flex-wrap:wrap;margin:.75rem 0}}
+.consumption-summary dt{{font-size:.86rem;color:var(--muted)}}
+.consumption-summary dd{{margin:.2rem 0 0;font-weight:700;font-variant-numeric:tabular-nums}}
+.consumption-history{{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,13rem),1fr));gap:.8rem}}
+.consumption-history ol{{padding:0;margin:.4rem 0;list-style:none}}
+.consumption-history li{{display:flex;justify-content:space-between;gap:.6rem;padding:.25rem 0;border-bottom:1px solid var(--edge);font-variant-numeric:tabular-nums}}
+.consumption-history li span:last-child{{text-align:right}}
 #recognition-tools{{margin-top:1rem;padding-top:.8rem;border-top:1px solid var(--edge)}}
 #recognition-tools .check-actions{{margin-top:.65rem}}
 #setup-image-test{{margin:.4rem 0 .8rem}}
@@ -450,6 +457,22 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <p>? steht für eine unklare Ziffer.</p>
 <table><thead><tr><th>Versuch</th><th>Erkannter Stand</th></tr></thead><tbody></tbody></table>
 </details>
+<section class="consumption-panel" aria-labelledby="consumption-title">
+<h2 id="consumption-title">Verbrauch</h2>
+<dl class="consumption-summary">
+<div><dt>Diese Stunde</dt><dd id="consumption-hour">–</dd></div>
+<div><dt>Heute</dt><dd id="consumption-day">–</dd></div>
+</dl>
+<p id="consumption-empty" class="settings-note">Die Statistik füllt sich mit bestätigten Ablesungen.</p>
+<details id="consumption-details" hidden>
+<summary>Verlauf nach Stunde und Tag</summary>
+<p class="settings-note">An Zeitgrenzen wird der Verbrauch zwischen zwei Ablesungen geschätzt. Lücken bleiben offen.</p>
+<div class="consumption-history">
+<div><strong>Letzte 24 Stunden</strong><ol id="consumption-hours"></ol></div>
+<div><strong>Letzte 7 Tage</strong><ol id="consumption-days"></ol></div>
+</div>
+</details>
+</section>
 <details class="dashboard-help">
 <summary>Stand im Home-Assistant-Dashboard anzeigen</summary>
 <p>Wenn AI Meter Reader selbst aus einer ESPHome- oder Home-Assistant-Kamera liest, kannst du den Sensor „Zählerstand“ zum Dashboard hinzufügen. Seine Entitäts-ID lautet <code>sensor.rf1_ocr_zaehlerstand</code>.</p>
@@ -2345,6 +2368,36 @@ ignoreWarning.addEventListener('click', () => {{
 }});
 updateBannerVisibility();
 
+const consumptionFormat = new Intl.NumberFormat(lang, {{maximumFractionDigits: 3}});
+function renderConsumption(data) {{
+  if (!data) return;
+  function volume(bucket) {{
+    if (bucket?.litres == null) return '–';
+    const amount = consumptionFormat.format(bucket.litres / 1000) + ' m³';
+    return (bucket.estimated ? '≈ ' : '') + amount + (bucket.partial ? ' · teilweise' : '');
+  }}
+  document.querySelector('#consumption-hour').textContent = volume(data.hours[0]);
+  document.querySelector('#consumption-day').textContent = volume(data.days[0]);
+  const available = [...data.hours, ...data.days].some(bucket => bucket.litres != null);
+  document.querySelector('#consumption-empty').hidden = available;
+  document.querySelector('#consumption-details').hidden = !available;
+  for (const [id, buckets] of [['hours', data.hours], ['days', data.days]]) {{
+    const list = document.querySelector('#consumption-' + id);
+    const key = JSON.stringify(buckets);
+    if (list.dataset.values === key) continue;
+    list.replaceChildren(...buckets.map(bucket => {{
+      const row = document.createElement('li');
+      const label = document.createElement('span');
+      const value = document.createElement('span');
+      label.textContent = bucket.label;
+      value.textContent = volume(bucket);
+      row.append(label, value);
+      return row;
+    }}));
+    list.dataset.values = key;
+  }}
+}}
+
 async function refreshAutomatic() {{
   let refreshDelay = 15000;
   try {{
@@ -2356,6 +2409,7 @@ async function refreshAutomatic() {{
     if (routineOk) calibrationNoticeUntil = 0;
     updateCalibrationNotice();
     next = sample.next_check;
+    renderConsumption(sample.consumption);
     document.querySelector('#paused-notice').hidden = !sample.paused;
     document.querySelector('#pause-auto-form').hidden = sample.paused;
     automaticBanner.dataset.tone = sample.tone;
@@ -2382,7 +2436,7 @@ async function refreshAutomatic() {{
     checkDetails.hidden = progress.hidden;
     if (checkDetails.hidden) checkDetails.open = false;
     document.querySelector('#automatic-attempt-info').textContent = sample.activity_total > 0
-      ? 'Versuche abgeschlossen: ' + (sample.activity_completed || 0) + ' · Höchstens ' + sample.activity_total
+      ? 'Versuche abgeschlossen: ' + (sample.activity_completed || 0) + ' von ' + sample.activity_total
       : 'Die Ziffernerkennung beginnt, sobald das Bild bereitsteht.';
     document.querySelector('#automatic-live-reading').textContent = /[0-9]/.test(sample.activity_reading || '')
       ? 'Zuletzt gelesen (noch unbestätigt): ' + sample.activity_reading
@@ -2558,7 +2612,7 @@ def start_panel(
     request_factory_reset=None, get_reset_status=None, skip_setup=None, get_activity=None,
     get_auto_paused=None, save_auto_paused=None, discover_sources=None,
     settings_lock=None, get_calibration=None, control_calibration=None, get_calibration_image=None,
-    has_calibration_backup=None, get_wizard_image=None,
+    has_calibration_backup=None, get_wizard_image=None, statistics_zone=timezone.utc,
 ):
     images = {"/aktuell.jpg": current_image, "/treffer.jpg": good_image,
               "/testvorschau.jpg": test_image}
@@ -2712,12 +2766,19 @@ def start_panel(
                 and time.time() - completed["time"] >= 5):
             return None
         elapsed = completed["duration_seconds"]
-        if type(elapsed) is not int or elapsed < 0:
-            return {"duration": ""}
-        minutes, seconds = divmod(elapsed, 60)
-        duration = f"{minutes} min {seconds:02d} s" if minutes else f"{seconds} s"
-        label = "Setup duration" if language == "en" else "Einrichtungsdauer"
-        return {"duration": f"{label} · {duration}"}
+        details = []
+        if type(elapsed) is int and elapsed >= 0:
+            minutes, seconds = divmod(elapsed, 60)
+            duration = f"{minutes} min {seconds:02d} s" if minutes else f"{seconds} s"
+            label = "Setup duration" if language == "en" else "Einrichtungsdauer"
+            details.append(f"{label} · {duration}")
+        counts = (("frames_tested", "Frame attempts", "Rahmenversuche"),
+                  ("images_checked", "Images checked", "Geprüfte Bilder"))
+        for key, english, german in counts:
+            value = completed.get(key)
+            if type(value) is int and value >= 0:
+                details.append(f"{english if language == 'en' else german} {value}")
+        return {"duration": " · ".join(details)}
 
     def automatic_summary(history, language, auto_rules):
         source, setup_pending = get_source()
@@ -2986,7 +3047,12 @@ def start_panel(
             history = read_history()
             auto_rules = read_auto_rules()
             if path == "/automatic":
-                payload = json.dumps(automatic_summary(history, language, auto_rules))
+                summary = automatic_summary(history, language, auto_rules)
+                summary["consumption"] = consumption_statistics(
+                    history.get("consumption_statistics", {}), setup_source_id(get_source()[0]),
+                    time.time(), statistics_zone,
+                )
+                payload = json.dumps(summary)
                 self.reply(payload.encode("utf-8"), "application/json; charset=utf-8")
                 return
             user = self.user_id()
@@ -3581,6 +3647,7 @@ def start_panel(
                         if initial_setup and not learn_crop:
                             rules_values["setup_pending_source"] = setup_source_id(get_source()[0])
                             rules_values["setup_pending_started"] = None
+                            rules_values["setup_pending_metrics"] = None
                         with delivery_lock:
                             save_delivery(delivery_values)
                         save_auto_rules(rules_values)

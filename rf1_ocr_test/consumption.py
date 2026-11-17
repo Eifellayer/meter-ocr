@@ -109,10 +109,15 @@ STATISTICS_HOURS = 24
 MAX_STATISTICS_GAP = 2 * 3600
 
 
-def record_consumption_sample(series, source, counter):
-    """Keep dated snapshots of the accepted cumulative counter with a boundary anchor."""
+def record_consumption_sample(series, source, counter, *, preserve_on_source_change=False):
+    """Keep dated snapshots, optionally bridging an explicit reset across image-source changes.
+
+    accumulate_consumption keeps the cumulative total when a source changes and
+    starts a new reading baseline. The first point here therefore adds no
+    artificial consumption; the historical samples remain available.
+    """
     stamp, total, step = (counter[key] for key in ("timestamp", "total_litres", "step_litres"))
-    samples = series.get("samples", []) if series.get("source") == source else []
+    samples = series.get("samples", []) if (series.get("source") == source or preserve_on_source_change) else []
     if samples and stamp <= samples[-1][0]:
         return series
     cutoff = stamp - (STATISTICS_DAYS + 1) * 86400

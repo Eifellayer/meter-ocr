@@ -40,6 +40,21 @@ def synthetic_meter():
 
 
 class SourceTests(TestCase):
+    def test_optional_factory_reset_keeps_only_consumption_statistics(self):
+        original = {
+            "consumption": {"source": ["camera", "camera.meter"], "total_litres": 1240,
+                            "timestamp": 100, "reading_litres": 32100, "step_litres": 10},
+            "consumption_statistics": {"source": "camera.meter", "samples": [[100, 1240, 10]]},
+            "manual_result": {"ocr": "12345.001"}, "confirmations": [100], "check_status": "match",
+        }
+        kept = run.factory_reset_history(original, keep_statistics=True)
+        self.assertEqual({"consumption", "consumption_statistics", "statistics_preserved_after_reset"}, set(kept))
+        self.assertEqual(1240, kept["consumption"]["total_litres"])
+        self.assertEqual([[100, 1240, 10]], kept["consumption_statistics"]["samples"])
+        kept["consumption_statistics"]["samples"].append([101, 1300, 10])
+        self.assertEqual(1, len(original["consumption_statistics"]["samples"]))
+        self.assertEqual({}, run.factory_reset_history(original))
+
     def test_failed_angle_correction_requests_fresh_image_for_mismatch_or_uncertainty(self):
         for outcome in ("difference", "ocr_unclear"):
             with self.subTest(outcome=outcome):
@@ -1262,7 +1277,21 @@ class StateTests(TestCase):
                 "reading": "12346", "time": datetime.now(timezone.utc).timestamp() - 10,
             },
         }))
+        # After a statistics-preserving reset, a newly configured camera may
+        # use a fresh calibration reference. It must retain the previous total.
+        prior_time = datetime.now(timezone.utc).timestamp() - 120
+        files["HISTORY"].write_text(json.dumps({
+            "consumption": {"source": ["esphome", "camera.old", ""], "timestamp": prior_time,
+                            "reading_litres": 12345000, "anchor_litres": 12345000,
+                            "step_litres": 1000, "total_litres": 2100},
+            "consumption_statistics": {"source": "old-camera", "samples": [[prior_time, 2100, 1000]]},
+            "statistics_preserved_after_reset": True,
+        }))
         started = check("12346.???")
+        self.assertEqual(2100, started["consumption"]["total_litres"])
+        self.assertEqual([2100, 2100], [sample[1] for sample in
+                                          started["consumption_statistics"]["samples"]])
+        self.assertNotIn("statistics_preserved_after_reset", started)
         self.assertEqual("ocr_only", started["check_status"])
         self.assertEqual("12346", started["last_reference"])
         self.assertEqual(5, started["check_interval_minutes"])

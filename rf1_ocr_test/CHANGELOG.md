@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.5 Stable
+
+- Zusätzlicher Button „Factory Reset – Statistik behalten“ im Bereich „App-Daten zurücksetzen“. Der bisherige vollständige Reset bleibt unverändert.
+- Der neue Reset entfernt OCR-Einrichtung, Bildquelle, Benachrichtigungen, Kalibrierung, Testbilder und Prüfergebnisse, erhält aber kumulierten Verbrauch und die gespeicherten Stunden-/Tagesstatistiken. Auch die Messhistorie experimenteller Zusatzzähler bleibt für eine spätere Wiedereinrichtung erhalten.
+- Bei erneuter Einrichtung mit einer anderen Bildquelle bleiben vorhandene Statistikwerte erhalten; die erste neue Messung setzt die neue Basis, ohne künstlichen Verbrauch zu erzeugen. Die neue Einrichtung ist vor weiteren automatischen Prüfungen erforderlich.
+- Separate Bestätigung für den Reset mit Statistikerhalt; serverseitige Eingabeprüfung und Regressionstests für beide Resetvarianten.
+
 ## 0.6.4 Stable
 
 - Bleibt die automatische Zählerprüfung nach tatsächlich durchgeführten kleinen Winkelkorrekturen weiterhin unklar oder abweichend, fordert die App bei direkt abrufbaren Kameras einmalig nach 15 Sekunden ein neues Bild an. Die vorhandene Fehlerbegrenzung und Prüfung auf unabhängige Aufnahmen bleiben bestehen.

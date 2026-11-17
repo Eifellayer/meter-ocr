@@ -998,7 +998,8 @@ Bei anhaltenden Problemen benachrichtigen
 <details class="settings-item reset-section">
 <summary><strong>App-Daten zurücksetzen</strong></summary>
 <div class="manual-content">
-<p class="settings-note">Setzt die AI-Meter-Reader-Einstellungen und Prüfhistorie auf Standardwerte zurück und entfernt gespeicherte Testbilder. Die Home-Assistant-App-Konfiguration und vorhandenen Entitäten bleiben erhalten.</p>
+<p class="settings-note">Du kannst die Einrichtung vollständig zurücksetzen oder die bestätigten Zählerstands- und Verbrauchsstatistiken behalten. Home-Assistant-App-Konfiguration und Entitäten bleiben in beiden Fällen bestehen.</p>
+<button type="button" id="open-reset-keep">Factory Reset – Statistik behalten</button>
 <button type="button" id="open-reset">Auf Werkseinstellungen zurücksetzen</button>
 </div></details>
 </div>
@@ -1032,10 +1033,12 @@ Bei anhaltenden Problemen benachrichtigen
 </dialog>
 <dialog class="setup-dialog" id="reset-dialog" aria-labelledby="reset-title">
 <h2 id="reset-title">Werkseinstellungen wiederherstellen?</h2>
-<p>Gespeicherte Bildquelle, OCR- und Benachrichtigungseinstellungen, Prüfhistorie und Testbilder werden zurückgesetzt. Home-Assistant-App-Konfiguration und Entitätsnamen bleiben erhalten.</p>
+<p id="reset-full-info">Gespeicherte Bildquelle, OCR- und Benachrichtigungseinstellungen, Prüfhistorie, Verbrauchsstatistik und Testbilder werden zurückgesetzt. Home-Assistant-App-Konfiguration und Entitätsnamen bleiben erhalten.</p>
+<p id="reset-keep-info" hidden>Bildquelle, OCR- und Benachrichtigungseinstellungen, Prüfhistorie und Testbilder werden zurückgesetzt. Bestätigte Zählerstands- und Verbrauchsstatistiken sowie der kumulierte Verbrauch bleiben erhalten. Anschließend ist eine neue Einrichtung erforderlich.</p>
 <form method="post" action="werkreset" id="reset-form">
 <input type="hidden" name="lang" value="{language}"><input type="hidden" name="mode" value="{language_mode}">
 <input type="hidden" name="csrf" value="{csrf}">
+<input type="hidden" name="keep_statistics" id="reset-keep-statistics" value="0">
 <button type="button" id="cancel-reset">Abbrechen</button>
 <button type="submit">Jetzt zurücksetzen</button>
 </form>
@@ -1196,7 +1199,14 @@ document.querySelector('#run-demo-glare').addEventListener('click', () => checkD
 const resetDialog = document.querySelector('#reset-dialog');
 const resetForm = document.querySelector('#reset-form');
 const resetProgress = document.querySelector('#reset-progress');
-document.querySelector('#open-reset').addEventListener('click', () => resetDialog.showModal());
+function openFactoryReset(keepStatistics) {{
+  document.querySelector('#reset-keep-statistics').value = keepStatistics ? '1' : '0';
+  document.querySelector('#reset-keep-info').hidden = !keepStatistics;
+  document.querySelector('#reset-full-info').hidden = keepStatistics;
+  resetDialog.showModal();
+}}
+document.querySelector('#open-reset').addEventListener('click', () => openFactoryReset(false));
+document.querySelector('#open-reset-keep').addEventListener('click', () => openFactoryReset(true));
 document.querySelector('#cancel-reset').addEventListener('click', () => resetDialog.close());
 resetDialog.addEventListener('cancel', event => {{
   if (!resetProgress.hidden) event.preventDefault();
@@ -3449,9 +3459,12 @@ def start_panel(
             auto_rules = read_auto_rules()
             if path == "/automatic":
                 summary = automatic_summary(history, language, auto_rules)
+                series = history.get("consumption_statistics", {})
+                source_scope = setup_source_id(get_source()[0])
+                if history.get("statistics_preserved_after_reset") and series.get("source"):
+                    source_scope = series["source"] if source_scope != series["source"] else source_scope
                 summary["consumption"] = consumption_statistics(
-                    history.get("consumption_statistics", {}), setup_source_id(get_source()[0]),
-                    time.time(), statistics_zone,
+                    series, source_scope, time.time(), statistics_zone,
                 )
                 payload = json.dumps(summary)
                 self.reply(payload.encode("utf-8"), "application/json; charset=utf-8")
@@ -3514,6 +3527,7 @@ def start_panel(
             success = setup_success(history, auto_rules, source, language)
             duration = success["duration"] if success else ""
             reset_state = query.get("reset", [""])[0]
+            keep_reset_statistics = query.get("keep_statistics") == ["1"]
             if reset_state == "pending" and get_reset_status is not None:
                 reset_state = get_reset_status()
                 if reset_state not in ("pending", "done", "failed"):
@@ -3521,7 +3535,8 @@ def start_panel(
             if reset_state not in ("pending", "done", "failed"):
                 reset_state = ""
             reset_message = {
-                "done": "Werkseinstellungen wiederhergestellt. Die Einrichtung öffnet sich erneut.",
+                "done": ("Werkseinstellungen wiederhergestellt. Verbrauchsstatistik und Gesamtverbrauch sind erhalten. Die Einrichtung öffnet sich erneut."
+                         if keep_reset_statistics else "Werkseinstellungen wiederhergestellt. Die Einrichtung öffnet sich erneut."),
                 "pending": "Werkreset läuft noch. Die Einrichtung öffnet sich, sobald er fertig ist.",
                 "failed": "Werkreset konnte nicht vollständig ausgeführt werden.",
             }.get(reset_state, "")
@@ -3884,10 +3899,17 @@ def start_panel(
                 self.redirect("?paused=" + target[0] + keep_mode)
                 return
             if path == "/werkreset":
-                result = request_factory_reset() if request_factory_reset is not None else "failed"
+                values = form.get("keep_statistics", ["0"])
+                if len(values) != 1 or values[0] not in ("0", "1"):
+                    problem(400)
+                    return
+                keep_statistics = values[0] == "1"
+                result = (request_factory_reset(keep_statistics=keep_statistics)
+                          if request_factory_reset is not None else "failed")
                 if result not in ("done", "pending", "failed"):
                     result = "failed"
-                self.redirect("?reset=" + result + "&ui=settings" + keep_mode)
+                self.redirect("?reset=" + result + "&ui=settings"
+                              + ("&keep_statistics=1" if keep_statistics else "") + keep_mode)
                 return
             if path == "/sprache":
                 if user:

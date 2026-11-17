@@ -43,3 +43,7 @@ For full setup, explanation of comparison rules, schedules and troubleshooting, 
 ---
 
 Private, free hobby project. Optional [PayPal donation](https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8). Donations are not required.
+
+## Factory Reset mit Erhalt der Verbrauchsstatistik
+
+Unter **App-Daten zurücksetzen** stehen zwei Schaltflächen: Der bisherige vollständige Reset löscht auch die Statistik. **Factory Reset – Statistik behalten** entfernt Einstellungen, Bildquelle, Kalibrierungen, Prüfdetails und Testbilder, erhält jedoch den kumulierten Verbrauch sowie die gespeicherten Zählerstands-/Verbrauchsstatistiken. Für experimentelle Zusatzsensoren bleiben die bisherigen Messdaten gespeichert; die Überwachung muss danach erneut eingerichtet werden. Nach dem Reset ist eine erneute Einrichtung erforderlich. Bei einer anderen Bildquelle wird kein Verbrauch für den Quellenwechsel erfunden. Home-Assistant-Entitätsnamen und bestehende Langzeitstatistik im Home-Assistant-Recorder werden nicht verändert.

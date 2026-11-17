@@ -101,6 +101,25 @@ class ConsumptionStatisticsTests(TestCase):
         other = consumption_statistics(series, "other", self.midnight + 20 * day, timezone.utc)
         self.assertIsNone(other["days"][0]["litres"])
 
+    def test_preserved_statistics_survive_image_source_change_without_phantom_consumption(self):
+        start = self.midnight
+        before = record_consumption_sample({}, "source-a", {
+            "timestamp": start + 10, "total_litres": 120, "step_litres": 1})
+        before = record_consumption_sample(before, "source-a", {
+            "timestamp": start + 600, "total_litres": 180, "step_litres": 1})
+        switched = record_consumption_sample(before, "source-b", {
+            "timestamp": start + 900, "total_litres": 180, "step_litres": 1},
+            preserve_on_source_change=True)
+        self.assertEqual("source-b", switched["source"])
+        self.assertEqual([120, 180, 180], [sample[1] for sample in switched["samples"]])
+        continued = record_consumption_sample(switched, "source-b", {
+            "timestamp": start + 1200, "total_litres": 200, "step_litres": 1})
+        self.assertEqual(80, consumption_statistics(
+            continued, "source-b", start + 1200, timezone.utc)["days"][0]["litres"])
+        reset = record_consumption_sample(before, "source-b", {
+            "timestamp": start + 900, "total_litres": 180, "step_litres": 1})
+        self.assertEqual(1, len(reset["samples"]))
+
     def test_repeated_clock_hour_is_labelled_twice_on_the_autumn_clock_change(self):
         zone = ZoneInfo("Europe/Berlin")
         start = datetime(2026, 10, 25, 2, tzinfo=zone)

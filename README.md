@@ -1,4 +1,6 @@
-# AI Meter Reader für Home Assistant
+# AI Meter Reader – lokale Zählerablesung für Home Assistant
+
+**Home Assistant App / Add-on für Kamera-OCR am Gaszähler.** Liest mechanische Zähler lokal mit Tesseract, unterstützt ESPHome- und Home-Assistant-Kameras und kann Messwerte von AI on the Edge / SLFork gegenprüfen.
 
 **Sprache / Language:** [Deutsch](README.md) · [English](README.en.md)
 
@@ -8,9 +10,15 @@
 
 **Zählerstände direkt in Home Assistant aus Kamerabildern lesen und prüfen.**
 
+## Ausprobieren und mitmachen
+
+- **Demo ohne Kamera** – App installieren, Weboberfläche öffnen und die Zähler-Demo ausprobieren. Das künstliche Beispiel zeigt OCR, Ausrichtung und eine simulierte verdeckte Ziffer.
+- **Eigenen Zähler einrichten** – Bildquelle wählen und die Selbsteinrichtung starten. Drei ausgewählte Nachkommastellen schließen die automatische Feinprüfung der letzten Rolle ein. Bei zwei Stellen entfällt diese Prüfung.
+- **Fehler oder Ideen melden** – App-Version, Bildquelle, Zählertyp und die erwartete Ablesung helfen beim Nachstellen. [Support und Rückmeldungen](https://github.com/Eifellayer/meter-ocr/issues)
+
 **Langfristiges Ziel:** AI on the Edge / SLFork soll keine Voraussetzung mehr sein. AI Meter Reader soll Bilder direkt aus Home Assistant beziehen und die Auswertung lokal dort übernehmen – flexibel für unterschiedliche Zählertypen, Kamerawinkel, Bildausschnitte und Lichtverhältnisse. Das ist das Projektziel, kein Versprechen, dass jeder Zähler bereits unterstützt oder praktisch getestet ist.
 
-## Beta-Tester gesucht
+## Tester und Rückmeldungen willkommen
 
 Du nutzt Home Assistant mit einem Gas-, Wasser- oder anderen Zähler? Gesucht werden Tester mit unterschiedlichen Kameras, Ausschnitten und Lichtverhältnissen. Die zuschaltbare Langzeit-Feinjustierung und die adaptiven Intervalle brauchen echte Langzeittests. Für reale Prüfungen nutze ich selbst AI on the Edge; andere Quellen und Zählertypen sind bislang nur simuliert getestet. Wenn du beim Testen helfen möchtest, melde dich über [GitHub Issues](https://github.com/Eifellayer/meter-ocr/issues) und nenne App-Version, Zählertyp und Bildquelle. Bitte keine Zugangsdaten oder ungeschwärzten Fotos mit persönlichen Informationen posten.
 
@@ -18,7 +26,7 @@ AI Meter Reader liest das Zählerfoto mit **Tesseract OCR**. Mit ESPHome oder ei
 
 Der aktuelle Schwerpunkt liegt auf mechanischen Gaszählern mit einstellbaren Ziffern vor und nach dem Komma. Kleine Zeiger und analoge Rädchen werden noch nicht automatisch ausgewertet. Die Messwertausgabe ist derzeit auf Kubikmeter ausgelegt; weitere Zählertypen und Situationen sollen mit Tester-Rückmeldungen schrittweise dazukommen.
 
-AI Meter Reader ist ein privates Hobbyprojekt für die Plausibilitätskontrolle. [Hinweise zur Nutzung](#hinweise-zur-nutzung)
+AI Meter Reader ist ein öffentliches Hobbyprojekt für die Plausibilitätskontrolle. [Hinweise zur Nutzung](#hinweise-zur-nutzung)
 
 ## Was wird kontrolliert?
 
@@ -186,3 +194,35 @@ AI Meter Reader ist ein kostenloses Hobbyprojekt. Wenn sie dir hilft, freue ich 
 [Änderungsprotokoll](rf1_ocr_test/CHANGELOG.md) · [Quellen](SOURCES.md) · [Home-Assistant-App](rf1_ocr_test/README.md) · [English documentation](README.en.md)
 
 <img src="assets/project-logo.png" alt="Projektlogo" width="120">
+
+## Projekt teilen
+
+Ein kurzer Text für Smart-Home-Gruppen und soziale Netzwerke
+
+> AI Meter Reader liest mechanische Gaszähler mit lokaler OCR direkt in Home Assistant. Mit automatischer Rahmensuche, Bilddrehung und einer Demo ohne Kamera. Rückmeldungen zu unterschiedlichen Zählern und Kameras sind willkommen.
+>
+> https://github.com/Eifellayer/meter-ocr
+>
+> #HomeAssistant #SmartHome #OCR #ESP32CAM #ESPHome #SelfHosted
+
+Suchbegriffe für dieses Projekt sind Home Assistant Add-on, lokale Zählerablesung, Gaszähler OCR, camera meter reading, meter OCR, ESP32-CAM und AI on the Edge.
+
+## Neue Version sofort suchen
+
+In Home Assistant unter **Entwicklerwerkzeuge → Aktionen** diese Aktion ausführen. Sie lädt den App-Katalog unmittelbar neu.
+
+```yaml
+action: homeassistant.update_entity
+data:
+  entity_id: update.meter_ocr_update
+```
+
+Sobald die neue Version bei der Update-Entität angezeigt wird, installiert die aktivierte automatische Aktualisierung sie. Alternativ die Installation mit dieser Aktion anstoßen.
+
+```yaml
+action: update.install
+target:
+  entity_id: update.meter_ocr_update
+```
+
+Im Home-Assistant-Terminal lässt sich der Katalog mit `ha store reload` neu laden.

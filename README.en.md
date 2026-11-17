@@ -1,6 +1,12 @@
-# AI Meter Reader for Home Assistant
+# AI Meter Reader – local camera OCR for Home Assistant
 
-**Read and verify meter values from camera images directly in Home Assistant.**
+**Home Assistant app / add-on for local gas meter OCR.** Read mechanical meters with Tesseract using ESPHome or Home Assistant cameras, or cross-check readings from AI on the Edge / SLFork.
+
+## Try it and contribute
+
+- **Demo without a camera** – Install the app, open its web interface and try the meter demo. The synthetic example shows OCR, image alignment and a simulated obscured digit.
+- **Set up your meter** – Select an image source and start automatic setup. Selecting three decimal places includes the last-roller fine check. Selecting two decimal places skips it.
+- **Report an issue or suggest an improvement** – Include the app version, image source, meter type and expected reading so the problem can be reproduced. [Support and feedback](https://github.com/Eifellayer/meter-ocr/issues)
 
 **Long-term goal:** AI on the Edge / SLFork should no longer be a requirement. AI Meter Reader aims to get images from Home Assistant and process them locally, with flexible support for different meter types, camera angles, crops, and lighting. This is the project direction, not a claim that every meter is already supported or field-tested.
 
@@ -10,7 +16,7 @@
 
 **Current version: 0.6.3 Stable.** Setup checks rotated images. Automatic checks default to ten minutes, and the interval is configurable. The meter demo runs without a camera. [Changelog](rf1_ocr_test/CHANGELOG.md)
 
-## Beta testers wanted
+## Testers and feedback welcome
 
 Do you use Home Assistant with a gas, water, or other meter? We are looking for testers with different cameras, crops, and lighting conditions. Optional fine-tuning and adaptive intervals need real long-term testing. I use AI on the Edge for real-world checks; other sources and meter types have so far been tested with simulations only. To help, report your app version, meter type, and image source through [GitHub Issues](https://github.com/Eifellayer/meter-ocr/issues). Please do not post credentials or unredacted photos containing personal information.
 
@@ -18,7 +24,7 @@ AI Meter Reader reads camera images with **local Tesseract OCR**. It can provide
 
 The current focus is mechanical gas meters with configurable whole and fractional digits. Small pointer dials are not read automatically yet. The Home Assistant reading output currently uses cubic meters; tester feedback will help extend support to more meters and conditions.
 
-AI Meter Reader is a private hobby project for checking meter readings. [Usage notes](#usage-notes)
+AI Meter Reader is a public hobby project for checking meter readings. [Usage notes](#usage-notes)
 
 ## What does it check?
 
@@ -168,3 +174,36 @@ For questions and bug reports, use the [GitHub issues](https://github.com/Eifell
 The project is free. If it helped you, you can [make a voluntary PayPal donation](https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8). Donations are never required for use or support.
 
 [German README](README.md) · [Changelog](rf1_ocr_test/CHANGELOG.md) · [App introduction (English)](rf1_ocr_test/README.en.md)
+
+
+## Share the project
+
+A short introduction for smart home groups and social media
+
+> AI Meter Reader reads mechanical gas meters locally in Home Assistant. It includes automatic crop detection, image rotation and a camera-free demo. Feedback from different meters and cameras is welcome.
+>
+> https://github.com/Eifellayer/meter-ocr
+>
+> #HomeAssistant #SmartHome #OCR #ESP32CAM #ESPHome #SelfHosted
+
+Search terms for this project include Home Assistant add-on, local meter reading, gas meter OCR, camera meter reading, meter OCR, ESP32-CAM and AI on the Edge.
+
+## Check for a new release immediately
+
+Run this action in Home Assistant under **Developer tools → Actions** to reload the app catalog immediately.
+
+```yaml
+action: homeassistant.update_entity
+data:
+  entity_id: update.meter_ocr_update
+```
+
+Once the update entity reports the new version, enabled automatic updates install it. Alternatively, start installation with this action.
+
+```yaml
+action: update.install
+target:
+  entity_id: update.meter_ocr_update
+```
+
+In the Home Assistant terminal, `ha store reload` also reloads the catalog.

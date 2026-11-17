@@ -1008,7 +1008,11 @@ class StateTests(TestCase):
         self.assertIsNone(completed["setup_pending_source"])
         self.assertIsNone(completed["setup_pending_started"])
         self.assertGreaterEqual(completed["setup_completed"]["duration_seconds"], 60)
-        self.assertEqual(verified["automatic_completed_at"], completed["setup_completed"]["time"])
+        self.assertNotIn("automatic_completed_at", verified)
+        subsequent = check("12346.???")
+        self.assertEqual("standalone_pending", subsequent["check_status"])
+        self.assertNotIn("automatic_completed_at", subsequent)
+        self.assertGreater(check("12346.???")["automatic_completed_at"], completed["setup_completed"]["time"])
         self.assertGreater(run.setup_deadlines(completed, source)[1], datetime.now(timezone.utc).timestamp())
         files["HISTORY"].unlink()
         files["AUTO_RULES"].write_text(json.dumps({

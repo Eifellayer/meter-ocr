@@ -1918,6 +1918,7 @@ def main():
         raw_fallback = False
         duplicate_cycle = False
         cached_standalone = False
+        setup_finished_in_check = False
         image_id = None
         automatic_preview_ready = False
         live_deadline = (time.monotonic() + LIVE_CAPTURE_WINDOW_SECONDS
@@ -2558,6 +2559,7 @@ def main():
                                 except OSError:
                                     print("Abschluss der Einrichtung konnte nicht gespeichert werden.")
                                 else:
+                                    setup_finished_in_check = True
                                     stabilizing_until, _ = setup_deadlines(get_auto_rules(), active_source)
                                     interval_minutes = stabilization_interval(interval_minutes, stabilizing_until, now.timestamp())
                                     optimization_paused = True
@@ -2694,7 +2696,7 @@ def main():
             defer_duplicate_cycle(updated, now.timestamp(), interval_minutes)
         else:
             schedule_next_check(updated, outcome, now.timestamp(), interval_minutes)
-            if outcome != STANDALONE_PENDING:
+            if outcome != STANDALONE_PENDING and not setup_finished_in_check:
                 updated["automatic_completed_at"] = now.timestamp()
             if updated.get("setup_first_check_unclear") and mode != "slfork":
                 updated["next_check_at"] = now.timestamp() + 15

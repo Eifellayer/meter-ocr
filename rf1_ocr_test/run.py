@@ -4,6 +4,7 @@ import base64
 from concurrent.futures import Future
 from copy import deepcopy
 from datetime import datetime
+from email.parser import BytesHeaderParser
 from functools import partial
 import hashlib
 import io
@@ -58,6 +59,9 @@ from language import load_preferences
 from transport import open_core
 
 MAX_RESPONSE_BYTES = 3_000_000
+LAST_WHEEL_STREAM_FRAMES = 3
+LAST_WHEEL_STREAM_SECONDS = 2
+LAST_WHEEL_STREAM_SPACING = .35
 MAX_TRANSFER_BYTES = 11_000
 DESTINATION = Path(f"/media/{NAMESPACE}/kontrollbild.jpg")
 GOOD_IMAGE = Path(f"/media/{NAMESPACE}/letzter_treffer.jpg")
@@ -145,6 +149,84 @@ def capture_edge_camera(base, zone, *, fetch=None):
             raise
         error.close()
     return capture_esp_snapshot(base + "/capture_with_flashlight", zone, "edge_camera", fetch=fetch)
+
+
+def read_last_wheel_stream(url, *, token=None, stop=lambda: False):
+    """Read a short, bounded multipart JPEG sequence from a direct ESP camera."""
+    sample_after = time.monotonic()
+    deadline = sample_after + LAST_WHEEL_STREAM_SECONDS
+    headers = {"Accept": "multipart/x-mixed-replace", "Cache-Control": "no-cache"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    request = Request(url, headers=headers)
+    open_request = open_core if token else urlopen
+    pictures = []
+    pending = bytearray()
+    with open_request(request, timeout=1) as response:
+        headers = response.headers
+        boundary = headers.get_param("boundary")
+        if headers.get_content_type() != "multipart/x-mixed-replace" or not boundary or len(boundary) > 70:
+            return pictures
+        delimiter = b"--" + boundary.encode("ascii")
+        while len(pictures) < LAST_WHEEL_STREAM_FRAMES and not stop() and time.monotonic() < deadline:
+            end = pending.find(b"\r\n\r\n")
+            if end >= 0:
+                section = pending[:end].lstrip(b"\r\n")
+                marker, _, part = section.partition(b"\r\n")
+                if marker != delimiter or end > 4096:
+                    break
+                fields = BytesHeaderParser().parsebytes(bytes(part))
+                if fields.get_content_type() != "image/jpeg":
+                    break
+                start = end + 4
+                length = fields.get("Content-Length")
+                if length is None:
+                    data_end = pending.find(b"\r\n" + delimiter, start)
+                else:
+                    length = int(length)
+                    if not 0 < length <= MAX_RESPONSE_BYTES:
+                        break
+                    data_end = start + length
+                if data_end >= 0 and len(pending) >= data_end:
+                    if not 0 < data_end - start <= MAX_RESPONSE_BYTES:
+                        break
+                    picture = bytes(pending[start:data_end])
+                    del pending[:data_end]
+                    sampled_at = time.monotonic()
+                    if (sampled_at >= sample_after and picture.startswith(b"\xff\xd8")
+                            and picture.endswith(b"\xff\xd9") and picture not in pictures):
+                        try:
+                            with Image.open(io.BytesIO(picture)) as frame:
+                                if frame.width * frame.height <= MAX_IMAGE_PIXELS:
+                                    frame.load()
+                                    pictures.append(picture)
+                                    sample_after = sampled_at + LAST_WHEEL_STREAM_SPACING
+                        except (OSError, ValueError, Image.DecompressionBombError):
+                            pass
+                    continue
+                if len(pending) - start > MAX_RESPONSE_BYTES:
+                    break
+            elif len(pending) > 4096:
+                break
+            try:
+                block = response.read1(16_384)
+            except TimeoutError:
+                break
+            if not block:
+                break
+            pending.extend(block)
+    return pictures
+
+
+def last_wheel_transition(readings):
+    """Report a forward one-position change between visible digits, including 9 → 0."""
+    visible = []
+    for value in readings:
+        if value in tuple("0123456789") and (not visible or value != visible[-1]):
+            visible.append(value)
+    if len(visible) == 2 and (int(visible[0]) + 1) % 10 == int(visible[1]):
+        return visible[0], visible[1]
+    return None
 
 
 def discover_ha_sources(token):
@@ -1213,8 +1295,27 @@ def main():
         result = None
         selected = None
         provisional = False
+        stream_pictures = []
         try:
-            if mode == "slfork":
+            if attempt.intensive and not attempt.stream_unavailable:
+                stream_url = None
+                stream_token = None
+                if mode == "slfork_camera":
+                    stream_url = base + "/camera?task=stream_flashlight"
+                elif camera and not reference:
+                    stream_url = f"http://supervisor/core/api/camera_proxy_stream/{camera}"
+                    stream_token = token
+                if stream_url:
+                    try:
+                        stream_pictures = read_last_wheel_stream(stream_url, token=stream_token, stop=stopped)
+                    except (OSError, ValueError) as error:
+                        if isinstance(error, HTTPError):
+                            error.close()
+                    if not stream_pictures and not stopped():
+                        attempt.stream_unavailable = True
+            if stream_pictures:
+                result = capture_esp_snapshot(base, zone, "camera_stream", fetch=lambda _: stream_pictures[-1])
+            elif mode == "slfork":
                 result = capture(base, {}, fetch=fetch)
             elif mode == "slfork_camera":
                 result = capture_edge_camera(base, zone, fetch=fetch)
@@ -1416,6 +1517,15 @@ def main():
                                 digits, profile=profile, force_polarity=polarity != "auto", deadline=fine_deadline))
 
                         if attempt.intensive:
+                            earlier_frames = []
+                            for stream_picture in stream_pictures[:-1]:
+                                try:
+                                    with Image.open(io.BytesIO(stream_picture)) as earlier:
+                                        if earlier.size == frame.size:
+                                            earlier_frames.append(earlier.convert("RGB"))
+                                except (OSError, ValueError, Image.DecompressionBombError):
+                                    continue
+                            transition = None
                             layout = attempt.candidate or attempt.previous_layout
                             if layout and not layout.digit_boxes:
                                 register, _, whole_boxes, fraction_boxes, _ = register_for(layout)
@@ -1424,25 +1534,48 @@ def main():
                                     layout = Layout(layout.box, layout.rotation, layout.width, boxes)
                             if layout and len(layout.digit_boxes) == whole + fraction:
                                 def read_last(trial, profile):
-                                    nonlocal previous_layout
+                                    nonlocal previous_layout, transition
                                     register = register_for(trial)
                                     if trial != previous_layout:
                                         readings.clear()
                                         previous_layout = trial
                                         report_crop(trial, register, None, last_only=True)
                                     polarity = active_rules["polarity"]
-                                    digit = read_digit(register[0], register[3][-1], lambda picture, digits: cached_digit(
-                                        picture, options["helle_ziffern"] if polarity == "auto" else polarity == "light",
-                                        digits, profile=profile, force_polarity=polarity != "auto", deadline=deadline))
+                                    def recognize_digit(picture, digits, *, active_profile=profile):
+                                        return cached_digit(
+                                            picture, options["helle_ziffern"] if polarity == "auto" else polarity == "light",
+                                            digits, profile=active_profile, force_polarity=polarity != "auto",
+                                            deadline=deadline)
+
+                                    digit_box = register[3][-1]
+                                    digit = read_digit(register[0], digit_box, recognize_digit)
+                                    if trial == layout and earlier_frames:
+                                        views = [turn_crop(crop_register(earlier, trial.box), trial.rotation)
+                                                 for earlier in earlier_frames]
+                                        previous = [read_digit(view, digit_box, recognize_digit) for view in views]
+                                        observed = last_wheel_transition([*previous, digit])
+                                        if observed:
+                                            other = OCR_PROFILES[1] if profile == OCR_PROFILES[0] else OCR_PROFILES[0]
+                                            cross_check = [read_digit(
+                                                view, digit_box, partial(recognize_digit, active_profile=other)
+                                            ) for view in [*views, register[0]]]
+                                            if last_wheel_transition(cross_check) == observed:
+                                                transition = observed
+                                                digit = "?"
                                     readings.append(digit)
                                     report_crop(trial, register, digit, last_only=True)
                                     return digit
 
                                 report_calibration("last_digit", rotation=layout.rotation)
                                 result_layout = attempt.check_last_digit(
-                                    frame, sample, captured, layout, whole, read_last, stopped,
-                                    on_image, report_decision,
+                                    frame, sample, captured, layout, whole, read_last,
+                                    lambda: stopped() or transition is not None, on_image, report_decision,
                                 )
+                                if transition:
+                                    with settings_lock:
+                                        if calibration is job and job.state == "testing":
+                                            calibration_preview["wheel_transition"] = transition
+                                    report_decision("roll_transition")
                                 if result_layout is not None:
                                     if attempt.verification_pending:
                                         selected = result_layout

@@ -1603,6 +1603,7 @@ function refreshCalibrationImages(preview) {{
     implausible: 'Der Stand passt zeitlich nicht zur letzten sicheren Ablesung.',
     await_movement: 'Der Rahmen ist lesbar. Die App wartet auf einen plausiblen Zähleranstieg.',
     accepted: 'Dieser Rahmen wurde auf dem aktuellen Bild bestätigt.',
+    roll_transition: 'Letzte Rolle dreht weiter. Warte auf eine eindeutige Ziffer.',
     accepted_geometry: 'Ziffern bis zur zweiten Nachkommastelle gelesen. Der Rahmen zählt vorläufig. Der Vergleichswert fehlt.',
     accepted_partial: 'Bis zur zweiten Nachkommastelle bestätigt. Die dritte Stelle bleibt offen.',
     verified: 'Die abschließende Gegenprobe war erfolgreich.',
@@ -1717,7 +1718,10 @@ function refreshCalibration(status) {{
   const reason = status.preview?.reason;
   let message = active && stages[status.stage] ? stages[status.stage] : messages[status.state] || '';
   if (status.state === 'waiting' && status.stage !== 'queued') {{
-    if (reason === 'soft_image') {{
+    if (reason === 'roll_transition') {{
+      message = 'Letzte Rolle dreht weiter. Warte auf eine eindeutige Ziffer.' +
+        (status.preview?.wheel_transition ? ' ' + status.preview.wheel_transition.join(' → ') : '');
+    }} else if (reason === 'soft_image') {{
       message = 'Gegenprobe wartet auf ein besseres Bild. Der bestätigte Rahmen bleibt ausgewählt.';
     }} else if (reason === 'collecting') {{
       message = 'Grobtests: ' + status.coarse_attempts + '/' + status.coarse_limit + '.';

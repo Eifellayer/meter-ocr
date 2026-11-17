@@ -8,7 +8,7 @@
 
 📘 [German illustrated user guide (PDF)](docs/Bedienungsanleitung-AI-Meter-Reader.pdf) · [App documentation](rf1_ocr_test/DOCS.md)
 
-**Current version: 0.6.2 Stable.** Setup checks rotated images. Automatic checks default to ten minutes, and the interval is configurable. The meter demo runs without a camera. [Changelog](rf1_ocr_test/CHANGELOG.md)
+**Current version: 0.6.3 Stable.** Setup checks rotated images. Automatic checks default to ten minutes, and the interval is configurable. The meter demo runs without a camera. [Changelog](rf1_ocr_test/CHANGELOG.md)
 
 ## Beta testers wanted
 

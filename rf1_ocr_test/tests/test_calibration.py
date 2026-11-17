@@ -551,6 +551,54 @@ class CalibrationTests(TestCase):
                 self.assertEqual(1, job.confirmations)
                 self.assertEqual(list(profiles[:5]), [profile for angle, profile in calls if angle == expected])
 
+    def test_seven_digit_hit_compares_angles_before_confirming_an_existing_candidate(self):
+        base = Layout((0, 0, 90, 25), 0, 55)
+        rules = {**RULES, "decimals": 3, "fraction_digits": 3}
+        sample = {"reference_time": 100, "actual_value": "12345.234", "raw_value": "12345.234"}
+        job = Calibration(7, 0, rank_candidates=True, simplified=True,
+                          candidate=base, confirmations=1, full_hits=1, known_good_layout=base)
+        angles = []
+
+        def read(layout, profile):
+            if layout.rotation == 2:
+                return "12345.234"
+            return "12345.23?"
+
+        job.examine(frame(1), None, sample, 101, rules, read, lambda: False, angle_read=read,
+                    on_angle=lambda _, angle: angles.append(angle))
+        self.assertEqual([-1, 1, -2, 2], angles)
+        self.assertEqual(2, job.candidate.rotation)
+        self.assertEqual(1, job.confirmations)
+        chosen = job.candidate
+        job.examine(frame(2), None, sample, 102, rules, read, lambda: False, angle_read=read,
+                    on_angle=lambda _, angle: angles.append(angle))
+        self.assertEqual(chosen, job.candidate)
+        self.assertEqual(2, job.confirmations)
+        self.assertEqual([-1, 1, -2, 2], angles)
+
+    def test_intensive_last_digit_can_recover_a_frame_too_far_above_and_left(self):
+        boxes = tuple((index * 110, 100, index * 110 + 90, 700) for index in range(7))
+        boxes += ((750, 50, 840, 650),)
+        initial = Layout((0, 0, 100, 30), 0, 55, boxes)
+        job = Calibration(7, 0, intensive=True, previous_layout=initial)
+        attempts = []
+
+        def read(trial, profile):
+            self.assertEqual(initial.box, trial.box)
+            self.assertEqual(initial.rotation, trial.rotation)
+            self.assertEqual(initial.digit_boxes[:-1], trial.digit_boxes[:-1])
+            attempts.append(trial.digit_boxes[-1])
+            left, top, right, bottom = trial.digit_boxes[-1]
+            self.assertEqual((90, 600), (right - left, bottom - top))
+            return "9" if left >= 785 and top >= 180 else "?"
+
+        job.check_last_digit(frame(1), {"reference_required": False}, 101, initial, 5,
+                             read, lambda: False, lambda: None, lambda _: None)
+        self.assertEqual(1, job.confirmations)
+        self.assertGreaterEqual(job.candidate.digit_boxes[-1][0], 785)
+        self.assertGreaterEqual(job.candidate.digit_boxes[-1][1], 180)
+        self.assertLessEqual(len(attempts), 28)
+
     def test_green_reading_without_reference_gets_extra_profiles_but_no_confirmation(self):
         self.job = Calibration(5, 0, rank_candidates=True)
         sample = {"reference_time": None, "raw_value": "12345", "actual_value": "12345"}
@@ -711,7 +759,7 @@ class CalibrationTests(TestCase):
         sample = {"reference_time": 100, "raw_value": "12345.23?", "actual_value": "12345.23?"}
         self.job.examine(frame(1), None, sample, 101, rules, lambda *_: "12345.23?", lambda: False,
                          angle_read=lambda *_: "12345.23?", on_angle=lambda _, angle: angles.append(angle))
-        self.assertEqual([-1, 1, -2, 2, -3, 3], angles)
+        self.assertEqual([-1, 1, -2, 2], angles)
         self.assertEqual(large, self.job.candidate)
 
     def test_ranked_crop_enters_intensive_search_at_ninety_percent(self):

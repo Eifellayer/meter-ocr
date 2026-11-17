@@ -454,6 +454,70 @@ class StateTests(TestCase):
         self.assertIsNone(run.last_verified_configured_geometry(
             {**history, "check_status": "standalone_pending"}, rules, source))
 
+    def test_setup_automatically_checks_the_last_roller_only_for_three_selected_decimals(self):
+        from threading import Event
+
+        class Done(Exception):
+            pass
+
+        class StopAfterFrame(Event):
+            def wait(self, timeout=None):
+                raise Done
+
+        for decimals in (2, 3):
+            with self.subTest(decimals=decimals), TemporaryDirectory() as folder:
+                files = {name: Path(folder) / name for name in (
+                    "OPTIONS", "HISTORY", "EFFECTIVE_OPTIONS", "AUTO_RULES", "AUTO_PAUSED",
+                    "LANGUAGE_MODES", "SOURCE_SETTINGS", "NOTIFICATIONS", "DESTINATION",
+                    "GOOD_IMAGE", "TEST_IMAGE", "AUTOMATIC_PREVIEW",
+                )}
+                files["OPTIONS"].write_text(json.dumps({"ausschnitt": "0,0,100,30", "vorkomma_breite": 50}))
+                files["SOURCE_SETTINGS"].write_text(json.dumps({
+                    "mode": "camera", "url": "", "camera": "camera.meter", "reference": "sensor.meter",
+                }))
+                files["AUTO_RULES"].write_text(json.dumps({
+                    "decimals": decimals, "attempts": 2, "integer_digits": 5, "fraction_digits": 3,
+                }))
+                access = {}
+                boxes = tuple((i * 120, 100, i * 120 + 100, 900) for i in range(8))
+                layout = run.Layout((0, 0, 100, 30), 0, 60, boxes)
+                recorded = datetime.now(timezone.utc)
+                picture = run.calibration_jpeg(Image.new("RGB", (100, 30), "gray"), (100, 30))
+                measurement = {**sample(recorded), "raw_value": "12345.230", "actual_value": "12345.230",
+                               "reference_time": recorded.timestamp(), "reference_required": True}
+
+                def fake_panel(*args, **kwargs):
+                    access.update(status=kwargs["get_calibration"], rules=args[6])
+                    kwargs["control_calibration"]("start", 4)
+                    return None, None, None
+
+                def found(job, *args, **kwargs):
+                    job.candidate = layout
+                    job.confirmations = 3
+                    job.reference_reading = "12345.23?"
+                    job.counter = {"step_litres": 10, "timestamp": recorded.timestamp()}
+                    return layout
+
+                class InlineCalibrationThread:
+                    def __init__(self, target, args, **kwargs):
+                        self.target, self.args = target, args
+
+                    def start(self):
+                        self.target(*self.args)
+                        raise Done
+
+                with patch.multiple(run, **files, Event=StopAfterFrame),                      patch.dict(os.environ, {"SUPERVISOR_TOKEN": "stub"}),                      patch.object(run, "start_panel", fake_panel),                      patch.object(run, "Thread", InlineCalibrationThread),                      patch.object(run, "capture_camera", return_value=(picture, None, measurement)),                      patch.object(run.Calibration, "examine", found):
+                    with self.assertRaises(Done):
+                        run.main()
+                    status = access["status"]()
+                    self.assertEqual(decimals == 3, status["intensive"])
+                    self.assertEqual("waiting" if decimals == 3 else "saved", status["state"])
+                    if decimals == 3:
+                        self.assertEqual(0, status["confirmations"])
+                        self.assertIsNone(access["rules"]().get("setup_success"))
+                    else:
+                        self.assertIsNotNone(access["rules"]()["setup_success"])
+
     def test_calibration_preview_shows_real_ocr_on_a_rotated_synthetic_camera_image(self):
         from threading import Event
 

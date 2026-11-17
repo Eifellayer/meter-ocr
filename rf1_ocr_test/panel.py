@@ -683,6 +683,7 @@ name: Zählerstand (OCR)</code></pre>
 <button type="button" id="calibration-region-reset">Markierung löschen</button>
 </div>
 </details>
+<p id="calibration-precision-notice">{calibration_precision_notice}</p>
 <div class="crop-actions">
 <button id="calibration-start" type="submit" name="action" value="start">Selbsteinrichtung starten</button>
 <button id="calibration-intensive" type="submit" name="action" value="intensive" {calibration_intensive_hidden}>Dritte Nachkommastelle intensiv suchen</button>
@@ -3605,7 +3606,15 @@ def start_panel(
                 setup_duration=html.escape(duration),
                 calibration_saved_notice=auto_saved_notice if saved in ("setup-calibration", "crop-restored") else "",
                 calibration_hidden="" if control_calibration else "hidden",
-                calibration_intensive_hidden="" if auto_rules["fraction_digits"] == 3 else "hidden",
+                calibration_intensive_hidden="" if auto_rules["fraction_digits"] == 3 and auto_rules["decimals"] == 3 else "hidden",
+                calibration_precision_notice=(
+                    ("Three decimal places selected. Setup checks the last roller automatically."
+                     if language == "en" else
+                     "Drei Nachkommastellen ausgewählt. Die Einrichtung prüft die letzte Rolle automatisch.")
+                    if auto_rules["decimals"] == 3 else
+                    ("Fewer than three decimal places selected. The last roller is skipped because it is not needed for the reading."
+                     if language == "en" else
+                     "Weniger als drei Nachkommastellen ausgewählt. Die letzte Rolle wird übersprungen, weil sie für die Ablesung nicht benötigt wird.")),
                 wizard_initial_hidden="" if setup_pending else "hidden",
                 wizard_precision_hidden="hidden" if setup_pending else "",
                 wizard_precision_disabled="disabled" if setup_pending else "",

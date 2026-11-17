@@ -1,14 +1,35 @@
 from datetime import datetime, timezone
+import json
+from tempfile import TemporaryDirectory
 from pathlib import Path
 import sys
 from unittest import TestCase
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from experimental_meters import meter_config, read_meter
+from experimental_meters import ExperimentalMeters, meter_config, read_meter
 
 
 class ExperimentalMeterTests(TestCase):
+    def test_setup_reset_can_keep_experimental_meter_readings_without_running_monitors(self):
+        with TemporaryDirectory() as directory:
+            file = Path(directory) / "meters.json"
+            write = lambda path, content, mode: path.write_bytes(content)
+            meter = ExperimentalMeters(file, lambda _: {}, write, timezone.utc)
+            states = {"sensor.water": {"unit": "m³", "reading": 2000, "total": 1000,
+                                        "timestamp": 100, "series": {
+                                            "source": "m³", "samples": [[100, 1000, 1]]},
+                                        "next": 999, "status": "ok"}}
+            meter._save({"sensor.water": 30}, states)
+            meter.reset(keep_statistics=True)
+            self.assertEqual({}, meter.settings)
+            self.assertNotIn("next", meter.states["sensor.water"])
+            reloaded = ExperimentalMeters(file, lambda _: {}, write, timezone.utc)
+            self.assertEqual(1000, reloaded.states["sensor.water"]["total"])
+            self.assertEqual({}, reloaded.settings)
+            reloaded.reset()
+            self.assertFalse(file.exists())
+
     def reading(self, stamp, value, unit="m³"):
         return {"state": str(value), "last_updated": datetime.fromtimestamp(stamp, timezone.utc).isoformat(),
                 "attributes": {"unit_of_measurement": unit, "state_class": "total_increasing"}}

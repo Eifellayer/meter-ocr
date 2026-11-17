@@ -6,7 +6,7 @@
 
 📘 [Bebilderte Bedienungsanleitung (PDF)](docs/Bedienungsanleitung-AI-Meter-Reader.pdf) · [App-Dokumentation](rf1_ocr_test/DOCS.md)
 
-**Aktueller Stand: 0.6.3 Stable.** Die Ersteinrichtung prüft gedrehte Aufnahmen. Die Automatik ist auf zehn Minuten voreingestellt, und das Intervall lässt sich anpassen. Die Zähler-Demo läuft ohne Kamera. [Änderungen](rf1_ocr_test/CHANGELOG.md)
+**Aktueller Stand: 0.6.4 Stable.** Die Ersteinrichtung prüft gedrehte Aufnahmen. Die Automatik ist auf zehn Minuten voreingestellt, und das Intervall lässt sich anpassen. Die Zähler-Demo läuft ohne Kamera. [Änderungen](rf1_ocr_test/CHANGELOG.md)
 
 **Zählerstände direkt in Home Assistant aus Kamerabildern lesen und prüfen.**
 

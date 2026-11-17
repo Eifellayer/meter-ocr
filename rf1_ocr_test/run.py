@@ -29,7 +29,7 @@ from app_channel import APP_NAME, CHECK_ENTITY, LABEL_SUFFIX, NAMESPACE
 from checks import (
     DEFAULT_INTERVAL_MINUTES, FRESH_SAMPLE_AGE, RETRY_INTERVAL, REVIEW_AFTER, OCR_PROFILES,
     STANDALONE_PENDING, STANDALONE_PENDING_NOTICE, STANDALONE_REJECTED_NOTICE, STANDALONE_VERIFIED_NOTICE,
-    STANDALONE_CACHED_CAPTURE_DELAY, MAX_OCR_ATTEMPTS, missing_digit_pattern, single_missing_digit,
+    STANDALONE_CACHED_CAPTURE_DELAY, MAX_OCR_ATTEMPTS, missing_digit_pattern, single_missing_digit, disputed_digit_pattern, resolve_ocr_readings,
     compare_sample, crop_register, lighting_ocr_profiles, read_register, read_with_retries, record_sample,
     automatic_interval_minutes, defer_duplicate_cycle,
     LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, LAST_DIGIT_RETRIES, SUCCESSFUL_CHECKS,
@@ -56,6 +56,7 @@ from settings import DEFAULTS, SCHEMA_VERSION, load_options
 from source_settings import (CAMERA, DISCOVERY_TEMPLATE, ESP_ADDRESS_MODES, REFERENCE,
                              discovered_sources, source_check_key, source_rules)
 from panel import start_panel
+from experimental_meters import ExperimentalMeters
 from language import load_preferences
 from transport import open_core
 
@@ -86,6 +87,7 @@ LIVE_CAPTURE_WINDOW_SECONDS = 20
 LIVE_CAPTURE_MAX_ATTEMPTS = 10
 INTENSIVE_ROTATIONS = (-6, 6)
 MAX_LEARNED_ROTATION = 18
+FRESH_OCR_NOTICE = "Die bisherigen OCR-Versuche reichen nicht aus. Ein frisches Kamerabild folgt in Kürze."
 SINGLE_DIGIT_RECHECK = "Automatik-Nachprüfung: Die App prüft die fehlende Ziffer mit leicht verschobenem Rahmen."
 INTENSIVE_ROTATION_STATUS = "Intensivtest: Prüfe eine leicht gedrehte Aufnahme."
 SLFORK_RAW_SOURCE = "slfork_raw"
@@ -429,16 +431,19 @@ def recover_single_digit(layout, pattern, current, whole_digits, fraction_digits
         first = read(box, OCR_PROFILES[0])
         attempted += 1
         if first not in "0123456789" or len(first) != 1 or stop():
+            report(attempted, box, "unclear")
             continue
         report(attempted)
         second = read(box, OCR_PROFILES[1])
         attempted += 1
-        if first == second:
-            candidate = pattern[:position] + first + pattern[position + 1:] + current[len(pattern):]
-            if accept(candidate):
-                moved = boxes.copy()
-                moved[index] = box
-                return (candidate, moved[:whole_digits], moved[whole_digits:]), attempted
+        candidate = pattern[:position] + first + pattern[position + 1:] + current[len(pattern):]
+        accepted = first == second and accept(candidate)
+        evidence = "accepted" if accepted else "agreement" if first == second else "disagreement"
+        report(attempted, box, evidence)
+        if accepted:
+            moved = boxes.copy()
+            moved[index] = box
+            return (candidate, moved[:whole_digits], moved[whole_digits:]), attempted
     return None, attempted
 
 
@@ -913,6 +918,7 @@ def main():
                           "precision_mode": saved_rules.get("precision_mode") is True,
                           "calibration_reference": saved_rules.get("calibration_reference"),
                           "setup_completed": saved_rules.get("setup_completed"),
+                          "setup_success": saved_rules.get("setup_success"),
                           "setup_input_source": saved_rules.get("setup_input_source"),
                           "setup_pending_source": saved_rules.get("setup_pending_source"),
                           "setup_pending_started": saved_rules.get("setup_pending_started"),
@@ -1077,9 +1083,9 @@ def main():
                            "Einrichtung erforderlich. Bitte Bildquelle festlegen." if setup_pending else
                            "App läuft. Wartet auf die nächste automatische Prüfung.")}
 
-    def set_activity(state, detail, *, completed=None, total=None, reading=None):
+    def set_activity(state, detail, *, completed=None, total=None, reading=None, candidates=None):
         activity.update(state=state, detail=detail, updated_at=time.time(), completed=completed, total=total,
-                        reading=reading)
+                        reading=reading, candidates=candidates)
 
     def ready_for_automatic(rules, source):
         explicit_crop = options["ausschnitt"] != DEFAULTS["ausschnitt"]
@@ -1187,8 +1193,11 @@ def main():
         finished = time.time()
         elapsed = max(0, round(time.monotonic() - attempt.started))
         metrics = {"frames_tested": attempt.attempts, "images_checked": len(attempt.seen)}
-        if verified and not previous_completion and not attempt.intensive and not attempt.automatic and reference:
-            completed = {"source": setup_source_id(source), "time": finished, "duration_seconds": elapsed, **metrics}
+        success = rules.get("setup_success")
+        if verified and not attempt.intensive and not attempt.automatic and reference:
+            success = {"source": setup_source_id(source), "time": finished, "duration_seconds": elapsed, **metrics}
+            if not previous_completion:
+                completed = success
         revision = str(time.time_ns())
         partial = (provisional and not reflected) or verified and attempt.simplified
         partial_scope = calibration_source_id([source, revision]) if partial else None
@@ -1198,7 +1207,7 @@ def main():
         save_auto_rules({**rules, **layout.settings(), "crop_revision": revision,
                          "setup_input_source": setup_source_id(source),
                          "calibration_reference": reference, "stationary_partial_scope": partial_scope,
-                         "setup_completed": completed,
+                         "setup_completed": completed, "setup_success": success,
                          "setup_pending_source": None if completed else pending_source,
                          "setup_pending_started": None if completed else pending_started,
                          "setup_pending_metrics": None if completed else pending_metrics})
@@ -1779,6 +1788,12 @@ def main():
             wake_worker.set()
         return True
 
+    extra_meters = ExperimentalMeters(
+        HISTORY.with_name("experimental-meters.json"),
+        lambda entity: json.loads(get_bytes(f"http://supervisor/core/api/states/{entity}", token, timeout=5)),
+        atomic_write, zone,
+    )
+    extra_meters.start()
     _, update_progress, reset_manual_progress = start_panel(
         HISTORY, DESTINATION, GOOD_IMAGE, requested, default_decimals, default_attempts,
         get_auto_rules, save_auto_rules, options["ausschnitt"], options["vorkomma_breite"], TEST_IMAGE,
@@ -1792,7 +1807,7 @@ def main():
         get_auto_paused=get_auto_paused, save_auto_paused=save_auto_paused,
         settings_lock=settings_lock, get_calibration=calibration_status, control_calibration=control_calibration,
         get_calibration_image=calibration_image, has_calibration_backup=lambda: read_geometry_backup() is not None,
-        statistics_zone=zone,
+        statistics_zone=zone, experimental_meters=extra_meters,
     )
     reminder = Reminder(token)
     pending_image = None
@@ -1814,6 +1829,7 @@ def main():
             )
             for path in paths:
                 path.unlink(missing_ok=True)
+            extra_meters.reset()
             history = {}
             auto_paused["value"] = False
             configured_source = dict(default_source)
@@ -1911,7 +1927,8 @@ def main():
             wake_worker.wait(timeout=2)
             continue
         if remaining > 0 and not startup and not manual and not source_changed and not run_automatic_now:
-            set_activity("waiting", REFLECTION_RECHECK_NOTICE if history.get("reflection_retry_at") else
+            set_activity("waiting", FRESH_OCR_NOTICE if history.get("fresh_ocr_retry_at") else
+                         REFLECTION_RECHECK_NOTICE if history.get("reflection_retry_at") else
                          STANDALONE_PENDING_NOTICE if history.get("check_status") == STANDALONE_PENDING
                          else "App läuft. Wartet auf die nächste automatische Prüfung.")
             # Refresh status after a Home Assistant restart, even between checks.
@@ -1949,7 +1966,7 @@ def main():
                           "standalone_candidate",
                           "learned_rotation", "geometry_recovery",
                           "reflection_anchor", "reflection_pending", "reflection_estimate", "reflection_streak", "reflection_live_estimate",
-                          "reflection_rechecks", "reflection_retry_at",
+                          "reflection_rechecks", "reflection_retry_at", "fresh_ocr_retry_at", "ocr_candidates", "ocr_method",
                           "last_slfork_match", "last_reference", "last_reference_time",
                           "last_reference_is_fallback", "ocr_value", "ocr_readings"):
                 source_history.pop(field, None)
@@ -1997,6 +2014,9 @@ def main():
         cached_standalone = False
         setup_finished_in_check = False
         reflection_recheck = None
+        ocr_candidates = []
+        ocr_method = None
+        exhausted_ocr = False
         decoded_test_image = False
         image_id = None
         automatic_preview_ready = False
@@ -2267,8 +2287,7 @@ def main():
                             if len(same_frame) == 1:
                                 return live_source and missing_digit_pattern(same_frame[-1], comparison_decimals,
                                                                              integer_digits) is not None
-                            return single_missing_digit(same_frame[-1], same_frame, comparison_decimals,
-                                                        integer_digits) is not None
+                            return disputed_digit_pattern(same_frame, comparison_decimals, integer_digits) is not None
 
                         ocr, ocr_confirmed, ocr_attempts = read_with_retries(
                             read, sample, comparison_decimals,
@@ -2280,14 +2299,17 @@ def main():
                             stop_before_attempt=stop_before_extra_profile,
                             force_all_attempts=manual,
                             profiles=lighting_ocr_profiles(register),
+                            defer_composition=digit_probe_enabled,
                         )
                         regular_status, _ = compare_sample(sample, ocr, comparison_decimals,
                                                            ocr_confirmed=ocr_confirmed, integer_digits=integer_digits)
                         same_frame = read_state["frame_reads"]
                         observed = same_frame[-1] if same_frame else ""
-                        near_hit = (digit_probe_enabled and regular_status == "ocr_unclear"
+                        pattern = disputed_digit_pattern(same_frame, comparison_decimals, integer_digits)
+                        near_hit = (digit_probe_enabled and regular_status != "match"
                                     and read_state["captured"] is not None and not sample.get("reference_is_fallback")
-                                    and missing_digit_pattern(observed, comparison_decimals, integer_digits)
+                                    and (pattern or not ocr_confirmed
+                                         and missing_digit_pattern(observed, comparison_decimals, integer_digits))
                                     and not stop_ocr())
                         if near_hit and ocr_attempts + 2 <= MAX_OCR_ATTEMPTS:
                             layout = tuple(read_state[key] for key in (
@@ -2298,9 +2320,19 @@ def main():
                             if live_source:
                                 digit_deadline = min(digit_deadline, live_deadline)
 
-                            def report_digit(attempts):
+                            def report_digit(attempts, box=None, evidence=None):
+                                if box is not None and pattern:
+                                    position = pattern.index("?")
+                                    candidate = {
+                                        "position": position + (position < integer_digits), "box": box,
+                                        "angle": rotation + base_adjustment, "evidence": evidence,
+                                    }
+                                    rank = {"accepted": 3, "agreement": 2, "disagreement": 1, "unclear": 0}
+                                    ocr_candidates.append(candidate)
+                                    ocr_candidates.sort(key=lambda entry: rank[entry["evidence"]], reverse=True)
+                                    del ocr_candidates[3:]
                                 set_activity("working", SINGLE_DIGIT_RECHECK, completed=ocr_attempts + attempts,
-                                             total=budget, reading=observed)
+                                             total=budget, reading=observed, candidates=list(ocr_candidates))
 
                             if len(same_frame) == 1:
                                 report_digit(0)
@@ -2314,7 +2346,8 @@ def main():
                                 except (OSError, subprocess.SubprocessError):
                                     pass
                                 ocr_attempts += 1
-                            pattern = single_missing_digit(observed, same_frame, comparison_decimals, integer_digits)
+                            pattern = (disputed_digit_pattern(same_frame, comparison_decimals, integer_digits)
+                                       or single_missing_digit(observed, same_frame, comparison_decimals, integer_digits))
                             if pattern:
                                 register_for_digit = layout[0]
                                 polarity = active_rules["polarity"]
@@ -2338,13 +2371,23 @@ def main():
                                 if recovery:
                                     ocr, whole, fraction = recovery
                                     ocr_confirmed, ocr_readings = True, [ocr, ocr]
+                                    ocr_method = "shifted"
                                     read_state.update(whole_boxes=whole, fraction_boxes=fraction)
                                     regular_status = compare_sample(
                                         sample, ocr, comparison_decimals, integer_digits=integer_digits,
                                     )[0]
-                                else:
-                                    # Reflection estimates also need neighbours from the same capture.
-                                    ocr, ocr_readings = observed, same_frame
+                        if digit_probe_enabled and not ocr_confirmed:
+                            # A moving meter can show different digits on separate photographs.
+                            ocr_readings = same_frame
+                            ocr, ocr_confirmed = resolve_ocr_readings(
+                                ocr_readings, comparison_decimals, integer_digits, standalone=require_consensus,
+                                standalone_composition=True,
+                            )
+                            if ocr_confirmed and ocr not in ocr_readings:
+                                ocr_method = "composed"
+                            regular_status = compare_sample(
+                                sample, ocr, comparison_decimals, ocr_confirmed=ocr_confirmed, integer_digits=integer_digits,
+                            )[0]
                         if local_enabled:
                             required = integer_digits + comparison_decimals
                             rows = [str(value).replace(".", "").replace(",", "")[:required] for value in ocr_readings]
@@ -2393,6 +2436,7 @@ def main():
                                                           integer_digits=integer_digits)[0] not in ("match", "ocr_only"):
                                             continue
                                         ocr, ocr_confirmed, ocr_readings = values[0], True, values
+                                        ocr_method = None
                                         reg, width, whole, fractions, kind = trial
                                         read_state.update(register=reg, integer_width=width, whole_boxes=whole,
                                                           fraction_boxes=fractions, source=kind)
@@ -2435,6 +2479,7 @@ def main():
                                     if rotated_status in ("match", "ocr_only"):
                                         ocr, ocr_confirmed = value, confirmed
                                         ocr_readings = tilted_readings
+                                        ocr_method = "composed" if ocr not in tilted_readings else None
                                         reg, width, whole, fractions, kind = tilted
                                         read_state.update(register=reg, integer_width=width, whole_boxes=whole,
                                                           fraction_boxes=fractions, source=kind)
@@ -2643,6 +2688,8 @@ def main():
                     if not automatic_preview_ready:
                         AUTOMATIC_PREVIEW.unlink(missing_ok=True)
                     outcome = updated["status"]
+                    updated["ocr_candidates"] = ocr_candidates
+                    updated["ocr_method"] = ocr_method if automatic_preview_ready else None
                     if standalone and outcome == "ocr_only":
                         if standalone_reference is None:
                             outcome = updated["status"] = STANDALONE_PENDING
@@ -2703,6 +2750,8 @@ def main():
                     if outcome in SUCCESSFUL_CHECKS or not active_rules["reflection_estimate_enabled"]:
                         updated.pop("reflection_rechecks", None)
                     verified = outcome == "match" or standalone_reference is not None and outcome == "ocr_only"
+                    exhausted_ocr = (outcome == "ocr_unclear" and not ocr_confirmed and not validation_detail
+                                     and not ocr_error and ocr_attempts > 0 and not raw_fallback)
                     if (verified and not raw_fallback and not stabilizing_until
                             and active_rules.get("setup_pending_source") == setup_source):
                         whole, _, fraction = ocr.replace(",", ".").partition(".")
@@ -2879,11 +2928,17 @@ def main():
             defer_duplicate_cycle(updated, now.timestamp(), interval_minutes)
         else:
             updated.pop("reflection_retry_at", None)
+            updated.pop("fresh_ocr_retry_at", None)
             schedule_next_check(updated, outcome, now.timestamp(), interval_minutes)
             if outcome != STANDALONE_PENDING and not setup_finished_in_check:
                 updated["automatic_completed_at"] = now.timestamp()
             if updated.get("setup_first_check_unclear") and mode != "slfork":
                 updated["next_check_at"] = now.timestamp() + 15
+            if (exhausted_ocr and mode != "slfork" and updated.get("failure_attempts", 0) == 1
+                    and not history.get("fresh_ocr_retry_at")):
+                deadline = now.timestamp() + 15
+                if deadline < updated["next_check_at"]:
+                    updated["next_check_at"] = updated["fresh_ocr_retry_at"] = deadline
             if reflection_recheck is not None:
                 delay = plan_reflection_recheck(
                     updated, *reflection_recheck, updated["next_check_at"] - now.timestamp(),
@@ -2924,7 +2979,8 @@ def main():
                             atomic_write(HISTORY, json.dumps(updated).encode("utf-8"), 0o600)
                     except (OSError, ValueError):
                         print("Feinjustierung konnte nicht gespeichert werden.")
-        set_activity("waiting", REFLECTION_RECHECK_NOTICE if updated.get("reflection_retry_at") else
+        set_activity("waiting", FRESH_OCR_NOTICE if updated.get("fresh_ocr_retry_at") else
+                     REFLECTION_RECHECK_NOTICE if updated.get("reflection_retry_at") else
                      "Warte auf einen neuen Messzyklus vom ESP …" if duplicate_cycle else
                      STANDALONE_PENDING_NOTICE if outcome == STANDALONE_PENDING else
                      "Letzte Prüfung beendet. Nächster Versuch nach kurzer Wartezeit."

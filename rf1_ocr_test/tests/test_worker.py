@@ -325,7 +325,7 @@ class SingleDigitRecheckTests(TestCase):
         layout = (register, 250, boxes[:5], boxes[5:])
         read = Mock(return_value="4")
         result, used = run.recover_single_digit(
-            layout, "10465.9?", "10465.9?2", 5, 3, read, 10, lambda _: None,
+            layout, "10465.9?", "10465.9?2", 5, 3, read, 10, lambda *_: None,
             lambda: False, lambda reading: reading == "10465.942",
         )
         recovered, whole, fraction = result
@@ -342,7 +342,7 @@ class SingleDigitRecheckTests(TestCase):
         layout = (register, 250, boxes[:5], boxes[5:])
         read = Mock(side_effect=["4", "7", "4", "7"])
         result, used = run.recover_single_digit(
-            layout, "10465.9?", "10465.9?2", 5, 3, read, 4, lambda _: None,
+            layout, "10465.9?", "10465.9?2", 5, 3, read, 4, lambda *_: None,
             lambda: False, lambda _: True,
         )
         self.assertIsNone(result)
@@ -1165,6 +1165,8 @@ class StateTests(TestCase):
         history = json.loads(paths["HISTORY"].read_text())
         self.assertEqual(run.STANDALONE_PENDING, history["check_status"])
         self.assertEqual("10465.942", history["standalone_candidate"]["reading"])
+        self.assertEqual("shifted", history["ocr_method"])
+        self.assertEqual(7, history["ocr_candidates"][0]["position"])
         self.assertEqual(2, whole.call_count)
         self.assertEqual(2, digit.call_count)
         capture.assert_called_once()

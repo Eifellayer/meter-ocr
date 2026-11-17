@@ -613,7 +613,7 @@ class IngressTests(IngressFixture):
         self.activity = {"state": "setup_wait", "detail": "Automatik wartet auf die Einrichtung."}
         page = self.request("/")[0]
         self.assertIn('value="learn" checked>Automatische Selbsteinrichtung (empfohlen)', page)
-        self.assertIn('id="resume-setup" >Einrichtung fortsetzen', page)
+        self.assertIn('id="resume-setup">Einrichtung fortsetzen', page)
         self.assertIsNone(json.loads(self.request("/automatic")[0])["next_check"])
 
     def test_setup_wizard_saves_source_meter_format_crop_schedule_and_notifications(self):
@@ -869,6 +869,15 @@ class BrowserTests(IngressFixture):
             page.reload()
             page.get_by_text("Alles OK. Automatik läuft.", exact=True).wait_for()
             self.assertFalse(success.is_visible())
+            self.rules["setup_success"] = {
+                **self.rules["setup_completed"], "time": now + 7, "duration_seconds": 42,
+            }
+            success.get_by_text("Einrichtungsdauer · 42 s", exact=False).wait_for()
+            self.history.write_text(json.dumps({
+                "check_status": "ocr_only", "check_detail": STANDALONE_VERIFIED_NOTICE,
+                "automatic_completed_at": now + 8,
+            }))
+            page.wait_for_function("document.querySelector('#setup-success').hidden", timeout=12000)
             self.assertFalse(page.locator("#calibration-complete-notice").is_visible())
             self.assertFalse(page.locator(".activity-status").is_visible())
             page.locator("#tab-settings").click()
@@ -1076,6 +1085,28 @@ class BrowserTests(IngressFixture):
             for actual, expected in zip(self.calibration["region"], (200, 300, 800, 700)):
                 self.assertAlmostEqual(actual, expected, delta=4)
 
+            browser.close()
+
+    def test_new_user_can_try_the_demo_without_a_camera_then_resume_setup(self):
+        from playwright.sync_api import sync_playwright
+
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(executable_path=os.getenv("RF1_CHROMIUM"))
+            page = browser.new_page(viewport={"width": 390, "height": 844}, locale="de-DE")
+            page.set_default_timeout(22000)
+            page.goto(self.base)
+            page.locator("#open-demo-setup").click()
+            demo = page.locator("#demo-dialog")
+            demo.get_by_text("Abgelesen 12344.942 m³ · Drehung -5° · Alle Ziffern erkannt.").wait_for()
+            self.assertTrue(demo.locator("#demo-aligned").is_visible())
+            demo.get_by_role("button", name="Spiegelung ausprobieren").click()
+            demo.get_by_text("Abgelesen 12344.94? m³", exact=False).wait_for()
+            demo.get_by_text("Aus einem Beispiel-Referenzwert geschätzt: 12344.942 m³.").wait_for()
+            demo.get_by_role("button", name="Schließen").click()
+            self.assertTrue(page.locator("#setup-dialog").is_visible())
+            self.assertTrue(self.setup_pending)
+            self.assertFalse(self.history.exists())
+            self.assertTrue(self.requested.empty())
             browser.close()
 
     def test_manual_wizard_draws_a_crop_and_saves_without_calibrating(self):

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.33 Stable
+
+- Die Selbsteinrichtung schlägt mögliche Spiegelungsstellen zwischen lesbaren Nachbarziffern vor. Bis zu zwei Positionen lassen sich markieren und die Rahmen korrigieren. Drei passende Bilder erlauben einen vorläufigen Rahmen mit offenen Ziffern.
+- Nach drei bestätigten Aufnahmen übernimmt die reguläre Automatik die Gegenprüfung. Die Einrichtung hat ein Ziel von fünf Minuten und ein Limit von 20 Minuten. Die erste unklare Kontrollmessung erscheint als Hinweis. Direkt auslösbare Kameras werden dann nach 15 Sekunden erneut abgefragt.
+- Die Diagnose zeigt Kandidaten mit Prozentwert und gelesener Ziffernfolge. Die eingestellte Übereinstimmungsschwelle erklärt den Start der Feinprüfung.
+- Bei aktivierter Langzeit-Feinjustierung lösen wiederholt unklare Stellen kleine lokale Versuche im regulären OCR-Budget aus. Neue Rahmen werden erst nach mehreren plausiblen Aufnahmen und mehr als einem Zählerstand übernommen.
+- Das Standard-Prüfintervall beträgt 30 Minuten. Bei Lesefehlern hält der Home-Assistant-Sensor den letzten bestätigten Stand derselben Quelle und kennzeichnet ihn als Fallback.
+
 ## 0.5.32 Stable
 
 - Wenn höchstens zwei Pflichtstellen offen sind und mindestens drei andere Stellen übereinstimmend lesbar sind, prüft die Selbsteinrichtung zuerst kleine Verschiebungen der betroffenen Einzelrahmen. Bei Bedarf testet sie danach nur die Winkel einen Grad links und rechts vom aktuellen Winkel.

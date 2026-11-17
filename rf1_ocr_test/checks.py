@@ -14,7 +14,8 @@ from PIL import Image, ImageChops, ImageFilter, ImageOps
 
 WINDOW_SECONDS = 24 * 60 * 60
 REQUIRED_MATCHES = 5
-DEFAULT_INTERVAL_MINUTES = 60
+DEFAULT_INTERVAL_MINUTES = 30
+LEGACY_INTERVAL_MINUTES = 60
 MAX_INTERVAL_MINUTES = 24 * 60
 NORMAL_INTERVAL = DEFAULT_INTERVAL_MINUTES * 60
 RETRY_INTERVAL = 5 * 60
@@ -668,15 +669,15 @@ def last_check_at(history):
     outcome = history.get("check_status")
     if not deadline or not outcome:
         return None
-    interval_minutes = history.get("check_interval_minutes", DEFAULT_INTERVAL_MINUTES)
+    interval_minutes = history.get("check_interval_minutes", LEGACY_INTERVAL_MINUTES)
     if not valid_interval_minutes(interval_minutes):
-        interval_minutes = DEFAULT_INTERVAL_MINUTES
+        interval_minutes = LEGACY_INTERVAL_MINUTES
     return deadline - _check_delay(outcome, interval_minutes, history.get("retry_suppressed", False))
 
 
 def reschedule_next_check(history, interval_minutes):
     """Apply a new interval relative to the same last check, including older schedules."""
-    if history.get("check_interval_minutes", DEFAULT_INTERVAL_MINUTES) == interval_minutes:
+    if history.get("check_interval_minutes", LEGACY_INTERVAL_MINUTES) == interval_minutes:
         return False
     checked_at = last_check_at(history)
     if checked_at is None:

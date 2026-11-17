@@ -886,6 +886,9 @@ class StateTests(TestCase):
         self.assertNotIn("state_class", body["attributes"])
         with patch.object(run, "publish_state") as publish:
             run.publish_standalone({"standalone_reading": latest, "check_status": "ocr_unclear"}, "camera.meter", "stub")
+            self.assertEqual("12345.17", publish.call_args.args[1]["state"])
+            self.assertTrue(publish.call_args.args[1]["attributes"]["is_fallback"])
+            run.publish_standalone({"standalone_reading": latest, "check_status": "ocr_unclear"}, "camera.other", "stub")
             self.assertEqual("unavailable", publish.call_args.args[1]["state"])
 
     def test_main_reads_esphome_camera_and_publishes_standalone_sensor(self):
@@ -980,7 +983,8 @@ class StateTests(TestCase):
         self.assertEqual("standalone_pending", check("12347.???")["check_status"])
         rejected = check("13347.???")
         self.assertEqual("2", published[run.CONSUMPTION_ENTITY]["state"])
-        self.assertEqual("unavailable", published[run.OCR_ENTITY]["state"])
+        self.assertEqual("12347", published[run.OCR_ENTITY]["state"])
+        self.assertTrue(published[run.OCR_ENTITY]["attributes"]["is_fallback"])
         self.assertEqual("ocr_unclear", published[run.CHECK_ENTITY]["state"])
         self.assertIn(EXCESSIVE_INCREASE, rejected["check_detail"])
         self.assertIn("zweite Aufnahme", rejected["check_detail"])

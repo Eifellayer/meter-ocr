@@ -12,6 +12,55 @@ ALIGNMENT_CONFIRMATIONS = 6
 ALIGNMENT_ROLLBACK_FAILURES = 2
 
 
+def note_local_issue(state, key, stamp, positions):
+    """Allow a local probe only for the same issue on three separate captures."""
+    if state.get("key") != key:
+        state.clear()
+        state["key"] = key
+    if stamp <= state.get("stamp", 0):
+        return False
+    previous = state.get("positions")
+    state["stamp"] = stamp
+    state["positions"] = positions
+    state["count"] = state.get("count", 0) + 1 if positions and positions == previous else int(bool(positions))
+    return state["count"] >= 3
+
+
+def note_local_improvement(state, key, stamp, geometry, reading):
+    """Require agreement across fresh images and more than one meter reading."""
+    if state.get("key") == key and stamp <= state.get("stamp", 0):
+        return False
+    if state.get("key") != key or state.get("geometry") != geometry:
+        state.clear()
+        state.update(key=key, geometry=geometry, count=0, readings=[])
+    state["stamp"] = stamp
+    state["count"] += 1
+    if reading not in state["readings"]:
+        state["readings"] = (state["readings"] + [reading])[-2:]
+    return state["count"] >= 3 and len(state["readings"]) >= 2
+
+
+def local_geometry_trials(boxes, positions):
+    """Move only the uncertain cells, preserving their size and order."""
+    if boxes:
+        for axis, sign in ((0, -1), (0, 1), (1, -1), (1, 1)):
+            shifted = [list(box) for box in boxes]
+            for index in positions:
+                box = shifted[index]
+                width = box[axis + 2] - box[axis]
+                step = sign * max(1, width // 18)
+                step = max(-box[axis], min(step, 1000 - box[axis + 2]))
+                box[axis] += step
+                box[axis + 2] += step
+            if shifted != boxes:
+                try:
+                    yield 0, digit_box_settings(shifted, len(boxes))
+                except ValueError:
+                    pass
+    for angle in (-1, 1, -2, 2):
+        yield angle, boxes
+
+
 def widen_digit_boxes(boxes, size, pixels=2):
     """Create a conservative wider per-digit grid for glyphs such as 1/8.
 

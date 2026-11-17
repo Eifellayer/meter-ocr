@@ -1368,7 +1368,7 @@ class BrowserTests(IngressFixture):
             frame.locator("#auto-crop-draw-area").wait_for(state="visible")
             frame.locator("#auto-form select[name=decimals]").select_option("2")
             frame.locator("#auto-form input[name=max_flow]").fill("4,5")
-            self.assertEqual("30", frame.locator("#auto-form input[name=interval_minutes]").input_value())
+            self.assertEqual("10", frame.locator("#auto-form input[name=interval_minutes]").input_value())
             frame.locator("#auto-form input[name=interval_minutes]").fill("15")
             frame.locator("#save-auto-settings").click()
             frame.get_by_text("Automatische Prüfregeln gespeichert.", exact=True).wait_for()

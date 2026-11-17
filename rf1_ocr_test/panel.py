@@ -189,6 +189,16 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .setup-step legend{{font-weight:700;padding:0 .4rem 0 0;color:inherit}}
 .setup-controls{{display:flex;align-items:center;justify-content:space-between;gap:.6rem;grid-column:1/-1}}
 .setup-help{{grid-column:1/-1}}
+.setup-step details.setup-help{{border:1px solid var(--edge);border-radius:.7rem;padding:0 .7rem}}
+.setup-step details.setup-help > summary{{cursor:pointer;min-height:2.8rem;padding:.7rem .2rem;color:inherit;font-weight:650}}
+.setup-step select,#wizard-camera-search{{min-height:2.8rem}}
+.setup-step .setup-controls button{{min-height:2.8rem}}
+.setup-phase{{display:grid;gap:.45rem;margin:.7rem 0;grid-template-columns:repeat(auto-fit,minmax(min(100%,10rem),1fr))}}
+.setup-phase div{{padding:.55rem .7rem;border:1px solid var(--edge);border-radius:.6rem}}
+.setup-phase dt{{font-size:.85rem;color:var(--muted)}}
+.setup-phase dd{{margin:.2rem 0 0;font-weight:650}}
+#wizard-manual-draw{{margin:0}}
+#wizard-crop-confirmation{{margin:.35rem 0}}
 .wizard-crop-options{{margin:0;padding:0;border:0;min-width:0}}
 .wizard-crop-options legend{{margin:0 0 .45rem;padding:0;font-size:.9rem}}
 .wizard-crop-choices{{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,10rem),1fr));gap:.5rem}}
@@ -355,6 +365,7 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <p id="automatic-live-reading"></p>
 </details>
 </div>
+<button type="button" id="resume-setup" {resume_setup_hidden}>Einrichtung fortsetzen</button>
 <p id="calibration-complete-notice" class="settings-note" role="status" hidden></p>
 {digit_correction_notice}
 <dialog class="setup-dialog digit-correction" id="digit-correction" aria-labelledby="digit-correction-title">
@@ -391,6 +402,8 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 </dialog>
 <div id="calibration-overview" class="calibration-live" hidden>
 <p id="calibration-overview-state" role="status"></p>
+<dl class="setup-phase" hidden><div><dt>Aktueller Schritt</dt><dd class="setup-current-step"></dd></div>
+<div><dt>Nächster Schritt</dt><dd class="setup-next-step"></dd></div></dl>
 <details class="setup-help calibration-candidate-panel" hidden><summary>Kandidaten</summary><ol class="calibration-candidates"></ol></details>
 {calibration_skip_html}
 <p class="calibration-image-hint settings-note" hidden></p>
@@ -601,6 +614,8 @@ name: Zählerstand (OCR)</code></pre>
 <p>Die App sucht einen passenden Rahmen und Winkel. Nach drei bestätigten Aufnahmen übernimmt die Automatik die Gegenprüfung. Ziel sind fünf Minuten. Die Suche endet spätestens nach 20 Minuten.</p>
 <p>Ohne externen Vergleichswert hilft ein von Hand abgelesener Startwert. Ohne Startwert wartet die App zusätzlich auf einen plausiblen Zähleranstieg.</p>
 {calibration_saved_notice}
+<dl class="setup-phase" hidden><div><dt>Aktueller Schritt</dt><dd class="setup-current-step"></dd></div>
+<div><dt>Nächster Schritt</dt><dd class="setup-next-step"></dd></div></dl>
 <details id="calibration-diagnostics" open hidden>
 <summary>Diagnose der Selbsteinrichtung</summary>
 <p id="calibration-state" role="status" hidden></p>
@@ -665,8 +680,10 @@ name: Zählerstand (OCR)</code></pre>
 <li><strong>AI on the Edge / SLFork:</strong> Die App prüft den ESP-Messwert. Du kannst den ESP auch nur als Kamera verwenden.</li>
 </ul>
 </div>
-<label id="wizard-discovered-sources" class="setup-help" hidden>In Home Assistant gefunden
-<select id="wizard-discovered-source"><option value="">Gerät auswählen …</option></select></label>
+<div id="wizard-discovered-sources" class="setup-help" hidden>
+<label>Geräte suchen<input type="search" id="wizard-camera-search" placeholder="z. B. Gaszähler"></label>
+<label>In Home Assistant gefunden<select id="wizard-discovered-source"><option value="">Gerät auswählen …</option></select></label>
+</div>
 <label id="wizard-source-url">ESP-Adresse<input name="url" value="{source_url}" maxlength="150" placeholder="http://esp-gaszaehler.local"></label>
 <div id="wizard-esp-camera-only" class="setup-help" hidden>
 <label class="check-option"><input type="checkbox" name="esp_camera_only" value="1" {esp_camera_only_checked}> ESP nur als Kamera verwenden</label>
@@ -694,7 +711,7 @@ name: Zählerstand (OCR)</code></pre>
 <label>Verglichen wird bis<select name="decimals">{wizard_decimal_options}</select></label>
 <div class="settings-note setup-help" data-precision-options {precision_hidden}>
 <p>Die letzte Stelle kann beim Weiterdrehen schwer lesbar sein. Das kann zu Fehlmeldungen führen.</p>
-<p {wizard_initial_hidden}>Die dritte Nachkommastelle ist bei Rollen oft schwer zu erkennen. „Ausschnitt und Drehung lernen“ bestätigt bei der Ersteinrichtung die ersten zwei Stellen. Die dritte bleibt unbestätigt und kann später intensiv gesucht oder im Kamerabild manuell markiert werden.</p>
+<p {wizard_initial_hidden}>Die dritte Nachkommastelle ist bei Rollen oft schwer zu erkennen. „Automatische Selbsteinrichtung“ bestätigt bei der Ersteinrichtung die ersten zwei Stellen. Die dritte bleibt unbestätigt und kann später intensiv gesucht oder im Kamerabild manuell markiert werden.</p>
 <label class="check-option" {wizard_precision_hidden}><input type="checkbox" name="precision_mode" value="1" {precision_checked} {wizard_precision_disabled}> Präzisionsmodus: Alle drei Nachkommastellen müssen stimmen</label>
 </div>
 <p class="settings-note setup-help">Die Vergleichsgenauigkeit darf kleiner sein als die angezeigte Stellenzahl. Kleine Zeiger werden nicht automatisch gelesen; bei Rollen und Zeigern bitte nur die Ziffernrollen einstellen.</p>
@@ -736,10 +753,30 @@ name: Zählerstand (OCR)</code></pre>
 <label>Prüfintervall (Minuten)<input type="number" name="interval_minutes" min="5" max="1440" value="{interval_minutes}" required></label>
 <details class="setup-help"><summary>ⓘ Warum das Prüfintervall ändern?</summary><p>Nach einem fehlgeschlagenen automatischen Test folgen bis zu zwei weitere Prüfungen im Abstand von fünf Minuten. Sind alle drei erfolglos, wartet die App eine Stunde und prüft dann erneut. Nach Erfolg gilt wieder dein eingestelltes Intervall. Ein kürzeres Intervall kann helfen, wenn sich der Zähler beim Weiterdrehen vorübergehend schlecht lesen lässt.</p></details>
 <label>Maximaler Durchfluss (m³/h)<input name="max_flow" type="text" inputmode="decimal" maxlength="10" value="{max_flow}" required></label>
-<div class="crop-fields setup-help" id="wizard-crop-fields">
+<div class="setup-help" id="wizard-manual-draw" hidden>
+<p>1. Lade ein Bild deiner Kamera oder wähle ein Testbild derselben Kamera.</p>
+<div class="crop-actions">
+<button type="button" id="wizard-crop-load">Kamerabild für Rahmen laden</button>
+<label>Eigenes Bild für den Rahmen<input id="wizard-crop-file" type="file" accept="image/jpeg,image/png"></label>
+</div>
+<p>2. Ziehe einen Rahmen um die gesamte Ziffernreihe. Lass etwas Rand und spare die Seriennummer aus.</p>
+<div class="crop-draw-image" hidden><img alt="Kamerabild zum Zeichnen des Ziffernrahmens" draggable="false"><span class="crop-draw-outline" hidden></span></div>
+<p class="settings-note" role="status"></p>
+<div class="crop-fields" id="wizard-crop-fields">
+<label>3. Bilddrehung bei Bedarf (°)<input name="rotation" type="number" min="-180" max="180" step="1" value="{auto_rotation_value}"></label>
+<input type="hidden" name="digit_boxes" value="{wizard_digit_boxes}">
+<details class="setup-help"><summary>Koordinaten und Breite bearbeiten</summary>
 <label>Bildbereich (links, oben, rechts, unten)<input name="crop" value="{auto_crop_value}" maxlength="30" placeholder="52,56,564,132"></label>
-<label>Bilddrehung (°)<input name="rotation" type="number" min="-180" max="180" step="1" value="{auto_rotation_value}"></label>
 <label>Breite des Vorkomma-Bereichs in Pixeln<input name="width" type="number" min="1" max="9999" value="{auto_width_value}"></label>
+</details>
+</div>
+<figure class="crop-live-preview" hidden>
+<figcaption>Vorschau mit Bilddrehung</figcaption>
+<div class="digit-editor"><canvas role="img" aria-label="Vorschau mit Bilddrehung"></canvas><div class="digit-layer"></div></div>
+<button type="button" class="clear-digit-boxes">Einzelrahmen zurücksetzen</button>
+</figure>
+<p id="wizard-crop-confirmation">4. Prüfe die Vorschau und bestätige den Rahmen.</p>
+<label class="check-option"><input name="confirm_manual_crop" type="checkbox" value="1" required disabled> Dieser Rahmen umfasst die Ziffernreihe</label>
 </div>
 <details class="setup-help"><summary>ⓘ Bild einrichten</summary><p>Die automatische Erkennung versucht, den Ziffernrahmen zu finden. Bei einer unsicheren Ablesung folgen bis zu zehn zusätzliche Bildauswertungen; die App setzt einzelne Ziffern nur bei einer strikten Mehrheit zusammen. Nach drei fehlgeschlagenen automatischen Prüfungen mit unterschiedlichen Bildabrufen wartet sie eine Stunde auf ein neues Bild oder einen höheren Zählerstand. Prüfe bei wiederholten Fehlern auch Beleuchtung, Abstand und Fokus. Beim Livebild kann AI Meter Reader bis zu 10 frische Standbilder innerhalb von höchstens 20 Sekunden prüfen.</p></details>
 <div class="setup-controls"><button type="button" class="setup-back">Zurück</button><span class="setup-count"></span><button type="button" class="setup-next">Weiter</button></div>
@@ -992,12 +1029,14 @@ function dismissSetup() {{
 }}
 setupDialog.addEventListener('close', () => localStorage.setItem(setupDismissKey, '1'));
 document.querySelector('#setup-skip-form').addEventListener('submit', () => localStorage.setItem(setupDismissKey, '1'));
-document.querySelector('#open-setup').addEventListener('click', () => {{
+function openSetup() {{
   activateTab('settings');
   showSetupStep(0);
   if (!setupDialog.open) setupDialog.showModal();
   loadSourceSuggestions();
-}});
+}}
+document.querySelector('#open-setup').addEventListener('click', openSetup);
+document.querySelector('#resume-setup').addEventListener('click', openSetup);
 document.querySelector('#open-recognition-tools').addEventListener('click', event => {{
   event.preventDefault();
   activateTab('overview');
@@ -1187,6 +1226,10 @@ wizardReading.addEventListener('input', () => {{
   const now = new Date(Date.now() - new Date().getTimezoneOffset() * 60000);
   wizardReadingTime.value = wizardReading.value.trim() ? now.toISOString().slice(0, 16) : '';
 }});
+setupForm.addEventListener('invalid', event => {{
+  const step = event.target.closest('.setup-step');
+  if (step) showSetupStep(Number(step.dataset.step));
+}}, true);
 setupForm.addEventListener('submit', event => {{
   const saving = document.querySelector('#setup-saving');
   if (!saving.hidden) {{
@@ -1232,6 +1275,7 @@ function showWizardSource() {{
 }}
 wizardSourceMode.addEventListener('change', showWizardSource); showWizardSource();
 const discoveredSource = document.querySelector('#wizard-discovered-source');
+const cameraSearch = document.querySelector('#wizard-camera-search');
 let sourceSuggestions = [];
 let loadingSourceSuggestions = false;
 async function loadSourceSuggestions() {{
@@ -1241,10 +1285,7 @@ async function loadSourceSuggestions() {{
     const response = await fetch('bildquellen', {{cache: 'no-store'}});
     if (!response.ok) return;
     sourceSuggestions = await response.json();
-    sourceSuggestions.forEach((source, index) => {{
-      const type = source.mode === 'slfork' ? 'AI on the Edge' : (lang === 'en' ? 'Camera' : 'Kamera');
-      discoveredSource.add(new Option(type + ' · ' + source.label, String(index)));
-    }});
+    filterWizardSources();
     document.querySelector('#wizard-discovered-sources').hidden = !sourceSuggestions.length;
   }} catch (_) {{
     // Manual entry remains available when Home Assistant cannot return suggestions.
@@ -1252,6 +1293,19 @@ async function loadSourceSuggestions() {{
     loadingSourceSuggestions = false;
   }}
 }}
+function filterWizardSources() {{
+  const selected = discoveredSource.value;
+  const term = cameraSearch.value.trim().toLowerCase();
+  discoveredSource.options.length = 1;
+  sourceSuggestions.forEach((source, index) => {{
+    if (![source.label, source.camera, source.url].join(' ').toLowerCase().includes(term)) return;
+    const type = source.mode === 'slfork' ? 'AI on the Edge' : (lang === 'en' ? 'Camera' : 'Kamera');
+    discoveredSource.add(new Option(type + ' · ' + source.label, String(index)));
+  }});
+  if ([...discoveredSource.options].some(option => option.value === selected)) discoveredSource.value = selected;
+  discoveredSource.disabled = discoveredSource.options.length === 1;
+}}
+cameraSearch.addEventListener('input', filterWizardSources);
 discoveredSource.addEventListener('change', () => {{
   if (discoveredSource.value === '') return;
   const source = sourceSuggestions[Number(discoveredSource.value)];
@@ -1269,7 +1323,7 @@ const wizardCropMode = setupForm.elements.crop_mode;
 function showWizardCrop() {{
   const manual = wizardCropMode.value === 'manual';
   const learn = wizardCropMode.value === 'learn';
-  const fields = document.querySelector('#wizard-crop-fields');
+  const fields = document.querySelector('#wizard-manual-draw');
   fields.hidden = !manual;
   fields.querySelectorAll('input').forEach(input => input.disabled = !manual);
   document.querySelector('#wizard-calibration-options').hidden = !learn;
@@ -1437,7 +1491,7 @@ function digitFrameEditor(preview, boxField, widthField, position = null,
   }}
   return {{paint: paintDigitBoxes, current: currentDigitBoxes, select, setBoxes, replace, edit: editDigitBox}};
 }}
-function cropEditor(form, panel, fields, reset, save, emptyText) {{
+function cropEditor(form, panel, fields, reset, save, emptyText, wizard = false) {{
   const mode = form.elements.crop_mode;
   const crop = form.elements.crop;
   const rotation = form.elements.rotation;
@@ -1465,17 +1519,36 @@ function cropEditor(form, panel, fields, reset, save, emptyText) {{
     const span = width * Math.abs(Math.cos(radians)) + height * Math.abs(Math.sin(radians));
     const turned = angle === 0 ? width : angle === 90 ? height :
       Math.ceil((width + span) / 2) - Math.floor((width - span) / 2);
-    form.elements.width.value = Math.min(9999, Math.max(1, Math.round(turned * {crop_whole_ratio})));
+    form.elements.width.value = Math.min(9999, Math.max(1, Math.round(turned * (wizard ? Number(form.elements.integer_digits.value) /
+      (Number(form.elements.integer_digits.value) + Number(form.elements.fraction_digits.value)) : {crop_whole_ratio}))));
   }}
-  const digitEditor = digitFrameEditor(preview, boxField, form.elements.width);
-  const {{paint: paintDigitBoxes, current: currentDigitBoxes}} = digitEditor;
+  let digitEditor;
+  let digitFormat;
+  function paintDigitBoxes() {{
+    const whole = wizard ? Number(form.elements.integer_digits.value) : {crop_integer_digits};
+    const count = wizard ? whole + Number(form.elements.fraction_digits.value) : {crop_digit_count};
+    const format = whole + '/' + count;
+    if (format !== digitFormat) {{
+      preview.querySelector('.digit-layer').replaceChildren();
+      digitEditor = digitFrameEditor(preview, boxField, form.elements.width, null, count, whole);
+      digitFormat = format;
+    }}
+    digitEditor.paint(digitEditor.current());
+  }}
+  function markCropChanged() {{
+    if (wizard) {{
+      form.elements.confirm_manual_crop.checked = false;
+      boxField.value = '[]';
+    }}
+  }}
   preview.querySelector('.clear-digit-boxes').addEventListener('click', () => {{
     boxField.value = '[]';
-    paintDigitBoxes(currentDigitBoxes());
+    markCropChanged();
+    paintDigitBoxes();
   }});
   function drawRotationPreview(left, top, right, bottom) {{
     drawRegister(canvas, image, [left, top, right, bottom], Number(rotation.value));
-    paintDigitBoxes(currentDigitBoxes());
+    paintDigitBoxes();
     preview.hidden = false;
   }}
   function paint(box) {{
@@ -1493,10 +1566,10 @@ function cropEditor(form, panel, fields, reset, save, emptyText) {{
     outline.style.height = (bottom - top) / h * 100 + '%';
   }}
   function paintSaved() {{ paint(crop.value.split(',').map(Number)); }}
-  function loadImage() {{
+  function loadImage(previewUrl) {{
     if (displayedUrl.startsWith('blob:')) URL.revokeObjectURL(displayedUrl);
     const file = upload?.files[0];
-    displayedUrl = file ? URL.createObjectURL(file) : 'aktuell.jpg?v=' + encodeURIComponent(currentVersion || Date.now());
+    displayedUrl = previewUrl || (file ? URL.createObjectURL(file) : 'aktuell.jpg?v=' + encodeURIComponent(currentVersion || Date.now()));
     area.hidden = true;
     preview.hidden = true;
     cancelAnimationFrame(previewRequest);
@@ -1551,18 +1624,24 @@ function cropEditor(form, panel, fields, reset, save, emptyText) {{
     if (box[2] - box[0] >= 8 && box[3] - box[1] >= 8) {{
       drawnCrop = box;
       crop.value = box.join(',');
+      markCropChanged();
       updateWidth(box);
     }}
     paintSaved();
   }});
   area.addEventListener('pointercancel', () => {{ drag = null; paintSaved(); }});
   rotation.addEventListener('input', () => {{
+    markCropChanged();
     if (drawnCrop && crop.value === drawnCrop.join(',')) updateWidth(drawnCrop);
     paintSaved();
   }});
-  crop.addEventListener('input', paintSaved);
-  form.elements.width.addEventListener('input', paintSaved);
+  crop.addEventListener('input', () => {{ markCropChanged(); paintSaved(); }});
+  form.elements.width.addEventListener('input', () => {{ markCropChanged(); paintSaved(); }});
   upload?.addEventListener('change', () => {{ if (!panel.hidden) loadImage(); }});
+  if (wizard) {{
+    preview.addEventListener('digit-edit', () => {{ form.elements.confirm_manual_crop.checked = false; }});
+    return loadImage;
+  }}
   mode.addEventListener('change', syncMode);
   if (!save) reset.addEventListener('click', () => {{
     drawnCrop = drag = null;
@@ -1591,6 +1670,52 @@ const updateAutoCropImage = cropEditor(document.querySelector('#auto-form'), doc
   document.querySelector('#auto-crop-fields'), document.querySelector('#reset-auto-crop'),
   document.querySelector('#save-auto-settings'),
   'Kein Kamerabild verfügbar. Prüfe die Bildquelle oder warte auf die nächste automatische Prüfung.');
+const wizardManualPanel = document.querySelector('#wizard-manual-draw');
+const wizardCropFile = document.querySelector('#wizard-crop-file');
+const wizardCropLoad = document.querySelector('#wizard-crop-load');
+const wizardCropStatus = wizardManualPanel.querySelector('[role="status"]');
+const setWizardCropImage = cropEditor(setupForm, wizardManualPanel, document.querySelector('#wizard-crop-fields'),
+  null, null, 'Kein Bild verfügbar. Prüfe die Bildquelle oder wähle ein Testbild.', true);
+let wizardCropRevision = 0;
+function clearWizardCrop() {{
+  wizardCropRevision++;
+  setupForm.elements.confirm_manual_crop.checked = false;
+  setupForm.elements.digit_boxes.value = '[]';
+  wizardManualPanel.querySelector('.crop-draw-image').hidden = true;
+  wizardManualPanel.querySelector('.crop-live-preview').hidden = true;
+}}
+for (const name of [...wizardSourceFields, 'integer_digits', 'fraction_digits']) {{
+  setupForm.elements[name].addEventListener('input', clearWizardCrop);
+}}
+discoveredSource.addEventListener('change', clearWizardCrop);
+wizardCropFile.addEventListener('change', () => {{
+  if (!wizardCropFile.files[0]) return;
+  clearWizardCrop();
+  setWizardCropImage(URL.createObjectURL(wizardCropFile.files[0]));
+}});
+wizardCropLoad.addEventListener('click', async () => {{
+  clearWizardCrop();
+  const revision = wizardCropRevision;
+  const body = new URLSearchParams({{preview: 'crop'}});
+  for (const name of [...wizardSourceFields, 'csrf', 'lang', 'mode']) {{
+    const field = setupForm.elements[name];
+    if (field.type !== 'checkbox' || field.checked) body.set(name, field.value);
+  }}
+  wizardCropLoad.disabled = true;
+  wizardCropStatus.hidden = false;
+  wizardCropStatus.textContent = 'Kamerabild wird geladen …';
+  try {{
+    const response = await fetch('einrichtungsbild', {{method: 'POST', body, cache: 'no-store'}});
+    if (!response.ok) throw new Error();
+    const picture = await response.blob();
+    if (revision === wizardCropRevision) setWizardCropImage(URL.createObjectURL(picture));
+  }} catch (_) {{
+    if (revision === wizardCropRevision)
+      wizardCropStatus.textContent = 'Kein Bild verfügbar. Prüfe die Bildquelle oder wähle ein Testbild.';
+  }} finally {{
+    wizardCropLoad.disabled = false;
+  }}
+}});
 const sourceMode = document.querySelector('#source-mode');
 function showSourceFields() {{
   const mode = sourceMode.value;
@@ -1851,7 +1976,7 @@ function refreshCalibration(status) {{
     queued: status.followup ?
       'Ausschnitt gespeichert. Suche jetzt gezielt nach der dritten Nachkommastelle …' :
       status.known_good_available ? 'Die App prüft zuerst den zuletzt bestätigten Rahmen.' :
-      'Selbsteinrichtung startet, sobald die laufende Prüfung beendet ist …',
+      'Selbsteinrichtung wird vorbereitet …',
     capture: 'Kamerabild wird abgerufen …',
     search: 'Grobkalibrierung: Suche nach der Ziffernreihe …',
     shortlist: 'Intensivprüfung für Kandidat ' + status.variant + ' …',
@@ -1868,6 +1993,20 @@ function refreshCalibration(status) {{
       'Prüfe den nächsten Rahmen …' :
       'Prüfe Rahmen ' + status.variant + ' mit Drehung ' + status.rotation + '° …',
   }};
+  const steps = status.intensive ? ['Kamerabild laden', 'Letzte Rolle prüfen', 'Ergebnis gegenprüfen'] :
+    ['Kamerabild laden', 'Ziffernreihe finden', 'Rahmen und Drehung prüfen', 'Rahmen bestätigen'];
+  const confirm = Number(status.confirmations || status.reflected_confirmations || 0) > 0;
+  const stage = status.stage;
+  const current = ['queued', 'capture'].includes(stage) ? 0 :
+    status.intensive ? (['verify', 'verify_wait'].includes(stage) ? 2 : 1) :
+    ['verify', 'verify_wait'].includes(stage) || stage === 'waiting' && confirm ? 3 :
+    ['shortlist', 'refine', 'angle', 'digit_probe'].includes(stage) ? 2 : 1;
+  for (const plan of document.querySelectorAll('.setup-phase')) {{
+    plan.hidden = !active || status.automatic;
+    plan.querySelector('.setup-current-step').textContent = steps[current];
+    plan.querySelector('.setup-next-step').textContent = steps[current + 1] ||
+      (status.intensive ? 'Ergebnis anzeigen' : 'Rahmen speichern und Automatik starten');
+  }}
   const reason = status.preview?.reason;
   for (const list of document.querySelectorAll('.calibration-candidates')) {{
     list.replaceChildren(...(status.candidates || []).map(candidate => {{
@@ -1981,6 +2120,8 @@ function refreshCalibration(status) {{
   document.querySelector('#calibration-overview-state').textContent =
     message + (active && status.confirmations ? ' · ' + status.confirmations + '/' + status.required : '');
   document.querySelector('.activity-status').hidden = active;
+  document.querySelector('#resume-setup').hidden = active ||
+    document.querySelector('.activity-status').dataset.state !== 'setup_wait';
   for (const bar of [progress, document.querySelector('#calibration-overview-progress')]) {{
     bar.hidden = !active;
     bar.max = status.duration;
@@ -2427,6 +2568,7 @@ async function refreshAutomatic() {{
     const activityStatus = document.querySelector('.activity-status');
     activityStatus.dataset.offline = 'false';
     activityStatus.dataset.state = sample.activity_state;
+    document.querySelector('#resume-setup').hidden = sample.activity_state !== 'setup_wait' || activityStatus.hidden;
     activityStatus.dataset.routineOk = String(routineOk);
     const activityText = document.querySelector('#automatic-activity');
     if (activityText.textContent !== sample.activity) activityText.textContent = sample.activity;
@@ -2904,6 +3046,10 @@ def start_panel(
         else:
             recovery_notice = ""
         activity = get_activity() if get_activity else {"detail": "Wartet auf die nächste automatische Prüfung."}
+        if activity.get("state") == "setup_wait":
+            tone, icon, incident, routine_ok = "neutral", "", "", False
+            heading = "Automatik wartet auf Einrichtung" if language == "de" else "Automatic checks are waiting for setup"
+            detail, show_attempts, failure_attempts, recovery_notice = "", False, 0, ""
         if language == "en":
             from i18n import english_activity
             activity = {**activity, "detail": english_activity(activity.get("state"), activity.get("detail"))}
@@ -2928,7 +3074,7 @@ def start_panel(
             "reference_time": history.get("last_reference_time"),
             "reference_is_fallback": history.get("last_reference_is_fallback", False),
             "image_time": history.get("last_epoch") or 0,
-            "next_check": history.get("next_check_at"),
+            "next_check": None if activity.get("state") == "setup_wait" else history.get("next_check_at"),
             "last_check": last_check_at(history),
             "last_match": history.get("last_match_at"),
             "readings": history.get("ocr_readings", []) if show_attempts else [],
@@ -3174,6 +3320,7 @@ def start_panel(
                 app_name=APP_NAME,
                 language_mode=mode,
                 automatic_progress_hidden="" if summary["activity_state"] in ("queued", "working") else "hidden",
+                resume_setup_hidden="" if summary["activity_state"] == "setup_wait" else "hidden",
                 automatic_tone=summary["tone"], automatic_heading=summary["heading"],
                 automatic_icon=summary["icon"], automatic_incident=html.escape(summary["incident"]),
                 banner_preference_key=f"{NAMESPACE}-ignored-warning-{user}" if user else "",
@@ -3241,11 +3388,12 @@ def start_panel(
                     {key: label for key, label in (DECIMALS_EN if language == "en" else DECIMALS).items()
                      if int(key) <= auto_rules["fraction_digits"]}, str(auto_rules["decimals"])),
                 wizard_crop_options=radio_options("crop_mode", {
-                    **({"learn": "Learn crop and rotation (recommended)" if language == "en"
-                        else "Ausschnitt und Drehung lernen (empfohlen)"} if control_calibration else {}),
+                    **({"learn": "Automatic setup (recommended)" if language == "en"
+                        else "Automatische Selbsteinrichtung (empfohlen)"} if control_calibration else {}),
                     "auto": CROP_MODES_EN["auto"] if language == "en" else CROP_MODES["auto"],
-                    "manual": "Enter crop coordinates" if language == "en" else "Bildkoordinaten eingeben",
+                    "manual": "Set up manually" if language == "en" else "Manuell einrichten",
                 }, "learn" if setup_pending and control_calibration else auto_rules["crop_mode"]),
+                wizard_digit_boxes=html.escape(json.dumps(auto_rules["digit_boxes"]), quote=True),
                 fallback_value=html.escape(auto_rules["fallback_value"], quote=True),
                 fallback_time=html.escape(auto_rules["fallback_time"], quote=True),
                 wizard_saved_notice=(
@@ -3507,7 +3655,8 @@ def start_panel(
                     problem(503)
                     return
                 try:
-                    content = get_wizard_image(source)
+                    content = (get_wizard_image(source, full_size=True) if field("preview") == "crop"
+                               else get_wizard_image(source))
                     if field("preview") == "reflection":
                         preview = reflection_setup_preview(content, int(field("integer_digits")),
                                                            int(field("fraction_digits")), field("polarity"))
@@ -3582,6 +3731,8 @@ def start_panel(
                         width = int(field("width", str(width)))
                         rotation = int(field("rotation", str(rotation)))
                         crop_coordinates(crop, width, rotation)
+                    if not learn_crop and crop_mode == "manual" and field("confirm_manual_crop") != "1":
+                        raise ValueError("Confirm the manually selected crop")
                     max_flow = parse_flow_limit(field("max_flow"))
                     fallback_value, fallback_time = fallback_options(
                         field("fallback_value"), field("fallback_time"), decimals, integer_digits, fraction_digits,
@@ -3613,6 +3764,10 @@ def start_panel(
                         "fraction_digits": fraction_digits, "meter_display": meter_display,
                         "fallback_value": fallback_value, "fallback_time": fallback_time,
                     }
+                    if not learn_crop and crop_mode == "manual" and field("digit_boxes"):
+                        rules_values["digit_boxes"] = digit_box_settings(
+                            json.loads(field("digit_boxes")), integer_digits + fraction_digits,
+                        )
                     marked_text = field("reflection_geometry")
                     rules_values["setup_reflection"] = None
                     if learn_crop and rules_values["reflection_estimate_enabled"] and marked_text:
@@ -3640,11 +3795,16 @@ def start_panel(
                             problem(409, "Setze die Automatik fort und starte dann die Selbsteinrichtung.",
                                     "Resume automatic checks before starting automatic setup.")
                             return
-                        initial_setup = get_source()[1]
+                        previous_source, initial_setup = get_source()
                         if initial_setup:
                             rules_values["precision_mode"] = False
                         save_source(source_values)
-                        if initial_setup and not learn_crop:
+                        if not learn_crop or fallback_value and (
+                                fallback_value != old_rules.get("fallback_value") or previous_source != get_source()[0]):
+                            rules_values["setup_input_source"] = setup_source_id(get_source()[0])
+                        else:
+                            rules_values.pop("setup_input_source", None)
+                        if initial_setup and not learn_crop and (crop_mode == "manual" or fallback_value):
                             rules_values["setup_pending_source"] = setup_source_id(get_source()[0])
                             rules_values["setup_pending_started"] = None
                             rules_values["setup_pending_metrics"] = None
@@ -3720,6 +3880,7 @@ def start_panel(
                         current = read_auto_rules()
                         current.update(crop_mode="manual", crop=settings["crop"], width=settings["width"],
                                        rotation=settings.get("rotation", 0), digit_boxes=settings.get("digit_boxes", []))
+                        current["setup_input_source"] = setup_source_id(get_source()[0])
                         save_auto_rules(current)
                 except (OSError, ValueError, KeyError, TypeError):
                     problem(503, "Der Ausschnitt konnte nicht gespeichert werden.",
@@ -3735,7 +3896,8 @@ def start_panel(
                             field("fallback_value"), field("fallback_time"), rules["decimals"],
                             rules["integer_digits"], rules["fraction_digits"],
                         )
-                        save_auto_rules({**rules, "fallback_value": value, "fallback_time": stamp})
+                        save_auto_rules({**rules, "fallback_value": value, "fallback_time": stamp,
+                                         "setup_input_source": setup_source_id(get_source()[0])})
                 except ValueError:
                     problem(400, "Bitte Zählerstand und Ablesezeit prüfen.", "Check the meter reading and its time.")
                     return
@@ -3806,7 +3968,8 @@ def start_panel(
                             raise ValueError("Missing digit boxes")
                         if action == "save":
                             revision = str(time.time_ns())
-                            values = {**rules, "digit_boxes": boxes, "crop_revision": revision}
+                            values = {**rules, "digit_boxes": boxes, "crop_revision": revision,
+                                      "setup_input_source": setup_source_id(source)}
                             old_revision = rules.get("crop_revision")
                             if old_revision and rules.get("stationary_partial_scope") == setup_source_id([source, old_revision]):
                                 values["stationary_partial_scope"] = setup_source_id([source, revision])
@@ -3909,7 +4072,9 @@ def start_panel(
                                          "reflection_suggestion_hidden": field("reflection_suggestion_hidden") == "1",
                                          "polarity": polarity[0], "crop_mode": crop_mode[0],
                                          "crop": crop, "width": width, "rotation": rotation, "digit_boxes": boxes,
-                                         "max_flow_lph": max_flow, "interval_minutes": interval_minutes})
+                                         "max_flow_lph": max_flow, "interval_minutes": interval_minutes,
+                                         "setup_input_source": (setup_source_id(get_source()[0]) if crop_mode[0] == "manual"
+                                                                else old_rules.get("setup_input_source"))})
                 except ValueError:
                     problem(400, "Bitte Prüfintervall, Bildbereich und Durchfluss prüfen.",
                             "Check the interval, image region, and maximum flow.")

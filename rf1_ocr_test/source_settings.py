@@ -45,6 +45,22 @@ def source_rules(values):
     return dict(mode=mode, url=url, camera=camera, reference=reference)
 
 
+def source_check_key(source):
+    mode = source["mode"]
+    camera = source["camera"] if mode not in ESP_ADDRESS_MODES else ""
+    return [mode, camera or source["url"].rstrip("/"), source["reference"] if mode == "camera" else ""]
+
+
+def discovery_order(source):
+    label = source["label"].casefold()
+    identity = f"{label} {source.get('camera', '')}"
+    if re.search(r"(?:^|[\W_])gas(?:$|[\W_]|meter|zähler|zaehler)", identity):
+        return 0, label
+    if source["mode"] == "slfork" or re.search(r"meter|zähler|zaehler", identity):
+        return 1, label
+    return 2, label
+
+
 def discovered_sources(data):
     choices = {}
     for item in data.get("cameras", []):
@@ -67,4 +83,4 @@ def discovered_sources(data):
         if len(url) <= 150:
             label = str(item.get("label") or url)[:120]
             choices[url] = {"mode": "slfork", "label": label, "url": url}
-    return sorted(choices.values(), key=lambda choice: (choice["mode"], choice["label"].casefold()))[:80]
+    return sorted(choices.values(), key=discovery_order)[:80]

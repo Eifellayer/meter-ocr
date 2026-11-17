@@ -163,12 +163,13 @@ class SourceTests(TestCase):
 
     def test_discovery_lists_only_camera_entities_and_valid_esp_addresses(self):
         sources = discovered_sources({
-            "cameras": [{"camera": "camera.test", "label": "Camera"}, {"camera": "sensor.extra"}],
+            "cameras": [{"camera": "camera.test", "label": "Camera"}, {"camera": "sensor.extra"},
+                        {"camera": "camera.gasmeter", "label": "Zählerbild"}],
             "devices": [{"url": "http://meter/", "label": "Meter"}, {"url": "http://meter"},
                         {"ip": "192.168.0.10", "label": "Second meter"},
                         {"url": "http://user:secret@meter"}, {"url": "file:///tmp/example"}],
         })
-        self.assertEqual(["camera.test", "http://meter", "http://192.168.0.10"],
+        self.assertEqual(["camera.gasmeter", "http://meter", "http://192.168.0.10", "camera.test"],
                          [source.get("camera") or source["url"] for source in sources])
 
     def test_slfork_aborted_cycle_skips_aligned_images(self):
@@ -614,6 +615,38 @@ class StateTests(TestCase):
             run.main()
         capture.assert_not_called()
 
+    def test_saving_only_a_camera_keeps_automatic_check_off_across_restart(self):
+        class WaitingForSetup(Exception):
+            pass
+
+        class StopOnWait(run.Event):
+            def wait(self, timeout=None):
+                raise WaitingForSetup
+
+        folder = Path(self.enterContext(TemporaryDirectory()))
+        files = {key: folder / key for key in (
+            "OPTIONS", "HISTORY", "EFFECTIVE_OPTIONS", "AUTO_RULES", "AUTO_PAUSED",
+            "LANGUAGE_MODES", "SOURCE_SETTINGS", "NOTIFICATIONS",
+        )}
+        files["OPTIONS"].write_text("{}")
+        self.enterContext(patch.multiple(run, **files, Event=StopOnWait))
+        self.enterContext(patch.dict(os.environ, {"SUPERVISOR_TOKEN": "stub"}))
+        status = []
+
+        def configure_source_then_restart(*args, **kwargs):
+            if not files["SOURCE_SETTINGS"].exists():
+                args[16]({"mode": "esphome", "url": "", "camera": "camera.gasmeter", "reference": ""})
+            status.append(kwargs["get_activity"]()["state"])
+            return None, None, None
+
+        self.enterContext(patch.object(run, "start_panel", configure_source_then_restart))
+        capture = self.enterContext(patch.object(run, "capture_camera"))
+        for _ in range(2):
+            with self.assertRaises(WaitingForSetup):
+                run.main()
+        self.assertEqual(["setup_wait", "setup_wait"], status)
+        capture.assert_not_called()
+
     def test_last_digit_can_pass_with_warning_after_three_distinct_samples(self):
         now = datetime.now(timezone.utc)
         for strict in (False, True):
@@ -743,6 +776,29 @@ class StateTests(TestCase):
         self.assertTrue(reschedule_next_check(history, 1))
         self.assertEqual((2000, 2060, 2000),
                          (last_check_at(history), history["next_check_at"], history["failure_since"]))
+
+    def test_initial_automatic_checks_require_source_and_meter_input(self):
+        source = {"mode": "esphome", "url": "", "camera": "camera.meter", "reference": "", "selected": True}
+        scope = run.setup_source_id(source)
+        key = run.source_check_key(source)
+        rules = {"crop_mode": "auto"}
+        self.assertFalse(run.automatic_inputs_ready(rules, source, {}))
+        self.assertFalse(run.automatic_inputs_ready(rules, source, {
+            "check_source": key, "last_epoch": 1000, "check_status": "ocr_unclear",
+        }))
+        self.assertTrue(run.automatic_inputs_ready(rules, source, {"manual_setup_source": scope}))
+        self.assertTrue(run.automatic_inputs_ready(rules, source, {"consumption": {"source": key}}))
+        self.assertTrue(run.automatic_inputs_ready(rules, source, {"check_source": key, "last_match_at": 1000}))
+        configured = {**rules, "crop_mode": "manual", "setup_input_source": scope}
+        self.assertTrue(run.automatic_inputs_ready(configured, source, {}))
+        self.assertFalse(run.automatic_inputs_ready(configured, {**source, "camera": "camera.other"}, {}))
+        self.assertFalse(run.automatic_inputs_ready(configured, {**source, "selected": False}, {}))
+        self.assertTrue(run.automatic_inputs_ready({
+            **rules, "setup_completed": {"source": scope, "time": 1000},
+        }, source, {}))
+        self.assertTrue(run.automatic_inputs_ready({
+            **rules, "fallback_value": "12345.6", "fallback_time": "2026-11-17T10:00", "setup_input_source": scope,
+        }, source, {}))
 
     def test_setup_windows_survive_serialization_and_end_independently(self):
         source = {"mode": "camera", "camera": "camera.meter", "selected": True}
@@ -903,6 +959,9 @@ class StateTests(TestCase):
         )}
         files["OPTIONS"].write_text(json.dumps({"ausschnitt": "0,0,500,100", "vorkomma_breite": 350,
                                                 "ocr_versuche": 1}))
+        files["AUTO_RULES"].write_text(json.dumps({
+            "decimals": 0, "attempts": 1, "crop_mode": "manual", "crop": "0,0,500,100", "width": 350,
+        }))
         files["SOURCE_SETTINGS"].write_text(json.dumps({"mode": "esphome", "url": "", "camera": "camera.esp",
                                                         "reference": "sensor.ignored"}))
         self.enterContext(patch.multiple(run, **files))

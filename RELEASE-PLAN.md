@@ -32,12 +32,21 @@ Einmal möglichst automatisch einrichten. Danach prüft die App eigenständig, �
 | P1 | Bedienung und Anleitung | Ergebnisse auf der Übersicht, Fallback mit Speichern, sichtbare optionale Ziffernergänzung und dezenter Spendenlink. Bebilderte Anleitung mit synthetischen Beispielen. |
 | P2 | Automatische Verbesserungen | Feinjustierung, Ziffernrekonstruktion und adaptive SLFork-Frequenz sind zuschaltbar. Langzeittests am echten Zähler stehen für diese Funktionen noch aus. Saisonprofile brauchen beobachtete Verbräuche aus den betreffenden Monaten. |
 
+## 0.6 Beta – mehrere Zähler und ESPHome-Hallsensor
+
+| Arbeit | Abnahme |
+| --- | --- |
+| Mehrzähler | Jeder Zähler erhält eine stabile ID, eigene Quelle, Einstellungen, Referenz, Prüfzeiten und Historie. Die Übersicht lässt sich pro Zähler öffnen. |
+| ESPHome-Hallsensor | Einen kumulativen ESPHome-Pulssensor als Home-Assistant-Entität pro Zähler auswählen. Ein gemeinsamer oder separater ESP ist möglich. Impulsfaktor und Entprellung werden pro Gerät geprüft. |
+| Verbrauch | Doppelte Sensorwerte und Wiederverbindungen erzeugen keinen Mehrverbrauch. Zählerrücksetzung und Sensorneustart werden getrennt geprüft. |
+| Beta parallel zu Stable | Eigene App-ID und getrennte Entitäten, Einstellungen und Medien. Der bestehende OCR-Zähler und seine Historie behalten ihre IDs. |
+
 ## Geplante Langzeit-Abnahme
 
 - Ziffernstellungen und Beleuchtung über mehrere Messzyklen beobachten. Eine Rahmenänderung muss auf frischen Bildern besser abschneiden. Bei nachlassender Erkennung auf die zuletzt funktionierenden Rahmen zurückgehen.
 - Je eine Vorkomma- und eine Nachkommastelle nur eindeutig aus bestätigtem Anker, erkannten Nachbarstellen und Durchflussgrenze ergänzen. Überträge und die Rückkehr zu vollständiger OCR prüfen.
 - Prüfintervalle anhand bestätigter Änderungen und erwarteter Rollenwechsel variieren. Doppelte SLFork-Zyklen verändern die Fehlerzählung nicht. Unklare Fälle bleiben sichtbar.
-- Mehrere Zähler und zusätzliche Zählertypen folgen als eigene Erweiterungen. Der Pulszähler-Entwurf wird frühestens für **0.6** weiterentwickelt.
+- Weitere Zählertypen folgen anhand praktischer Tests.
 
 ## Vor 1.0 noch zu bestätigen
 

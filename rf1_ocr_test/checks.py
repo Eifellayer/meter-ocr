@@ -592,6 +592,12 @@ def setup_source_id(source):
     return hashlib.sha256(json.dumps(source, sort_keys=True).encode()).hexdigest()
 
 
+def stationary_partial_active(rules, source):
+    revision = rules.get("crop_revision")
+    return (rules["decimals"] == 3 and not rules.get("precision_mode") and bool(revision)
+            and rules.get("stationary_partial_scope") == setup_source_id([source, revision]))
+
+
 def setup_deadlines(rules, source):
     completed = rules.get("setup_completed")
     if isinstance(completed, dict) and completed.get("source") == setup_source_id(source):

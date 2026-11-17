@@ -36,7 +36,7 @@ from checks import (
     meter_prefix, common_exact_precision, manual_confirms_failed_auto,
     reschedule_next_check, rolling_summary, sample_epoch, sample_timestamp, schedule_next_check, slfork_reference,
     timestamp_epoch, track_reflection,
-    setup_deadlines, setup_source_id, stabilization_interval, valid_interval_minutes,
+    setup_deadlines, setup_source_id, stabilization_interval, stationary_partial_active, valid_interval_minutes,
 )
 from calibration import (Calibration, Layout, CAPTURE_INTERVAL, PERFECT_CONFIRMATION_INTERVAL, MIN_IMAGES, MIN_IMAGE_LIMIT, MAX_IMAGES, MAX_ATTEMPTS,
                          DEFAULT_INTENSIVE_AGREEMENT, SHORTLIST_LIMIT, TIME_LIMIT, LAST_DIGIT_CAPTURE_INTERVAL,
@@ -493,12 +493,6 @@ def last_verified_configured_geometry(history, rules, source_key):
 
 def calibration_source_id(source):
     return hashlib.sha256(json.dumps(source, sort_keys=True).encode()).hexdigest()
-
-
-def stationary_partial_active(rules, source):
-    return (rules["decimals"] == 3 and not rules["precision_mode"]
-            and bool(rules["crop_revision"])
-            and rules.get("stationary_partial_scope") == calibration_source_id([source, rules["crop_revision"]]))
 
 
 def standalone_calibration_reference(rules, source, source_key, captured, previous):

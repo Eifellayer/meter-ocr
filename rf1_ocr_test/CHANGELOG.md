@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.26 Stable
+
+- Die Übersicht zeigt nach erfolgreicher regulärer Ablesung kurz und bündig „Alles OK. Automatik läuft.“. Einrichtungsmeldungen laufen aus und bleiben in der Diagnose nachlesbar.
+- Laufende Prüfungen, fehlende Gegenproben, Pausen und Fehler behalten ihren eigenen Status. Auch vorläufig eingerichtete Zähler mit zwei bestätigten Nachkommastellen verwenden die passende Statusanzeige.
+
 ## 0.5.25 Stable
 
 - Bei der vereinfachten Einrichtung zählen übereinstimmende Lesungen bis zur zweiten Nachkommastelle. Fehlt der Vergleichswert, zählt der Rahmen vorläufig. Ein vorhandener, abweichender Vergleichswert blockiert die Bestätigung.

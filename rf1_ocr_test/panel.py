@@ -26,7 +26,7 @@ from calibration import (
 from checks import (DEFAULT_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, WARNING_DETAIL_AFTER, meter_prefix,
                     crop_register, LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, REFLECTION_SUGGEST_AFTER, STANDALONE_PENDING, STANDALONE_REJECTED_NOTICE,
                     STANDALONE_VERIFIED_NOTICE, last_check_at, reschedule_next_check,
-                    setup_deadlines, setup_source_id, stabilization_interval, valid_interval_minutes)
+                    setup_deadlines, setup_source_id, stabilization_interval, stationary_partial_active, valid_interval_minutes)
 from consumption import DEFAULT_FLOW_LPH, format_cubic_metres, parse_flow_limit
 from i18n import EN_UI, english_progress, english_result, translate_page
 from language import MODES, SUPPORTED, USER_ID, browser_locale, profile_script
@@ -135,6 +135,7 @@ header{{display:flex;align-items:baseline;justify-content:space-between;gap:.5re
 .setup-progress[value]::-webkit-progress-bar{{background:light-dark(#eee6d1,#473d29)}}
 .setup-progress[value]::-webkit-progress-value{{background:#c28a25;border-radius:99px}}
 .setup-progress[hidden]{{display:none}}
+.activity-status[data-state="waiting"][data-routine-ok="true"]{{display:none}}
 .activity-status[data-offline="pending"]{{color:light-dark(#704c08,#ffdf8a)}}
 .activity-status[data-offline="true"]{{color:light-dark(#8d282e,#ffc0c1);font-weight:650}}
 .connection-status{{margin:.35rem 0;color:var(--muted);font-size:.9rem}}
@@ -322,7 +323,7 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <button type="button" id="open-manual-settings">Test einstellen</button>
 <button id="start-check" type="submit" form="manual-form">Test starten</button>
 </div></div>
-<div class="activity-status" data-state="{automatic_activity_state}">
+<div class="activity-status" data-state="{automatic_activity_state}" data-routine-ok="{automatic_routine_ok}">
 <p role="status" aria-live="polite"><strong>Automatik:</strong> <span id="automatic-activity">{automatic_activity}</span></p>
 <progress id="automatic-progress" class="setup-progress" aria-label="Fortschritt der automatischen Prüfung" {automatic_progress_hidden}></progress>
 </div>
@@ -1654,6 +1655,13 @@ function refreshCalibrationImages(preview) {{
 let calibrationWasActive = false;
 let previousCalibrationState = '';
 let stabilizingUntil = {setup_stabilizing_until};
+let routineOk = {automatic_routine_ok};
+let calibrationNoticeUntil = 0;
+function updateCalibrationNotice() {{
+  const notice = document.querySelector('#calibration-complete-notice');
+  const stabilizing = previousCalibrationState === 'saved' && Date.now() < stabilizingUntil * 1000;
+  notice.hidden = routineOk || stabilizing || Date.now() >= calibrationNoticeUntil;
+}}
 function refreshCalibration(status) {{
   refreshCalibrationImages(status?.preview);
   if (status && typeof status.stabilizing_until === 'number') stabilizingUntil = status.stabilizing_until;
@@ -1772,15 +1780,19 @@ function refreshCalibration(status) {{
   const completed = ['saved', 'saved_without_verification', 'saved_stationary'].includes(status.state);
   document.querySelector('#calibration-overview').hidden = completed;
   const notice = document.querySelector('#calibration-complete-notice');
-  notice.hidden = !completed || (stabilizing && status.state === 'saved');
   notice.textContent = completed ? message : '';
   const diagnostics = document.querySelector('#calibration-diagnostics');
   diagnostics.hidden = false;
   if (previousCalibrationState !== status.state) {{
-    if (completed) diagnostics.open = false;
-    else if (active && !calibrationWasActive) diagnostics.open = true;
+    calibrationNoticeUntil = 0;
+    if (completed) {{
+      diagnostics.open = false;
+      const justSkipped = status.state === 'saved_without_verification' && searchPrefs.get('saved') === 'calibration';
+      if (calibrationWasActive || justSkipped) calibrationNoticeUntil = Date.now() + 60 * 1000;
+    }} else if (active && !calibrationWasActive) diagnostics.open = true;
   }}
   previousCalibrationState = status.state;
+  updateCalibrationNotice();
   if (completed && calibrationWasActive) activateTab('overview');
   calibrationWasActive = active;
   const imageHints = {{
@@ -2164,8 +2176,8 @@ try {{
   ignoredIncident = (preferenceKey ? localStorage : sessionStorage).getItem(preferenceKey || anonymousPreferenceKey) || '';
 }} catch (_) {{ /* Storage is optional. */ }}
 function updateBannerVisibility() {{
-  automaticBanner.hidden = Boolean(automaticBanner.dataset.incident) &&
-    automaticBanner.dataset.incident === ignoredIncident;
+  const ignored = Boolean(automaticBanner.dataset.incident) && automaticBanner.dataset.incident === ignoredIncident;
+  automaticBanner.hidden = ignored || (automaticStatusFailures > 0 && routineOk);
 }}
 ignoreWarning.addEventListener('click', () => {{
   ignoredIncident = automaticBanner.dataset.incident;
@@ -2185,6 +2197,9 @@ async function refreshAutomatic() {{
     stabilizingUntil = sample.stabilizing_until || 0;
     document.querySelector('#setup-stabilization').hidden = Date.now() >= stabilizingUntil * 1000;
     automaticStatusFailures = 0;
+    routineOk = sample.routine_ok;
+    if (routineOk) calibrationNoticeUntil = 0;
+    updateCalibrationNotice();
     next = sample.next_check;
     document.querySelector('#paused-notice').hidden = !sample.paused;
     document.querySelector('#pause-auto-form').hidden = sample.paused;
@@ -2203,6 +2218,7 @@ async function refreshAutomatic() {{
     const activityStatus = document.querySelector('.activity-status');
     activityStatus.dataset.offline = 'false';
     activityStatus.dataset.state = sample.activity_state;
+    activityStatus.dataset.routineOk = String(routineOk);
     const activityText = document.querySelector('#automatic-activity');
     if (activityText.textContent !== sample.activity) activityText.textContent = sample.activity;
     const progress = document.querySelector('#automatic-progress');
@@ -2266,6 +2282,7 @@ async function refreshAutomatic() {{
     }}
   }} catch (_) {{
     automaticStatusFailures += 1;
+    updateBannerVisibility();
     const status = document.querySelector('.activity-status');
     document.querySelector('#automatic-progress').hidden = true;
     status.dataset.state = 'unknown';
@@ -2480,7 +2497,9 @@ def start_panel(
         return EN_UI[message] if language == "en" else message
 
     def automatic_summary(history, language, auto_rules):
-        stabilizing_until, optimization_until = setup_deadlines(auto_rules, get_source()[0])
+        source, setup_pending = get_source()
+        stabilizing_until, optimization_until = setup_deadlines(auto_rules, source)
+        decimals = 2 if stationary_partial_active(auto_rules, source) else auto_rules["decimals"]
         now = time.time()
         interval = stabilization_interval(auto_rules.get("interval_minutes", DEFAULT_INTERVAL_MINUTES),
                                           stabilizing_until, now)
@@ -2488,7 +2507,7 @@ def start_panel(
         paused = bool(get_auto_paused()) if get_auto_paused else False
         detail = history.get("check_detail")
         precision_pending = any(history.get(key, value) != value for key, value in (
-            ("comparison_decimals", auto_rules["decimals"]),
+            ("comparison_decimals", decimals),
             ("comparison_integer_digits", auto_rules["integer_digits"]),
             ("comparison_fraction_digits", auto_rules["fraction_digits"]),
             ("precision_mode", auto_rules.get("precision_mode", False)),
@@ -2563,6 +2582,11 @@ def start_panel(
             rotation_note = (f"Read with an image rotation of {adjustment:+d}°."
                              if language == "en" else f"Mit Bilddrehung von {adjustment:+d}° gelesen.")
             detail = " ".join(part for part in (detail, rotation_note) if part)
+        routine_ok = (tone == "ok" and not paused and not setup_pending
+                      and history.get("source_connection_status") != "error")
+        if routine_ok:
+            heading = "All good. Automatic checks running." if language == "en" else "Alles OK. Automatik läuft."
+            detail = ""
         try:
             failure_attempts = max(0, int(history.get("failure_attempts", 0) or 0))
         except (TypeError, ValueError):
@@ -2605,7 +2629,7 @@ def start_panel(
         return {
             "detail": (detail if detail is not None else
                        "No automatic result yet." if language == "en" else "Noch kein automatisches Prüfergebnis."),
-            "tone": tone, "heading": heading, "icon": icon,
+            "tone": tone, "heading": heading, "icon": icon, "routine_ok": routine_ok,
             "incident": incident,
             "ocr": str(history["ocr_value"]) if history.get("ocr_value") is not None else "–",
             "reference": str(history["last_reference"]) if history.get("last_reference") is not None else "–",
@@ -2762,6 +2786,7 @@ def start_panel(
             values = {name: html.escape(summary[name]) for name in ("ocr", "reference", "detail")}
             values["automatic_activity"] = html.escape(summary["activity"])
             values["automatic_activity_state"] = html.escape(summary["activity_state"])
+            values["automatic_routine_ok"] = json.dumps(summary["routine_ok"])
             values["recovery_notice"] = html.escape(summary["recovery_notice"])
             values["source_connection"] = html.escape(summary["source_connection"])
             values["source_connection_state"] = html.escape(summary["source_connection_state"])

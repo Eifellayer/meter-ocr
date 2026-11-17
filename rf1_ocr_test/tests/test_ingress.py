@@ -23,7 +23,7 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import panel
-from checks import FALLBACK_NOTICE
+from checks import FALLBACK_NOTICE, STANDALONE_PENDING_NOTICE, STANDALONE_VERIFIED_NOTICE
 from consumption import FALLBACK_PLAUSIBLE
 from language import browser_locale, load_preferences
 from run import atomic_write
@@ -356,6 +356,33 @@ class IngressTests(IngressFixture):
         status = json.loads(self.request("/automatic")[0])
         self.assertEqual(("warning", "Prüfung bestanden mit Hinweis"), (status["tone"], status["heading"]))
 
+
+    def test_regular_cross_check_replaces_setup_message_with_healthy_status(self):
+        self.setup_pending = False
+        self.source_selected = True
+        source = {**self.source, "selected": True}
+        self.rules.update(decimals=3, crop_revision="saved")
+        self.rules["stationary_partial_scope"] = panel.setup_source_id([source, "saved"])
+        sample = {"check_status": "ocr_only", "check_detail": STANDALONE_VERIFIED_NOTICE,
+                  "comparison_decimals": 2, "source_connection_status": "ok"}
+        self.history.write_text(json.dumps(sample))
+        status = json.loads(self.request("/automatic")[0])
+        self.assertEqual(("ok", "Alles OK. Automatik läuft.", "", True),
+                         (status["tone"], status["heading"], status["detail"], status["routine_ok"]))
+        status = json.loads(self.request("/automatic?lang=en")[0])
+        self.assertEqual("All good. Automatic checks running.", status["heading"])
+
+        self.paused = True
+        self.assertFalse(json.loads(self.request("/automatic")[0])["routine_ok"])
+        self.paused = False
+        self.history.write_text(json.dumps({**sample, "check_status": "standalone_pending",
+                                            "check_detail": STANDALONE_PENDING_NOTICE}))
+        status = json.loads(self.request("/automatic")[0])
+        self.assertEqual(("Zweite Aufnahme steht aus", False), (status["heading"], status["routine_ok"]))
+        self.history.write_text(json.dumps({**sample, "check_status": "capture_unavailable",
+                                            "source_connection_status": "error"}))
+        status = json.loads(self.request("/automatic")[0])
+        self.assertEqual(("warning", False), (status["tone"], status["routine_ok"]))
 
     def test_automatic_status_explains_three_retry_attempts_and_one_hour_wait(self):
         self.history.write_text(json.dumps({
@@ -755,6 +782,27 @@ class BrowserTests(IngressFixture):
                 page.locator("#save-digit-correction").click()
             self.assertTrue(page.get_by_text("Ziffernrahmen gespeichert.").is_visible())
             self.assertEqual([*boxes[:-1], [865, 100, 990, 900]], self.rules["digit_boxes"])
+            browser.close()
+
+    def test_overview_hides_old_setup_success_after_a_regular_check(self):
+        from playwright.sync_api import sync_playwright
+
+        self.setup_pending = False
+        self.source_selected = True
+        self.control_calibration("start", 8)
+        self.calibration.update(state="saved", confirmations=3)
+        self.history.write_text(json.dumps({"check_status": "ocr_only", "check_detail": STANDALONE_VERIFIED_NOTICE}))
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(executable_path=os.getenv("RF1_CHROMIUM"))
+            page = browser.new_page(viewport={"width": 390, "height": 844}, locale="de-DE")
+            page.set_default_timeout(7000)
+            page.goto(self.base)
+            page.get_by_text("Alles OK. Automatik läuft.", exact=True).wait_for()
+            self.assertFalse(page.locator("#calibration-complete-notice").is_visible())
+            self.assertFalse(page.locator(".activity-status").is_visible())
+            page.locator("#tab-settings").click()
+            page.locator("#calibration-diagnostics summary").click()
+            page.locator("#calibration-state").filter(has_text="Erfolgreich eingerichtet").wait_for()
             browser.close()
 
     def test_drawing_a_crop_sets_coordinates_for_the_manual_test(self):

@@ -6,6 +6,7 @@
 - Die zusätzliche intensive Suche nach der dritten Nachkommastelle beginnt anschließend im Hintergrund. Ein fehlerhafter oder verdeckter letzter Rollenwert blockiert die bereits funktionierende Einrichtung und den laufenden Verbrauchszähler nicht.
 - Dreht die siebte Rolle vorübergehend, behält die Einrichtung einen bereits einmal bestätigten Rahmen für bis zu drei weitere frische Bildversuche; unlesbare Bilder zählen nicht als erfolgreiche Bestätigungen. Anhaltend unklare Bilder führen weiterhin zur erneuten Rahmensuche.
 - Erst nach eindeutiger erfolgreicher Gegenprüfung der achten Ziffer wechselt die automatische Auswertung auf alle drei Nachkommastellen. Regressionstests prüfen die Trennung und die temporär unlesbare siebte Rolle.
+- Beim Rückfall auf ein frisches SLFork-Rohbild versucht die automatische Prüfung zuerst die Ziffernreihe im vollständigen Rohbild zu finden, bevor sie einen eventuell nicht passenden manuellen Ausschnitt des aufbereiteten Bildes verwendet.
 
 ## 0.6.6 Stable
 

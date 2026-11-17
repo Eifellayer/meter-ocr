@@ -8,7 +8,7 @@
 
 📘 [German illustrated user guide (PDF)](docs/Bedienungsanleitung-AI-Meter-Reader.pdf) · [App documentation](rf1_ocr_test/DOCS.md)
 
-**Current version: 0.5.2 Stable.** This release focuses on OCR stability, automatic setup and image editing. Pulse sensor work resumes in 0.6 or later.
+**Current version: 0.6.1 Stable.** Setup checks rotated images. Automatic checks default to ten minutes, and the interval is configurable. The meter demo runs without a camera. [Changelog](rf1_ocr_test/CHANGELOG.md)
 
 ## Beta testers wanted
 

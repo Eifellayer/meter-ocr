@@ -154,7 +154,7 @@ class IngressTests(IngressFixture):
         self.assertEqual(["learn", "auto", "manual"],
                          re.findall(r'name="crop_mode" value="([^"]+)"', german))
         self.assertIn('value="learn" checked>Automatische Selbsteinrichtung (empfohlen)', german)
-        self.assertIn("Learn crop and rotation (recommended)", choices("en"))
+        self.assertIn("Automatic setup (recommended)", choices("en"))
 
         self.setup_pending = False
         self.source_selected = True

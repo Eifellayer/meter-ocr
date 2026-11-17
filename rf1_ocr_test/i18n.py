@@ -446,6 +446,15 @@ EN_UI = {
     "Oder füge diese kurze YAML-Konfiguration in eine manuelle Karte ein:":
         "Or paste this short YAML configuration into a manual card:",
     "App-Daten zurücksetzen": "Reset app data",
+    "Du kannst die Einrichtung vollständig zurücksetzen oder die bestätigten Zählerstands- und Verbrauchsstatistiken behalten. Home-Assistant-App-Konfiguration und Entitäten bleiben in beiden Fällen bestehen.":
+        "You can reset all setup data or keep verified meter reading and consumption statistics. Home Assistant app configuration and entities remain in both cases.",
+    "Factory Reset – Statistik behalten": "Factory Reset – Keep Statistics",
+    "Gespeicherte Bildquelle, OCR- und Benachrichtigungseinstellungen, Prüfhistorie, Verbrauchsstatistik und Testbilder werden zurückgesetzt. Home-Assistant-App-Konfiguration und Entitätsnamen bleiben erhalten.":
+        "Saved image source, OCR and notification settings, check history, consumption statistics and test images will be reset. Home Assistant app configuration and entity IDs remain.",
+    "Bildquelle, OCR- und Benachrichtigungseinstellungen, Prüfhistorie und Testbilder werden zurückgesetzt. Bestätigte Zählerstands- und Verbrauchsstatistiken sowie der kumulierte Verbrauch bleiben erhalten. Anschließend ist eine neue Einrichtung erforderlich.":
+        "Image source, OCR and notification settings, check history and test images will be reset. Verified reading and consumption statistics and the cumulative total are kept. You must set up the app again.",
+    "Werkseinstellungen wiederhergestellt. Verbrauchsstatistik und Gesamtverbrauch sind erhalten. Die Einrichtung öffnet sich erneut.":
+        "Factory settings restored. Consumption statistics and cumulative total were kept. Setup will open again.",
     "Setzt die AI-Meter-Reader-Einstellungen und Prüfhistorie auf Standardwerte zurück und entfernt gespeicherte Testbilder. Die Home-Assistant-App-Konfiguration und vorhandenen Entitäten bleiben erhalten.":
         "Resets AI Meter Reader settings and check history to defaults and removes saved test images. Home Assistant app configuration and existing entities are kept.",
     "Auf Werkseinstellungen zurücksetzen": "Restore factory settings",

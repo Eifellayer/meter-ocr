@@ -9,7 +9,7 @@ from pathlib import Path
 import sys
 from tempfile import TemporaryDirectory
 from unittest import TestCase
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from urllib.error import HTTPError
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
@@ -316,6 +316,37 @@ class OCRTests(TestCase):
         detail = explain_uncertain_positions(["?????.???"] * 5, 2)
         self.assertIn("Keine Ziffern lesbar", detail)
         self.assertNotIn("Vorkommastelle", detail)
+
+
+class SingleDigitRecheckTests(TestCase):
+    def test_reads_only_the_shifted_second_decimal_and_preserves_the_other_boxes(self):
+        register = Image.new("RGB", (400, 100))
+        boxes = [(50 * index + 5, 20, 50 * index + 45, 80) for index in range(8)]
+        layout = (register, 250, boxes[:5], boxes[5:])
+        read = Mock(return_value="4")
+        result, used = run.recover_single_digit(
+            layout, "10465.9?", "10465.9?2", 5, 3, read, 10, lambda _: None,
+            lambda: False, lambda reading: reading == "10465.942",
+        )
+        recovered, whole, fraction = result
+        self.assertEqual("10465.942", recovered)
+        self.assertEqual(2, used)
+        self.assertEqual(boxes[:6], [*whole, fraction[0]])
+        self.assertEqual(boxes[7], fraction[2])
+        self.assertNotEqual(boxes[6], fraction[1])
+        self.assertEqual([fraction[1], fraction[1]], [call.args[0] for call in read.call_args_list])
+
+    def test_rejects_disagreement_and_respects_the_remaining_budget(self):
+        register = Image.new("RGB", (400, 100))
+        boxes = [(50 * index + 5, 20, 50 * index + 45, 80) for index in range(8)]
+        layout = (register, 250, boxes[:5], boxes[5:])
+        read = Mock(side_effect=["4", "7", "4", "7"])
+        result, used = run.recover_single_digit(
+            layout, "10465.9?", "10465.9?2", 5, 3, read, 4, lambda _: None,
+            lambda: False, lambda _: True,
+        )
+        self.assertIsNone(result)
+        self.assertEqual(4, used)
 
 
 class StateTests(TestCase):
@@ -1101,6 +1132,43 @@ class StateTests(TestCase):
         self.assertEqual("ocr_unclear", failed["check_status"])
         self.assertEqual(started["consumption"], failed["consumption"])
         self.assertEqual("12346", json.loads(files["AUTO_RULES"].read_text())["calibration_reference"]["reading"])
+
+    def test_automatic_run_rechecks_a_single_digit_during_stabilization(self):
+        class StopLoop(Exception):
+            pass
+
+        folder = Path(self.enterContext(TemporaryDirectory()))
+        paths = {key: folder / key for key in (
+            "OPTIONS", "HISTORY", "EFFECTIVE_OPTIONS", "SOURCE_SETTINGS", "AUTO_RULES", "NOTIFICATIONS",
+            "LANGUAGE_MODES", "AUTO_PAUSED", "DESTINATION", "GOOD_IMAGE", "AUTOMATIC_PREVIEW",
+        )}
+        source = {"mode": "esphome", "url": "", "camera": "camera.meter", "reference": ""}
+        paths["OPTIONS"].write_text("{}")
+        paths["SOURCE_SETTINGS"].write_text(json.dumps(source))
+        paths["AUTO_RULES"].write_text(json.dumps({
+            "decimals": 2, "attempts": 5, "crop_mode": "manual", "crop": "0,0,500,100", "width": 300,
+            "setup_completed": {"source": run.setup_source_id({**source, "selected": True}),
+                                "time": datetime.now(timezone.utc).timestamp()},
+        }))
+        self.enterContext(patch.multiple(run, **paths))
+        self.enterContext(patch.dict(os.environ, {"SUPERVISOR_TOKEN": "stub"}))
+        self.enterContext(patch.object(run, "start_panel", return_value=(None, None, None)))
+        with BytesIO() as stream:
+            synthetic_meter().save(stream, "JPEG")
+            capture = self.enterContext(patch.object(run, "get_bytes", return_value=stream.getvalue()))
+        whole = self.enterContext(patch.object(run, "read_visible_digits", return_value="10465.9?2"))
+        digit = self.enterContext(patch.object(run, "read_register", return_value="4"))
+        self.enterContext(patch.object(run, "publish_state"))
+        self.enterContext(patch.object(run, "publish_consumption", side_effect=StopLoop))
+        with self.assertRaises(StopLoop):
+            run.main()
+        history = json.loads(paths["HISTORY"].read_text())
+        self.assertEqual(run.STANDALONE_PENDING, history["check_status"])
+        self.assertEqual("10465.942", history["standalone_candidate"]["reading"])
+        self.assertEqual(2, whole.call_count)
+        self.assertEqual(2, digit.call_count)
+        capture.assert_called_once()
+        self.assertNotIn("consumption", history)
 
     def test_main_keeps_manual_run_separate_from_automated_entities_and_history(self):
         class StopLoop(Exception):

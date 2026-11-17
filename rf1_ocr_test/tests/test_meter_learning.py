@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from checks import OCR_PROFILES, lighting_ocr_profiles, provisional_digit_estimate
 from layout import digit_box_settings, scale_digit_boxes
-from meter_learning import local_geometry_trials, note_local_improvement, note_local_issue, alignment_rollback, observe_alignment, observe_flow, observe_geometry_failures, suggested_interval
+from meter_learning import local_geometry_trials, note_local_improvement, note_local_issue, alignment_rollback, observe_alignment, observe_flow, observe_geometry_failures, plan_reflection_recheck, suggested_interval
 
 
 class MeterLearningTests(TestCase):
@@ -109,3 +109,25 @@ class MeterLearningTests(TestCase):
         for stamp in range(300, 3600, 300):
             self.assertFalse(observe_geometry_failures(state, key, stamp, "ocr_unclear", reading_problem=False))
         self.assertEqual(0, state["failures"])
+
+
+class ReflectionScheduleTests(TestCase):
+    def test_forecast_uses_visible_suffix_and_recent_flow(self):
+        history = {"consumption_statistics": {"source": "meter", "samples": [[1200, 10, 1], [1800, 70, 1]]}}
+        self.assertEqual(72, plan_reflection_recheck(history, "meter", "10465.9?", "10465.9?2", 1801, 5, 3, 300))
+        self.assertEqual(20, plan_reflection_recheck(history, "meter", "10465.9?", "10465.9?9", 1802, 5, 3, 300))
+        self.assertIsNone(plan_reflection_recheck(history, "meter", "1046?.94", "1046?.942", 1803, 5, 3, 300))
+
+    def test_waits_for_the_second_half_and_limits_fast_checks_without_a_flow_history(self):
+        history = {}
+        self.assertIsNone(plan_reflection_recheck(history, "meter", "10465.9?", "10465.9?4", 1800, 5, 3, 300))
+        for stamp in (1801, 1831, 1861):
+            self.assertEqual(30, plan_reflection_recheck(history, "meter", "10465.9?", "10465.9?7", stamp, 5, 3, 300))
+        self.assertIsNone(plan_reflection_recheck(history, "meter", "10465.9?", "10465.9?8", 1891, 5, 3, 300))
+        self.assertEqual(30, plan_reflection_recheck(history, "meter", "10465.94?", "10465.94?", 1921, 5, 3, 300))
+
+    def test_stationary_confirmed_meter_and_earlier_regular_check_do_not_trigger_fast_polling(self):
+        history = {"consumption_statistics": {"source": "meter", "samples": [[1200, 10, 1], [1800, 10, 1]]}}
+        self.assertIsNone(plan_reflection_recheck(history, "meter", "10465.9?", "10465.9?9", 1801, 5, 3, 300))
+        self.assertIsNone(plan_reflection_recheck(history, "other", "10465.9?", "10465.9?9", 1802, 5, 3, 15))
+        self.assertNotIn("reflection_rechecks", history)

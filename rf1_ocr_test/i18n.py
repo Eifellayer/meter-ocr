@@ -12,6 +12,10 @@ from layout import MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR
 
 
 EN_UI = {
+    "Automatik-Nachprüfung: Die App prüft die fehlende Ziffer mit leicht verschobenem Rahmen.":
+        "Automatic recheck: reading the missing digit with a slightly shifted box.",
+    "Frische Aufnahme für den erwarteten Rollenwechsel eingeplant.":
+        "A fresh image is scheduled around the expected roller change.",
     "Roadmap und geplante Funktionen": "Roadmap and planned features",
     "Für die 0.6-Beta geplant": "Planned for the 0.6 beta",
     "Mehrere Zähler mit eigenen Quellen, Einstellungen und Verläufen.": "Multiple meters with their own sources, settings and history.",

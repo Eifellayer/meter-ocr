@@ -354,12 +354,20 @@ STANDALONE_REJECTED_NOTICE = "Die zweite Aufnahme passt nicht zum ersten Zähler
 REFLECTION_SUGGEST_AFTER = 3
 
 
-def single_missing_digit(ocr, readings, decimals, integer_digits):
-    """Only one required position may be unknown; all others need majority evidence."""
+def missing_digit_pattern(ocr, decimals, integer_digits):
+    """Find a single missing digit among the positions required for comparison."""
     size = integer_digits + (decimals + 1 if decimals else 0)
     pattern = str(ocr or "")[:size]
     decimal_part = rf"\.[0-9?]{{{decimals}}}" if decimals else ""
     if not re.fullmatch(rf"[0-9?]{{{integer_digits}}}{decimal_part}", pattern) or pattern.count("?") != 1:
+        return None
+    return pattern
+
+
+def single_missing_digit(ocr, readings, decimals, integer_digits):
+    """Require majority evidence for all the visible neighbours."""
+    pattern = missing_digit_pattern(ocr, decimals, integer_digits)
+    if pattern is None:
         return None
     votes = max(2, len(readings) // 2 + 1)
     for index, digit in enumerate(pattern):

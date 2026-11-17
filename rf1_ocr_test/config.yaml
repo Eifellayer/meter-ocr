@@ -1,5 +1,5 @@
 name: AI Meter Reader
-version: "0.5.36"
+version: "0.5.37"
 slug: rf1_ocr_test
 description: "AI-gestützte Zählerablesung und Plausibilitätsprüfung / AI-assisted meter reading and verification. Bebilderte Anleitung / illustrated guide: https://github.com/Eifellayer/meter-ocr/blob/main/docs/Bedienungsanleitung-AI-Meter-Reader.pdf"
 arch:

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.37 Stable
+
+- Fehlt bei einer Automatikprüfung genau eine erforderliche Ziffer, prüft die App ihren Rahmen im selben Bild mit kleinen Verschiebungen. Zwei OCR-Profile müssen die Ziffer gleich lesen. Zusammen bleiben reguläre Prüfung und Nachprüfung bei höchstens 15 Versuchen.
+- Bei aktivierter Spiegelungsergänzung plant die App begrenzte schnellere Kameraprüfungen anhand der fehlenden Rolle und des zuletzt bestätigten Verbrauchs.
+
 ## 0.5.36 Stable
 
 - Automatische Prüfungen warten auf die Einrichtung. Ein bestätigter Rahmen, ein gespeicherter Startwert oder ein gültiges, manuell geprüftes Testbild kann die Automatik freigeben.

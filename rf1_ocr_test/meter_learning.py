@@ -12,6 +12,46 @@ ALIGNMENT_CONFIRMATIONS = 6
 ALIGNMENT_ROLLBACK_FAILURES = 2
 
 
+REFLECTION_RECHECK_NOTICE = "Frische Aufnahme für den erwarteten Rollenwechsel eingeplant."
+
+
+def plan_reflection_recheck(history, source, pattern, reading, stamp, whole, fraction, normal_delay):
+    """Schedule a small burst near the missing roller's next likely change."""
+    position = pattern.index("?")
+    slot = position - (position > whole)
+    width = whole + fraction
+    digits = reading.replace(".", "")[:width]
+    if len(digits) != width:
+        return None
+    window = history.get("consumption_statistics", {})
+    samples = window.get("samples", []) if window.get("source") == source else []
+    recent = [sample for sample in samples[-8:] if 0 <= stamp - sample[0] <= 2 * 3600]
+    rate = None
+    if len(recent) >= 2 and recent[-1][0] - recent[0][0] >= 60:
+        rate = (recent[-1][1] - recent[0][1]) / (recent[-1][0] - recent[0][0])
+        if rate <= 0:
+            return None
+    suffix = digits[slot + 1:]
+    if rate is not None and (not suffix or suffix.isascii() and suffix.isdigit()):
+        unit = 10 ** (3 - fraction)
+        remaining = (10 ** len(suffix) - int(suffix or "0")) * unit
+        seconds = max(20, round(.9 * remaining / rate))
+    elif slot == width - 1 or slot == width - 2 and digits[-1] in "56789":
+        # With insufficient history, poll briefly only for the two fastest wheels.
+        seconds = 30
+    else:
+        return None
+    if seconds >= normal_delay:
+        return None
+    state = history.get("reflection_rechecks", {})
+    if state.get("source") != source or state.get("slot") != slot or stamp - state.get("since", 0) >= 15 * 60:
+        state = {"source": source, "slot": slot, "since": stamp, "count": 0}
+    if state["count"] >= 3 or stamp <= state.get("last", 0):
+        return None
+    history["reflection_rechecks"] = {**state, "count": state["count"] + 1, "last": stamp}
+    return seconds
+
+
 def note_local_issue(state, key, stamp, positions):
     """Allow a local probe only for the same issue on three separate captures."""
     if state.get("key") != key:

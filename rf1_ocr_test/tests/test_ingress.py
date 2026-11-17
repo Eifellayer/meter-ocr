@@ -1043,7 +1043,7 @@ class BrowserTests(IngressFixture):
             page.locator("#wizard-sources-status").filter(has_text="Keine Geräte gefunden.").wait_for()
             self.suggestions = [{"mode": "slfork", "url": "http://192.168.2.35", "label": "Gasmeter"}]
             page.locator("#wizard-refresh-sources").click()
-            page.locator("#wizard-sources-status").filter(has_text="1 Geräte in Home Assistant gefunden.").wait_for()
+            page.locator("#wizard-sources-status").filter(has_text="1 Gerät in Home Assistant gefunden.").wait_for()
             discovered = page.locator("#wizard-discovered-source")
             self.assertTrue(discovered.is_enabled())
             discovered.select_option(label="AI on the Edge · Gasmeter")

@@ -1,7 +1,6 @@
 """Bridge the latest matched SLFork picture and reading to Home Assistant."""
 
 import base64
-from dataclasses import replace
 from concurrent.futures import Future
 from copy import deepcopy
 from datetime import datetime
@@ -1404,13 +1403,6 @@ def main():
                                 fine_deadline = min(deadline, time.monotonic() + 12)
                             report_calibration("refine", variant, rotation, positions)
 
-                        def layout_with_boxes(layout):
-                            register, width, whole_boxes, fraction_boxes, _ = register_for(layout)
-                            if not whole_boxes:
-                                whole_boxes = approximate_whole_boxes(width, register.height, whole)
-                            boxes = normalize_digit_boxes([*whole_boxes, *fraction_boxes], register.size)
-                            return replace(layout, digit_boxes=boxes) if len(boxes) == whole + fraction else layout
-
                         def read_leading_slot(layout, index, profile):
                             register, width, boxes, _, _ = register_for(layout)
                             if not boxes:
@@ -1471,7 +1463,7 @@ def main():
                                 on_refine=report_fine,
                                 on_regions=report_regions,
                                 on_selected=show_selected,
-                                read_slot=read_leading_slot, layout_with_boxes=layout_with_boxes,
+                                read_slot=read_leading_slot,
                                 angle_read=read,
                                 on_angle=lambda variant, rotation: report_calibration("angle", variant, rotation),
                                 on_shortlist=lambda variant, rotation: report_calibration(

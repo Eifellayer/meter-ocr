@@ -338,12 +338,15 @@ class CalibrationTests(TestCase):
                     self.assertEqual(current.box, layout.box)
                     self.assertEqual(current.rotation, layout.rotation)
                     self.assertEqual(boxes[2:], layout.digit_boxes[2:])
+                    for original, trial in zip(boxes, layout.digit_boxes):
+                        self.assertEqual((original[2] - original[0], original[3] - original[1]),
+                                         (trial[2] - trial[0], trial[3] - trial[1]))
                     if adjusted and layout.digit_boxes[index] == boxes[index]:
                         return "?"
                     return "10"[index]
 
                 accepted = job.examine(frame(3), None, sample, 103, rules, lambda *_: "??459.982",
-                                       lambda: False, read_slot=read_slot, layout_with_boxes=lambda layout: layout,
+                                       lambda: False, read_slot=read_slot,
                                        on_refine=lambda _, __, slots: positions.append(slots))
                 self.assertEqual({0, 1}, set(visited))
                 self.assertEqual([[1, 2]], positions)
@@ -356,6 +359,27 @@ class CalibrationTests(TestCase):
                 else:
                     self.assertEqual(current, accepted)
                     self.assertEqual(3, job.confirmations)
+
+    def test_leading_search_never_promotes_approximate_boxes(self):
+        rules = {**RULES, "decimals": 3, "fraction_digits": 3}
+        sample = {"reference_time": 100, "actual_value": "10459.982", "raw_value": "10459.982"}
+        job = Calibration(7, 0, rank_candidates=True)
+        for index in (1, 2):
+            job.examine(frame(index), None, sample, 100 + index, rules, lambda *_: "10459.982", lambda: False)
+
+        visited = []
+
+        def read_slot(layout, index, _):
+            visited.append(index)
+            self.assertEqual(LAYOUT, layout)
+            self.assertFalse(layout.digit_boxes)
+            return "?"
+
+        self.assertIsNone(job.examine(frame(3), None, sample, 103, rules, lambda *_: "??459.982",
+                                     lambda: False, read_slot=read_slot))
+        self.assertEqual([0, 0], visited)
+        self.assertEqual(LAYOUT, job.candidate)
+        self.assertEqual(2, job.confirmations)
 
     def test_fine_check_retries_only_the_penultimate_digit_and_keeps_the_same_frame_hits(self):
         job = Calibration(7, 0, intensive=True, followup=True, previous_layout=LAYOUT, attempt_limit=20)

@@ -2096,7 +2096,7 @@ function refreshCalibration(status) {{
     waiting: 'Warte auf ein neues Kamerabild …',
     testing: 'Prüfe Ausschnitt und Drehung …',
     saved: status.simplified ?
-      'Ausschnitt und Drehung gespeichert. Zwei Nachkommastellen bestätigt, die dritte bleibt unbestätigt.' :
+      'Einrichtung abgeschlossen: Sieben Ziffern bestätigt. Die dritte Nachkommastelle kann zusätzlich intensiv geprüft werden.' :
       status.intensive ? 'Dritte Nachkommastelle bestätigt. Die Ziffernrahmen sind übernommen.' :
       'Erfolgreich eingerichtet. Ausschnitt und Drehung sind übernommen.',
     saved_reflection: 'Ausschnitt mit markierter Spiegelung vorläufig gespeichert. Die verdeckten Ziffern bleiben offen.',
@@ -3629,9 +3629,9 @@ def start_panel(
                 calibration_hidden="" if control_calibration else "hidden",
                 calibration_intensive_hidden="" if auto_rules["fraction_digits"] == 3 and auto_rules["decimals"] == 3 else "hidden",
                 calibration_precision_notice=(
-                    ("Three decimal places selected. Setup checks the last roller automatically."
+                    ("Setup confirms seven digits first. The third decimal can then be checked separately."
                      if language == "en" else
-                     "Drei Nachkommastellen ausgewählt. Die Einrichtung prüft die letzte Rolle automatisch.")
+                     "Die Einrichtung bestätigt zuerst sieben Ziffern. Die dritte Nachkommastelle kann anschließend separat geprüft werden.")
                     if auto_rules["decimals"] == 3 else
                     ("Fewer than three decimal places selected. The last roller is skipped because it is not needed for the reading."
                      if language == "en" else

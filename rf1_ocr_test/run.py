@@ -741,6 +741,16 @@ def publish_standalone(history, camera, token):
     publish_state(f"http://supervisor/core/api/states/{OCR_ENTITY}", payload, token)
 
 
+def factory_reset_history(history, keep_statistics=False):
+    """Discard setup and checks while optionally retaining the verified consumption ledger."""
+    if not keep_statistics:
+        return {}
+    retained = {key: deepcopy(history[key]) for key in ("consumption", "consumption_statistics")
+                if key in history}
+    retained["statistics_preserved_after_reset"] = True
+    return retained
+
+
 def publish_consumption(history, token):
     consumption = history.get("consumption")
     if consumption is not None:
@@ -1086,10 +1096,14 @@ def main():
     reset_requested = Event()
     reset_lock = Lock()
     reset_result = {"value": "idle"}
+    reset_mode = {"keep_statistics": False}
 
-    def request_factory_reset():
+    def request_factory_reset(*, keep_statistics=False):
+        if type(keep_statistics) is not bool:
+            raise ValueError("Ungültige Werkreset-Variante")
         with reset_lock:
             if reset_result["value"] != "pending":
+                reset_mode["keep_statistics"] = keep_statistics
                 reset_result["value"] = "pending"
                 reset_requested.set()
                 wake_worker.set()
@@ -1112,6 +1126,8 @@ def main():
                         reading=reading, candidates=candidates)
 
     def ready_for_automatic(rules, source):
+        if setup_pending and history.get("statistics_preserved_after_reset"):
+            return False
         explicit_crop = options["ausschnitt"] != DEFAULTS["ausschnitt"]
         return automatic_inputs_ready(rules, source, history, legacy_crop=explicit_crop and not setup_pending)
 
@@ -1856,7 +1872,12 @@ def main():
         nonlocal history, configured_source, setup_pending, auto_rules, delivery, source_selected
         nonlocal pending_image, startup, published_standalone, snapshot
         nonlocal handled_automatic_request, calibration
+        keep_statistics = reset_mode["keep_statistics"]
+        retained_history = factory_reset_history(history, keep_statistics)
         try:
+            if keep_statistics:
+                # Persist the counter and samples before deleting any setup files.
+                atomic_write(HISTORY, json.dumps(retained_history).encode("utf-8"), 0o600)
             reminder.clear_for_reset(history)
             paths = (
                 HISTORY, AUTO_RULES, SOURCE_SETTINGS, NOTIFICATIONS, LANGUAGE_MODES,
@@ -1865,9 +1886,11 @@ def main():
                 calibration_candidates_path, known_good_geometry_path,
             )
             for path in paths:
+                if keep_statistics and path == HISTORY:
+                    continue
                 path.unlink(missing_ok=True)
-            extra_meters.reset()
-            history = {}
+            extra_meters.reset(keep_statistics=keep_statistics)
+            history = retained_history
             auto_paused["value"] = False
             configured_source = dict(default_source)
             setup_pending = True
@@ -2745,6 +2768,7 @@ def main():
                         updated["consumption"] = new_consumption
                         updated["consumption_statistics"] = record_consumption_sample(
                             history.get("consumption_statistics", {}), setup_source_id(active_source), new_consumption,
+                            preserve_on_source_change=bool(history.get("statistics_preserved_after_reset")),
                         )
                     if raw_fallback and outcome == "ocr_only":
                         updated["source_connection_detail"] = SLFORK_RAW_SUCCESS

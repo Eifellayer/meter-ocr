@@ -43,7 +43,7 @@ from calibration import (Calibration, Layout, CAPTURE_INTERVAL, PERFECT_CONFIRMA
                          DEFAULT_INTENSIVE_AGREEMENT, SHORTLIST_LIMIT, TIME_LIMIT, LAST_DIGIT_CAPTURE_INTERVAL,
                          image_quality_hints, two_decimal_reading, uncertain_slots, valid_intensive_agreement)
 from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, MAX_FLOW_LPH, ImplausibleReading,
-                         accumulate_consumption, fallback_detail, format_cubic_metres)
+                         accumulate_consumption, fallback_detail, format_cubic_metres, record_consumption_sample)
 from layout import (MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, find_digit_row,
                     digit_box_settings, find_raw_digit_row, normalize_digit_boxes, rotated_width, scale_digit_boxes, turn_crop)
 from meter_learning import (GEOMETRY_REPAIR_LIMIT, GEOMETRY_REPAIR_SECONDS, alignment_rollback, observe_flow,
@@ -853,6 +853,7 @@ def main():
                           "setup_completed": saved_rules.get("setup_completed"),
                           "setup_pending_source": saved_rules.get("setup_pending_source"),
                           "setup_pending_started": saved_rules.get("setup_pending_started"),
+                          "setup_pending_metrics": saved_rules.get("setup_pending_metrics"),
                           "setup_reflection": saved_rules.get("setup_reflection"),
                           "stationary_partial_scope": saved_rules.get("stationary_partial_scope"),
                           "intensive_agreement": intensive_agreement,
@@ -1116,18 +1117,21 @@ def main():
         previous_completion, _ = setup_deadlines(rules, source)
         finished = time.time()
         elapsed = max(0, round(time.monotonic() - attempt.started))
+        metrics = {"frames_tested": attempt.attempts, "images_checked": len(attempt.seen)}
         if verified and not previous_completion and not attempt.intensive and not attempt.automatic and reference:
-            completed = {"source": setup_source_id(source), "time": finished, "duration_seconds": elapsed}
+            completed = {"source": setup_source_id(source), "time": finished, "duration_seconds": elapsed, **metrics}
         revision = str(time.time_ns())
         partial = (provisional and not reflected) or verified and attempt.simplified
         partial_scope = calibration_source_id([source, revision]) if partial else None
         pending_source = setup_source_id(source) if provisional else rules.get("setup_pending_source")
         pending_started = finished - elapsed if provisional else rules.get("setup_pending_started")
+        pending_metrics = metrics if provisional else rules.get("setup_pending_metrics")
         save_auto_rules({**rules, **layout.settings(), "crop_revision": revision,
                          "calibration_reference": reference, "stationary_partial_scope": partial_scope,
                          "setup_completed": completed,
                          "setup_pending_source": None if completed else pending_source,
-                         "setup_pending_started": None if completed else pending_started})
+                         "setup_pending_started": None if completed else pending_started,
+                         "setup_pending_metrics": None if completed else pending_metrics})
 
     def control_calibration(action, limit, region=None, *, verification_id=None):
         nonlocal calibration, calibration_configuration, calibration_next
@@ -1720,6 +1724,7 @@ def main():
         get_auto_paused=get_auto_paused, save_auto_paused=save_auto_paused,
         settings_lock=settings_lock, get_calibration=calibration_status, control_calibration=control_calibration,
         get_calibration_image=calibration_image, has_calibration_backup=lambda: read_geometry_backup() is not None,
+        statistics_zone=zone,
     )
     reminder = Reminder(token)
     pending_image = None
@@ -2149,7 +2154,7 @@ def main():
                             else:
                                 running = "läuft" in message
                                 current_attempt = attempts + 1 if running else attempts
-                                set_activity("working", f"Zählerbild wird gelesen · Versuch {current_attempt} (höchstens {ocr_limit})",
+                                set_activity("working", f"Zählerbild wird gelesen · Versuch {current_attempt} von {ocr_limit}",
                                              completed=attempts, total=ocr_limit,
                                              reading=ocr_readings[-1] if ocr_readings else None)
                         require_consensus = (raw_fallback and not manual_reference) or (standalone and not manual)
@@ -2493,6 +2498,9 @@ def main():
                             updated["check_detail"] = STANDALONE_VERIFIED_NOTICE
                     if new_consumption is not None and not raw_fallback:
                         updated["consumption"] = new_consumption
+                        updated["consumption_statistics"] = record_consumption_sample(
+                            history.get("consumption_statistics", {}), setup_source_id(active_source), new_consumption,
+                        )
                     if raw_fallback and outcome == "ocr_only":
                         updated["source_connection_detail"] = SLFORK_RAW_SUCCESS
                     if new_standalone is not None:
@@ -2545,11 +2553,18 @@ def main():
                                     finished = now.timestamp()
                                     duration = (round(finished - started) if type(started) in (int, float)
                                                 and 0 < started <= finished else None)
+                                    metrics = active_rules.get("setup_pending_metrics")
+                                    if not isinstance(metrics, dict):
+                                        metrics = {}
                                     save_auto_rules({
                                         **active_rules,
-                                        "setup_completed": {"source": setup_source, "time": finished,
-                                                            "duration_seconds": duration},
+                                        "setup_completed": {
+                                            "source": setup_source, "time": finished, "duration_seconds": duration,
+                                            "frames_tested": metrics.get("frames_tested"),
+                                            "images_checked": metrics.get("images_checked"),
+                                        },
                                         "setup_pending_source": None, "setup_pending_started": None,
+                                        "setup_pending_metrics": None,
                                         "calibration_reference": {
                                             "reading": reading, "time": image_time, "precision": decimals,
                                             "source": setup_source, "integer_digits": integer_digits,

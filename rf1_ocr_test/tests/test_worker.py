@@ -996,6 +996,7 @@ class StateTests(TestCase):
             "decimals": 0, "attempts": 1, "crop_mode": "manual",
             "crop": "0,0,500,100", "width": 350, "setup_pending_source": run.setup_source_id(source),
             "setup_pending_started": datetime.now(timezone.utc).timestamp() - 60,
+            "setup_pending_metrics": {"frames_tested": 12, "images_checked": 4},
         }))
         pending = check("12346.???")
         self.assertEqual("standalone_pending", pending["check_status"])
@@ -1008,6 +1009,11 @@ class StateTests(TestCase):
         self.assertIsNone(completed["setup_pending_source"])
         self.assertIsNone(completed["setup_pending_started"])
         self.assertGreaterEqual(completed["setup_completed"]["duration_seconds"], 60)
+        self.assertEqual(12, completed["setup_completed"]["frames_tested"])
+        self.assertEqual(4, completed["setup_completed"]["images_checked"])
+        self.assertEqual([[verified["consumption"]["timestamp"], verified["consumption"]["total_litres"], 1000]],
+                         verified["consumption_statistics"]["samples"])
+        self.assertNotIn("consumption_statistics", pending)
         self.assertNotIn("automatic_completed_at", verified)
         subsequent = check("12346.???")
         self.assertEqual("standalone_pending", subsequent["check_status"])

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.35 Stable
+
+- Die Verbrauchsübersicht zeigt die aktuelle Stunde und den heutigen Tag in m³. Der aufklappbare Verlauf zeigt 24 Stunden und sieben Tage anhand bestätigter Ablesungen.
+- Die Erfolgskarte der Ersteinrichtung zeigt zusätzlich die Anzahl der Rahmenversuche und geprüften Bilder.
+- Der OCR-Fortschritt verwendet wieder „Versuch 1 von 5“ mit der jeweils gültigen Versuchszahl.
+
 ## 0.5.34 Stable
 
 - Die Übersicht zeigt nach der Ersteinrichtung eine grüne Erfolgskarte mit der Dauer. Sie verschwindet nach dem ersten vollständigen Automatiklauf.

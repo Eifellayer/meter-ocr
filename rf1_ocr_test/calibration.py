@@ -504,6 +504,7 @@ class Calibration:
     automatic: bool = False
     simplified: bool = False
     intensive: bool = False
+    setup_last_digit: bool = False
     stream_unavailable: bool = False
     followup: bool = False
     followup_baseline: dict | None = None
@@ -561,8 +562,9 @@ class Calibration:
 
     def remaining(self, now):
         if self.verification_deadline is not None:
-            return self.verification_deadline - now
-        if not self.intensive and not self.automatic:
+            remaining = self.verification_deadline - now
+            return min(remaining, self.duration - (now - self.started)) if self.setup_last_digit else remaining
+        if (not self.intensive or self.setup_last_digit) and not self.automatic:
             return self.duration - (now - self.started)
         return self.duration - self.spent - (now - self.searching_since if self.searching_since is not None else 0)
 
@@ -570,7 +572,7 @@ class Calibration:
         return now - (self.last_image_at if self.last_image_at is not None else self.started) >= IMAGE_WAIT_LIMIT
 
     def precision(self, rules, has_reference):
-        return 2 if self.simplified else rules["decimals"] if has_reference else rules["fraction_digits"]
+        return 2 if self.simplified or rules["decimals"] == 2 else rules["decimals"] if has_reference else rules["fraction_digits"]
 
     def sweep_angles(self, layout, readings, sample, rules, read, stop, report, tested, frame_ceiling,
                      *, accept_first=False, offsets=None, stress_reads=None):
@@ -671,7 +673,7 @@ class Calibration:
                 "stress_weak_slots": self.stress_weak_slots,
                 "coarse_complete": self.full_hits >= MIN_IMAGES,
                 "awaiting_start_value": self.confirmations >= MIN_IMAGES and not (self.anchored or self.advanced),
-                "simplified": self.simplified, "intensive": self.intensive, "followup": self.followup,
+                "simplified": self.simplified, "intensive": self.intensive, "setup_last_digit": self.setup_last_digit, "followup": self.followup,
                 "coarse_attempts": self.coarse_attempts, "coarse_limit": COARSE_LIMIT,
                 "shortlist": [score[0] for score in self.shortlist.values() if len(score) == 3],
                 "candidates": [{"percent": score[0], "reading": self.candidate_readings.get(layout, "")}
@@ -929,6 +931,21 @@ class Calibration:
     def search_exhausted(self):
         confirming = self.intensive and (self.confirmations or self.verification_pending)
         return self.attempts >= self.attempt_limit and not confirming
+
+    def begin_setup_last_digit(self, layout):
+        self.setup_last_digit = self.intensive = True
+        self.simplified = self.rank_candidates = False
+        self.candidate = self.previous_layout = layout
+        self.confirmations = self.best_confirmations = self.full_hits = 0
+        self.best = None
+        self.counter = {}
+        self.reference_reading = None
+        self.reference_image_id = None
+        self.confirmed_quality = []
+        self.verification_pending = False
+        self.verification_deadline = None
+        self.limit = min(MAX_IMAGES, max(self.limit, len(self.seen) + MIN_IMAGES + 1))
+        self.stage = "last_digit"
 
     def check_last_digit(self, frame, sample, stamp, layout, digits, read, stop, on_image, on_decision):
         if self.search_exhausted() or not self.remember_image(frame, stamp):

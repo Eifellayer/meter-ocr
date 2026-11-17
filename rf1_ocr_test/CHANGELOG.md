@@ -2,6 +2,7 @@
 
 ## 0.6.3 Stable
 
+- Bei drei ausgewählten Nachkommastellen prüft die Einrichtung die letzte Rolle automatisch und bestätigt abschließend den vollständigen Stand auf einem frischen Bild. Bei weniger Stellen entfällt diese Feinprüfung. Die Oberfläche erklärt die gewählte Prüfung.
 - Die Selbsteinrichtung vergleicht ±1° und ±2° auch bei sieben lesbaren Stellen und bei bereits begonnenen Bestätigungen. Der Vergleich erfolgt vor der Übernahme und gilt für den tatsächlich geprüften Rahmen.
 - Die Intensivprüfung der letzten Rolle sucht zusätzlich bis zu einer halben Rahmenbreite und -höhe um die Ausgangsposition, einschließlich diagonaler Verschiebungen. Die benachbarten Rollen dienen als weiterer Positionsvorschlag.
 

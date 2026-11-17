@@ -1227,7 +1227,7 @@ def main():
         elapsed = max(0, round(time.monotonic() - attempt.started))
         metrics = {"frames_tested": attempt.attempts, "images_checked": len(attempt.seen)}
         success = rules.get("setup_success")
-        if verified and not attempt.intensive and not attempt.automatic and reference:
+        if verified and (not attempt.intensive or attempt.setup_last_digit) and not attempt.automatic and reference:
             success = {"source": setup_source_id(source), "time": finished, "duration_seconds": elapsed, **metrics}
             if not previous_completion:
                 completed = success
@@ -1286,7 +1286,7 @@ def main():
                 simplified = rules["decimals"] == 3 and (
                     action == "setup" or action == "start" and not rules["precision_mode"])
                 intensive = action == "intensive"
-                if intensive and rules["fraction_digits"] != 3:
+                if intensive and (rules["fraction_digits"] != 3 or rules["decimals"] != 3):
                     raise ValueError("The meter must display three decimal digits")
                 if running and (action == "repair" or (
                         calibration.limit == limit and calibration.region == region
@@ -1618,7 +1618,7 @@ def main():
                             )
 
                         def recognize(layout, profile, register, ocr_deadline=None, *, full_precision=False):
-                            reduced = attempt.simplified and not full_precision
+                            reduced = (attempt.simplified or active_rules["decimals"] == 2) and not full_precision
                             value = read_visible_digits(
                                 *register[:4], options["helle_ziffern"], active_rules["polarity"], profile=profile,
                                 whole_digits=whole, fraction_digits=2 if reduced else fraction,
@@ -1662,19 +1662,6 @@ def main():
                             return read_digit(register, box, lambda picture, digits: cached_digit(
                                 picture, options["helle_ziffern"] if polarity == "auto" else polarity == "light",
                                 digits, profile=profile, force_polarity=polarity != "auto", deadline=fine_deadline))
-
-                        def preview_optional_slot(layout):
-                            nonlocal fine_deadline
-                            fine_deadline = min(deadline, time.monotonic() + 3)
-                            hint = attempt.probe_optional_last_slot(
-                                layout, active_rules, read_calibration_slot,
-                                lambda: stopped() or time.monotonic() >= fine_deadline, report_fine,
-                            )
-                            if hint is not None:
-                                trial, values = hint
-                                readings[:] = values
-                                report_crop(trial, register_for(trial), values[-1], tentative_last=True)
-                                report_decision("optional_last_slot")
 
                         if attempt.intensive:
                             earlier_frames = []
@@ -1727,10 +1714,17 @@ def main():
                                     return digit
 
                                 report_calibration("last_digit", rotation=layout.rotation)
-                                result_layout = attempt.check_last_digit(
-                                    frame, sample, captured, layout, whole, read_last,
-                                    lambda: stopped() or transition is not None, on_image, report_decision,
-                                )
+                                if attempt.setup_last_digit and attempt.verification_pending:
+                                    report_calibration("verify", rotation=layout.rotation)
+                                    result_layout = attempt.verify(
+                                        frame, sample, captured, active_rules, read, stopped,
+                                        on_image=on_image, on_decision=report_decision,
+                                    )
+                                else:
+                                    result_layout = attempt.check_last_digit(
+                                        frame, sample, captured, layout, whole, read_last,
+                                        lambda: stopped() or transition is not None, on_image, report_decision,
+                                    )
                                 if transition:
                                     with settings_lock:
                                         if calibration is job and job.state == "testing":
@@ -1767,7 +1761,6 @@ def main():
                                     attempt.begin_verification(time.monotonic())
                                 else:
                                     selected = candidate
-                                    preview_optional_slot(selected)
                             elif attempt.stationary_crop_ready():
                                 selected = attempt.candidate
                                 provisional = True
@@ -1798,13 +1791,17 @@ def main():
                 attempt.state = "timeout"
             elif calibration_configuration_now() != calibration_configuration or get_auto_paused():
                 attempt.state = "cancelled"
+            elif (selected and attempt.simplified and active_rules["decimals"] == 3
+                  and not attempt.automatic and not reflected):
+                attempt.begin_setup_last_digit(selected)
+                attempt.state = "waiting"
             elif selected:
                 try:
                     save_calibration_layout(attempt, selected, provisional=provisional,
                                             verified=not provisional, reflected=reflected)
-                    if not provisional and not attempt.intensive:
+                    if not provisional and (not attempt.intensive or attempt.setup_last_digit):
                         remember_known_good_layout(get_auto_rules(), active_source, selected)
-                    if not attempt.intensive and not attempt.automatic:
+                    if (not attempt.intensive or attempt.setup_last_digit) and not attempt.automatic:
                         history["setup_first_check_revision"] = get_auto_rules()["crop_revision"]
                     attempt.state = "saved_reflection" if reflected else "saved_stationary" if provisional else "saved"
                 except (OSError, ValueError):

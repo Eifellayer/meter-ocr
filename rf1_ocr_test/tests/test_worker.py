@@ -544,9 +544,10 @@ class StateTests(TestCase):
                     with self.assertRaises(Done):
                         run.main()
                     status = access["status"]()
-                    self.assertEqual("saved", status["state"])
-                    self.assertFalse(status["intensive"])
-                    self.assertEqual(decimals == 3, status["simplified"])
+                    self.assertEqual("waiting" if decimals == 3 else "saved", status["state"])
+                    self.assertEqual(decimals == 3, status["intensive"])
+                    self.assertEqual(decimals == 3, status["background"])
+                    self.assertFalse(status["simplified"] if decimals == 3 else status["intensive"])
                     rules = access["rules"]()
                     self.assertIsNotNone(rules["setup_success"])
                     self.assertEqual("manual", rules["crop_mode"])
@@ -557,10 +558,10 @@ class StateTests(TestCase):
                     self.assertEqual(decimals == 3,
                                      run.stationary_partial_active(rules, configured_source))
                     if decimals == 3:
-                        # The eighth digit can be checked separately without
-                        # altering the already saved seven-digit configuration.
-                        self.assertTrue(access["control"]("intensive", 4))
-                        self.assertTrue(access["status"]()["intensive"])
+                        # The eighth digit starts automatically as a secondary
+                        # job; it must not mutate or replace the seven-digit crop.
+                        self.assertTrue(access["status"]()["followup"])
+                        self.assertTrue(access["status"]()["background"])
                         self.assertEqual(rules, access["rules"]())
 
     def test_calibration_preview_shows_real_ocr_on_a_rotated_synthetic_camera_image(self):

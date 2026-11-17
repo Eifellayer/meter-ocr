@@ -352,8 +352,10 @@ EN_UI = {
     LAST_DIGIT_NOTICE: "Only the third decimal digit is unclear or differs.",
     "Dritte Nachkommastelle intensiv suchen": "Run intensive search for the third decimal digit",
     "Dritte Nachkommastelle manuell markieren": "Mark the third decimal digit manually",
-    "Ausschnitt und Drehung gespeichert. Zwei Nachkommastellen bestätigt, die dritte bleibt unbestätigt.":
-        "Crop and rotation saved. Two decimal digits confirmed. The third remains unconfirmed.",
+    "Einrichtung abgeschlossen: Sieben Ziffern bestätigt. Die dritte Nachkommastelle kann zusätzlich intensiv geprüft werden.":
+        "Setup complete: Seven digits confirmed. The third decimal can be checked separately.",
+    "Die Einrichtung bestätigt zuerst sieben Ziffern. Die dritte Nachkommastelle kann anschließend separat geprüft werden.":
+        "Setup confirms seven digits first. The third decimal can then be checked separately.",
     "Die dritte Nachkommastelle ist bei Rollen oft schwer zu erkennen. „Automatische Selbsteinrichtung“ bestätigt bei der Ersteinrichtung die ersten zwei Stellen. Die dritte bleibt unbestätigt und kann später intensiv gesucht oder im Kamerabild manuell markiert werden.":
         "The third decimal digit on a roller can be hard to read. During initial setup, Learn crop and rotation confirms the first two decimal digits. The third remains unconfirmed. You can run an intensive search or mark it manually on the camera image later.",
     "Dritte Nachkommastelle bestätigt. Die Ziffernrahmen sind übernommen.":

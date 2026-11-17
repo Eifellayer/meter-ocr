@@ -1029,7 +1029,7 @@ class BrowserTests(IngressFixture):
             self.assertFalse(page.locator("#calibration-overview").is_visible())
             browser.close()
 
-    def test_device_discovery_remains_visible_without_results_and_supports_retry(self):
+    def test_device_discovery_field_remains_visible_when_no_devices_found(self):
         from playwright.sync_api import sync_playwright
 
         with sync_playwright() as playwright:
@@ -1039,20 +1039,21 @@ class BrowserTests(IngressFixture):
             page.goto(self.base)
             section = page.locator("#wizard-discovered-sources")
             section.wait_for(state="visible")
-            self.assertTrue(page.locator("#wizard-discovered-source").is_disabled())
-            page.locator("#wizard-sources-status").filter(has_text="Keine Geräte gefunden.").wait_for()
-            self.suggestions = [{"mode": "slfork", "url": "http://192.168.2.35", "label": "Gasmeter"}]
-            page.locator("#wizard-refresh-sources").click()
-            page.locator("#wizard-sources-status").filter(has_text="1 Gerät in Home Assistant gefunden.").wait_for()
             discovered = page.locator("#wizard-discovered-source")
+            self.assertTrue(discovered.is_disabled())
+            self.assertEqual(["Es wurden keine Geräte gefunden"], discovered.locator("option").all_text_contents())
+            self.suggestions = [{"mode": "slfork", "url": "http://192.168.2.35", "label": "Gasmeter"}]
+            page.reload()
+            discovered.locator("option").filter(has_text="AI on the Edge · Gasmeter").wait_for()
             self.assertTrue(discovered.is_enabled())
             discovered.select_option(label="AI on the Edge · Gasmeter")
             self.assertEqual("http://192.168.2.35", page.locator("#wizard-source-url input").input_value())
             page.route("**/bildquellen", lambda route: route.fulfill(status=503, body="Unavailable"))
-            page.locator("#wizard-refresh-sources").click()
-            page.locator("#wizard-sources-status").filter(has_text="Gerätesuche fehlgeschlagen.").wait_for()
-            self.assertTrue(section.is_visible())
-            self.assertTrue(page.locator("#wizard-refresh-sources").is_enabled())
+            page.reload()
+            discovered = page.locator("#wizard-discovered-source")
+            self.assertTrue(discovered.is_disabled())
+            self.assertEqual(["Es wurden keine Geräte gefunden"], discovered.locator("option").all_text_contents())
+            self.assertTrue(page.locator("#wizard-discovered-sources").is_visible())
             browser.close()
 
     def test_selecting_a_discovered_meter_prefills_the_wizard(self):

@@ -12,7 +12,7 @@ Die ausführliche Einführung, Voraussetzungen, Installation und Konfiguration f
 
 ## Installation
 
-**AI Meter Reader 0.6.6** ist auf Stable. Im Einrichtungsassistenten bleibt „In Home Assistant gefunden“ sichtbar, auch wenn die Gerätesuche nach einem Home-Assistant-Neustart kurzzeitig keine Treffer liefert. Die optionalen Langzeitfunktionen bleiben zuschaltbar.
+**AI Meter Reader 0.6.7** ist auf Stable. Die Selbsteinrichtung übernimmt sieben bestätigte Ziffern sofort und prüft die achte Ziffer anschließend zusätzlich im Hintergrund. Eine vorübergehend drehende siebte Rolle wird mit frischen Bildern erneut geprüft, ohne den gefundenen Rahmen sofort zu verlieren.
 
 Über **Einstellungen → Apps → App installieren → ⋮ → Repositories** den [Stable-Link](https://github.com/Eifellayer/meter-ocr#stable) hinzufügen und **AI Meter Reader** installieren. Im SLFork-Modus die `esp_url` eintragen, starten und die Weboberfläche öffnen.
 

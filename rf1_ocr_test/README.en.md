@@ -12,7 +12,7 @@ This is an additional plausibility check, **not a certified measurement device**
 
 ## Installation
 
-**AI Meter Reader 0.6.6** is on the Stable channel. The setup wizard now keeps the Home Assistant device selector visible even when discovery is temporarily empty after a Home Assistant restart. Optional long-term features remain configurable.
+**AI Meter Reader 0.6.7** is on the Stable channel. Setup immediately saves seven confirmed digits and searches for the optional eighth digit in the background, while temporarily unreadable rolling digits are rechecked on fresh frames.
 
 Add **Add-ons by Eifellayer** under **Settings → Apps → Install app → ⋮ → Repositories** using the [Stable link](https://github.com/Eifellayer/meter-ocr#stable), then install **AI Meter Reader**. Set `esp_url` for SLFork, or configure `kamera_entitaet` and an optional `referenz_entitaet` sensor.
 

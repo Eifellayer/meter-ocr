@@ -487,7 +487,7 @@ class StateTests(TestCase):
         self.assertIsNone(run.last_verified_configured_geometry(
             {**history, "check_status": "standalone_pending"}, rules, source))
 
-    def test_setup_automatically_checks_the_last_roller_only_for_three_selected_decimals(self):
+    def test_seven_digit_setup_completes_before_optional_last_digit_check(self):
         from threading import Event
 
         class Done(Exception):
@@ -520,7 +520,8 @@ class StateTests(TestCase):
                                "reference_time": recorded.timestamp(), "reference_required": True}
 
                 def fake_panel(*args, **kwargs):
-                    access.update(status=kwargs["get_calibration"], rules=args[6])
+                    access.update(status=kwargs["get_calibration"], rules=args[6],
+                                  control=kwargs["control_calibration"])
                     kwargs["control_calibration"]("start", 4)
                     return None, None, None
 
@@ -543,13 +544,25 @@ class StateTests(TestCase):
                     with self.assertRaises(Done):
                         run.main()
                     status = access["status"]()
-                    self.assertEqual(decimals == 3, status["intensive"])
                     self.assertEqual("waiting" if decimals == 3 else "saved", status["state"])
+                    self.assertEqual(decimals == 3, status["intensive"])
+                    self.assertEqual(decimals == 3, status["background"])
+                    self.assertFalse(status["simplified"] if decimals == 3 else status["intensive"])
+                    rules = access["rules"]()
+                    self.assertIsNotNone(rules["setup_success"])
+                    self.assertEqual("manual", rules["crop_mode"])
+                    self.assertEqual(layout.settings()["crop"], rules["crop"])
+                    configured_source = {"mode": "camera", "url": "",
+                                         "camera": "camera.meter", "reference": "sensor.meter",
+                                         "selected": True}
+                    self.assertEqual(decimals == 3,
+                                     run.stationary_partial_active(rules, configured_source))
                     if decimals == 3:
-                        self.assertEqual(0, status["confirmations"])
-                        self.assertIsNone(access["rules"]().get("setup_success"))
-                    else:
-                        self.assertIsNotNone(access["rules"]()["setup_success"])
+                        # The eighth digit starts automatically as a secondary
+                        # job; it must not mutate or replace the seven-digit crop.
+                        self.assertTrue(access["status"]()["followup"])
+                        self.assertTrue(access["status"]()["background"])
+                        self.assertEqual(rules, access["rules"]())
 
     def test_calibration_preview_shows_real_ocr_on_a_rotated_synthetic_camera_image(self):
         from threading import Event

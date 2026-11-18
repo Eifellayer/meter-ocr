@@ -2297,6 +2297,8 @@ let calibrationWasActive = false;
 let lastDigitSearching = false;
 let lastDigitProgress = null;
 let comparedDecimals = null;
+let configuredDecimals = null;
+let partialEighthDigit = false;
 let previousCalibrationState = '';
 let routineOk = {automatic_routine_ok};
 let calibrationNoticeUntil = 0;
@@ -2983,11 +2985,20 @@ function syncHero() {{
     if (minutesLeft) noteText += lang === 'en'
       ? ` Maximum ${{maxMinutes}} min, at most ${{minutesLeft}} min left.`
       : ` Höchstdauer ${{maxMinutes}} min, noch höchstens ${{minutesLeft}} min.`;
+  }} else if (partialEighthDigit && configuredDecimals === 3 && comparedDecimals === 2) {{
+    noteText = lang === 'en'
+      ? 'Configured: 3 decimal places. Currently only 2 are verified; the eighth digit is still unconfirmed. The background search will retry automatically.'
+      : 'Eingestellt: 3 Nachkommastellen. Aktuell werden nur 2 sicher verglichen; die 8. Ziffer ist noch unbestätigt. Die Hintergrundsuche wird automatisch wiederholt.';
+    noteState = 'skipped';
   }} else if (fractionDigits.endsWith('?') && comparedDecimals !== null && comparedDecimals < fractionDigits.length) {{
     noteText = lang === 'en'
       ? `The ${{position}}th digit is not compared (setting: ${{comparedDecimals}} decimal places).`
       : `Die ${{position}}. Ziffer wird nicht verglichen (eingestellt: ${{comparedDecimals}} Nachkommastellen).`;
     noteState = 'skipped';
+  }}
+  if (partialEighthDigit && configuredDecimals === 3 && lastDigitSearching) {{
+    noteText = (lang === 'en' ? 'Configured: 3 decimal places, currently 2 verified. '
+      : 'Eingestellt: 3 Nachkommastellen, aktuell 2 geprüft. ') + noteText;
   }}
   if (note.textContent !== noteText) note.textContent = noteText;
   note.dataset.state = noteState;
@@ -3201,6 +3212,8 @@ async function refreshAutomatic() {{
     next = sample.next_check;
     renderConsumption(sample.consumption);
     comparedDecimals = Number.isInteger(sample.decimals) ? sample.decimals : null;
+    configuredDecimals = Number.isInteger(sample.configured_decimals) ? sample.configured_decimals : null;
+    partialEighthDigit = sample.partial_eighth_digit === true;
     if (experimental.open) refreshExperimental().catch(() => {{}});
     document.querySelector('#paused-notice').hidden = !sample.paused;
     document.querySelector('#pause-auto-form').hidden = sample.paused;
@@ -3585,7 +3598,8 @@ def start_panel(
     def automatic_summary(history, language, auto_rules):
         source, setup_pending = get_source()
         stabilizing_until, optimization_until = setup_deadlines(auto_rules, source)
-        decimals = 2 if stationary_partial_active(auto_rules, source) else auto_rules["decimals"]
+        partial_eighth_digit = stationary_partial_active(auto_rules, source)
+        decimals = 2 if partial_eighth_digit else auto_rules["decimals"]
         now = time.time()
         interval = stabilization_interval(auto_rules.get("interval_minutes", DEFAULT_INTERVAL_MINUTES),
                                           stabilizing_until, now)
@@ -3678,7 +3692,16 @@ def start_panel(
                       "Die App prüft mit einem frischen Bild erneut.")
         routine_ok = (tone == "ok" and not paused and not setup_pending
                       and history.get("source_connection_status") != "error")
-        if routine_ok:
+        if routine_ok and partial_eighth_digit:
+            tone, icon, routine_ok = "warning", "!", False
+            heading = ("Seven digits verified; eighth digit pending" if language == "en"
+                       else "Sieben Ziffern bestätigt – achte Ziffer offen")
+            detail = ("Configured: 3 decimal places, currently 2 checked. "
+                      "The separate eighth-digit search will retry automatically."
+                      if language == "en" else
+                      "Eingestellt: 3 Nachkommastellen, aktuell 2 verglichen. "
+                      "Die Suche nach der achten Ziffer wird automatisch wiederholt.")
+        elif routine_ok:
             heading = "All good. Automatic checks running." if language == "en" else "Alles OK. Automatik läuft."
             detail = ""
         try:
@@ -3772,6 +3795,9 @@ def start_panel(
             "source_connection": source_connection,
             "source_connection_state": history.get("source_connection_status", "unknown"),
             "decimals": history.get("comparison_decimals", default_decimals),
+            "configured_decimals": auto_rules["decimals"],
+            "partial_eighth_digit": partial_eighth_digit,
+            "eighth_digit_retry_at": history.get("eighth_digit_retry_at"),
             "current": image_version(current_image),
             "good": image_version(good_image),
             "automatic_preview": image_version(automatic_preview),

@@ -364,13 +364,19 @@ def compare_sample(data, ocr, decimals, *, ocr_confirmed=True, integer_digits=5,
     if value != actual:
         if decimals == 0:
             return "difference", "Abweichung: Die vollen Kubikmeter stimmen nicht überein. Bitte das Zählerbild prüfen."
+        if exact_prefix:
+            return ("difference", f"Abweichung: Die ersten {decimals} Nachkommastellen "
+                    "stimmen ohne Rundung nicht mit der Referenz überein.")
         return ("difference",
-                f"Abweichung: {'Ungerundet' if exact_prefix else 'Gerundet'} auf {decimals} Nachkommastelle{'' if decimals == 1 else 'n'} "
+                f"Abweichung: Gerundet auf {decimals} Nachkommastelle{'' if decimals == 1 else 'n'} "
                 "stimmen die Werte nicht überein. Bitte das Zählerbild prüfen.")
     if decimals == 0:
         return "match", "Bestätigt: Die vollen Kubikmeter stimmen überein. Nachkommastellen wurden nicht berücksichtigt."
+    if exact_prefix:
+        return ("match", f"Bestätigt: Die ersten {decimals} Nachkommastellen "
+                "stimmen ohne Rundung mit der Referenz überein. Die nächste Stelle bleibt unbestätigt.")
     return ("match",
-            f"Bestätigt: {'Ungerundet' if exact_prefix else 'Gerundet'} auf {decimals} Nachkommastelle{'' if decimals == 1 else 'n'} "
+            f"Bestätigt: Gerundet auf {decimals} Nachkommastelle{'' if decimals == 1 else 'n'} "
             "stimmen Zählerstand und Referenzwert überein.")
 
 

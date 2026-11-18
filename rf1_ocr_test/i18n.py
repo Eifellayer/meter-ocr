@@ -604,6 +604,10 @@ EN_UI = {
     "Das Prüfintervall gilt auch für die bereits geplante nächste Prüfung. Bei geänderter Vergleichsgenauigkeit beginnt die Trefferzählung neu.":
         "The interval also applies to the next scheduled check. Changing comparison precision resets the match count.",
     "Manueller Test": "Manual test",
+    'id="open-setup">Einrichtung<': 'id="open-setup">Setup<',
+    "Abweichenden Bildausschnitt ausprobieren": "Try a different image crop",
+    "Der Test verwendet den gespeicherten Ausschnitt der Automatik. Dauerhaft änderst du ihn unter Einstellungen → Automatische Prüfung. Hier kannst du eine Variante testen und danach übernehmen.":
+        "The test uses the crop saved for automatic checks. To change it permanently, go to Settings → Automatic check. Here you can try a variant and then apply it.",
     "Test einstellen": "Test settings",
     "Test starten": "Start test",
     "Testeinstellungen": "Test settings",

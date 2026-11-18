@@ -448,6 +448,13 @@ background:linear-gradient(#0d141a,#26323b 48%,#0d141a);color:#f4f7f9;box-shadow
 #recognition-tools{{margin-top:1rem;padding:1rem 1.15rem;border:1px dashed var(--edge);border-radius:var(--radius)}}
 .dashboard-help{{margin:1rem 0 0}}
 .test-box{{border-radius:var(--radius-sm);background:var(--surface-2)}}
+/* ---------- Tools tab ---------- */
+#tools-panel #recognition-tools{{margin:0 0 1rem;padding:0;border:0}}
+#tools-panel #recognition-tools > summary{{font-size:1.02rem;color:var(--ink);margin-bottom:.4rem}}
+.manual-crop-override{{grid-column:1/-1;padding:.2rem .9rem;border:1px solid var(--edge);border-radius:var(--radius-sm)}}
+.manual-crop-override > summary{{min-height:2.6rem;display:flex;align-items:center;cursor:pointer;font-weight:650;color:var(--muted)}}
+.manual-crop-override[open]{{padding-bottom:.9rem}}
+.manual-crop-override > label,.manual-crop-override > .crop-draw,.manual-crop-override > .crop-fields{{margin-top:.6rem}}
 /* ---------- Settings ---------- */
 .settings-item{{border-top:0;margin:0 0 .6rem;padding:0 1.15rem;border:1px solid var(--edge);border-radius:var(--radius);background:var(--surface)}}
 .settings-item > summary{{min-height:3.4rem;font-weight:700}}
@@ -462,6 +469,7 @@ background:linear-gradient(#0d141a,#26323b 48%,#0d141a);color:#f4f7f9;box-shadow
 #pause-auto-form button,#resume-auto-form button{{background:var(--surface-2);color:var(--ink);border-color:var(--edge)}}
 #pause-auto-form button:not(:disabled):hover{{background:light-dark(#e8edf1,#22303c)}}
 #start-automatic:disabled{{background:var(--surface-2);color:var(--muted);border-color:var(--edge)}}
+#save-manual-crop{{background:var(--surface-2);color:var(--ink);border-color:var(--edge)}}
 header{{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.6rem}}
 .main-tabs button[aria-selected="true"]:not(:disabled):hover{{background:var(--ink);color:var(--surface)}}
 .calibration-card form > :is(p,div,details){{grid-column:1/-1}}
@@ -477,7 +485,7 @@ header{{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.6rem}}
 <header>
 <div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5a8 8 0 1 1 15 0"/><path d="M12 13l3.5-4"/><circle cx="12" cy="13.5" r="1.4" fill="currentColor"/><path d="M7 20h10"/></svg></span>
 <div><h1>{app_name}</h1><p class="brand-subtitle">Zählerstand lokal aus dem Kamerabild</p></div></div>
-<button type="button" id="open-setup">Einrichtung öffnen</button>
+<button type="button" id="open-setup">Einrichtung</button>
 <form method="post" action="sprache" class="language-bar" id="language-form">
 <input type="hidden" name="csrf" value="{csrf}">
 <label for="language-select">Sprache / Language</label>
@@ -489,8 +497,8 @@ header{{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.6rem}}
 <div class="main-tabs" role="tablist" aria-label="Ansichten">
 <button type="button" role="tab" id="tab-overview" aria-controls="view-overview" aria-selected="true">Übersicht</button>
 <button type="button" role="tab" id="tab-settings" aria-controls="view-settings" aria-selected="false" tabindex="-1">Einstellungen</button>
+<button type="button" role="tab" id="tab-tools" aria-controls="view-tools" aria-selected="false" tabindex="-1">Werkzeuge</button>
 </div>
-<a id="open-recognition-tools" class="main-guide" href="#recognition-tools">Werkzeuge</a>
 <a id="open-user-guide" class="main-guide" href="https://github.com/Eifellayer/meter-ocr/blob/main/docs/Bedienungsanleitung-AI-Meter-Reader.pdf" target="_blank" rel="noopener noreferrer" title="Bebilderte Bedienungsanleitung (PDF)">Anleitung</a>
 </nav>
 <main>
@@ -523,7 +531,6 @@ header{{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.6rem}}
 </div>
 <div class="crop-actions" id="setup-start-actions" {resume_setup_hidden}>
 <button type="button" id="resume-setup">Einrichtung fortsetzen</button>
-<button type="button" id="open-demo-overview">Demo ohne Kamera ausprobieren</button>
 </div>
 <p id="calibration-complete-notice" class="settings-note" role="status" hidden></p>
 {digit_correction_notice}
@@ -598,7 +605,7 @@ header{{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.6rem}}
 <form method="post" action="automatik-pause" id="pause-auto-form" {pause_button_hidden}><input type="hidden" name="lang" value="{language}"><input type="hidden" name="mode" value="{language_mode}"><input type="hidden" name="csrf" value="{csrf}"><input type="hidden" name="paused" value="1"><button type="submit">Automatik pausieren</button></form>
 </div>
 <div class="automatic-interval-hint" id="automatic-interval-hint" hidden><span>Wiederholte Fehlablesung? Ein kürzeres Prüfintervall kann helfen, wenn sich der Zähler nach einer Weile wieder klarer ablesen lässt.</span><button type="button" id="open-interval-settings">Prüfintervall ändern</button></div>
-<details class="automatic-images" id="automatic-images" open><summary>Letztes Testbild</summary>
+<span id="preview-home" hidden></span><details class="automatic-images" id="automatic-images" open><summary>Letztes Testbild</summary>
 <p id="preview-empty" class="legend" {preview_empty_hidden}>Noch kein Testbild verfügbar.</p>
 <div class="preview" id="test-preview" {automatic_preview_hidden}>
 <h2 id="preview-heading">Letztes Testbild</h2>
@@ -682,6 +689,18 @@ header{{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.6rem}}
 entity: sensor.rf1_ocr_zaehlerstand
 name: Zählerstand (OCR)</code></pre>
 </details>
+</div>
+</div>
+<div class="tab-content" id="view-tools" role="tabpanel" aria-labelledby="tab-tools" {tools_hidden}>
+<div class="panel" id="tools-panel">
+<details id="recognition-tools" open>
+<summary>Werkzeuge zur Erkennung</summary>
+<div class="check-actions">
+<button type="button" id="open-demo-tools">Demo ohne Kamera ausprobieren</button>
+<button type="button" id="open-digit-correction" {digit_correction_hidden}>Ziffernrahmen korrigieren</button>
+<button type="button" id="open-manual-settings">Manueller Test</button>
+</div>
+</details>
 <div class="manual-test-area" id="manual-test-area" {manual_area_hidden}>
 <div class="manual-test-heading"><h2>Manueller Test</h2>
 <button type="button" id="close-manual-test">Schließen</button></div>
@@ -733,6 +752,9 @@ name: Zählerstand (OCR)</code></pre>
 <select name="decimals">{decimal_options}</select></label>
 <label>Max. OCR-Versuche
 <select name="attempts">{attempt_options}</select></label>
+<details class="manual-crop-override" id="manual-crop-override">
+<summary>Abweichenden Bildausschnitt ausprobieren</summary>
+<p class="settings-note">Der Test verwendet den gespeicherten Ausschnitt der Automatik. Dauerhaft änderst du ihn unter Einstellungen → Automatische Prüfung. Hier kannst du eine Variante testen und danach übernehmen.</p>
 <label>Bildbereich
 <select name="crop_mode" id="crop-mode">{crop_mode_options}</select></label>
 <div class="crop-draw" id="crop-draw" hidden>
@@ -762,30 +784,24 @@ name: Zählerstand (OCR)</code></pre>
 <input name="width" type="number" min="1" max="9999" value="{width_value}"></label>
 <p class="settings-note">Wähle den Ausschnitt im Originalbild. Positive Winkel drehen nach rechts, negative nach links. Die Vorkommabreite gilt nach der Drehung.</p>
 </div>
+<div class="crop-actions">
+<button id="save-manual-crop" type="submit" name="save_settings" value="1" hidden>Ausschnitt und Drehung speichern</button>
+<button type="button" id="reset-manual-crop" class="crop-reset" data-default-crop="{default_crop_value}"
+        data-default-width="{default_crop_width}" hidden>Ausschnitt zurücksetzen</button>
+</div>
+</details>
 <label>Eigenes Testbild (optional, JPG oder PNG)
 <input type="file" name="image" accept="image/jpeg,image/png"></label>
 <p class="settings-note">Ein ausgewähltes Bild wird nur für diesen manuellen Test verwendet (max. 3 MB).</p>
 <div class="crop-actions">
 <button id="start-check-with-options" type="submit">Jetzt prüfen</button>
-<button id="save-manual-crop" type="submit" name="save_settings" value="1" hidden>Ausschnitt und Drehung speichern</button>
-<button type="button" id="reset-manual-crop" class="crop-reset" data-default-crop="{default_crop_value}"
-        data-default-width="{default_crop_width}" hidden>Ausschnitt zurücksetzen</button>
 </div>
 </form>
 <details class="help"><summary title="Informationen zum manuellen Bildtest">ⓘ Was passiert bei „Jetzt prüfen“?</summary>
 <p>Die App verwendet das letzte vorhandene Zählerbild oder ein ausgewähltes eigenes JPG-/PNG-Testbild (bis 3 MB). Sie liest die Zahlen aus dem Bild und vergleicht sie mit dem Referenzwert. Sobald die Werte übereinstimmen, stoppt die Prüfung. Andernfalls werden höchstens so viele OCR-Versuche durchgeführt wie eingestellt (1–10). Der Test verändert die automatische Trefferzahl nicht.</p></details>
 </div></details>
 </div>
-<details id="recognition-tools">
-<summary>Werkzeuge zur Erkennung</summary>
-<div class="check-actions">
-<button type="button" id="open-demo-tools">Demo ohne Kamera ausprobieren</button>
-<button type="button" id="open-calibration" {calibration_hidden}>Selbsteinrichtung</button>
-<button type="button" id="open-digit-correction" {digit_correction_hidden}>Ziffernrahmen korrigieren</button>
-<button type="button" id="open-manual-settings">Test einstellen</button>
-<button id="start-check" type="submit" form="manual-form">Test starten</button>
-</div>
-</details>
+<span id="preview-tools-slot" hidden></span>
 </div>
 </div>
 <div class="tab-content" id="view-settings" role="tabpanel" aria-labelledby="tab-settings" {settings_hidden}>
@@ -1205,22 +1221,26 @@ const searchPrefs = new URLSearchParams(location.search);
 const tabs = [...document.querySelectorAll('[role="tab"]')];
 const views = [...document.querySelectorAll('.tab-content')];
 function activateTab(name, updateUrl = true) {{
-  const selected = name === 'settings' ? 'settings' : 'overview';
+  const selected = ['settings', 'tools'].includes(name) ? name : 'overview';
   tabs.forEach(tab => {{
     const active = tab.id === `tab-${{selected}}`;
     tab.setAttribute('aria-selected', String(active));
     tab.tabIndex = active ? 0 : -1;
   }});
   views.forEach(view => view.hidden = view.id !== `view-${{selected}}`);
+  // One shared test image: show it in the tab where the user is working.
+  const previewCard = document.querySelector('#automatic-images');
+  const slot = document.querySelector(selected === 'tools' ? '#preview-tools-slot' : '#preview-home');
+  if (previewCard && slot && slot.nextElementSibling !== previewCard) slot.after(previewCard);
   if (updateUrl) {{
     const url = new URL(location.href);
-    if (selected === 'settings') url.searchParams.set('ui', 'settings');
+    if (selected !== 'overview') url.searchParams.set('ui', selected);
     else url.searchParams.delete('ui');
     history.replaceState(null, '', url.pathname + (url.searchParams.size ? '?' + url.searchParams : ''));
   }}
 }}
 tabs.forEach((tab, index) => {{
-  tab.addEventListener('click', () => activateTab(tab.id === 'tab-settings' ? 'settings' : 'overview'));
+  tab.addEventListener('click', () => activateTab(tab.id.replace('tab-', '')));
   tab.addEventListener('keydown', event => {{
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
@@ -1233,10 +1253,13 @@ const settingsSections = ['#source-settings', '#automatic-settings', '#notificat
 const selectedTab = searchPrefs.get('ui');
 const settingsOpen = selectedTab ? selectedTab === 'settings' :
   searchPrefs.get('saved') === 'crop' || settingsSections.some(selector => document.querySelector(selector).open);
-activateTab(settingsOpen ? 'settings' : 'overview', false);
+const toolsOpen = !settingsOpen && (selectedTab === 'tools' || !document.querySelector('#view-tools').hidden);
+activateTab(settingsOpen ? 'settings' : toolsOpen ? 'tools' : 'overview', false);
 const setupDialog = document.querySelector('#setup-dialog');
 // Keep the first-run modal outside the tab panel so its hidden ancestor cannot hide it.
 document.body.appendChild(setupDialog);
+// Dialogs must not inherit a hidden tab panel; they can be opened from any tab.
+for (const dialog of document.querySelectorAll('.tab-content dialog')) document.body.appendChild(dialog);
 const setupDismissKey = 'meter-ocr-setup-dismissed';
 function dismissSetup() {{
   if (setupDialog.open) setupDialog.close();
@@ -1252,19 +1275,6 @@ function openSetup() {{
 }}
 document.querySelector('#open-setup').addEventListener('click', openSetup);
 document.querySelector('#resume-setup').addEventListener('click', openSetup);
-document.querySelector('#open-recognition-tools').addEventListener('click', event => {{
-  event.preventDefault();
-  activateTab('overview');
-  const tools = document.querySelector('#recognition-tools');
-  tools.open = true;
-  tools.scrollIntoView({{block: 'nearest'}});
-  tools.querySelector('summary').focus({{preventScroll: true}});
-}});
-document.querySelector('#open-calibration').addEventListener('click', () => {{
-  activateTab('settings');
-  document.querySelector('#calibration-title').focus({{preventScroll: true}});
-  document.querySelector('#calibration-settings').scrollIntoView({{block: 'start'}});
-}});
 document.querySelector('#open-interval-settings').addEventListener('click', () => {{
   activateTab('settings');
   document.querySelector('#automatic-settings').open = true;
@@ -1301,7 +1311,6 @@ function openDemo(fromSetup) {{
 }}
 document.querySelector('#open-demo-setup').addEventListener('click', () => openDemo(true));
 document.querySelector('#open-demo-tools').addEventListener('click', () => openDemo(false));
-document.querySelector('#open-demo-overview').addEventListener('click', () => openDemo(false));
 document.querySelector('#close-demo').addEventListener('click', () => demoDialog.close());
 demoDialog.addEventListener('close', () => {{
   if (closeDemoToSetup) document.querySelector('#open-demo-setup').focus();
@@ -1624,6 +1633,7 @@ document.querySelector('#language-select').addEventListener('change', () => {{
   const url = new URL(document.querySelector('#language-form').action);
   if (document.querySelector('#manual-panel').open) url.searchParams.set('test', 'open');
   if (document.querySelector('#view-settings').hidden === false) url.searchParams.set('ui', 'settings');
+  else if (document.querySelector('#view-tools').hidden === false) url.searchParams.set('ui', 'tools');
   document.querySelector('#language-form').action = url;
   document.querySelector('#language-form').submit();
 }});
@@ -1633,11 +1643,11 @@ let statusPending = false;
 const manualPanel = document.querySelector('#manual-panel');
 const manualForm = document.querySelector('#manual-form');
 const testBox = document.querySelector('#test-box');
-const testButtons = [document.querySelector('#start-check'), document.querySelector('#start-check-with-options')];
+const testButtons = [document.querySelector('#start-check-with-options')];
 function setTestActive(active) {{
   for (const [index, button] of testButtons.entries()) {{
     button.disabled = active;
-    button.textContent = active ? 'Prüfung läuft …' : (index === 0 ? 'Test starten' : 'Jetzt prüfen');
+    button.textContent = active ? 'Prüfung läuft …' : 'Jetzt prüfen';
   }}
 }}
 let lastManualCropResetTime = 0;
@@ -2029,7 +2039,7 @@ calibrationProposal.addEventListener('click', () => {{
   for (const name of ['crop_mode', 'crop', 'width', 'rotation']) manualForm.elements[name].value = proposedCrop[name];
   manualForm.elements.digit_boxes.value = JSON.stringify(proposedCrop.digit_boxes || []);
   manualForm.elements.crop_mode.dispatchEvent(new Event('change'));
-  activateTab('overview');
+  document.querySelector('#manual-crop-override').open = true;
   document.querySelector('#open-manual-settings').click();
 }});
 
@@ -2766,6 +2776,7 @@ for (const el of document.querySelectorAll('.stamp')) {{
 }}
 const manualTestArea = document.querySelector('#manual-test-area');
 document.querySelector('#open-manual-settings').addEventListener('click', () => {{
+  activateTab('tools');
   manualTestArea.hidden = false;
   manualPanel.open = true;
   manualPanel.scrollIntoView({{block: 'nearest'}});
@@ -2783,6 +2794,7 @@ if (['queued', 'open', 'busy'].includes(testRequest)) {{
   else if (!testBox.hidden) testBox.focus();
   searchPrefs.delete('test');
   history.replaceState(null, '', location.pathname + (searchPrefs.size ? '?' + searchPrefs : ''));
+  activateTab('tools');
 }}
 manualForm.addEventListener('submit', event => {{
   if (event.submitter?.name === 'save_settings') return;
@@ -3765,8 +3777,11 @@ def start_panel(
             if language == "en" and reset_message:
                 reset_message = EN_UI[reset_message]
             selected_tab = query.get("ui", [""])[0]
-            settings_tab_active = (selected_tab == "settings" if selected_tab in ("settings", "overview") else
+            settings_tab_active = (selected_tab == "settings" if selected_tab in ("settings", "overview", "tools") else
                                    saved in ("1", "crop", "notifications", "source", "setup-calibration") or setup_pending)
+            tools_tab_active = not settings_tab_active and (
+                selected_tab == "tools" or saved == "manual-crop"
+                or query.get("test", [""])[0] in ("queued", "open", "busy"))
             saved_message = (
                 "Ziffernrahmen gespeichert." if saved == "digit-frames" else
                 "Ausschnitt und Drehung für manuelle Tests gespeichert." if saved == "manual-crop" else
@@ -3829,8 +3844,9 @@ def start_panel(
                     f"{meter['id']}, {meter['minutes']}" for meter in extra_meters
                 )),
                 extra_meter_open="open" if extra_meters else "",
-                overview_hidden="hidden" if settings_tab_active else "",
+                overview_hidden="hidden" if settings_tab_active or tools_tab_active else "",
                 settings_hidden="" if settings_tab_active else "hidden",
+                tools_hidden="" if tools_tab_active else "hidden",
                 language_options=select_options({"auto": automatic, "de": "Deutsch", "en": "English"}, mode),
                 settings_open="open" if saved in ("1", "crop", "crop-reset", "fallback") else "",
                 fallback_saved_notice=auto_saved_notice if saved == "fallback" else "",
@@ -4151,8 +4167,11 @@ def start_panel(
                         problem(503, "Die Spracheinstellung konnte nicht gespeichert werden.",
                                 "Could not save the language setting.")
                         return
-                test_open = parse_qs(urlsplit(self.path).query).get("test") == ["open"]
+                return_query = parse_qs(urlsplit(self.path).query)
+                test_open = return_query.get("test") == ["open"]
+                return_tab = return_query.get("ui", [""])[0]
                 params = (["test=open"] if test_open else []) + (
+                    ["ui=" + return_tab] if return_tab in ("settings", "tools") else []) + (
                     ["mode=" + mode] if keep_mode else [])
                 self.redirect("?" + "&".join(params) if params else "")
                 return

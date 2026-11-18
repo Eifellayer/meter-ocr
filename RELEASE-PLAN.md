@@ -1,6 +1,6 @@
 # Roadmap und Freigabeplan
 
-Stand: November 2026 · aktuelle Version **0.6.9 Stable**
+Stand: November 2026 · aktuelle Version **0.6.10 Stable**
 
 **Leitbild „Fire and Forget“:** Einmal möglichst automatisch einrichten. Danach prüft die App eigenständig, übernimmt nur belegte Verbesserungen und zeigt Unsicherheit sichtbar an. Ein errechneter Zwischenstand verändert keine bestätigten Messwerte oder Verbrauchszähler.
 
@@ -10,9 +10,7 @@ Stand: November 2026 · aktuelle Version **0.6.9 Stable**
 
 | Status | Aufgabe | Abnahme |
 | --- | --- | --- |
-| In Prüfung ([#94](https://github.com/Eifellayer/meter-ocr/pull/94)) | **Unveränderliche führende Stellen ergänzen** | Im Praxisbetrieb war etwa jede fünfte Ablesung unklar, weil die schmale führende „1“ nicht erkannt wurde. Stellen, die sich seit dem letzten bestätigten Stand bei maximalem Durchfluss nicht ändern können, werden ergänzt; widerspricht eine eindeutige Lesung, wird nichts ergänzt. Praxistest am echten Zähler steht aus. |
-| In Prüfung ([#95](https://github.com/Eifellayer/meter-ocr/pull/95)) | **Modernere Oberfläche** | Rollenzählwerk mit Status, Kacheln, 24-Stunden-Verbrauchsdiagramm, Hell/Dunkel, Einstellungen als Karten. Alle IDs, Formulare und Abläufe bleiben erhalten. |
-| Offen | **Doppelte Bedienelemente zusammenführen** | Jede Aktion hat einen eindeutigen Platz. Keine Funktion geht verloren. |
+| Beobachten | **Praxis 0.6.10** | Am echten Zähler prüfen, wie oft führende Stellen ergänzt werden und ob die neue Oberfläche in Browser und Companion-App gut bedienbar ist. |
 | Offen | **Einstellungen nachvollziehbar machen** | Sichtbar machen, ob ein Wert aus der App-Konfiguration oder aus der Web-Einstellung (`/data/auto-pruefregeln.json`) greift. Alte Felder nur mit Migrationsplan entfernen. |
 | Offen | **Reproduzierbare Foto-Regressionstests** | Versionierte Offline-Testbilder mit Sollwerten in GitHub Actions; Regressionen werden gemeldet. Rechte der Ausgangsbilder klären. |
 | Offen | **GitHub-Releases, Topics und Screenshot** | Releases zu veröffentlichten Stable-Commits, Repository-Topics, anonymisierter Screenshot nur mit Demo-Daten. |
@@ -49,6 +47,7 @@ Diese Funktionen kommen erst, wenn der Einzelzähler im Alltag zuverlässig läu
 
 | Version | Ergebnis |
 | --- | --- |
+| 0.6.10 | Neue Oberfläche mit Rollenzählwerk, Kacheln, 24-Stunden-Diagramm und Reiter „Werkzeuge“; doppelte Bedienelemente zusammengeführt; unveränderliche führende Stellen werden aus dem bestätigten Stand ergänzt; Roadmap nur noch auf GitHub. |
 | 0.6.9 | Unklare siebte Ziffer: einzelner Durchlauf wird mit einer Nachkommastelle teilbestätigt, danach 30 Minuten Wartezeit. |
 | 0.6.7–0.6.8 | Sieben-Ziffern-Einrichtung wird sofort gespeichert; die achte Ziffer wird im Hintergrund gesucht, ohne die Automatik zu blockieren. |
 | 0.6.5–0.6.6 | Reset mit Erhalt der Verbrauchsstatistik; Geräteerkennung im Assistenten robuster. |

@@ -342,9 +342,142 @@ section>div{{background:var(--surface);border:1px solid var(--edge);border-radiu
 section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 .stamp,#countdown{{font-variant-numeric:tabular-nums}}
 @media(max-width:500px){{body{{padding:.8rem .7rem 2rem}}.panel{{padding:.9rem}}dl{{grid-template-columns:minmax(5.5rem,1fr) minmax(0,1.7fr);gap:.5rem .85rem}}form:not(.language-bar) button{{width:100%;min-height:2.75rem}}}}
+/* ---------- Design system 0.7: tokens ---------- */
+:root{{font:15px/1.5 "Inter","Segoe UI Variable","Segoe UI",system-ui,-apple-system,sans-serif;
+--page:light-dark(#eef2f5,#0b1117);--surface:light-dark(#ffffff,#141c24);--surface-2:light-dark(#f6f8fa,#1a242e);
+--edge:light-dark(#e1e7ec,#26323d);--ink:light-dark(#0f1f2b,#e6edf3);--muted:light-dark(#5b6b78,#93a3b1);
+--accent:light-dark(#0b8f7c,#38c9b0);--accent-ink:light-dark(#ffffff,#04201b);--accent-soft:light-dark(#e2f4f1,#123a34);
+--ok:light-dark(#1d8a52,#5fd29a);--ok-soft:light-dark(#e6f6ed,#12301f);
+--warn:light-dark(#a46a00,#f2c14e);--warn-soft:light-dark(#fff4d9,#33290f);
+--bad:light-dark(#c0353f,#ff8a92);--bad-soft:light-dark(#fdecee,#3a1a1f);
+--radius:1.1rem;--radius-sm:.7rem;--shadow:0 1px 2px light-dark(#0f1f2b0d,#0006),0 8px 24px light-dark(#0f1f2b0f,#0004)}}
+body{{max-width:64rem;padding:1.25rem 1rem 3rem;background:var(--page);color:var(--ink)}}
+h1{{font-size:1.35rem;letter-spacing:-.02em;margin:0;line-height:1.2}}
+h2{{font-size:1.02rem;letter-spacing:-.01em}}
+a{{color:var(--accent)}}
+/* ---------- Header and navigation ---------- */
+header{{align-items:center;margin-bottom:1rem}}
+.brand{{display:flex;align-items:center;gap:.7rem;margin-right:auto;min-width:0}}
+.brand-mark{{flex:none;width:2.6rem;height:2.6rem;border-radius:.8rem;display:grid;place-items:center;
+background:linear-gradient(140deg,var(--accent),light-dark(#0a6f87,#2a8fb0));color:#fff;box-shadow:var(--shadow)}}
+.brand-mark svg{{width:1.55rem;height:1.55rem}}
+.brand-subtitle{{margin:.1rem 0 0;color:var(--muted);font-size:.82rem}}
+#open-setup{{background:var(--surface);border-color:var(--edge);color:var(--ink)}}
+.language-bar{{margin:0}}
+.language-bar label{{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}}
+.language-bar select{{min-height:2.55rem;border-radius:99px;padding-inline:.9rem}}
+.main-menu{{padding:.3rem;border-radius:99px;background:var(--surface);box-shadow:var(--shadow);border-color:transparent}}
+.main-tabs button{{border-radius:99px;font-weight:650}}
+.main-tabs button[aria-selected="true"]{{background:var(--ink);color:var(--surface);border-color:transparent}}
+.main-guide{{border-radius:99px;color:var(--muted);text-decoration:none;font-weight:600}}
+.main-guide:hover{{color:var(--ink);background:var(--surface-2)}}
+/* ---------- Surfaces and controls ---------- */
+.panel{{border:1px solid var(--edge);border-radius:var(--radius);box-shadow:var(--shadow);padding:1.25rem 1.35rem}}
+button{{border-radius:99px;border:1px solid var(--edge);background:var(--surface-2);color:var(--ink);font-weight:650;
+transition:background .15s,transform .05s,box-shadow .15s}}
+button:not(:disabled):hover{{background:light-dark(#e8edf1,#22303c)}}
+button:not(:disabled):active{{transform:translateY(1px)}}
+button:disabled{{opacity:.5;cursor:not-allowed}}
+#start-automatic,#start-check-with-options,#save-digit-correction,form button[type="submit"]:not(.crop-reset){{background:var(--accent);border-color:transparent;color:var(--accent-ink)}}
+#start-automatic:not(:disabled):hover,#start-check-with-options:not(:disabled):hover,form button[type="submit"]:not(.crop-reset):not(:disabled):hover{{background:light-dark(#097a6a,#5fd8c3)}}
+select,input{{border-radius:var(--radius-sm);background:var(--surface);border:1px solid var(--edge)}}
+button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible,a:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b088);outline-offset:2px}}
+label{{color:var(--muted)}}
+/* ---------- Meter hero ---------- */
+.meter-hero{{position:relative;display:grid;gap:1rem;margin:-1.25rem -1.35rem 1.1rem;padding:1.4rem 1.35rem 1.2rem;
+border-radius:var(--radius) var(--radius) 0 0;background:radial-gradient(120% 140% at 0% 0%,light-dark(#e3f3f0,#123430) 0%,transparent 60%),var(--surface-2);
+border-bottom:1px solid var(--edge)}}
+.meter-hero-top{{display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap}}
+.meter-hero-label{{margin:0;font-size:.78rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}}
+.status-chip{{display:inline-flex;align-items:center;gap:.45rem;padding:.3rem .75rem;border-radius:99px;font-size:.85rem;font-weight:700;
+background:var(--surface);border:1px solid var(--edge);color:var(--muted)}}
+.status-chip::before{{content:"";width:.55rem;height:.55rem;border-radius:50%;background:currentColor}}
+.status-chip[data-tone="ok"]{{color:var(--ok);background:var(--ok-soft);border-color:transparent}}
+.status-chip[data-tone="ok"]::before{{box-shadow:0 0 0 0 currentColor;animation:pulse 2.4s infinite}}
+.status-chip[data-tone="warning"]{{color:var(--warn);background:var(--warn-soft);border-color:transparent}}
+.status-chip[data-tone="problem"]{{color:var(--bad);background:var(--bad-soft);border-color:transparent}}
+@keyframes pulse{{0%{{box-shadow:0 0 0 0 color-mix(in srgb,currentColor 45%,transparent)}}70%{{box-shadow:0 0 0 .45rem transparent}}100%{{box-shadow:0 0 0 0 transparent}}}}
+@media(prefers-reduced-motion:reduce){{.status-chip::before{{animation:none!important}}}}
+.odometer{{display:flex;align-items:stretch;gap:.28rem;flex-wrap:nowrap;max-width:100%;overflow-x:auto;padding:.15rem 0 .3rem;
+font:700 clamp(1.7rem,7.5vw,3rem)/1 ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}}
+.odometer .roller{{position:relative;display:grid;place-items:center;min-width:1.02em;padding:.22em .08em;border-radius:.16em;
+background:linear-gradient(#0d141a,#26323b 48%,#0d141a);color:#f4f7f9;box-shadow:inset 0 .08em .12em #0009,inset 0 -.08em .12em #0009,0 1px 0 light-dark(#fff,#ffffff14)}}
+.odometer .roller::after{{content:"";position:absolute;inset:48% 0 auto;height:1px;background:#0006}}
+.odometer .roller.fraction{{background:linear-gradient(#5d1116,#b3262e 48%,#5d1116)}}
+.odometer .roller.unclear{{color:#ffcf53;background:linear-gradient(#3a2c06,#6d5410 48%,#3a2c06)}}
+.odometer .separator{{align-self:end;padding:0 .02em;color:var(--muted)}}
+.odometer .unit{{align-self:end;margin-left:.35rem;font:600 .38em/1.4 system-ui,sans-serif;color:var(--muted)}}
+.odometer-empty{{color:var(--muted);font:600 1rem system-ui,sans-serif;align-self:center}}
+.meter-hero-meta{{display:flex;gap:.4rem 1.2rem;flex-wrap:wrap;margin:0;color:var(--muted);font-size:.86rem}}
+.meter-hero-meta strong{{color:var(--ink);font-weight:650;font-variant-numeric:tabular-nums}}
+/* ---------- Status, facts and actions ---------- */
+.check-card-heading{{display:none}}
+.automatic-banner{{border-radius:var(--radius-sm);border-width:1px;padding:.75rem .9rem}}
+.automatic-banner[data-tone="ok"]{{background:var(--ok-soft);border-color:transparent;color:var(--ok)}}
+.automatic-banner[data-tone="warning"]{{background:var(--warn-soft);border-color:transparent;color:var(--warn)}}
+.automatic-banner[data-tone="problem"]{{background:var(--bad-soft);border-color:transparent;color:var(--bad)}}
+.automatic-actions{{display:flex;flex-wrap:wrap;gap:.55rem;align-items:center;margin:0 0 1rem}}
+.automatic-actions form{{margin:0;display:block}}
+#start-automatic-form{{margin:0}}
+.fact-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,10.5rem),1fr));gap:.6rem;margin:.4rem 0 0}}
+.fact-grid > div{{padding:.7rem .85rem;border-radius:var(--radius-sm);background:var(--surface-2);border:1px solid var(--edge);min-width:0}}
+.fact-grid dt{{font-size:.76rem;font-weight:650;letter-spacing:.02em;color:var(--muted)}}
+.fact-grid dd{{margin:.2rem 0 0;font-size:1.02rem;font-weight:650}}
+.connection-status{{display:inline-flex;align-items:center;gap:.4rem;margin:.2rem 0 .6rem;font-size:.85rem}}
+.connection-status::before{{content:"";width:.5rem;height:.5rem;border-radius:50%;background:currentColor;opacity:.8}}
+.failure-recovery,.paused-notice{{border-radius:var(--radius-sm)}}
+/* ---------- Consumption ---------- */
+.consumption-panel{{display:block;margin:1.25rem 0 0;padding:1.1rem 1.15rem;border-radius:var(--radius);background:var(--surface-2);border:1px solid var(--edge)}}
+.consumption-panel h2{{margin:0 0 .6rem}}
+.consumption-summary{{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,9rem),1fr));gap:.6rem;margin:0}}
+.consumption-summary > div{{padding:.75rem .9rem;border-radius:var(--radius-sm);background:var(--surface);border:1px solid var(--edge)}}
+.consumption-summary dt{{font-size:.76rem;font-weight:650}}
+.consumption-summary dd{{font-size:clamp(1.05rem,4.2vw,1.45rem);letter-spacing:-.02em;margin-top:.15rem}}
+.consumption-chart{{display:flex;align-items:end;gap:3px;height:5.5rem;margin:.9rem 0 .2rem;padding-bottom:1px;border-bottom:1px solid var(--edge)}}
+.consumption-chart span{{flex:1;min-width:0;border-radius:4px 4px 1px 1px;background:linear-gradient(var(--accent),color-mix(in srgb,var(--accent) 55%,transparent));min-height:2px}}
+.consumption-chart span[data-empty="true"]{{background:var(--edge);min-height:2px;height:2px!important}}
+.consumption-chart span[data-estimated="true"]{{opacity:.55}}
+.consumption-chart-axis{{display:flex;justify-content:space-between;margin:0;color:var(--muted);font-size:.75rem}}
+#consumption-details summary,.dashboard-help summary,.automatic-images > summary,#recognition-tools > summary,.ocr-details summary{{cursor:pointer;font-weight:650;color:var(--muted)}}
+/* ---------- Images and tools ---------- */
+.automatic-images{{margin:1.1rem 0 0;padding:1rem 1.15rem;border-radius:var(--radius);border:1px solid var(--edge)}}
+.automatic-images[open] > summary{{margin-bottom:.4rem}}
+.preview{{border-top:0;padding-top:0}}
+.preview h2{{display:none}}
+.preview img{{border-radius:var(--radius-sm);border:0;background:#0d141a;box-shadow:inset 0 0 0 1px var(--edge)}}
+#recognition-tools{{margin-top:1rem;padding:1rem 1.15rem;border:1px dashed var(--edge);border-radius:var(--radius)}}
+.dashboard-help{{margin:1rem 0 0}}
+.test-box{{border-radius:var(--radius-sm);background:var(--surface-2)}}
+/* ---------- Settings ---------- */
+.settings-item{{border-top:0;margin:0 0 .6rem;padding:0 1.15rem;border:1px solid var(--edge);border-radius:var(--radius);background:var(--surface)}}
+.settings-item > summary{{min-height:3.4rem;font-weight:700}}
+.manual-panel[open]{{box-shadow:var(--shadow)}}
+.manual-panel > summary::after{{content:"";width:.55rem;height:.55rem;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);transition:transform .2s;margin-right:.2rem}}
+.manual-panel[open] > summary::after{{content:"";transform:rotate(-135deg)}}
+.setup-dialog{{border-radius:calc(var(--radius) + .2rem);box-shadow:0 1.5rem 4rem #0006}}
+.page-footer{{margin-top:2rem}}
+/* ---------- De-duplication: the hero already shows reading, status and timing ---------- */
+.automatic-banner[data-tone="ok"]{{display:none}}
+.fact-grid > div:has(#automatic-ocr),.fact-grid > div:has(#countdown),.fact-grid > div:has(#automatic-last-check){{display:none}}
+.meter-hero-detail{{margin:-.4rem 0 0;color:var(--muted);font-size:.86rem}}
+#pause-auto-form button,#resume-auto-form button{{background:var(--surface-2);color:var(--ink);border-color:var(--edge)}}
+#pause-auto-form button:not(:disabled):hover{{background:light-dark(#e8edf1,#22303c)}}
+#start-automatic:disabled{{background:var(--surface-2);color:var(--muted);border-color:var(--edge)}}
+header{{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.6rem}}
+.main-tabs button[aria-selected="true"]:not(:disabled):hover{{background:var(--ink);color:var(--surface)}}
+.calibration-card form > :is(p,div,details){{grid-column:1/-1}}
+.settings-item:not(.manual-panel) > summary,#experimental > summary{{display:flex;align-items:center;justify-content:space-between;list-style:none;cursor:pointer}}
+.settings-item:not(.manual-panel) > summary::-webkit-details-marker,#experimental > summary::-webkit-details-marker{{display:none}}
+.settings-item:not(.manual-panel) > summary::after,#experimental > summary::after{{content:"";width:.55rem;height:.55rem;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);transition:transform .2s;margin-right:.2rem}}
+.settings-item:not(.manual-panel)[open] > summary::after,#experimental[open] > summary::after{{transform:rotate(-135deg)}}
+.reset-section > summary{{color:var(--bad)}}
+@media(max-width:560px){{header{{grid-template-columns:1fr 1fr}}.brand{{grid-column:1/-1}}header > button,.language-bar,.language-bar select{{width:100%}}
+.meter-hero{{margin:-.9rem -.9rem 1rem;padding:1.1rem .9rem 1rem}}.brand-subtitle{{display:none}}.automatic-actions > *,.automatic-actions button{{width:100%}}
+.main-tabs button,.main-guide{{font-size:.86rem}}}}
 </style>
 <header>
-<h1>{app_name}</h1>
+<div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5a8 8 0 1 1 15 0"/><path d="M12 13l3.5-4"/><circle cx="12" cy="13.5" r="1.4" fill="currentColor"/><path d="M7 20h10"/></svg></span>
+<div><h1>{app_name}</h1><p class="brand-subtitle">Zählerstand lokal aus dem Kamerabild</p></div></div>
 <button type="button" id="open-setup">Einrichtung öffnen</button>
 <form method="post" action="sprache" class="language-bar" id="language-form">
 <input type="hidden" name="csrf" value="{csrf}">
@@ -364,6 +497,16 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <main>
 <div class="tab-content" id="view-overview" role="tabpanel" aria-labelledby="tab-overview" {overview_hidden}>
 <div class="panel" id="check-overview">
+<div class="meter-hero" id="meter-hero">
+<div class="meter-hero-top">
+<p class="meter-hero-label">Zählerstand</p>
+<span class="status-chip" id="hero-status" data-tone="{automatic_tone}">{automatic_heading}</span>
+</div>
+<div class="odometer" id="meter-odometer" role="img" aria-label="Zählerstand {ocr}" data-reading="{ocr}"></div>
+<p class="meter-hero-meta"><span>Letzte Prüfung <strong id="hero-last-check">–</strong></span>
+<span>Nächste Prüfung <strong id="hero-countdown">–</strong></span></p>
+<p class="meter-hero-detail" id="hero-detail" hidden></p>
+</div>
 <div class="check-card-heading"><h2>Automatische Kontrolle</h2></div>
 <div id="setup-success" class="setup-success" role="status" {setup_success_hidden}>
 <span class="setup-success-icon" aria-hidden="true">✓</span>
@@ -448,22 +591,24 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <span>Eine Nachkommastelle blieb wiederholt unklar. Du kannst den Vergleich auf weniger Stellen begrenzen.</span>
 <button type="submit">{comparison_suggestion_label}</button>
 </form>
+<div class="automatic-actions">
 <form method="post" action="automatik-jetzt" id="start-automatic-form" {start_automatic_hidden}>
 <input type="hidden" name="csrf" value="{csrf}"><input type="hidden" name="lang" value="{language}">
 <input type="hidden" name="mode" value="{language_mode}">
 <button type="submit" id="start-automatic" {start_automatic_disabled}>Automatische Prüfung jetzt starten</button>
 </form>
-<div class="automatic-interval-hint" id="automatic-interval-hint" hidden><span>Wiederholte Fehlablesung? Ein kürzeres Prüfintervall kann helfen, wenn sich der Zähler nach einer Weile wieder klarer ablesen lässt.</span><button type="button" id="open-interval-settings">Prüfintervall ändern</button></div>
 <form method="post" action="automatik-pause" id="pause-auto-form" {pause_button_hidden}><input type="hidden" name="lang" value="{language}"><input type="hidden" name="mode" value="{language_mode}"><input type="hidden" name="csrf" value="{csrf}"><input type="hidden" name="paused" value="1"><button type="submit">Automatik pausieren</button></form>
+</div>
+<div class="automatic-interval-hint" id="automatic-interval-hint" hidden><span>Wiederholte Fehlablesung? Ein kürzeres Prüfintervall kann helfen, wenn sich der Zähler nach einer Weile wieder klarer ablesen lässt.</span><button type="button" id="open-interval-settings">Prüfintervall ändern</button></div>
 <p class="connection-status" id="source-connection" data-state="{source_connection_state}">Quelle: {source_connection}</p>
-<dl><dt>Erkannter Stand</dt><dd id="automatic-ocr">{ocr}</dd>
-<dt title="Stand aus der ersten Aufnahme oder aus einer externen Quelle">Vergleichswert</dt><dd><span id="automatic-reference">{reference}</span>
+<dl class="fact-grid"><div><dt>Erkannter Stand</dt><dd id="automatic-ocr">{ocr}</dd></div>
+<div><dt title="Stand aus der ersten Aufnahme oder aus einer externen Quelle">Vergleichswert</dt><dd><span id="automatic-reference">{reference}</span>
 <small id="automatic-reference-note" class="reference-note" data-epoch="{reference_time}"
- data-fallback="{reference_is_fallback}" hidden></small></dd>
-<dt>Bildzeit</dt><dd id="automatic-image-time" class="stamp" data-epoch="{image_time}">–</dd>
-<dt>Letzte Prüfung</dt><dd id="automatic-last-check" class="stamp" data-epoch="{last_check}">–</dd>
-<dt>Letzter bestätigter Abgleich</dt><dd id="automatic-last-match" class="stamp" data-epoch="{last_match}">–</dd>
-<dt>Nächste Prüfung</dt><dd id="countdown">–</dd></dl>
+ data-fallback="{reference_is_fallback}" hidden></small></dd></div>
+<div><dt>Bildzeit</dt><dd id="automatic-image-time" class="stamp" data-epoch="{image_time}">–</dd></div>
+<div><dt>Letzte Prüfung</dt><dd id="automatic-last-check" class="stamp" data-epoch="{last_check}">–</dd></div>
+<div><dt>Letzter bestätigter Abgleich</dt><dd id="automatic-last-match" class="stamp" data-epoch="{last_match}">–</dd></div>
+<div><dt>Nächste Prüfung</dt><dd id="countdown">–</dd></div></dl>
 <p class="failure-recovery" id="geometry-repair-warning" {geometry_warning_hidden}>{geometry_warning_text}</p>
 <p class="failure-recovery" id="automatic-recovery" data-state="retrying" {recovery_hidden}>{recovery_notice}</p>
 <p class="failure-recovery" id="reflection-live" hidden>
@@ -506,6 +651,8 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 <div><dt>Diese Stunde</dt><dd id="consumption-hour">–</dd></div>
 <div><dt>Heute</dt><dd id="consumption-day">–</dd></div>
 </dl>
+<div class="consumption-chart" id="consumption-chart" role="img" aria-label="Verbrauch je Stunde, letzte 24 Stunden" hidden></div>
+<p class="consumption-chart-axis" id="consumption-chart-axis" hidden><span>vor 24 h</span><span>jetzt</span></p>
 <p id="consumption-empty" class="settings-note">Die Statistik füllt sich mit bestätigten Ablesungen.</p>
 <details id="consumption-details" hidden>
 <summary>Verlauf nach Stunde und Tag</summary>
@@ -2672,6 +2819,55 @@ manualForm.addEventListener('invalid', () => {{
 }}, true);
 tick(); setInterval(tick, 1000);
 const automaticBanner = document.querySelector('#automatic-banner');
+function renderOdometer(reading) {{
+  const box = document.querySelector('#meter-odometer');
+  const text = String(reading || '').trim();
+  if (box.dataset.rendered === text) return;
+  box.dataset.rendered = text;
+  box.setAttribute('aria-label', (lang === 'en' ? 'Meter reading ' : 'Zählerstand ') + (text || '–'));
+  if (!/[0-9?]/.test(text)) {{
+    const empty = document.createElement('span');
+    empty.className = 'odometer-empty';
+    empty.textContent = lang === 'en' ? 'No reading yet' : 'Noch kein Zählerstand';
+    box.replaceChildren(empty);
+    return;
+  }}
+  const [whole, fraction = ''] = text.replace(',', '.').split('.');
+  const roller = (char, isFraction) => {{
+    const cell = document.createElement('span');
+    cell.className = 'roller' + (isFraction ? ' fraction' : '') + (/[0-9]/.test(char) ? '' : ' unclear');
+    cell.textContent = char;
+    return cell;
+  }};
+  const cells = Array.from(whole, char => roller(char, false));
+  if (fraction) {{
+    const separator = document.createElement('span');
+    separator.className = 'separator';
+    separator.textContent = lang === 'en' ? '.' : ',';
+    cells.push(separator, ...Array.from(fraction, char => roller(char, true)));
+  }}
+  const unit = document.createElement('span');
+  unit.className = 'unit';
+  unit.textContent = 'm³';
+  box.replaceChildren(...cells, unit);
+}}
+function syncHero() {{
+  renderOdometer(document.querySelector('#automatic-ocr').textContent);
+  const chip = document.querySelector('#hero-status');
+  const heading = document.querySelector('#automatic-status-heading').textContent;
+  if (chip.textContent !== heading) chip.textContent = heading;
+  chip.dataset.tone = automaticBanner.dataset.tone || '';
+  const detail = document.querySelector('#hero-detail');
+  const detailText = automaticBanner.dataset.tone === 'ok' ? document.querySelector('#automatic-result').textContent : '';
+  if (detail.textContent !== detailText) detail.textContent = detailText;
+  detail.hidden = !detailText;
+  for (const [from, to] of [['#countdown', '#hero-countdown'], ['#automatic-last-check', '#hero-last-check']]) {{
+    const value = document.querySelector(from).textContent;
+    const target = document.querySelector(to);
+    if (target.textContent !== value) target.textContent = value;
+  }}
+}}
+syncHero(); setInterval(syncHero, 1000);
 const ignoreWarning = document.querySelector('#ignore-automatic-warning');
 const preferenceKey = automaticBanner.dataset.preferenceKey;
 const anonymousPreferenceKey = '{anonymous_banner_key}';
@@ -2703,6 +2899,22 @@ function renderConsumption(data) {{
   document.querySelector('#consumption-hour').textContent = volume(data.hours[0]);
   document.querySelector('#consumption-day').textContent = volume(data.days[0]);
   const available = [...data.hours, ...data.days].some(bucket => bucket.litres != null);
+  const chart = document.querySelector('#consumption-chart');
+  const chartKey = JSON.stringify(data.hours);
+  chart.hidden = document.querySelector('#consumption-chart-axis').hidden = !data.hours.some(bucket => bucket.litres != null);
+  if (!chart.hidden && chart.dataset.values !== chartKey) {{
+    const hours = data.hours.slice().reverse();
+    const peak = Math.max(1, ...hours.map(bucket => bucket.litres || 0));
+    chart.replaceChildren(...hours.map(bucket => {{
+      const bar = document.createElement('span');
+      bar.title = bucket.label + ' · ' + volume(bucket);
+      bar.dataset.empty = String(bucket.litres == null);
+      bar.dataset.estimated = String(Boolean(bucket.estimated));
+      bar.style.height = bucket.litres == null ? '' : Math.max(3, 100 * bucket.litres / peak) + '%';
+      return bar;
+    }}));
+    chart.dataset.values = chartKey;
+  }}
   document.querySelector('#consumption-empty').hidden = available;
   document.querySelector('#consumption-details').hidden = !available;
   for (const [id, buckets] of [['hours', data.hours], ['days', data.days]]) {{

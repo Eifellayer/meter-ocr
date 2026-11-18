@@ -455,7 +455,7 @@ class IngressTests(IngressFixture):
         self.source_selected = True
         source = {**self.source, "selected": True}
         self.rules.update(decimals=3, fraction_digits=3, precision_mode=False,
-                          crop_revision="partial")
+                          crop_revision="partial", rotation=0, digit_boxes=[])
         self.rules["stationary_partial_scope"] = panel.setup_source_id([source, "partial"])
         self.history.write_text(json.dumps({
             "check_status": "match", "check_detail": "Bestätigt", "comparison_decimals": 2,

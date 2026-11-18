@@ -470,6 +470,11 @@ background:linear-gradient(#0d141a,#26323b 48%,#0d141a);color:#f4f7f9;box-shadow
 #pause-auto-form button:not(:disabled):hover{{background:light-dark(#e8edf1,#22303c)}}
 #start-automatic:disabled{{background:var(--surface-2);color:var(--muted);border-color:var(--edge)}}
 #save-manual-crop{{background:var(--surface-2);color:var(--ink);border-color:var(--edge)}}
+.main-tabs button{{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+.dialog-heading{{flex-wrap:wrap}}
+.dialog-heading h2{{flex:1 1 10rem;min-width:0}}
+@media(max-width:420px){{.main-menu{{flex-wrap:wrap;border-radius:1.2rem;gap:.15rem}}.main-tabs{{flex-basis:100%;gap:.15rem}}
+.main-tabs button{{padding-inline:.35rem;font-size:.84rem;min-height:2.6rem}}.main-guide{{flex-basis:100%;min-height:2.2rem;padding:.2rem;font-size:.82rem}}}}
 header{{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.6rem}}
 .main-tabs button[aria-selected="true"]:not(:disabled):hover{{background:var(--ink);color:var(--surface)}}
 .calibration-card form > :is(p,div,details){{grid-column:1/-1}}
@@ -863,7 +868,7 @@ name: Zählerstand (OCR)</code></pre>
 <input type="hidden" name="lang" value="{language}"><input type="hidden" name="mode" value="{language_mode}">
 <input type="hidden" name="csrf" value="{csrf}">
 <button type="submit" id="setup-skip">Später einrichten</button></form></div>
-<p class="settings-note">Du kannst die Einrichtung jederzeit über „Einrichtung öffnen“ erneut starten.</p>
+<p class="settings-note">Du kannst die Einrichtung jederzeit über „Einrichtung“ oben rechts erneut starten.</p>
 <button type="button" id="open-demo-setup">Demo ohne Kamera ausprobieren</button>
 <div class="manual-content">
 <p class="settings-note">Einmal Schritt für Schritt einrichten oder später einzelne Angaben ändern. Deine aktuellen Einstellungen sind vorausgefüllt.</p>

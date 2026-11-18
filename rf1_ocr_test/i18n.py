@@ -460,8 +460,8 @@ EN_UI = {
     "Schließen": "Close",
     "Originalbild zum Ablesen": "Original image for reading",
     "Später einrichten": "Set up later",
-    "Du kannst die Einrichtung jederzeit über „Einrichtung öffnen“ erneut starten.":
-        "You can restart setup at any time using “Open setup wizard”.",
+    "Du kannst die Einrichtung jederzeit über „Einrichtung“ oben rechts erneut starten.":
+        "You can restart setup at any time using “Setup” at the top right.",
     "Stand im Home-Assistant-Dashboard anzeigen": "Show the reading on a Home Assistant dashboard",
     "Wenn AI Meter Reader selbst aus einer ESPHome- oder Home-Assistant-Kamera liest, kannst du den Sensor „OCR-Zählerstand“ zum Dashboard hinzufügen. Seine Entitäts-ID lautet ":
         "When AI Meter Reader reads directly from an ESPHome or Home Assistant camera, you can add its OCR meter reading sensor to your dashboard. Its entity ID is ",

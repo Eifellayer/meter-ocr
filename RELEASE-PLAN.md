@@ -2,7 +2,7 @@
 
 Stand: 18. November 2026 · Version **0.1.1**
 
-Ziel: einmal einrichten, danach prüft die App selbstständig und zeigt Unsicherheit offen an. Stabilität geht vor neuen großen Funktionen.
+**Leitbild „Fire and Forget“ (Nutzer 18.11.):** Die App soll möglichst autonom arbeiten. Der Nutzer wählt nur Zähler und Kamera; alles andere (Grob- und Feineinrichtung, letzte Stelle, Genauigkeit, Fehlerkorrektur) erledigt sie selbst und zeigt Unsicherheit offen an. Manuelle Knöpfe sind nur Notfallwerkzeuge. Stabilität geht vor neuen großen Funktionen.
 
 ## Als Nächstes
 
@@ -13,6 +13,8 @@ Ziel: einmal einrichten, danach prüft die App selbstständig und zeigt Unsicher
 | **Genauigkeit vereinfachen (in Arbeit, 0.1.1)** | Nutzer 18.11.: Standard sind 2 Nachkommastellen. 3 Nachkommastellen nur bei eingeschaltetem Präzisionsmodus. Der bisherige Präzisionsmodus („alle 3 Stellen müssen da sein“) entfällt. |
 | **Fremde Zählerbilder testen (in Arbeit, 0.1.1)** | Öffentliche Vergleichsbilder von AI on the Edge (Problem- und Normalfälle), verschiedene Gas- und Wasserzähler; Auffälligkeiten direkt beheben. |
 | **Wasserzähler** | Bisher nicht getestet; Testmöglichkeit hat der Maintainer nur am eigenen Gaszähler (Stromzähler ist bereits vernetzt, Wasserzähler nicht zugänglich). In README/Anleitung vermerken. |
+| **Vorprüfung ohne geöffnete App** | Sobald Bildquelle bzw. Kamera feststeht, startet die Grob-Einrichtung von selbst im Hintergrund, auch wenn niemand die Weboberfläche offen hat. |
+| **Auffindbarkeit** | Repository-Beschreibung und Topics (home-assistant, ocr, gas-meter …), Screenshot mit Demo-Daten im README, Vorstellung im Home-Assistant-Forum/Community-Store vorbereiten. |
 | **Manuelle Korrektur in der Selbsteinrichtung** | Beim Markieren des Rahmens pausiert die Einrichtung; Winkel einstellbar; Ziffernrahmen verschieben und in der Größe ändern; danach geht es mit den korrigierten Rahmen weiter. |
 | **Plausibilität nach eigenem Durchschnittsverbrauch** | Große Sprünge zählen nur, wenn sie zum bisherigen Verbrauch passen; bis genug Daten vorliegen, gilt nur der maximale Durchfluss. |
 | **Anleitung mit Bildern neu** | Kurze bebilderte Anleitung aus der Demo (keine privaten Zählerfotos). |

@@ -457,9 +457,8 @@ background:linear-gradient(#0d141a,#26323b 48%,#0d141a);color:#f4f7f9;box-shadow
 .setup-dialog{{border-radius:calc(var(--radius) + .2rem);box-shadow:0 1.5rem 4rem #0006}}
 .page-footer{{margin-top:2rem}}
 /* ---------- De-duplication: the hero already shows reading, status and timing ---------- */
-.automatic-banner[data-tone="ok"]{{display:none}}
+.automatic-banner[data-tone="ok"]{{padding:.55rem .85rem;font-size:.92rem}}
 .fact-grid > div:has(#automatic-ocr),.fact-grid > div:has(#countdown),.fact-grid > div:has(#automatic-last-check){{display:none}}
-.meter-hero-detail{{margin:-.4rem 0 0;color:var(--muted);font-size:.86rem}}
 #pause-auto-form button,#resume-auto-form button{{background:var(--surface-2);color:var(--ink);border-color:var(--edge)}}
 #pause-auto-form button:not(:disabled):hover{{background:light-dark(#e8edf1,#22303c)}}
 #start-automatic:disabled{{background:var(--surface-2);color:var(--muted);border-color:var(--edge)}}
@@ -500,12 +499,11 @@ header{{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.6rem}}
 <div class="meter-hero" id="meter-hero">
 <div class="meter-hero-top">
 <p class="meter-hero-label">Zählerstand</p>
-<span class="status-chip" id="hero-status" data-tone="{automatic_tone}">{automatic_heading}</span>
+<span class="status-chip" id="hero-status" data-tone="{automatic_tone}"></span>
 </div>
 <div class="odometer" id="meter-odometer" role="img" aria-label="Zählerstand {ocr}" data-reading="{ocr}"></div>
 <p class="meter-hero-meta"><span>Letzte Prüfung <strong id="hero-last-check">–</strong></span>
 <span>Nächste Prüfung <strong id="hero-countdown">–</strong></span></p>
-<p class="meter-hero-detail" id="hero-detail" hidden></p>
 </div>
 <div class="check-card-heading"><h2>Automatische Kontrolle</h2></div>
 <div id="setup-success" class="setup-success" role="status" {setup_success_hidden}>
@@ -2854,13 +2852,13 @@ function renderOdometer(reading) {{
 function syncHero() {{
   renderOdometer(document.querySelector('#automatic-ocr').textContent);
   const chip = document.querySelector('#hero-status');
-  const heading = document.querySelector('#automatic-status-heading').textContent;
-  if (chip.textContent !== heading) chip.textContent = heading;
-  chip.dataset.tone = automaticBanner.dataset.tone || '';
-  const detail = document.querySelector('#hero-detail');
-  const detailText = automaticBanner.dataset.tone === 'ok' ? document.querySelector('#automatic-result').textContent : '';
-  if (detail.textContent !== detailText) detail.textContent = detailText;
-  detail.hidden = !detailText;
+  const tone = document.querySelector('#paused-notice').hidden ? (automaticBanner.dataset.tone || '') : 'warning';
+  const labels = lang === 'en'
+    ? {{ok: 'Running', warning: 'Needs attention', problem: 'Problem'}}
+    : {{ok: 'Läuft', warning: 'Bitte prüfen', problem: 'Problem'}};
+  const label = !document.querySelector('#paused-notice').hidden ? (lang === 'en' ? 'Paused' : 'Pausiert') : (labels[tone] || '–');
+  if (chip.textContent !== label) chip.textContent = label;
+  chip.dataset.tone = tone;
   for (const [from, to] of [['#countdown', '#hero-countdown'], ['#automatic-last-check', '#hero-last-check']]) {{
     const value = document.querySelector(from).textContent;
     const target = document.querySelector(to);

@@ -347,7 +347,7 @@ EN_UI = {
     "Vergleichswert": "Reference reading",
     "Die letzte Stelle kann beim Weiterdrehen schwer lesbar sein. Das kann zu Fehlmeldungen führen.":
         "The last digit can be hard to read as it turns, which can cause false alerts.",
-    "Präzisionsmodus: Alle drei Nachkommastellen müssen stimmen": "Precision mode: Require all three decimal places to match",
+    "Präzisionsmodus: auch die dritte Nachkommastelle vergleichen": "Precision mode: also compare the third decimal place",
     "Prüfung bestanden mit Hinweis": "Check passed with a note",
     "Test bestanden mit Hinweis": "Test passed with a note",
     "Letzte Nachkommastelle unsicher": "Last decimal digit uncertain",
@@ -827,6 +827,9 @@ EN_UI = {
 }
 
 EN_DETAILS = {
+    ("Die letzte verglichene Rolle drehte sich gerade. Diese Prüfung wurde deshalb mit einer "
+     "Nachkommastelle weniger bestätigt; der Rest folgt bei der nächsten Prüfung."):
+        "The last compared roller was turning. This check was therefore confirmed with one decimal place less; the rest follows with the next check.",
     ("Nur die letzte verglichene Stelle war unklar – vermutlich drehte sich die Rolle gerade. "
      "Die nächste Prüfung folgt automatisch."):
         "Only the last compared digit was unclear – the roller was probably turning. The next check follows automatically.",

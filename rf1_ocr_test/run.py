@@ -47,7 +47,7 @@ from calibration import (Calibration, Layout, CAPTURE_INTERVAL, PERFECT_CONFIRMA
 from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, LOWER_PENDING, LOWER_RECOVERED, MAX_FLOW_LPH,
                          ImplausibleReading, track_lower_series,
                          accumulate_consumption, fallback_detail, format_cubic_metres, record_consumption_sample)
-from checks import MOVING_DIGIT_NOTICE, only_last_compared_unclear
+from checks import MOVING_DIGIT_NOTICE, REDUCED_PRECISION_NOTICE, only_last_compared_unclear
 import debug_log
 from layout import (MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, find_digit_row,
                     digit_box_settings, find_raw_digit_row, normalize_digit_boxes, rotated_width, scale_digit_boxes, turn_crop)
@@ -870,7 +870,8 @@ def main():
         configured_source, setup_pending = validated, False
         source_selected = True
 
-    default_decimals = options["vergleich_nachkommastellen"]
+    # Two decimals by default; the third one only with precision mode (0.1.1).
+    default_decimals = min(options["vergleich_nachkommastellen"], 2)
     default_attempts = options["ocr_versuche"]
     wake_worker = Event()
     automatic_request = handled_automatic_request = None
@@ -956,7 +957,7 @@ def main():
                           "max_flow_lph": max_flow, "interval_minutes": interval_minutes,
                           "integer_digits": integer_digits, "fraction_digits": fraction_digits,
                           "meter_display": meter_display, "fallback_value": fallback_value,
-                          "precision_mode": saved_rules.get("precision_mode") is True,
+                          "precision_mode": saved_rules.get("precision_mode") is True or saved_rules["decimals"] == 3,
                           "calibration_reference": saved_rules.get("calibration_reference"),
                           "setup_completed": saved_rules.get("setup_completed"),
                           "setup_success": saved_rules.get("setup_success"),
@@ -1313,8 +1314,7 @@ def main():
                 now = time.monotonic()
                 configuration = calibration_configuration_now()
                 rules = configuration[0]
-                simplified = rules["decimals"] == 3 and (
-                    action == "setup" or action == "start" and not rules["precision_mode"])
+                simplified = rules["decimals"] == 3 and action in ("setup", "start")
                 intensive = action == "intensive"
                 if intensive and (rules["fraction_digits"] != 3 or rules["decimals"] != 3):
                     raise ValueError("The meter must display three decimal digits")
@@ -2619,6 +2619,23 @@ def main():
                     if not manual:
                         reading_status, _ = compare_sample(sample, ocr, decimals, ocr_confirmed=ocr_confirmed,
                                                            integer_digits=integer_digits)
+                        reduced_precision = False
+                        if (reading_status == "ocr_unclear" and decimals > 0 and not ocr_error
+                                and only_last_compared_unclear(ocr, decimals, integer_digits)):
+                            # Only the last compared roller is unreadable (typically turning):
+                            # accept this one check one decimal coarser instead of failing.
+                            # The truncated value is a safe lower bound for booking.
+                            coarse, coarse_confirmed = resolve_ocr_readings(
+                                ocr_readings or [ocr, ocr], decimals - 1, integer_digits,
+                                standalone=require_consensus, standalone_composition=True,
+                            )
+                            coarse_status, _ = compare_sample(sample, ocr, decimals - 1, ocr_confirmed=coarse_confirmed,
+                                                              integer_digits=integer_digits)
+                            if coarse_confirmed and coarse_status in ("match", "ocr_only"):
+                                print(f"Letzte verglichene Stelle unklar ({ocr}), prüfe diesmal mit "
+                                      f"{decimals - 1} Nachkommastelle(n)")
+                                decimals -= 1
+                                reading_status, ocr_confirmed, reduced_precision = coarse_status, True, True
                         accept_reference = (
                             decimals == 3 and reading_status in ("difference", "ocr_unclear")
                             and last_digit_can_pass(updated, precision_mode)
@@ -2756,7 +2773,7 @@ def main():
                           and status in ("difference", "ocr_unclear")
                           and differs_only_at_last_digit(sample, ocr, ocr_readings, integer_digits)):
                         detail = LAST_DIGIT_NOTICE
-                        if ocr_attempts >= LAST_DIGIT_RETRIES and not precision_mode:
+                        if ocr_attempts >= LAST_DIGIT_RETRIES:
                             status, detail = "match_with_warning", LAST_DIGIT_PASS
                     elif status == "match" and not manual_reference:
                         precise = common_exact_precision(
@@ -2852,6 +2869,9 @@ def main():
                         updated["standalone_reading"] = new_standalone
                     if lower_recovered and new_consumption is not None and outcome in SUCCESSFUL_CHECKS:
                         updated["check_detail"] = LOWER_RECOVERED
+                    if (locals().get("reduced_precision") and outcome in SUCCESSFUL_CHECKS
+                            and not validation_detail and not lower_recovered):
+                        updated["check_detail"] = REDUCED_PRECISION_NOTICE
                     updated["ocr_readings"] = ocr_readings if outcome == "ocr_unclear" else []
                     if outcome == "ocr_unclear" and updated["check_detail"] != LAST_DIGIT_NOTICE:
                         if not validation_detail and not ocr_error and only_last_compared_unclear(

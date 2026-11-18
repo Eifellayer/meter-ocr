@@ -372,6 +372,8 @@ def compare_sample(data, ocr, decimals, *, ocr_confirmed=True, integer_digits=5)
 
 
 LAST_DIGIT_NOTICE = "Nur die dritte Nachkommastelle ist unklar oder weicht ab."
+REDUCED_PRECISION_NOTICE = ("Die letzte verglichene Rolle drehte sich gerade. Diese Prüfung wurde deshalb mit einer "
+                            "Nachkommastelle weniger bestätigt; der Rest folgt bei der nächsten Prüfung.")
 MOVING_DIGIT_NOTICE = ("Nur die letzte verglichene Stelle war unklar – vermutlich drehte sich die Rolle gerade. "
                        "Die nächste Prüfung folgt automatisch.")
 
@@ -614,7 +616,7 @@ def track_reflection(history, ocr, readings, stamp, *, verified, unclear, decima
 
 
 def last_digit_can_pass(history, precision_mode):
-    return not precision_mode and history.get("last_digit_failures", 0) >= LAST_DIGIT_RETRIES - 1
+    return history.get("last_digit_failures", 0) >= LAST_DIGIT_RETRIES - 1
 
 
 def differs_only_at_last_digit(data, ocr, readings, integer_digits=5):
@@ -751,7 +753,7 @@ def record_sample(history, data, ocr, zone, now, decimals=0, *, ocr_confirmed=Tr
             status, detail = "match_with_warning", LAST_DIGIT_PASS
     else:
         history.pop("last_digit_failures", None)
-    if (decimals == 2 and not precision_mode and status in ("difference", "ocr_unclear")
+    if (decimals == 2 and status in ("difference", "ocr_unclear")
             and seventh_digit_can_pass(data, ocr, readings, integer_digits)):
         status, detail = "match_with_warning", SEVENTH_DIGIT_PASS
         history["seventh_digit_wait"] = True
@@ -779,7 +781,7 @@ def setup_source_id(source):
 
 def stationary_partial_active(rules, source):
     revision = rules.get("crop_revision")
-    return (rules["decimals"] == 3 and not rules.get("precision_mode") and bool(revision)
+    return (rules["decimals"] == 3 and bool(revision)
             and rules.get("stationary_partial_scope") == setup_source_id([source, revision]))
 
 

@@ -1002,7 +1002,7 @@ name: Zählerstand (OCR)</code></pre>
 <div class="settings-note setup-help" data-precision-options {precision_hidden}>
 <p>Die letzte Stelle kann beim Weiterdrehen schwer lesbar sein. Das kann zu Fehlmeldungen führen.</p>
 <p {wizard_initial_hidden}>Die dritte Nachkommastelle ist bei Rollen oft schwer zu erkennen. „Automatische Selbsteinrichtung“ bestätigt bei der Ersteinrichtung die ersten zwei Stellen. Die dritte bleibt unbestätigt und kann später intensiv gesucht oder im Kamerabild manuell markiert werden.</p>
-<label class="check-option" {wizard_precision_hidden}><input type="checkbox" name="precision_mode" value="1" {precision_checked} {wizard_precision_disabled}> Präzisionsmodus: Alle drei Nachkommastellen müssen stimmen</label>
+<label class="check-option"><input type="checkbox" name="precision_mode" value="1" {precision_checked}> Präzisionsmodus: auch die dritte Nachkommastelle vergleichen</label>
 </div>
 <p class="settings-note setup-help">Die Vergleichsgenauigkeit darf kleiner sein als die angezeigte Stellenzahl. Kleine Zeiger werden nicht automatisch gelesen; bei Rollen und Zeigern bitte nur die Ziffernrollen einstellen.</p>
 <div class="setup-controls"><button type="button" class="setup-back">Zurück</button><span class="setup-count"></span><button type="button" class="setup-next">Weiter</button></div>
@@ -1135,7 +1135,7 @@ name: Zählerstand (OCR)</code></pre>
 <select name="decimals">{auto_decimal_options}</select></label>
 <div class="settings-note" data-precision-options {precision_hidden}>
 <p>Die letzte Stelle kann beim Weiterdrehen schwer lesbar sein. Das kann zu Fehlmeldungen führen.</p>
-<label class="check-option"><input type="checkbox" name="precision_mode" value="1" {precision_checked}> Präzisionsmodus: Alle drei Nachkommastellen müssen stimmen</label>
+<label class="check-option"><input type="checkbox" name="precision_mode" value="1" {precision_checked}> Präzisionsmodus: auch die dritte Nachkommastelle vergleichen</label>
 </div>
 <label title="Nach einer unklaren Ablesung folgt ein zusätzlicher Versuch nach fünf Minuten. Schlägt auch der fehl, gilt wieder dieses Intervall.">Prüfintervall (Minuten)
 <input name="interval_minutes" type="number" min="1" max="{max_interval_minutes}" value="{interval_minutes}" required>
@@ -1721,8 +1721,10 @@ setupForm.querySelector('[name="fraction_digits"]').addEventListener('change', e
 }});
 document.querySelectorAll('[data-precision-options]').forEach(options => {{
   const select = options.closest('form').querySelector('[name="decimals"]');
-  const showPrecisionOptions = () => {{ options.hidden = select.value !== '3'; }};
-  select.addEventListener('change', showPrecisionOptions);
+  const fraction = options.closest('form').querySelector('[name="fraction_digits"]');
+  if (!fraction) return;
+  const showPrecisionOptions = () => {{ options.hidden = fraction.value !== '3'; }};
+  fraction.addEventListener('change', showPrecisionOptions);
   showPrecisionOptions();
 }});
 document.querySelector('#close-manual-test').addEventListener('click', () => {{
@@ -4143,8 +4145,8 @@ def start_panel(
                 calibration_min=MIN_IMAGE_LIMIT, calibration_max=MAX_IMAGES,
                 calibration_limit=calibration["limit"] if calibration else DEFAULT_LIMIT,
                 setup_first_run=str(bool(setup_pending or reset_state == "done")).lower(),
-                precision_hidden="" if auto_rules["decimals"] == 3 else "hidden",
-                precision_checked="checked" if auto_rules.get("precision_mode") else "",
+                precision_hidden="" if auto_rules["fraction_digits"] == 3 else "hidden",
+                precision_checked="checked" if auto_rules["decimals"] == 3 else "",
                 intensive_agreement=auto_rules.get("intensive_agreement", DEFAULT_INTENSIVE_AGREEMENT),
                 reflection_enabled_checked="checked" if auto_rules.get("reflection_estimate_enabled") else "",
                 fine_alignment_checked="checked" if auto_rules.get("fine_alignment_enabled") else "",
@@ -4175,7 +4177,7 @@ def start_panel(
                                                       str(auto_rules["fraction_digits"])),
                 wizard_decimal_options=select_options(
                     {key: label for key, label in (DECIMALS_EN if language == "en" else DECIMALS).items()
-                     if int(key) <= auto_rules["fraction_digits"]}, str(auto_rules["decimals"])),
+                     if int(key) <= min(2, auto_rules["fraction_digits"])}, str(min(2, auto_rules["decimals"]))),
                 wizard_crop_options=radio_options("crop_mode", {
                     **({"learn": "Automatic setup (recommended)" if language == "en"
                         else "Automatische Selbsteinrichtung (empfohlen)"} if control_calibration else {}),
@@ -4219,7 +4221,8 @@ def start_panel(
                     comparable_decimals, str(manual_precision),
                 ),
                 auto_decimal_options=select_options(
-                    comparable_decimals, str(auto_rules["decimals"]),
+                    {key: label for key, label in comparable_decimals.items() if int(key) <= 2},
+                    str(min(2, auto_rules["decimals"])),
                 ),
                 auto_attempt_options=select_options(
                     {value: label for value, label in ATTEMPTS.items()
@@ -4593,6 +4596,8 @@ def start_panel(
                         "delivery_hours": int(field("delivery_hours")),
                         "push": field("push"), "target": field("target"),
                     })
+                    precise = field("precision_mode") == "1" and fraction_digits == 3
+                    decimals = 3 if precise else min(2, decimals)
                     rules_values = {
                         **old_rules, "decimals": decimals, "attempts": attempts,
                         "polarity": polarity, "crop_mode": crop_mode, "crop": crop,
@@ -4602,7 +4607,7 @@ def start_panel(
                             and rotation == old_rules.get("rotation", 0) and width == old_rules["width"]
                             and integer_digits == old_rules["integer_digits"] and fraction_digits == old_rules["fraction_digits"]
                         ) else [], "max_flow_lph": max_flow,
-                        "precision_mode": field("precision_mode") == "1",
+                        "precision_mode": precise,
                         "self_repair_enabled": field("self_repair_enabled") == "1",
                         "fine_alignment_enabled": (field("fine_alignment_enabled") == "1"
                                                   if field("fine_alignment_option_present") == "1"
@@ -4646,8 +4651,6 @@ def start_panel(
                                     "Resume automatic checks before starting automatic setup.")
                             return
                         previous_source, initial_setup = get_source()
-                        if initial_setup:
-                            rules_values["precision_mode"] = False
                         save_source(source_values)
                         if not learn_crop or fallback_value and (
                                 fallback_value != old_rules.get("fallback_value") or previous_source != get_source()[0]):
@@ -4912,9 +4915,11 @@ def start_panel(
                             problem(400, "Die Übereinstimmung für die Intensivprüfung muss zwischen 1 und 100 Prozent liegen.",
                                     "Enter an intensive-check agreement threshold between 1 and 100 percent.")
                             return
-                        save_auto_rules({"decimals": int(decimals[0]), "attempts": int(attempts[0]),
+                        precise = field("precision_mode") == "1" and old_rules["fraction_digits"] == 3
+                        save_auto_rules({"decimals": 3 if precise else min(2, int(decimals[0])),
+                                         "attempts": int(attempts[0]),
                                          "intensive_agreement": intensive_agreement,
-                                         "precision_mode": field("precision_mode") == "1",
+                                         "precision_mode": precise,
                                          "reflection_estimate_enabled": field("reflection_estimate_enabled") == "1",
                                          "fine_alignment_enabled": field("fine_alignment_enabled") == "1",
                                          "self_repair_enabled": field("self_repair_enabled") == "1",

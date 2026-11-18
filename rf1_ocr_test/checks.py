@@ -785,6 +785,14 @@ def eighth_digit_retry_due(rules, source, history, now):
             and (type(deadline) not in (int, float) or now >= deadline))
 
 
+def resume_optional_eighth_digit(history, rules, source, now, begin):
+    """Start one bounded fine-check and persist its next allowable retry time."""
+    if not eighth_digit_retry_due(rules, source, history, now) or not begin():
+        return False
+    history["eighth_digit_retry_at"] = now + EIGHTH_DIGIT_RETRY_SECONDS
+    return True
+
+
 def setup_deadlines(rules, source):
     completed = rules.get("setup_completed")
     if isinstance(completed, dict) and completed.get("source") == setup_source_id(source):

@@ -89,11 +89,11 @@ Diese Regeln gelten für längere Entwicklungsaufträge unabhängig davon, welch
 
 ## Dokumentation und Verbreitung: offene Aufgaben nach 0.6.8
 
-Die Kurz-READMEs und die ausführlichen Anleitungen sind aufgetrennt; die Intervallbeschreibung und die reale Nutzung von **„ESP nur als Kamera“** sind korrigiert. Der offizielle My-Home-Assistant-Link fügt das Repository einfacher hinzu. Die folgenden Punkte sind **noch nicht umgesetzt** und werden vor einer neuen Umsetzung gegen den aktuellen `main`-Stand geprüft:
+Die Kurz-READMEs und die ausführlichen Anleitungen sind aufgetrennt; die Intervallbeschreibung und die reale Nutzung von **„ESP nur als Kamera“** sind korrigiert. Der offizielle My-Home-Assistant-Link fügt das Repository einfacher hinzu. Die folgende Liste enthält offene Aufgaben und zur Nachvollziehbarkeit die erledigte Lizenzentscheidung; vor einer neuen Umsetzung ist der aktuelle `main`-Stand zu prüfen:
 
 | Priorität | Noch offen | Abnahme / Entscheidung |
 | --- | --- | --- |
-| P0 | **Open-Source-Lizenz** | Der Rechteinhaber entscheidet ausdrücklich, ob und unter welcher Lizenz der Code veröffentlicht wird (z. B. MIT, Apache-2.0 oder GPL-3.0). Ohne Entscheidung **keine** LICENSE-Datei mit willkürlichen Nutzungsrechten erstellen. |
+| Erledigt | **Open-Source-Lizenz** | Der Maintainer hat die **GNU GPL-3.0-or-later** für den eigenen Projektcode gewählt; vollständiger Lizenztext liegt unter `LICENSE`. Weitergegebene abgeleitete Versionen unterliegen den GPL-Quellcodepflichten. Vor einer späteren Lizenzänderung sind alle beteiligten Rechteinhaber und Drittlizenzen zu berücksichtigen. |
 | P1 | GitHub-Metadaten und Release | Repository-Topics (z. B. `home-assistant`, `home-assistant-addon`, `ocr`, `esp32-cam`), nachvollziehbare GitHub-Releases anhand veröffentlichter Stable-Commits und ein optionaler Community-Beitrag. GitHub-Releases ersetzen nicht das Supervisor-Update. |
 | P1 | Anonymisierter Screenshot / Demo-GIF | Nur Demo-/Beispieldaten veröffentlichen; App-Navigation, Ingress, Status und private Zähler-/Kameradaten unkenntlich machen. Bild auch in englischer README prüfen. |
 | P1 | Einstellungen nachvollziehbar machen | Sichtbar machen, ob App-Konfigurationswert oder persistente Web-Einstellung aus `/data/auto-pruefregeln.json` greift. Alte Felder nur mit Migrationsplan und Abwärtskompatibilität entfernen. |

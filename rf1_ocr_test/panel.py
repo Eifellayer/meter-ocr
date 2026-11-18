@@ -21,6 +21,7 @@ from urllib.parse import parse_qs, urlsplit
 from PIL import Image
 
 from app_channel import APP_NAME, NAMESPACE
+import debug_log
 
 INSTANCE_ID = token_urlsafe(8)
 from calibration import (
@@ -485,6 +486,9 @@ white-space:pre-line;line-height:1.24em;text-align:center;animation:roll 2.2s li
 .manual-panel[open] > summary::after{{content:"";transform:rotate(-135deg)}}
 .setup-dialog{{border-radius:calc(var(--radius) + .2rem);box-shadow:0 1.5rem 4rem #0006}}
 .page-footer{{margin-top:2rem}}
+.debug-log-text{{max-height:22rem;overflow:auto;white-space:pre-wrap;word-break:break-all;font-size:.75rem;background:var(--surface-2);border:1px solid var(--edge);border-radius:var(--radius-sm);padding:.6rem}}
+#debug-log{{margin-top:1rem}}
+.button-link{{display:inline-flex;align-items:center;min-height:2.4rem;padding:.4rem 1rem;border-radius:99px;border:1px solid var(--edge);background:var(--surface-2);color:var(--ink);text-decoration:none;font-weight:650}}
 /* ---------- Setup wizard in the new design ---------- */
 .setup-dialog{{height:min(90dvh,44rem);scrollbar-gutter:stable;padding:1.1rem 1.3rem 1rem}}
 .setup-dialog .manual-content{{border-top:0;padding-top:0;margin-top:.25rem}}
@@ -766,6 +770,12 @@ name: Zählerstand (OCR)</code></pre>
 <button type="button" id="open-digit-correction" {digit_correction_hidden}>Ziffernrahmen korrigieren</button>
 <button type="button" id="open-manual-settings">Manueller Test</button>
 </div>
+</details>
+<details id="debug-log">
+<summary>Debug-Protokoll</summary>
+<p class="settings-note">Die letzten Prüfungen mit allen OCR-Durchläufen, Entscheidung und Verbrauchsstand. Ohne Bilder und Zugangsdaten. Hilfreich für Fehlermeldungen.</p>
+<p><a class="button-link" id="debug-log-download" href="debug-protokoll" download="ai-meter-reader-debug.jsonl">Protokoll herunterladen</a></p>
+<pre id="debug-log-text" class="debug-log-text">–</pre>
 </details>
 <div class="manual-test-area" id="manual-test-area" {manual_area_hidden}>
 <div class="manual-test-heading"><h2>Manueller Test</h2>
@@ -2297,6 +2307,8 @@ let calibrationWasActive = false;
 let lastDigitSearching = false;
 let lastDigitProgress = null;
 let comparedDecimals = null;
+let configuredDecimals = null;
+let lastDigitSearchAt = null;
 let previousCalibrationState = '';
 let routineOk = {automatic_routine_ok};
 let calibrationNoticeUntil = 0;
@@ -2983,6 +2995,16 @@ function syncHero() {{
     if (minutesLeft) noteText += lang === 'en'
       ? ` Maximum ${{maxMinutes}} min, at most ${{minutesLeft}} min left.`
       : ` Höchstdauer ${{maxMinutes}} min, noch höchstens ${{minutesLeft}} min.`;
+  }} else if (comparedDecimals !== null && configuredDecimals !== null && comparedDecimals < configuredDecimals) {{
+    const at = lastDigitSearchAt && lastDigitSearchAt * 1000 > Date.now()
+      ? new Date(lastDigitSearchAt * 1000).toLocaleTimeString(lang === 'en' ? 'en-GB' : 'de-DE', {{hour: '2-digit', minute: '2-digit'}})
+      : '';
+    noteText = lang === 'en'
+      ? `Temporarily only ${{comparedDecimals}} decimal places are compared (setting: ${{configuredDecimals}}). `
+        + (at ? `The search for the ${{position}}th digit starts at about ${{at}}.` : `The ${{position}}th digit will be searched in the background shortly.`)
+      : `Vorübergehend werden nur ${{comparedDecimals}} Nachkommastellen verglichen (eingestellt: ${{configuredDecimals}}). `
+        + (at ? `Die Suche nach der ${{position}}. Ziffer beginnt gegen ${{at}} Uhr.` : `Die ${{position}}. Ziffer wird demnächst im Hintergrund gesucht.`);
+    noteState = 'skipped';
   }} else if (fractionDigits.endsWith('?') && comparedDecimals !== null && comparedDecimals < fractionDigits.length) {{
     noteText = lang === 'en'
       ? `The ${{position}}th digit is not compared (setting: ${{comparedDecimals}} decimal places).`
@@ -3161,6 +3183,18 @@ function showStale(kind) {{
   syncHero();
 }}
 document.querySelector('#reload-view').addEventListener('click', () => location.reload());
+document.querySelector('#debug-log').addEventListener('toggle', async (event) => {{
+  if (!event.target.open) return;
+  const target = document.querySelector('#debug-log-text');
+  try {{
+    const response = await fetch('debug-protokoll?limit=40', {{cache: 'no-store'}});
+    const text = response.ok ? await response.text() : '';
+    target.textContent = text.trim().split(String.fromCharCode(10)).reverse().join(String.fromCharCode(10))
+      || (lang === 'en' ? 'No entries yet.' : 'Noch keine Einträge.');
+  }} catch (_) {{
+    target.textContent = lang === 'en' ? 'Log could not be loaded.' : 'Protokoll konnte nicht geladen werden.';
+  }}
+}});
 async function refreshAutomatic() {{
   let refreshDelay = 15000;
   let sample;
@@ -3201,6 +3235,8 @@ async function refreshAutomatic() {{
     next = sample.next_check;
     renderConsumption(sample.consumption);
     comparedDecimals = Number.isInteger(sample.decimals) ? sample.decimals : null;
+    configuredDecimals = Number.isInteger(sample.configured_decimals) ? sample.configured_decimals : comparedDecimals;
+    lastDigitSearchAt = typeof sample.last_digit_search_at === 'number' ? sample.last_digit_search_at : null;
     if (experimental.open) refreshExperimental().catch(() => {{}});
     document.querySelector('#paused-notice').hidden = !sample.paused;
     document.querySelector('#pause-auto-form').hidden = sample.paused;
@@ -3691,11 +3727,15 @@ def start_panel(
                                if language == "en" else
                                f"Bisherige Fehlprüfungen: {failure_attempts}. Die Automatik ist pausiert.")
         elif failure_attempts and retry_suppressed:
+            next_at = history.get("next_check_at")
+            clock = (datetime.fromtimestamp(next_at, statistics_zone).strftime("%H:%M")
+                     if type(next_at) in (int, float) and next_at > 0 else "")
             recovery_notice = (
                 f"{failure_attempts} automatic checks failed. Waiting for a higher meter reading or a new image."
+                + (f" Next attempt at about {clock}." if clock else "")
                 if language == "en" else
                 f"{failure_attempts} automatische Prüfungen fehlgeschlagen. Es wird auf einen höheren Zählerstand "
-                "oder ein neues Bild gewartet."
+                "oder ein neues Bild gewartet." + (f" Nächster Versuch gegen {clock} Uhr." if clock else "")
             )
         elif failure_attempts:
             recovery_notice = (
@@ -3756,6 +3796,8 @@ def start_panel(
             "recovery_notice": recovery_notice,
             "geometry_warning": geometry_warning(history, auto_rules, language) if now >= optimization_until else "",
             "stabilizing_until": stabilizing_until,
+            "configured_decimals": auto_rules["decimals"],
+            "last_digit_search_at": optimization_until if decimals < auto_rules["decimals"] else None,
             "reflection_estimate": reflection_estimate,
             "reflection_live_estimate": (history.get("reflection_live_estimate")
                                         if auto_rules.get("reflection_estimate_enabled") else None),
@@ -3831,6 +3873,13 @@ def start_panel(
                     self.send_error(404)
                 else:
                     self.reply(content, "image/jpeg")
+                return
+            if path == "/debug-protokoll":
+                try:
+                    limit = max(1, min(600, int(query.get("limit", ["600"])[0])))
+                except ValueError:
+                    limit = 600
+                self.reply(debug_log.read_text(limit).encode("utf-8"), "text/plain; charset=utf-8")
                 return
             if path == "/anzeigefehler":
                 message = re.sub(r"[^\w .,:;()'/<>=-]", "?", query.get("m", [""])[0])[:300]

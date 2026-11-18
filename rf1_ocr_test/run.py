@@ -47,6 +47,7 @@ from calibration import (Calibration, Layout, CAPTURE_INTERVAL, PERFECT_CONFIRMA
 from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, LOWER_PENDING, LOWER_RECOVERED, MAX_FLOW_LPH,
                          ImplausibleReading, track_lower_series,
                          accumulate_consumption, fallback_detail, format_cubic_metres, record_consumption_sample)
+import debug_log
 from layout import (MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, find_digit_row,
                     digit_box_settings, find_raw_digit_row, normalize_digit_boxes, rotated_width, scale_digit_boxes, turn_crop)
 from meter_learning import (GEOMETRY_REPAIR_LIMIT, GEOMETRY_REPAIR_SECONDS, alignment_rollback, observe_flow,
@@ -2701,6 +2702,7 @@ def main():
                                         if lower_confirmed:
                                             print(f"Lesefehler-Korrektur: {len(lower_series)} stimmige niedrigere "
                                                   f"Ablesungen, übernehme {ocr}")
+                                            debug_log.record(kind="correction", ocr=ocr, lower_series=len(lower_series))
                                             continue
                                         error = ImplausibleReading(LOWER_PENDING)
                                     ocr_confirmed = False
@@ -3143,6 +3145,15 @@ def main():
             print(f"Kontrollbild bereit: {data['esp_timestamp']} | Ausschnitt: {source} | "
                   f"OCR: {ocr or '?'} ({data['ocr_attempts']} Durchläufe) | "
                   f"SLFork: {data['actual_value']} | Ergebnis: {outcome}")
+            local = locals()
+            debug_log.record(
+                kind="manual" if manual else "automatic", image=data.get("esp_timestamp"), crop=source,
+                ocr=ocr, readings=local.get("ocr_readings"), attempts=data.get("ocr_attempts"),
+                method=local.get("ocr_method"), outcome=outcome, detail=updated.get("check_detail"),
+                compared_decimals=local.get("comparison_decimals"), reference=data.get("actual_value"),
+                consumption=updated.get("consumption"), failures=updated.get("failure_attempts"),
+                lower_series=len(updated.get("lower_series") or []) or None,
+            )
         try:
             publish_check(history, now, token, review_after)
             if pending_image is not None:

@@ -606,6 +606,10 @@ EN_UI = {
     "Manueller Test": "Manual test",
     'id="open-setup">Einrichtung<': 'id="open-setup">Setup<',
     'id="reload-view">Neu laden<': 'id="reload-view">Reload<',
+    '<summary>Debug-Protokoll</summary>': '<summary>Debug log</summary>',
+    "Die letzten Prüfungen mit allen OCR-Durchläufen, Entscheidung und Verbrauchsstand. Ohne Bilder und Zugangsdaten. Hilfreich für Fehlermeldungen.":
+        "The latest checks with all OCR runs, decision and consumption state. No images or credentials. Useful for bug reports.",
+    '>Protokoll herunterladen<': '>Download log<',
     '<li data-step="0" data-state="current">Bildquelle</li><li data-step="1">Anzeige</li><li data-step="2">Ausschnitt</li><li data-step="3">Hinweise</li>':
         '<li data-step="0" data-state="current">Source</li><li data-step="1">Display</li><li data-step="2">Crop</li><li data-step="3">Alerts</li>',
     'aria-label="Schritte"': 'aria-label="Steps"',

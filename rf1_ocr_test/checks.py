@@ -576,8 +576,8 @@ def seventh_digit_can_pass(data, ocr, readings, integer_digits=5):
         return False
     # A consistently recognized but *wrong* seventh digit is a real mismatch,
     # not a roller transition. The seventh position must actually be uncertain.
-    most_common = Counter(agreeing).most_common(1)[0]
-    return most_common[1] * 2 <= len(agreeing)
+    digit_votes = Counter(value for value in agreeing if value.isdigit())
+    return not digit_votes or digit_votes.most_common(1)[0][1] * 2 <= len(agreeing)
 
 
 def rolling_summary(history, now, review_after=REVIEW_AFTER):

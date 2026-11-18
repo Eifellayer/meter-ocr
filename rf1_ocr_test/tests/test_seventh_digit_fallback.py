@@ -10,12 +10,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from checks import (
     DEFAULT_INTERVAL_MINUTES,
     SEVENTH_DIGIT_PASS,
+    SEVENTH_DIGIT_WAIT_NOTICE,
     SEVENTH_DIGIT_WAIT_SECONDS,
     defer_duplicate_cycle,
     record_sample,
     schedule_next_check,
     seventh_digit_can_pass,
 )
+
+from i18n import english_activity, english_result
 
 
 def sample(stamp, *, raw="12345.87", actual="12345.87", **options):
@@ -92,6 +95,10 @@ class SeventhRollerTests(unittest.TestCase):
                 ))
                 self.assertNotEqual("match_with_warning", history["status"])
                 self.assertNotIn("seventh_digit_wait", history)
+
+    def test_english_status_and_wait_notice_are_localized(self):
+        self.assertIn("six digits", english_result(SEVENTH_DIGIT_PASS, "match_with_warning", 2))
+        self.assertIn("higher meter reading", english_activity("waiting", SEVENTH_DIGIT_WAIT_NOTICE))
 
     def test_duplicate_picture_does_not_short_circuit_thirty_minute_wait(self):
         now = datetime.now(timezone.utc)

@@ -870,8 +870,8 @@ def main():
         configured_source, setup_pending = validated, False
         source_selected = True
 
-    # Two decimals by default; the third one only with precision mode (0.1.1).
-    default_decimals = min(options["vergleich_nachkommastellen"], 2)
+    # Two decimals by default (config.yaml); 3 means precision mode is on.
+    default_decimals = options["vergleich_nachkommastellen"]
     default_attempts = options["ocr_versuche"]
     wake_worker = Event()
     automatic_request = handled_automatic_request = None
@@ -883,7 +883,7 @@ def main():
 
     auto_rules = {"decimals": default_decimals, "attempts": default_attempts, "polarity": "auto",
                   "intensive_agreement": DEFAULT_INTENSIVE_AGREEMENT,
-                  "precision_mode": False, "fine_alignment_enabled": False, "adaptive_interval_enabled": False, "self_repair_enabled": False,
+                  "precision_mode": default_decimals == 3, "fine_alignment_enabled": False, "adaptive_interval_enabled": False, "self_repair_enabled": False,
                   "reflection_estimate_enabled": False, "reflection_suggestion_hidden": False,
                   "reflection_confirmed_id": "",
                   "crop_mode": "auto", "crop": options["ausschnitt"],

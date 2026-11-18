@@ -473,7 +473,9 @@ class StateTests(TestCase):
         self.assertTrue(run.stationary_partial_active(rules, source))
         self.assertFalse(run.stationary_partial_active(rules, {**source, "camera": "camera.other"}))
         self.assertFalse(run.stationary_partial_active({**rules, "crop_revision": "43"}, source))
-        self.assertFalse(run.stationary_partial_active({**rules, "precision_mode": True}, source))
+        # Since 0.1.1 the precision mode only means "compare three decimals"; the
+        # seven-digit setup with a background search for the last digit applies there too.
+        self.assertTrue(run.stationary_partial_active({**rules, "precision_mode": True}, source))
 
     def test_existing_calibration_seed_requires_a_verified_matching_crop_revision(self):
         rules = {"crop_mode": "manual", "crop": "0,0,400,90", "width": 250, "rotation": 0,
@@ -669,7 +671,7 @@ class StateTests(TestCase):
         self.assertTrue(access["status"]()["intensive"])
         access["save"]({**access["rules"](), "precision_mode": True})
         access["control"]("start", 4)
-        self.assertFalse(access["status"]()["simplified"])
+        self.assertTrue(access["status"]()["simplified"], "precision mode no longer forces all eight digits")
 
         layout = run.Layout((120, 160, 525, 315), 1, 280)
         fine = run.Calibration(limit=4, started=0, intensive=True, candidate=layout, confirmations=2)
@@ -856,7 +858,7 @@ class StateTests(TestCase):
                                                   readings=readings, precision_mode=strict))
                     self.assertFalse(record_sample(history, data, "12345.222", timezone.utc, now, 3,
                                                    readings=readings, precision_mode=strict))
-                    if index < 2 or strict:
+                    if index < 2:
                         self.assertEqual(("difference", LAST_DIGIT_NOTICE),
                                          (history["status"], history["check_detail"]))
                     else:

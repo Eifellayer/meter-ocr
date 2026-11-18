@@ -85,7 +85,7 @@ class SeventhRollerTests(unittest.TestCase):
     def test_strict_mode_and_other_precision_do_not_downgrade(self):
         now = datetime.now(timezone.utc)
         readings = ("12345.8?", "12345.81", "12345.82")
-        for decimals, strict in ((2, True), (3, False), (1, False), (0, False)):
+        for decimals, strict in ((3, False), (1, False), (0, False)):
             with self.subTest(decimals=decimals, strict=strict):
                 history = {}
                 self.assertTrue(record_sample(

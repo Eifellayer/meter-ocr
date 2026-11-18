@@ -32,7 +32,7 @@ schema:
   zeitzone: str
   push_dienst: str?
   intervall_sekunden: int?
-  vergleich_nachkommastellen: int(0,2)
+  vergleich_nachkommastellen: int(0,3)
   ocr_versuche: int(1,10)
   kamera_entitaet: str?
   referenz_entitaet: str?

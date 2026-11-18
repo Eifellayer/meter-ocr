@@ -248,7 +248,8 @@ def explain_uncertain_positions(readings, decimals, integer_digits=5):
 
 def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace=None, *, standalone=False,
                       integer_digits=5, stop_before_attempt=None, force_all_attempts=False,
-                      extra_attempts=0, profiles=OCR_PROFILES, defer_composition=False):
+                      extra_attempts=0, profiles=OCR_PROFILES, defer_composition=False,
+                      exact_prefix=False):
     """Read one image up to max_attempts times; stop on the first valid agreement."""
     if type(max_attempts) is not int or not 1 <= max_attempts <= MAX_CONFIGURED_OCR_ATTEMPTS:
         raise ValueError("OCR-Versuche müssen zwischen 1 und 10 liegen")
@@ -266,7 +267,8 @@ def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace
         except subprocess.TimeoutExpired as error:
             print(f"OCR-Variante hat das Zeitlimit überschritten: {error}")
             value = "?" * integer_digits + ("." + "?" * decimals if decimals else "")
-        status, _ = compare_sample(data, value, decimals, integer_digits=integer_digits)
+        status, _ = compare_sample(data, value, decimals, integer_digits=integer_digits,
+                                   exact_prefix=exact_prefix)
         readings.append(value)
         if trace is not None:
             trace.append(str(value))
@@ -337,12 +339,13 @@ def resolve_ocr_readings(readings, decimals, integer_digits, *, standalone=False
     return "".join(display), prefix is not None or complete
 
 
-def compare_sample(data, ocr, decimals, *, ocr_confirmed=True, integer_digits=5):
+def compare_sample(data, ocr, decimals, *, ocr_confirmed=True, integer_digits=5, exact_prefix=False):
     if data.get("reference_is_fallback"):
         return "slfork_unclear", FALLBACK_NOTICE
     if not ocr_confirmed:
         return "ocr_unclear", "Zählerstand nicht sicher erkannt. Bitte die unklaren Stellen im Kamerabild prüfen."
-    value = rounded_meter_prefix(ocr, decimals, integer_digits)
+    prefix_reader = meter_prefix if exact_prefix else rounded_meter_prefix
+    value = prefix_reader(ocr, decimals, integer_digits)
     if value is None:
         return "ocr_unclear", "Zählerstand nicht lesbar. Mindestens eine benötigte Ziffer konnte nicht erkannt werden. Bitte das Kamerabild prüfen."
     if data.get("reference_required") is False:
@@ -352,8 +355,8 @@ def compare_sample(data, ocr, decimals, *, ocr_confirmed=True, integer_digits=5)
         return "slfork_unclear", "Der ESP meldet ein Problem mit der Zählerablesung. Bitte den Wert direkt am ESP prüfen."
     if data.get("slfork_process_error") in (-1, -2, "-1", "-2"):
         return "slfork_unclear", "Die Messung am ESP wurde abgebrochen. Bitte den ESP prüfen und die nächste Aufnahme abwarten."
-    raw = rounded_meter_prefix(data["raw_value"], decimals, integer_digits)
-    actual = rounded_meter_prefix(data["actual_value"], decimals, integer_digits)
+    raw = prefix_reader(data["raw_value"], decimals, integer_digits)
+    actual = prefix_reader(data["actual_value"], decimals, integer_digits)
     if raw is None or actual is None:
         return "slfork_unclear", "Referenzwert fehlt oder ist ungültig."
     if raw != actual:
@@ -362,12 +365,12 @@ def compare_sample(data, ocr, decimals, *, ocr_confirmed=True, integer_digits=5)
         if decimals == 0:
             return "difference", "Abweichung: Die vollen Kubikmeter stimmen nicht überein. Bitte das Zählerbild prüfen."
         return ("difference",
-                f"Abweichung: Gerundet auf {decimals} Nachkommastelle{'' if decimals == 1 else 'n'} "
+                f"Abweichung: {'Ungerundet' if exact_prefix else 'Gerundet'} auf {decimals} Nachkommastelle{'' if decimals == 1 else 'n'} "
                 "stimmen die Werte nicht überein. Bitte das Zählerbild prüfen.")
     if decimals == 0:
         return "match", "Bestätigt: Die vollen Kubikmeter stimmen überein. Nachkommastellen wurden nicht berücksichtigt."
     return ("match",
-            f"Bestätigt: Gerundet auf {decimals} Nachkommastelle{'' if decimals == 1 else 'n'} "
+            f"Bestätigt: {'Ungerundet' if exact_prefix else 'Gerundet'} auf {decimals} Nachkommastelle{'' if decimals == 1 else 'n'} "
             "stimmen Zählerstand und Referenzwert überein.")
 
 
@@ -718,7 +721,7 @@ def sample_epoch(data, zone, now):
 
 
 def record_sample(history, data, ocr, zone, now, decimals=0, *, ocr_confirmed=True, integer_digits=5,
-                  readings=(), precision_mode=False):
+                  readings=(), precision_mode=False, exact_prefix=False):
     """Count each in-window cycle at most once, even after a restart."""
     captured = sample_epoch(data, zone, now)
     if captured is None or captured <= history.get("last_epoch", 0):
@@ -729,7 +732,7 @@ def record_sample(history, data, ocr, zone, now, decimals=0, *, ocr_confirmed=Tr
         history.update(started_at=epoch, confirmations=[], status="no_current_sample")
     history["confirmations"] = [old for old in history["confirmations"] if old > epoch - WINDOW_SECONDS]
     status, detail = compare_sample(data, ocr, decimals, ocr_confirmed=ocr_confirmed,
-                                    integer_digits=integer_digits)
+                                    integer_digits=integer_digits, exact_prefix=exact_prefix)
     if (decimals == 3 and status in ("difference", "ocr_unclear")
             and differs_only_at_last_digit(data, ocr, readings, integer_digits)):
         can_pass = last_digit_can_pass(history, precision_mode)

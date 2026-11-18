@@ -820,6 +820,12 @@ EN_DETAILS = {
         "A valid measurement time is needed to assess the change.",
     "OCR-Stand unsicher.": "OCR reading uncertain.",
     "Zählerstand liegt unter dem letzten gültigen Wert.": "Reading is lower than the last accepted value.",
+    "Zählerstand liegt unter dem letzten gültigen Wert. Bestätigen weitere stimmige Ablesungen den niedrigeren Stand, wird er übernommen.":
+        "Reading is lower than the last accepted value. If further consistent readings confirm the lower value, it will be taken over.",
+    ("Mehrere stimmige Ablesungen lagen unter dem gespeicherten Stand. Der höhere Wert war ein Lesefehler, "
+     "der Zählerstand wurde korrigiert. Verbrauch wird erst wieder gebucht, wenn der frühere Höchststand erreicht ist."):
+        ("Several consistent readings were below the stored value. The higher value was a misread and the reading "
+         "has been corrected. Consumption is booked again once the earlier maximum is passed."),
     "Zählerstand steigt schneller als der eingestellte Durchfluss erlaubt.":
         "Reading increased faster than the configured maximum flow.",
     "Messzeitpunkt liegt vor der letzten gültigen Messung.": "The reading is older than the last accepted measurement.",

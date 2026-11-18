@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.12 Stable
+
+- **Selbstkorrektur nach einem zu hohen Lesefehler:** Ein Gaszähler läuft nicht rückwärts, deshalb wird eine einzelne niedrigere Ablesung weiterhin verworfen. Bestätigen aber mindestens drei untereinander stimmige Ablesungen über mindestens 15 Minuten (nie fallend, nie schneller als der Höchstdurchfluss) einen niedrigeren Stand, war der höhere Wert ein Lesefehler. Die App übernimmt dann den echten Zählerstand, statt bis zum Einholen des falschen Werts festzuhängen.
+- Dabei wird kein negativer und kein doppelter Verbrauch gebucht: Der Gesamtverbrauch springt nie zurück, und gezählt wird erst wieder, wenn der Zähler den früheren Höchststand überschreitet.
+- Die Übersicht erklärt den Zwischenstand („weitere stimmige Ablesungen …“) und die erfolgte Korrektur.
+
 ## 0.6.11 Stable
 
 - Läuft die Hintergrundsuche nach der letzten Ziffer, ist das sichtbar: Die letzte Rolle dreht animiert, daneben stehen ein Ladesymbol, die Restzeit und ein Fortschrittsbalken.

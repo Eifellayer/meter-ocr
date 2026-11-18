@@ -15,6 +15,11 @@ INVALID_TIME = "Messzeitpunkt liegt vor der letzten gültigen Messung."
 FALLBACK_PLAUSIBLE = "OCR-Zuwachs plausibel. Warte auf den Abgleich."
 FALLBACK_UNKNOWN_TIME = "Für die Plausibilitätsprüfung fehlt ein gültiger Messzeitpunkt."
 FALLBACK_UNCLEAR_OCR = "OCR-Stand unsicher."
+LOWER_RECOVERY_READINGS = 3
+LOWER_RECOVERY_SECONDS = 15 * 60
+LOWER_PENDING = "Zählerstand liegt unter dem letzten gültigen Wert. Bestätigen weitere stimmige Ablesungen den niedrigeren Stand, wird er übernommen."
+LOWER_RECOVERED = ("Mehrere stimmige Ablesungen lagen unter dem gespeicherten Stand. Der höhere Wert war ein Lesefehler, "
+                   "der Zählerstand wurde korrigiert. Verbrauch wird erst wieder gebucht, wenn der frühere Höchststand erreicht ist.")
 
 
 class ImplausibleReading(ValueError):
@@ -36,8 +41,41 @@ def parse_flow_limit(text):
     return litres
 
 
-def accumulate_consumption(previous, source, stamp, reading, decimals, max_flow_lph, integer_digits=5):
-    """Return a proposed new counter state. Rejected and repeated readings add nothing."""
+def track_lower_series(series, stamp, reading, decimals, max_flow_lph, integer_digits=5):
+    """Collect consecutive readings below the stored maximum and decide when they prove a misread.
+
+    A gas meter cannot run backwards. A *single* lower reading is therefore rejected.
+    If several later readings agree with each other (never falling, never faster than
+    the maximum flow) over a minimum time span, the earlier higher value was a misread.
+    Returns the updated series and whether the lower readings are confirmed.
+    """
+    prefix = meter_prefix(reading, decimals, integer_digits)
+    if prefix is None or type(stamp) not in (int, float):
+        return [], False
+    step = 10 ** (3 - decimals)
+    litres = prefix * step
+    rows = [row for row in (series or []) if isinstance(row, list) and len(row) == 2]
+    if rows:
+        last_stamp, last_litres = rows[-1]
+        if stamp <= last_stamp:
+            return rows, False
+        consistent = (last_litres - step <= litres
+                      and litres - last_litres - step <= max_flow_lph * (stamp - last_stamp) / 3600)
+        if not consistent:
+            rows = []
+    rows = [*rows, [stamp, litres]][-2 * LOWER_RECOVERY_READINGS:]
+    confirmed = len(rows) >= LOWER_RECOVERY_READINGS and rows[-1][0] - rows[0][0] >= LOWER_RECOVERY_SECONDS
+    return rows, confirmed
+
+
+def accumulate_consumption(previous, source, stamp, reading, decimals, max_flow_lph, integer_digits=5,
+                           allow_lower=False):
+    """Return a proposed new counter state. Rejected and repeated readings add nothing.
+
+    allow_lower accepts a reading below the stored maximum after track_lower_series
+    confirmed it. The maximum stays the booking anchor, so no negative and no double
+    consumption is booked: counting resumes once the meter passes the old maximum.
+    """
     prefix = meter_prefix(reading, decimals, integer_digits)
     if prefix is None:
         raise ValueError("Ungültiger Zählerstand")
@@ -45,13 +83,17 @@ def accumulate_consumption(previous, source, stamp, reading, decimals, max_flow_
     current = prefix * step
     total = previous.get("total_litres", 0)
     anchor = current
+    floor = current
     if previous.get("source") == source:
         elapsed = stamp - previous["timestamp"]
         observed = current - previous["reading_litres"]
         if elapsed <= 0:
             raise ImplausibleReading(INVALID_TIME)
         previous_anchor = previous.get("anchor_litres", previous["reading_litres"])
-        if current + step <= previous_anchor:
+        # floor: lowest acceptable reading. It equals the anchor unless a confirmed
+        # misread has been corrected; then it follows the real meter below the anchor.
+        previous_floor = previous.get("floor_litres", previous_anchor)
+        if current + step <= previous_floor and not allow_lower:
             raise ImplausibleReading(LOWER_READING)
         # Truncated readings represent an interval, not an exact quantity.
         if observed - previous["step_litres"] > max_flow_lph * elapsed / 3600:
@@ -60,11 +102,13 @@ def accumulate_consumption(previous, source, stamp, reading, decimals, max_flow_
         if step == previous["step_litres"]:
             total += max(0, current - previous_anchor)
         anchor = max(current, previous_anchor)
+        floor = current if allow_lower else max(current, previous_floor)
     return {
         "source": source,
         "timestamp": stamp,
         "reading_litres": current,
         "anchor_litres": anchor,
+        "floor_litres": floor,
         "step_litres": step,
         "total_litres": total,
     }

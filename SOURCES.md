@@ -9,3 +9,9 @@
 | [Foto-Vergleichstests](METER-PHOTO-TESTS.md) | Veröffentlichte Zählerbilder sind jeweils an der Originalquelle verlinkt. / Meter photos link to their original sources. |
 
 Das Projektlogo wurde vom Maintainer bereitgestellt. / The maintainer supplied the project logo.
+
+## Lizenz des Projektcodes / Project source license
+
+Soweit die Rechte beim Projekt liegen, wird AI Meter Reader unter **GNU GPL-3.0-or-later** bereitgestellt. Der vollständige Lizenztext steht in [LICENSE](LICENSE). Bei Weitergabe veränderter Versionen müssen die GNU-GPL-Bedingungen und die Bereitstellung des vollständigen zugehörigen Quellcodes beachtet werden. / Project-owned source code is made available under GNU GPL-3.0-or-later; see [LICENSE](LICENSE). Distributed modified versions must follow the GPL source-availability requirements.
+
+**Drittsoftware bleibt unter ihren eigenen Lizenzen.** Insbesondere Tesseract, Pillow, Debian-Pakete und andere Laufzeitkomponenten werden nicht durch diese Projektlizenz umgewidmet. Extern verlinkte Meterfotos sind nicht Bestandteil der Code-Lizenz. / Third-party software retains its own license terms, and externally linked meter photos are not relicensed by this repository.

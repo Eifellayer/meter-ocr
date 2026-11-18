@@ -1,7 +1,20 @@
-# Bedienungsanleitung
+# Dokumentation – AI Meter Reader
 
-Die bebilderte Anleitung erklärt die stabilen Kernabläufe von AI Meter Reader. Sie wird bei neuen Funktionen oder größeren Änderungen an Einrichtung, Prüfung und Ergebnisanzeige aktualisiert. Kleine Text- oder Bezeichnungsänderungen erfordern keine neue PDF-Ausgabe.
+Die [Haupt-README](../README.md) ist der kurze Einstieg. Diese Seiten enthalten Hintergrundinformationen, Bedienung und Tests:
 
-Die PDF und ihre App-nahen Abbildungen werden mit `build_user_guide.py` erzeugt. Die aktuelle Anleitung enthält ausschließlich nachgezeichnete App-Ansichten und das Projektlogo.
+| Inhalt | Deutsch | English |
+| --- | --- | --- |
+| Schnellstart und Installation | [README](../README.md) | [README](../README.en.md) |
+| Bedienung, Erkennung, Prüftermine und Konfiguration | [Ausführliche Dokumentation](DETAILS.md) | [Detailed documentation](DETAILS.en.md) |
+| Home-Assistant-App-Dokumentation | [DOCS.md](../rf1_ocr_test/DOCS.md) | [DOCS.md](../rf1_ocr_test/DOCS.md) |
+| Änderungsprotokoll | [Changelog](../rf1_ocr_test/CHANGELOG.md) | [Changelog](../rf1_ocr_test/CHANGELOG.md) |
+| Geplante und offene Arbeiten | [Entwicklungsplan](../RELEASE-PLAN.md) | [Development plan](../RELEASE-PLAN.md) |
+| Öffentliche Bildvergleichstests | [METER-PHOTO-TESTS.md](../METER-PHOTO-TESTS.md) | [Meter photo test report](../METER-PHOTO-TESTS.md) |
 
-Die ursprüngliche Prüfung der veröffentlichten Bilder ist in [IMAGE_PRIVACY_AUDIT.md](IMAGE_PRIVACY_AUDIT.md) dokumentiert.
+## Bebilderte Anleitung
+
+[Bebilderte Bedienungsanleitung (PDF)](Bedienungsanleitung-AI-Meter-Reader.pdf)
+
+Die PDF zeigt nachgezeichnete App-Ansichten, keine privaten Zählerfotos. Sie wird mit `build_user_guide.py` erstellt. Bei größeren Änderungen von Einrichtung und Statusdarstellung sollte geprüft werden, ob die Bilder und Texte neu erzeugt werden müssen. Die ursprüngliche Datenschutzprüfung ist in [IMAGE_PRIVACY_AUDIT.md](IMAGE_PRIVACY_AUDIT.md) dokumentiert.
+
+**Ein Screenshot der aktuellen Live-Oberfläche für die Kurz-README steht noch aus.** Vor einer Veröffentlichung muss das Bild aus einer Demo stammen oder anonymisiert sein. Echte Zählerstände, Netzwerkadressen, Entity-IDs mit Personenbezug und Tokens gehören nicht in die öffentliche Dokumentation.

@@ -39,7 +39,7 @@ from checks import (
     meter_prefix, common_exact_precision, manual_confirms_failed_auto,
     reschedule_next_check, rolling_summary, sample_epoch, sample_timestamp, schedule_next_check, slfork_reference,
     timestamp_epoch, track_reflection,
-    EIGHTH_DIGIT_RETRY_SECONDS, eighth_digit_retry_due,
+    resume_optional_eighth_digit,
     setup_deadlines, setup_source_id, stabilization_interval, stationary_partial_active, valid_interval_minutes,
 )
 from calibration import (Calibration, Layout, CAPTURE_INTERVAL, PERFECT_CONFIRMATION_INTERVAL, DEFAULT_LIMIT, MIN_IMAGES, MIN_IMAGE_LIMIT, MAX_IMAGES, MAX_ATTEMPTS,
@@ -1988,15 +1988,15 @@ def main():
         # search itself is in memory. Resume it after restarts and after failed
         # or timed-out searches, without suspending normal seven-digit checks.
         if (not manual and not get_auto_paused()
-                and eighth_digit_retry_due(active_rules, active_source, history, now.timestamp())
                 and (calibration is None or calibration.state not in ("waiting", "testing")
                      or calibration.expired(time.monotonic()))):
             with settings_lock:
                 if (get_auto_rules() == active_rules and get_source()[0] == active_source
                         and not get_auto_paused()):
                     try:
-                        if control_calibration("intensive", DEFAULT_LIMIT):
-                            history["eighth_digit_retry_at"] = now.timestamp() + EIGHTH_DIGIT_RETRY_SECONDS
+                        if resume_optional_eighth_digit(
+                                history, active_rules, active_source, now.timestamp(),
+                                lambda: control_calibration("intensive", DEFAULT_LIMIT)):
                             atomic_write(HISTORY, json.dumps(history).encode("utf-8"), 0o600)
                     except (OSError, ValueError, TypeError) as error:
                         print(f"Hintergrundprüfung der achten Ziffer konnte nicht erneut starten: {type(error).__name__}")

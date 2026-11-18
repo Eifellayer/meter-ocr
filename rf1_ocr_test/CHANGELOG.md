@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.8 Stable
+
+- Beim Start der Selbsteinrichtung (über Einstellungen oder Einrichtungsassistent) öffnet die App automatisch die Übersicht; dort bleiben während der eigentlichen Einrichtung die Fortschrittsanzeige, Einzelschritte, Kandidaten und Vorschaubilder sichtbar.
+- Nachdem die ersten sieben Ziffern bestätigt und gespeichert wurden, zeigt die Übersicht für die optionale achte Ziffer nur noch eine kurze Hintergrundstatusmeldung. Die Bilder, Zwischenschritte, Fortschrittsbalken und manuellen Einstellungswerkzeuge werden auf der Übersicht ausgeblendet, sind aber in den Einstellungen weiterhin zugänglich.
+- Die laufende Hintergrundprüfung versteckt nicht mehr den normalen Automatikstatus. Ist der Zusatzversuch zeitlich ausgeschöpft, wird ausdrücklich „noch offen“ statt einer angeblich weiterhin laufenden Prüfung angezeigt.
+- Browser- und HTTP-Regressionstests sichern die Navigation und beide Anzeigezustände ab.
+
 ## 0.6.7 Stable
 
 - Die Ersteinrichtung speichert einen mit frischen Bildern und einer Gegenprobe bestätigten Sieben-Ziffern-Ausschnitt (fünf Vorkomma- und zwei Nachkommastellen) sofort und startet die reguläre Automatik.

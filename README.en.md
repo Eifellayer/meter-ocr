@@ -1,6 +1,6 @@
 # AI Meter Reader – local meter OCR for Home Assistant
 
-**Version 0.6.10 Stable** · [Deutsch](README.md) · [Changelog](rf1_ocr_test/CHANGELOG.md)
+**Version 0.6.11 Stable** · [Deutsch](README.md) · [Changelog](rf1_ocr_test/CHANGELOG.md)
 
 Read mechanical meter registers locally from camera images with Tesseract OCR. Optionally verify results against **AI on the Edge / SLFork** or a Home Assistant sensor. Primarily designed for rolling-digit gas meters with configurable decimal digits. Requires Home Assistant with Supervisor (ARM64 or AMD64).
 

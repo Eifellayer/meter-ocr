@@ -12,7 +12,7 @@ This is an additional plausibility check, **not a certified measurement device**
 
 ## Installation
 
-**AI Meter Reader 0.6.10** is on the Stable channel. It brings a cleaner interface with three tabs: **Overview** (reading as a roller counter, latest test image, consumption with a 24-hour chart), **Settings** and **Tools** (manual test, digit-frame correction, demo). Unreadable leading digits that cannot have changed since the last confirmed reading are filled in.
+**AI Meter Reader 0.6.11** is on the Stable channel. Since 0.6.10 it has a cleaner interface with three tabs: **Overview** (reading as a roller counter, latest test image, consumption with a 24-hour chart), **Settings** and **Tools** (manual test, digit-frame correction, demo). Unreadable leading digits that cannot have changed since the last confirmed reading are filled in.
 
 Add **Add-ons by Eifellayer** under **Settings → Apps → Install app → ⋮ → Repositories** using the [Stable link](https://github.com/Eifellayer/meter-ocr#stable), then install **AI Meter Reader**. Set `esp_url` for SLFork, or configure `kamera_entitaet` and an optional `referenz_entitaet` sensor.
 

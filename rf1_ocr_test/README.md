@@ -12,7 +12,7 @@ Die ausführliche Einführung, Voraussetzungen, Installation und Konfiguration f
 
 ## Installation
 
-**AI Meter Reader 0.6.10** ist auf Stable. Neu ist eine aufgeräumte Oberfläche mit drei Reitern: **Übersicht** (Zählerstand als Rollenzählwerk, letztes Testbild, Verbrauch mit 24-Stunden-Diagramm), **Einstellungen** und **Werkzeuge** (manueller Test, Ziffernrahmen korrigieren, Demo). Unlesbare führende Stellen, die sich seit dem letzten bestätigten Stand nicht ändern können, werden ergänzt.
+**AI Meter Reader 0.6.11** ist auf Stable. Seit 0.6.10 gibt es eine aufgeräumte Oberfläche mit drei Reitern: **Übersicht** (Zählerstand als Rollenzählwerk, letztes Testbild, Verbrauch mit 24-Stunden-Diagramm), **Einstellungen** und **Werkzeuge** (manueller Test, Ziffernrahmen korrigieren, Demo). Unlesbare führende Stellen, die sich seit dem letzten bestätigten Stand nicht ändern können, werden ergänzt.
 
 Über **Einstellungen → Apps → App installieren → ⋮ → Repositories** den [Stable-Link](https://github.com/Eifellayer/meter-ocr#stable) hinzufügen und **AI Meter Reader** installieren. Im SLFork-Modus die `esp_url` eintragen, starten und die Weboberfläche öffnen.
 

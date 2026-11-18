@@ -606,6 +606,7 @@ EN_UI = {
     "Manueller Test": "Manual test",
     'id="open-setup">Einrichtung<': 'id="open-setup">Setup<',
     "Abweichenden Bildausschnitt ausprobieren": "Try a different image crop",
+    "Fortschritt der Hintergrundsuche": "Background search progress",
     "Der Test verwendet den gespeicherten Ausschnitt der Automatik. Dauerhaft änderst du ihn unter Einstellungen → Automatische Prüfung. Hier kannst du eine Variante testen und danach übernehmen.":
         "The test uses the crop saved for automatic checks. To change it permanently, go to Settings → Automatic check. Here you can try a variant and then apply it.",
     "Test einstellen": "Test settings",

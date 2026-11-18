@@ -1,14 +1,14 @@
 # AI Meter Reader
 
-Deutsch: [Vollständige Anleitung](../README.md) · [Deutsch – App](README.md)
+Deutsch: [Schnellstart](../README.md) · [Ausführliche Anleitung](../docs/DETAILS.md) · [Deutsch – App](README.md)
 
-English: [Full documentation](../README.en.md) · [English – App](README.en.md)
+English: [Quick start](../README.en.md) · [Detailed documentation](../docs/DETAILS.en.md) · [English – App](README.en.md)
 
 📘 [Bebilderte Bedienungsanleitung als PDF](../docs/Bedienungsanleitung-AI-Meter-Reader.pdf) - deutscher Schnelleinstieg zu Einrichtung, Bildtest, Status und Dashboard. Die Anleitung wird bei größeren Funktions- oder Ablaufänderungen aktualisiert; kleine Umbenennungen erfordern keine neue Ausgabe.
 
 ## Deutsch
 
-Diese App liest Zählerbilder lokal aus und kann den erkannten Stand mit einem Referenzwert abgleichen. Sie ist keine geeichte Messung.
+Diese App liest Zählerbilder lokal aus und kann den erkannten Stand mit einem Referenzwert abgleichen. Sie ist keine geeichte Messung. Der Projektcode steht unter [GNU GPLv3 oder später](../LICENSE); weitergegebene Bearbeitungen müssen die GPL-Bedingungen für Quellcode und Lizenzhinweise einhalten.
 
 Mit KI-Unterstützung entwickelt. Für Abrechnungen und Meldungen gilt der direkt am Zähler geprüfte Stand. [Hinweise zur Nutzung und Haftung](https://github.com/Eifellayer/meter-ocr#hinweise-zur-nutzung)
 
@@ -18,7 +18,7 @@ Mit KI-Unterstützung entwickelt. Für Abrechnungen und Meldungen gilt der direk
 4. Unter **Automatische Prüfung – Einstellungen** stellst du die Vergleichsgenauigkeit, OCR-Versuche, Ziffernfarbe und den Bildbereich dauerhaft ein.
 5. Öffne **Manuellen Test öffnen** für eine Probe mit dem letzten Bild. Dort findest du OCR-Einzelwerte, die farbig umrandeten Ziffern und die Möglichkeit, einen getesteten Bildausschnitt für die Automatik zu übernehmen.
 
-Der Einrichtungsassistent kann jederzeit erneut geöffnet werden. Unter **Benachrichtigungen** lassen sich Hinweis, Companion-Push und E-Mail konfigurieren. Version 0.5.2 ist auf Stable. Langzeit-Feinjustierung und adaptive Intervalle sind zuschaltbar und brauchen Praxistests. Pulszähler-Erweiterungen folgen frühestens ab 0.6. Der Maintainer testet reale Zähler ausschließlich mit AI on the Edge / SLFork. Andere Modi sind simuliert getestet. Für das Energie-Dashboard stellst du den maximalen Durchfluss nach Qmax ein und wählst `sensor.rf1_verbrauch_gesamt` als Gasverbrauch. [Plausibilitätsprüfung und Energie-Dashboard](../README.md#plausibilitätsprüfung-und-energie-dashboard)
+Der Einrichtungsassistent kann jederzeit erneut geöffnet werden. **0.6.8 Stable** leitet beim Start der Selbsteinrichtung zur Übersicht weiter, zeigt dort die Einzelschritte und blendet nach dem Speichern von sieben bestätigten Ziffern die anschließende Feinprüfung der achten Ziffer auf einen kurzen Hintergrundhinweis zusammen. Unter **Benachrichtigungen** lassen sich Hinweis, Companion-Push und E-Mail konfigurieren. Langzeit-Feinjustierung und adaptive Intervalle sind zuschaltbar und brauchen Praxistests. Experimentelle Zusatzsensoren sind vorhanden; die vollständige Hallsensor-/Impulszähler-Anbindung bleibt geplant. An einem realen ESP-Gaszähler wurden AI on the Edge / SLFork und **ESP nur als Kamera** getestet; eigenständige ESPHome- und andere Home-Assistant-Kameraquellen sowie andere Zählertypen sind derzeit automatisiert oder simuliert geprüft. Für das Energie-Dashboard stellst du den maximalen Durchfluss nach Qmax ein und wählst `sensor.rf1_verbrauch_gesamt` als Gasverbrauch. [Plausibilitätsprüfung und Energie-Dashboard](../docs/DETAILS.md#plausibilitätsprüfung-und-energie-dashboard)
 
 Über **Automatik pausieren** lassen sich automatische Prüfungen anhalten; manuelle Tests bleiben verfügbar. Der Statusbereich erklärt außerdem Wartezeit, Bildverarbeitung, Quellenverbindung und veraltete Bilder. Die Pause bleibt nach Neustarts erhalten. Die bestehenden Entitäten `sensor.rf1_kontrollbild` und `sensor.rf1_pruefstatus` bleiben unverändert. Support: [GitHub Issues](https://github.com/Eifellayer/meter-ocr/issues).
 
@@ -34,15 +34,15 @@ Developed with AI assistance. Check the physical meter for billing and official 
 4. Under **Automatic checks – settings**, save the comparison precision, maximum OCR attempts, digit color, and image crop. These settings persist across restarts.
 5. Expand **Open manual test** when you need to troubleshoot an image. The annotated preview shows green boxes for recognized digits and red for uncertain ones; **More details** lists each OCR attempt. A tested custom crop can be saved for automatic checks.
 
-The setup wizard can be reopened at any time. Under **Notifications**, configure Home Assistant notices, Companion push or email. Version 0.5.2 is on the Stable channel. Fine-tuning and adaptive intervals are optional and need long-term field testing. Pulse sensor work resumes in 0.6 or later. The maintainer tests real meters only with AI on the Edge / SLFork; other modes have simulated tests only. Set maximum flow to the meter's Qmax and select `sensor.rf1_verbrauch_gesamt` as gas consumption in the Energy dashboard. [Plausibility check and Energy dashboard](../README.en.md#plausibility-check-and-energy-dashboard)
+The setup wizard can be reopened at any time. **0.6.8 Stable** switches to Overview when automatic setup starts, shows the full setup steps, then reduces the optional eighth-digit check to a short background notice once seven digits have been saved. Under **Notifications**, configure Home Assistant notices, Companion push or email. Fine-tuning and adaptive intervals are optional and still need long-term field testing. Experimental extra entities are available, but dedicated hall-sensor/pulse-meter support is still planned. AI on the Edge / SLFork and **ESP as camera only** have been tested on a real ESP/gas meter; independent ESPHome and other camera sources plus other meter types currently have automated or simulated coverage. Set maximum flow to the meter's Qmax and select `sensor.rf1_verbrauch_gesamt` as gas consumption in the Energy dashboard. [Plausibility check and Energy dashboard](../docs/DETAILS.en.md#plausibility-check-and-energy-dashboard)
 
 Pause scheduled checks with **Pause automatic checks**; manual tests remain available. The status area explains waiting, image processing, source connectivity, and stale images. The pause survives restarts. Entity IDs `sensor.rf1_kontrollbild` and `sensor.rf1_pruefstatus` remain unchanged.
 
-For full setup, explanation of comparison rules, schedules and troubleshooting, consult the [English guide](../README.en.md). For help or bug reports, open a [GitHub issue](https://github.com/Eifellayer/meter-ocr/issues).
+For full setup, comparison rules, schedules and troubleshooting, consult the [English detailed guide](../docs/DETAILS.en.md). For help or bug reports, open a [GitHub issue](https://github.com/Eifellayer/meter-ocr/issues).
 
 ---
 
-Private, free hobby project. Optional [PayPal donation](https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8). Donations are not required.
+Free and open-source hobby project, licensed under [GNU GPLv3 or later](../LICENSE). Optional [PayPal donation](https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8). Donations are not required.
 
 ## Factory Reset mit Erhalt der Verbrauchsstatistik
 

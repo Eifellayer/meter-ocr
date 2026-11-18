@@ -56,6 +56,58 @@ class AppIdentityTests(unittest.TestCase):
         self.assertEqual("no-cache", request.get_header("Pragma"))
 
 
+class DocumentationTests(unittest.TestCase):
+    def test_readmes_are_short_and_link_to_detailed_guides(self):
+        for quickstart, detail, title in (
+            ("README.md", "docs/DETAILS.md", "Schnellstart"),
+            ("README.en.md", "docs/DETAILS.en.md", "Quick start"),
+        ):
+            with self.subTest(quickstart=quickstart):
+                page = (APP.parent / quickstart).read_text(encoding="utf-8")
+                self.assertLess(len(page), 8000)
+                self.assertIn(title, page)
+                self.assertIn(f"]({detail})", page)
+                self.assertTrue((APP.parent / detail).is_file())
+                self.assertIn("0.6.8 Stable", page)
+                self.assertIn("supervisor_add_addon_repository", page)
+                self.assertIn("repository_url=https%3A%2F%2Fgithub.com%2FEifellayer%2Fmeter-ocr", page)
+
+    def test_documentation_describes_real_check_intervals_and_current_version(self):
+        de = (APP.parent / "README.md").read_text(encoding="utf-8")
+        en = (APP.parent / "README.en.md").read_text(encoding="utf-8")
+        app_docs = (APP / "DOCS.md").read_text(encoding="utf-8")
+        self.assertIn("10 Minuten", de)
+        self.assertIn("5 Minuten", de)
+        self.assertIn("60 Minuten", de)
+        self.assertIn("10 minutes by default", en)
+        self.assertIn("5 minutes", en)
+        self.assertIn("60-minute", en)
+        self.assertIn("0.6.8 Stable", app_docs)
+        self.assertNotIn("Version 0.5.2", app_docs)
+        self.assertNotIn("Pulse sensor work resumes in 0.6", app_docs)
+        self.assertIn("ESP nur als Kamera", de)
+        self.assertIn("ESP as camera only", en)
+
+    def test_complete_copyleft_license_is_present(self):
+        license_text = (APP.parent / "LICENSE").read_text(encoding="utf-8")
+        self.assertTrue(license_text.startswith("GNU GENERAL PUBLIC LICENSE"))
+        self.assertIn("Version 3, 29 June 2007", license_text)
+        self.assertIn("END OF TERMS AND CONDITIONS", license_text)
+        self.assertGreater(len(license_text), 30000)
+        for readme in ("README.md", "README.en.md"):
+            text = (APP.parent / readme).read_text(encoding="utf-8")
+            self.assertIn("](LICENSE)", text)
+
+    def test_documentation_reference_files_exist(self):
+        for path in (
+            "docs/DETAILS.md", "docs/DETAILS.en.md", "docs/README.md",
+            "docs/Bedienungsanleitung-AI-Meter-Reader.pdf", "assets/project-logo.png",
+            "rf1_ocr_test/CHANGELOG.md", "METER-PHOTO-TESTS.md", "SOURCES.md",
+        ):
+            with self.subTest(path=path):
+                self.assertTrue((APP.parent / path).is_file(), path)
+
+
 class ComparisonTests(unittest.TestCase):
     def setUp(self):
         self.data = {"raw_value": "12345.120", "actual_value": "12345.120"}

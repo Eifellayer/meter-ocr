@@ -5,12 +5,20 @@ on:
     paths:
       - "rf1_ocr_test/**"
       - "repository.yaml"
+      - "README.md"
+      - "README.en.md"
+      - "docs/**"
+      - "RELEASE-PLAN.md"
       - "METER-PHOTO-TESTS.md"
       - ".github/workflows/prueftests.yml"
   pull_request:
     paths:
       - "rf1_ocr_test/**"
       - "repository.yaml"
+      - "README.md"
+      - "README.en.md"
+      - "docs/**"
+      - "RELEASE-PLAN.md"
       - "METER-PHOTO-TESTS.md"
       - ".github/workflows/prueftests.yml"
 

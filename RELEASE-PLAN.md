@@ -87,6 +87,23 @@ Diese Regeln gelten für längere Entwicklungsaufträge unabhängig davon, welch
 
 **Verbesserungsidee für die ChatGPT-Work-Plattform (nicht Teil dieser App):** Vor Erreichen des Work-Kontingents oder einer Gesprächsgrenze rechtzeitig warnen; bereits begonnene kleine Arbeitsschritte möglichst noch geordnet abschließen lassen bzw. den aktuellen Stand automatisch sichern und zur späteren Fortsetzung anbieten. Dies ist ein Produktwunsch, keine zugesicherte Funktion und kein bereits eingereichtes OpenAI-Feedback.
 
+## Dokumentation und Verbreitung: offene Aufgaben nach 0.6.8
+
+Die Kurz-READMEs und die ausführlichen Anleitungen sind aufgetrennt; die Intervallbeschreibung und die reale Nutzung von **„ESP nur als Kamera“** sind korrigiert. Der offizielle My-Home-Assistant-Link fügt das Repository einfacher hinzu. Die folgende Liste enthält offene Aufgaben und zur Nachvollziehbarkeit die erledigte Lizenzentscheidung; vor einer neuen Umsetzung ist der aktuelle `main`-Stand zu prüfen:
+
+| Priorität | Noch offen | Abnahme / Entscheidung |
+| --- | --- | --- |
+| Erledigt | **Open-Source-Lizenz** | Der Maintainer hat die **GNU GPL-3.0-or-later** für den eigenen Projektcode gewählt; vollständiger Lizenztext liegt unter `LICENSE`. Weitergegebene abgeleitete Versionen unterliegen den GPL-Quellcodepflichten. Vor einer späteren Lizenzänderung sind alle beteiligten Rechteinhaber und Drittlizenzen zu berücksichtigen. |
+| P1 | GitHub-Metadaten und Release | Repository-Topics (z. B. `home-assistant`, `home-assistant-addon`, `ocr`, `esp32-cam`), nachvollziehbare GitHub-Releases anhand veröffentlichter Stable-Commits und ein optionaler Community-Beitrag. GitHub-Releases ersetzen nicht das Supervisor-Update. |
+| P1 | Anonymisierter Screenshot / Demo-GIF | Nur Demo-/Beispieldaten veröffentlichen; App-Navigation, Ingress, Status und private Zähler-/Kameradaten unkenntlich machen. Bild auch in englischer README prüfen. |
+| P1 | Einstellungen nachvollziehbar machen | Sichtbar machen, ob App-Konfigurationswert oder persistente Web-Einstellung aus `/data/auto-pruefregeln.json` greift. Alte Felder nur mit Migrationsplan und Abwärtskompatibilität entfernen. |
+| P1 | Reproduzierbare Foto-Regressionstests | Rechte und Nutzbarkeit der 10 öffentlichen Ausgangsbilder klären, versionierte Offline-Testbilder mit lesbaren Sollwerten und akzeptabler Toleranz hinterlegen. In GitHub Actions bei Codeänderung mitführen; Fehlklassifikation oder Regression melden. |
+| P2 | Einzelziffern-Klassifikator (Machbarkeitsstudie) | Geeignete echte und synthetische Trainings-/Testdaten, TFLite/ONNX-Laufzeit auf AMD64/ARM64 sowie Laufzeit, RAM, Genauigkeit und Unsicherheitsbehandlung **gegen die vorhandene Tesseract-Baseline messen**. Kein Austausch ohne belegten Vorteil. |
+| P2 | ESPHome-Blitz/LED optional | Nur bei expliziter Entitätszuordnung und Zustimmung: Licht vor Aufnahme ein-, danach auch bei Fehlern wieder ausschalten; ursprünglichen Zustand respektieren. Keine überraschenden Änderungen an fremden Lichtern. |
+| P2 | Freiwilliger Trainingsdatenexport | Datenschutz- und Einwilligungsdesign: nur freigegebene einzelne Ziffernausschnitte mit bestätigten Labels, Voransicht, Anonymisierung, kein stiller Upload; Lizenz der Beiträge klären. |
+
+**Kompatibilität:** `rf1_ocr_test` und die bestehenden `rf1_*`-Home-Assistant-Entitäten nicht allein aus kosmetischen Gründen umbenennen; sie sind bereits installierte IDs und Datenquellen.
+
 ## Vor 1.0 noch zu bestätigen
 
 1. GitHub Actions erfolgreich für AMD64 und ARM64.

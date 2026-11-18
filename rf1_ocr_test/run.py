@@ -39,7 +39,7 @@ from checks import (
     meter_prefix, common_exact_precision, manual_confirms_failed_auto,
     reschedule_next_check, rolling_summary, sample_epoch, sample_timestamp, schedule_next_check, slfork_reference,
     timestamp_epoch, track_reflection,
-    resume_optional_eighth_digit,
+    resume_optional_eighth_digit, relocate_last_digit_due, EIGHTH_DIGIT_RETRY_SECONDS,
     setup_deadlines, setup_source_id, stabilization_interval, stationary_partial_active, valid_interval_minutes,
 )
 from calibration import (Calibration, Layout, CAPTURE_INTERVAL, PERFECT_CONFIRMATION_INTERVAL, DEFAULT_LIMIT, MIN_IMAGES, MIN_IMAGE_LIMIT, MAX_IMAGES, MAX_ATTEMPTS,
@@ -48,10 +48,11 @@ from calibration import (Calibration, Layout, CAPTURE_INTERVAL, PERFECT_CONFIRMA
 from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, LOWER_PENDING, LOWER_RECOVERED, MAX_FLOW_LPH,
                          ImplausibleReading, track_lower_series,
                          accumulate_consumption, fallback_detail, format_cubic_metres, record_consumption_sample)
-from checks import MOVING_DIGIT_NOTICE, REDUCED_PRECISION_NOTICE, only_last_compared_unclear
+from checks import (FRAME_OFF_NOTICE, FRAME_OFF_STREAK, FRAME_OFF_WAIT_NOTICE, MOVING_DIGIT_NOTICE,
+                    REDUCED_PRECISION_NOTICE, only_last_compared_unclear)
 import debug_log
 from layout import (MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, find_digit_row,
-                    digit_box_settings, find_raw_digit_row, normalize_digit_boxes, rotated_width, scale_digit_boxes, turn_crop)
+                    digit_box_settings, find_raw_digit_row, normalize_digit_boxes, roll_center, rotated_width, scale_digit_boxes, turn_crop)
 from meter_learning import (GEOMETRY_REPAIR_LIMIT, GEOMETRY_REPAIR_SECONDS, alignment_rollback, observe_flow,
                             observe_geometry_failures, local_geometry_trials, note_local_issue, note_local_improvement,
                             plan_reflection_recheck, REFLECTION_RECHECK_NOTICE, suggested_interval)
@@ -1316,7 +1317,7 @@ def main():
                 configuration = calibration_configuration_now()
                 rules = configuration[0]
                 simplified = rules["decimals"] == 3 and action in ("setup", "start")
-                intensive = action == "intensive"
+                intensive = action in ("intensive", "relocate_last")
                 if intensive and (rules["fraction_digits"] != 3 or rules["decimals"] != 3):
                     raise ValueError("The meter must display three decimal digits")
                 if running and (action == "repair" or (
@@ -1355,7 +1356,7 @@ def main():
                             reflected_layout, reflected_positions = layout, positions
                     except (ValueError, TypeError, KeyError):
                         pass
-                background = intensive and stationary_partial_active(rules, source)
+                background = intensive and (action == "relocate_last" or stationary_partial_active(rules, source))
                 calibration = Calibration(limit=limit, started=now, automatic=repair,
                                           rank_candidates=not (repair or intensive), shortlist=shortlist,
                                           simplified=simplified, intensive=intensive,
@@ -1754,9 +1755,18 @@ def main():
                                         on_image=on_image, on_decision=report_decision,
                                     )
                                 else:
+                                    centre = None
+                                    try:
+                                        image, _, whole_px, fraction_px = register_for(layout)[:4]
+                                        found = roll_center(image, [*whole_px, *fraction_px])
+                                        if found is not None and image.width:
+                                            centre = found * 1000 / image.width
+                                    except (OSError, ValueError, TypeError, IndexError):
+                                        centre = None
                                     result_layout = attempt.check_last_digit(
                                         frame, sample, captured, layout, whole, read_last,
                                         lambda: stopped() or transition is not None, on_image, report_decision,
+                                        roll_center=centre,
                                     )
                                 if transition:
                                     with settings_lock:
@@ -2002,6 +2012,15 @@ def main():
                             atomic_write(HISTORY, json.dumps(history).encode("utf-8"), 0o600)
                     except (OSError, ValueError, TypeError) as error:
                         print(f"Hintergrundprüfung der achten Ziffer konnte nicht erneut starten: {type(error).__name__}")
+                    try:
+                        if relocate_last_digit_due(history, active_rules, now.timestamp()):
+                            history["last_digit_relocate_at"] = now.timestamp() + EIGHTH_DIGIT_RETRY_SECONDS
+                            history.pop("last_digit_relocate_due", None)
+                            if control_calibration("relocate_last", DEFAULT_LIMIT):
+                                print("Rahmen der letzten Stelle sitzt vermutlich daneben – suche ihn im Hintergrund neu")
+                            atomic_write(HISTORY, json.dumps(history).encode("utf-8"), 0o600)
+                    except (OSError, ValueError, TypeError) as error:
+                        print(f"Neue Suche der letzten Stelle konnte nicht starten: {type(error).__name__}")
         if (not manual and calibration is not None and calibration.state in ("waiting", "testing")
                 and time.monotonic() >= calibration_next
                 and (not calibration.background
@@ -2907,6 +2926,18 @@ def main():
                                                    or explain_uncertain_positions(ocr_readings, decimals, integer_digits))
                     elif validation_detail:
                         updated["check_detail"] = validation_detail
+                    if ((locals().get("reduced_precision") and outcome in SUCCESSFUL_CHECKS)
+                            or updated.get("check_detail") == MOVING_DIGIT_NOTICE):
+                        streak = updated.get("last_position_unclear_streak", 0)
+                        streak = (streak if type(streak) is int else 0) + 1
+                        updated["last_position_unclear_streak"] = streak
+                        if streak >= FRAME_OFF_STREAK and not validation_detail and not lower_recovered:
+                            relocatable = active_rules["decimals"] == 3 and active_rules["fraction_digits"] == 3
+                            updated["check_detail"] = FRAME_OFF_NOTICE if relocatable else FRAME_OFF_WAIT_NOTICE
+                            if relocatable:
+                                updated["last_digit_relocate_due"] = True
+                    elif outcome in SUCCESSFUL_CHECKS:
+                        updated.pop("last_position_unclear_streak", None)
                     if outcome == "match":
                         if ocr_attempts == len(ocr_readings) and ocr not in ocr_readings:
                             updated["check_detail"] = "Ziffern aus mehreren OCR-Versuchen zusammengesetzt."

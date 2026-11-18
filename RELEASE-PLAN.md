@@ -1,6 +1,6 @@
 # Roadmap
 
-Stand: 18. November 2026 · Version **0.1.3**
+Stand: 18. November 2026 · Version **0.1.4**
 
 **Leitbild „Fire and Forget“ (Nutzer 18.11.):** Die App soll möglichst autonom arbeiten. Der Nutzer wählt nur Zähler und Kamera; alles andere (Grob- und Feineinrichtung, letzte Stelle, Genauigkeit, Fehlerkorrektur) erledigt sie selbst und zeigt Unsicherheit offen an. Manuelle Knöpfe sind nur Notfallwerkzeuge. Stabilität geht vor neuen großen Funktionen.
 
@@ -8,11 +8,7 @@ Stand: 18. November 2026 · Version **0.1.3**
 
 | Aufgabe | Fertig, wenn … |
 | --- | --- |
-| **8. Ziffer: Rolle finden, dann nur senkrecht suchen** | Beobachtung 18.11.: Der Rahmen der 8. Ziffer sitzt oft links oder rechts neben der Rolle, nach der Ersteinrichtung meist zu weit links, weil derselbe Abstand wie zwischen den anderen Ziffern angenommen wird, der Abstand zur letzten Rolle aber etwas größer ist. Ziel: die Rollenmitte waagerecht einmal zuverlässig bestimmen (z. B. über Helligkeits-/Kantenprofil des Rollenfensters), dort festhalten und danach nur noch nach oben und unten verschieben. Nur übernehmen, wenn die Mitte in Testbildern sicher gefunden wird; sonst wie bisher. |
-| **8. Ziffer: Suchbereich enger** | Beobachtung 18.11.: Bei der Suche springt der Rahmen oft viel zu weit (bis zur halben Ziffernbreite/-höhe). Dann rutscht eine halbe Ziffer in den Rahmen und wird falsch gelesen. Waagerecht nur wenig verschieben (nach Rollenmitte, siehe oben), senkrecht feiner; Teiltreffer am Rahmenrand verwerfen. |
-| **Hinweis „Rolle drehte sich“ nur, wenn es stimmt** | Beobachtung 18.11., 23:02: Hinweis „Die letzte verglichene Rolle drehte sich gerade …“, obwohl der Rahmen der 8. Ziffer deutlich rechts unterhalb der Rolle lag und dort nie eine Ziffer finden kann (vermutlich wurde vorher eine Teilerkennung bestätigt). Rahmen, der dauerhaft keine Ziffer trifft, als „Rahmen sitzt daneben“ erkennen und neu suchen statt als drehende Rolle melden. |
-| **„Bitte prüfen“ erst nach mehreren Fehlprüfungen** | Eine einzelne Fehlmessung soll kein „Bitte prüfen“ (Statuschip oben) auslösen, sonst optimieren Nutzer unnötig, obwohl es beim nächsten Rollenwechsel von selbst weg wäre. Erst bei anhaltenden Fehlern (wie die Überschrift „Zählerstand bitte prüfen“) warnen; einzelne Fehlversuche nur dezent anzeigen (kleiner, ohne Warnfarbe); erst bei wiederholten Fehlprüfungen größer und deutlicher. |
-| **Praxis 0.1.3 beobachten** | Verbrauch wird erst nach Bestätigung gebucht, ohne Warten auf alte Höchststände; Hinweise und Debug-Protokoll im Alltag hilfreich. |
+| **Praxis 0.1.4 beobachten** | Verbrauch wird erst nach Bestätigung gebucht; die 8. Ziffer wird über die Rollenmitte gefunden (bisher nur an synthetischen Bildern getestet, am echten Zähler beobachten: findet die Selbstprüfung die Mitte, sitzt der Rahmen danach mittig?); „Rahmen sitzt daneben“ löst die neue Suche aus; einzelne Fehlprüfungen bleiben dezent. |
 | **Laufende Rolle / Genauigkeit nach Durchfluss (beobachten)** | Die Fehlprüfungen am 18.11. kamen nicht vom Durchfluss, sondern vom falschen Startwert (in 0.1.1 behoben). Nur umsetzen, wenn das Debug-Protokoll zeigt, dass eine drehende Rolle bei hohem Verbrauch Prüfungen scheitern lässt: dann niedrigeren Wert nehmen bzw. vorübergehend eine Stelle weniger vergleichen, mit Hinweis „Zähler läuft gerade schnell“. |
 | **Fremde Zähler und Wasserzähler** | Test 18.11. mit ca. 2000 öffentlichen Ziffernbildern (Wasser-/Gaszähler): Einzelziffern nur zu etwa 45 % richtig, „1“ besonders schwach (oft unklar oder als 4 gelesen). Praktisch getestet ist nur der eigene Gaszähler (Stromzähler bereits vernetzt, Wasserzähler nicht zugänglich). Verbesserung über einen Einzelziffern-Klassifikator prüfen (siehe Später). |
 | **Vorprüfung ohne geöffnete App** | Sobald Bildquelle bzw. Kamera feststeht, startet die Grob-Einrichtung von selbst im Hintergrund, auch wenn niemand die Weboberfläche offen hat. |

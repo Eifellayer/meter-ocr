@@ -406,13 +406,32 @@ class IngressTests(IngressFixture):
     def test_first_missing_image_has_an_immediate_yellow_status(self):
         self.history.write_text(json.dumps({"check_status": "capture_unavailable", "failure_since": time.time()}))
         status = json.loads(self.request("/automatic")[0])
-        self.assertEqual(("warning", "Noch kein aktuelles Zählerbild"), (status["tone"], status["heading"]))
+        self.assertEqual(("notice", "Noch kein aktuelles Zählerbild"), (status["tone"], status["heading"]))
         self.assertIn("versucht es automatisch erneut", status["detail"])
+
+    def test_repeated_failures_get_the_prominent_warning(self):
+        self.history.write_text(json.dumps({"check_status": "difference", "failure_since": time.time(),
+                                            "failure_attempts": 3}))
+        status = json.loads(self.request("/automatic")[0])
+        self.assertEqual(("warning", "!"), (status["tone"], status["icon"]))
+
+    def test_single_failure_stays_quiet(self):
+        self.history.write_text(json.dumps({"check_status": "difference", "failure_since": time.time(),
+                                            "failure_attempts": 1}))
+        status = json.loads(self.request("/automatic")[0])
+        self.assertEqual(("notice", ""), (status["tone"], status["icon"]))
+
+    def test_frame_beside_the_last_roller_is_named_instead_of_a_turning_roller(self):
+        from checks import FRAME_OFF_NOTICE
+        self.history.write_text(json.dumps({"check_status": "match", "check_detail": FRAME_OFF_NOTICE}))
+        status = json.loads(self.request("/automatic")[0])
+        self.assertEqual("Rahmen der letzten Stelle sitzt daneben", status["heading"])
+        self.assertNotIn("drehte sich gerade", status["detail"])
 
     def test_mismatch_immediately_explains_what_to_do(self):
         self.history.write_text(json.dumps({"check_status": "difference", "failure_since": time.time()}))
         status = json.loads(self.request("/automatic")[0])
-        self.assertEqual(("warning", "Ablesung und Vergleichswert weichen ab"),
+        self.assertEqual(("notice", "Ablesung und Vergleichswert weichen ab"),
                          (status["tone"], status["heading"]))
         self.assertIn("prüft automatisch erneut", status["detail"])
         self.assertIn("direkt am Zähler", status["detail"])
@@ -451,7 +470,7 @@ class IngressTests(IngressFixture):
             "check_detail": "Die ersten zwei Nachkommastellen stimmen überein. Die dritte Stelle bleibt unbestätigt.",
         }))
         status = json.loads(self.request("/automatic")[0])
-        self.assertEqual(("warning", "Prüfung bestanden mit Hinweis"), (status["tone"], status["heading"]))
+        self.assertEqual(("notice", "Prüfung bestanden mit Hinweis"), (status["tone"], status["heading"]))
 
 
     def test_partial_eighth_digit_distinguishes_configured_and_active_precision(self):
@@ -508,7 +527,7 @@ class IngressTests(IngressFixture):
         self.history.write_text(json.dumps({**sample, "check_status": "capture_unavailable",
                                             "source_connection_status": "error"}))
         status = json.loads(self.request("/automatic")[0])
-        self.assertEqual(("warning", False), (status["tone"], status["routine_ok"]))
+        self.assertEqual(("notice", False), (status["tone"], status["routine_ok"]))
 
     def test_automatic_status_explains_three_retry_attempts_and_one_hour_wait(self):
         self.history.write_text(json.dumps({
@@ -850,7 +869,7 @@ class IngressTests(IngressFixture):
                  "last_reference_is_fallback": True}
         self.history.write_text(json.dumps(saved))
         status = json.loads(self.request("/automatic?lang=en")[0])
-        self.assertEqual(("warning", "Last check failed", "", ""),
+        self.assertEqual(("notice", "Last check failed", "", ""),
                          (status["tone"], status["heading"], status["detail"], status["incident"]))
         self.assertTrue(status["reference_is_fallback"])
         self.assertEqual(saved["last_reference_time"], status["reference_time"])
@@ -1535,7 +1554,7 @@ class BrowserTests(IngressFixture):
                                                "last_reference_is_fallback": True, "last_reference_time": 1709999000}))
             page.reload()
             frame.get_by_text("Last check failed", exact=True).wait_for()
-            self.assertEqual("warning", frame.locator("#automatic-banner").get_attribute("data-tone"))
+            self.assertEqual("notice", frame.locator("#automatic-banner").get_attribute("data-tone"))
             self.assertIn("ESP fallback reading", frame.locator("#automatic-reference-note").inner_text())
             failed = {"check_status": "capture_unavailable", "failure_since": 100, "comparison_decimals": 2}
             self.history.write_text(json.dumps(failed))

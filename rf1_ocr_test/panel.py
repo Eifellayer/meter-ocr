@@ -32,7 +32,8 @@ from checks import (DEFAULT_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, WARNING_DETA
                     OCR_PROFILES, crop_register, read_register, LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, REFLECTION_SUGGEST_AFTER, STANDALONE_PENDING, STANDALONE_REJECTED_NOTICE,
                     STANDALONE_VERIFIED_NOTICE, last_check_at, recommended_comparison_decimals, reschedule_next_check,
                     setup_deadlines, setup_source_id, stabilization_interval, stationary_partial_active, valid_interval_minutes)
-from checks import MOVING_DIGIT_NOTICE
+QUIET_FAILURES = 3
+from checks import FRAME_OFF_NOTICE, FRAME_OFF_WAIT_NOTICE, MOVING_DIGIT_NOTICE
 from consumption import (DEFAULT_FLOW_LPH, EXCESSIVE_INCREASE, LOWER_PENDING, LOWER_READING,
                          consumption_statistics, format_cubic_metres, parse_flow_limit)
 from demo import run_demo
@@ -400,6 +401,7 @@ border-bottom:1px solid var(--edge)}}
 background:var(--surface);border:1px solid var(--edge);color:var(--muted)}}
 .status-chip::before{{content:"";width:.55rem;height:.55rem;border-radius:50%;background:currentColor}}
 .status-chip[data-tone="ok"]{{color:var(--ok);background:var(--ok-soft);border-color:transparent}}
+.status-chip[data-tone="notice"]{{color:var(--ok);background:var(--ok-soft);border-color:transparent}}
 .status-chip[data-tone="ok"]::before{{box-shadow:0 0 0 0 currentColor;animation:pulse 2.4s infinite}}
 .status-chip[data-tone="warning"]{{color:var(--warn);background:var(--warn-soft);border-color:transparent}}
 .status-chip[data-tone="problem"]{{color:var(--bad);background:var(--bad-soft);border-color:transparent}}
@@ -441,6 +443,8 @@ white-space:pre-line;line-height:1.24em;text-align:center;animation:roll 2.2s li
 .automatic-banner[data-tone="ok"]{{background:var(--ok-soft);border-color:transparent;color:var(--ok)}}
 .automatic-banner[data-tone="warning"]{{background:var(--warn-soft);border-color:transparent;color:var(--warn)}}
 .automatic-banner[data-tone="problem"]{{background:var(--bad-soft);border-color:transparent;color:var(--bad)}}
+.automatic-banner[data-tone="notice"]{{background:transparent;border-color:var(--line, currentColor);color:var(--muted);padding:.55rem .85rem;font-size:.9rem}}
+.automatic-banner[data-tone="notice"] strong{{font-weight:650}}
 .automatic-actions{{display:flex;flex-wrap:wrap;gap:.55rem;align-items:center;margin:0 0 1rem}}
 .automatic-actions form{{margin:0;display:block}}
 #start-automatic-form{{margin:0}}
@@ -2987,8 +2991,8 @@ function syncHero() {{
   const chip = document.querySelector('#hero-status');
   const tone = document.querySelector('#paused-notice').hidden ? (automaticBanner.dataset.tone || '') : 'warning';
   const labels = lang === 'en'
-    ? {{ok: 'Running', warning: 'Needs attention', problem: 'Problem'}}
-    : {{ok: 'Läuft', warning: 'Bitte prüfen', problem: 'Problem'}};
+    ? {{ok: 'Running', notice: 'Running', warning: 'Needs attention', problem: 'Problem'}}
+    : {{ok: 'Läuft', notice: 'Läuft', warning: 'Bitte prüfen', problem: 'Problem'}};
   const busy = document.querySelector('.activity-status')?.dataset.state === 'working';
   let label = !document.querySelector('#paused-notice').hidden ? (lang === 'en' ? 'Paused' : 'Pausiert')
     : (labels[tone] || (busy ? (lang === 'en' ? 'Checking …' : 'Prüft …') : '–'));
@@ -3693,7 +3697,7 @@ def start_panel(
               and history.get("check_detail") == STANDALONE_VERIFIED_NOTICE):
             tone, heading, icon = "ok", "Zählerstand gegengeprüft", "✓"
         elif not precision_pending and status == "match_with_warning":
-            tone, heading, icon = "warning", "Prüfung bestanden mit Hinweis", "!"
+            tone, heading, icon = "notice", "Prüfung bestanden mit Hinweis", ""
             if history.get("check_detail") == LAST_DIGIT_PASS:
                 explanation = "Für den Verbrauch verwendet die App den plausiblen Vergleichswert."
                 detail = f"{detail} {EN_UI[explanation] if language == 'en' else explanation}"
@@ -3704,6 +3708,10 @@ def start_panel(
             failure_since = history.get("failure_since")
             prolonged = failure_since is not None and now - failure_since >= WARNING_DETAIL_AFTER
             tone, heading, icon = "warning", "Letzte Prüfung fehlgeschlagen", "!"
+            if not prolonged and history.get("failure_attempts", 0) < QUIET_FAILURES:
+                # A single failed check usually resolves itself with the next roller position.
+                # Show it quietly; only repeated failures get the prominent warning.
+                tone, icon = "notice", ""
             if prolonged:
                 heading = "Zählerstand bitte prüfen"
                 capture_failure_since = history.get("capture_failure_since", failure_since)
@@ -3740,6 +3748,12 @@ def start_panel(
                                 if prolonged or paused else
                                 "Die App prüft automatisch erneut. Bleibt der Unterschied, vergleiche beide Werte mit dem Stand direkt am Zähler.")
                 detail = instructions if language == "de" else EN_UI[instructions]
+        if not precision_pending and history.get("check_detail") in (FRAME_OFF_NOTICE, FRAME_OFF_WAIT_NOTICE):
+            heading = "Rahmen der letzten Stelle sitzt daneben"
+            detail = (history["check_detail"] if language == "de"
+                      else english_result(history["check_detail"], status))
+            if tone == "ok":
+                tone = "neutral"
         if language == "en":
             heading = EN_UI[heading]
         adjustment = history.get("ocr_rotation_adjustment", 0)
@@ -3748,7 +3762,7 @@ def start_panel(
                              if language == "en" else f"Mit Bilddrehung von {adjustment:+d}° gelesen.")
             detail = " ".join(part for part in (detail, rotation_note) if part)
         grace = (not precision_pending and history.get("setup_first_check_unclear")
-                 and history.get("failure_attempts") == 1 and tone == "warning")
+                 and history.get("failure_attempts") == 1 and tone in ("warning", "notice"))
         if grace:
             tone, icon, incident = "neutral", "", ""
             heading = ("First automatic check still unclear" if language == "en" else

@@ -18,7 +18,7 @@ class StaleViewTest(unittest.TestCase):
 
     def test_readable_last_digit_is_optimisation(self):
         self.assertIn("noteState = 'optimizing'", PANEL)
-        self.assertIn("Höchstdauer", PANEL)
+        self.assertIn("Noch höchstens", PANEL)
         self.assertNotIn("Statusaktualisierung kurz fehlgeschlagen", PANEL)
 
 

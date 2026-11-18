@@ -3014,8 +3014,8 @@ function syncHero() {{
       noteState = 'searching';
     }}
     if (minutesLeft) noteText += lang === 'en'
-      ? ` Maximum ${{maxMinutes}} min, at most ${{minutesLeft}} min left.`
-      : ` Höchstdauer ${{maxMinutes}} min, noch höchstens ${{minutesLeft}} min.`;
+      ? ` At most ${{minutesLeft}} of ${{maxMinutes}} min left.`
+      : ` Noch höchstens ${{minutesLeft}} von ${{maxMinutes}} min.`;
   }} else if (comparedDecimals !== null && configuredDecimals !== null && comparedDecimals < configuredDecimals) {{
     const at = lastDigitSearchAt && lastDigitSearchAt * 1000 > Date.now()
       ? new Date(lastDigitSearchAt * 1000).toLocaleTimeString(lang === 'en' ? 'en-GB' : 'de-DE', {{hour: '2-digit', minute: '2-digit'}})
@@ -3748,14 +3748,11 @@ def start_panel(
         routine_ok = (tone == "ok" and not paused and not setup_pending
                       and history.get("source_connection_status") != "error")
         if routine_ok and partial_eighth_digit:
-            tone, icon, routine_ok = "warning", "!", False
-            heading = ("Seven digits verified; eighth digit pending" if language == "en"
-                       else "Sieben Ziffern bestätigt – achte Ziffer offen")
-            detail = ("Configured: 3 decimal places, currently 2 checked. "
-                      "The separate eighth-digit search will retry automatically."
-                      if language == "en" else
-                      "Eingestellt: 3 Nachkommastellen, aktuell 2 verglichen. "
-                      "Die Suche nach der achten Ziffer wird automatisch wiederholt.")
+            # Normal operation in the seven-digit mode: no warning. The hero note
+            # above the reading already explains the eighth digit.
+            heading = ("All good. The 8th digit is still being confirmed." if language == "en"
+                       else "Alles OK. Die 8. Ziffer wird noch abgesichert.")
+            detail = ""
         elif routine_ok:
             heading = "All good. Automatic checks running." if language == "en" else "Alles OK. Automatik läuft."
             detail = ""

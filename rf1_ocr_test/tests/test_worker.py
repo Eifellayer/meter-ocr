@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from checks import (EIGHTH_DIGIT_RETRY_SECONDS, eighth_digit_retry_due, resume_optional_eighth_digit,
                     FRESH_SAMPLE_AGE, NORMAL_INTERVAL, OCR_PROFILES, RETRY_INTERVAL, WINDOW_SECONDS,
                     LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, compare_sample, explain_uncertain_positions,
-                    automatic_interval_minutes, defer_duplicate_cycle, last_check_at, read_register, record_sample,
+                    automatic_interval_minutes, defer_duplicate_cycle, last_check_at, read_register, read_with_retries, record_sample,
                     reschedule_next_check, rolling_summary, schedule_next_check, slfork_reference,
                     estimate_missing_digit, single_missing_digit, track_reflection)
 from consumption import EXCESSIVE_INCREASE, FALLBACK_PLAUSIBLE, FALLBACK_UNKNOWN_TIME, LOWER_READING, fallback_detail
@@ -466,6 +466,36 @@ class StateTests(TestCase):
         self.assertEqual("1", history["reflection_estimate"]["digit"])
         self.assertEqual({"time": 220, "value": 12345120}, history["reflection_anchor"])
         self.assertNotIn("reflection_pending", history)
+
+    def test_partial_seven_digit_compare_never_rounds_an_unknown_eighth(self):
+        now = datetime.now(timezone.utc)
+        data = {**sample(now), "raw_value": "10475.155", "actual_value": "10475.155"}
+        self.assertEqual("difference", compare_sample(data, "10475.15?", 2)[0])
+        status, detail = compare_sample(data, "10475.15?", 2, exact_prefix=True)
+        self.assertEqual("match", status)
+        self.assertIn("ohne Rundung", detail)
+        self.assertEqual("difference", compare_sample(data, "10475.14?", 2, exact_prefix=True)[0])
+        self.assertEqual("ocr_unclear", compare_sample(
+            data, "10475.1??", 2, exact_prefix=True,
+        )[0])
+        self.assertEqual("ocr_unclear", compare_sample(
+            data, "10475.15?", 2, ocr_confirmed=False, exact_prefix=True,
+        )[0])
+        self.assertEqual("slfork_unclear", compare_sample(
+            {**data, "raw_value": "10475.145"}, "10475.15?", 2, exact_prefix=True,
+        )[0])
+        self.assertEqual("slfork_unclear", compare_sample(
+            {**data, "reference_is_fallback": True}, "10475.15?", 2, exact_prefix=True,
+        )[0])
+        reading, confirmed, attempts = read_with_retries(
+            lambda _: "10475.15?", data, 2, max_attempts=2, exact_prefix=True,
+        )
+        self.assertEqual(("10475.15?", True, 1), (reading, confirmed, attempts))
+        history = {}
+        self.assertTrue(record_sample(history, data, "10475.15?", timezone.utc, now, 2,
+                                      readings=("10475.15?",), exact_prefix=True))
+        self.assertEqual("match", history["status"])
+        self.assertEqual(1, len(history["confirmations"]))
 
     def test_optional_eighth_digit_search_restarts_only_after_due_time(self):
         source = {"mode": "camera", "camera": "camera.meter", "reference": "sensor.meter", "selected": True}

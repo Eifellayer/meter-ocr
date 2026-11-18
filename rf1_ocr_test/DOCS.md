@@ -8,7 +8,7 @@ English: [Quick start](../README.en.md) · [Detailed documentation](../docs/DETA
 
 ## Deutsch
 
-Diese App liest Zählerbilder lokal aus und kann den erkannten Stand mit einem Referenzwert abgleichen. Sie ist keine geeichte Messung.
+Diese App liest Zählerbilder lokal aus und kann den erkannten Stand mit einem Referenzwert abgleichen. Sie ist keine geeichte Messung. Der Projektcode steht unter [GNU GPLv3 oder später](../LICENSE); weitergegebene Bearbeitungen müssen die GPL-Bedingungen für Quellcode und Lizenzhinweise einhalten.
 
 Mit KI-Unterstützung entwickelt. Für Abrechnungen und Meldungen gilt der direkt am Zähler geprüfte Stand. [Hinweise zur Nutzung und Haftung](https://github.com/Eifellayer/meter-ocr#hinweise-zur-nutzung)
 
@@ -42,7 +42,7 @@ For full setup, comparison rules, schedules and troubleshooting, consult the [En
 
 ---
 
-Private, free hobby project. Optional [PayPal donation](https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8). Donations are not required.
+Free and open-source hobby project, licensed under [GNU GPLv3 or later](../LICENSE). Optional [PayPal donation](https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8). Donations are not required.
 
 ## Factory Reset mit Erhalt der Verbrauchsstatistik
 

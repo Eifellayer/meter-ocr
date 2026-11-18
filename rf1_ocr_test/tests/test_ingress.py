@@ -661,14 +661,15 @@ class IngressTests(IngressFixture):
         self.assertEqual("slfork", self.source["mode"])
         self.assertEqual("http://new-meter", self.source["url"])
 
-    def test_roadmap_exposes_the_planned_beta_features_in_both_languages(self):
+    def test_roadmap_is_maintained_on_github_and_only_linked_in_the_app(self):
         german = self.request("/")[0]
         english = self.request("/", accept="en")[0]
-        self.assertIn('id="roadmap"', german)
-        self.assertIn("Hallsensor über ESPHome", german)
-        self.assertIn("Modernere Zählerübersicht mit Verbrauchsdiagrammen.", german)
-        self.assertIn("Roadmap and planned features", english)
-        self.assertIn("Multiple meters with their own sources", english)
+        for page in (german, english):
+            self.assertNotIn('id="roadmap"', page)
+            self.assertIn('id="roadmap-link"', page)
+            self.assertIn("meter-ocr/blob/main/RELEASE-PLAN.md", page)
+        self.assertIn("Roadmap auf GitHub", german)
+        self.assertIn("Roadmap on GitHub", english)
 
     def test_automatic_setup_remains_the_default_while_the_camera_waits_for_setup(self):
         self.setup_pending = False
@@ -889,8 +890,9 @@ class BrowserTests(IngressFixture):
             page.set_default_timeout(7000)
             page.goto(self.base + "/")
             self.assertFalse(page.locator("#open-digit-correction").is_visible())
-            page.get_by_role("link", name="Werkzeuge", exact=True).click()
-            self.assertTrue(page.locator("#recognition-tools > summary").evaluate("element => element === document.activeElement"))
+            page.get_by_role("tab", name="Werkzeuge", exact=True).click()
+            self.assertTrue(page.locator("#recognition-tools").evaluate("element => element.open"))
+            self.assertEqual("true", page.locator("#tab-tools").get_attribute("aria-selected"))
             page.locator("#open-digit-correction").click()
             page.locator("#digit-correction-position").select_option("7")
             page.locator('#digit-correction [data-box-move="-1,0"]').click()
@@ -958,6 +960,8 @@ class BrowserTests(IngressFixture):
             page = browser.new_page(viewport={"width": 600, "height": 850}, locale="de-DE")
             page.set_default_timeout(7000)
             page.goto(self.base + "/?test=open")
+            self.assertTrue(page.locator("#view-tools").is_visible())
+            page.locator("#manual-crop-override > summary").click()
             page.locator("#crop-mode").select_option("manual")
             image = page.locator("#crop-draw-area")
             image.wait_for(state="visible")
@@ -1208,8 +1212,7 @@ class BrowserTests(IngressFixture):
             self.assertEqual(300, display.locator('[data-image="crop"]').evaluate(
                 "async image => { await image.decode(); return image.naturalWidth; }"))
             self.assertEqual("20%", display.locator(".calibration-crop-region").evaluate("box => box.style.left"))
-            page.locator("#open-recognition-tools").click()
-            page.locator("#open-calibration").click()
+            page.locator("#tab-settings").click()
             page.locator("#calibration-title").wait_for()
             page.locator("#calibration-region summary").click()
             picker = page.locator("#calibration-region-picker")
@@ -1425,12 +1428,13 @@ class BrowserTests(IngressFixture):
             expect_language("en")
             if frame.locator("#setup-dialog").evaluate("dialog => dialog.open"):
                 frame.locator("#setup-skip").click()
-            frame.locator("#open-recognition-tools").click()
+            frame.locator("#tab-tools").click()
             frame.locator("#open-manual-settings").click()
+            frame.locator("#manual-crop-override > summary").click()
             frame.locator("#manual-form select[name=crop_mode]").select_option("manual")
             frame.locator("#manual-form input[name=crop]").fill("0,0,90,400")
             frame.locator("#manual-form input[name=rotation]").fill("90")
-            frame.locator("#start-check").click()
+            frame.locator("#start-check-with-options").click()
             frame.get_by_text("Request accepted", exact=True).wait_for()
             frame.locator("#test-progress").wait_for(state="visible")
             self.assertEqual("neutral", frame.locator("#test-box").get_attribute("data-result"))
@@ -1478,8 +1482,9 @@ class BrowserTests(IngressFixture):
             expect_language("en")
             page.set_viewport_size({"width": 1280, "height": 900})
             self.assertIsNone(frame.locator("#manual-panel").get_attribute("open"))
-            frame.locator("#open-recognition-tools").click()
-            frame.locator("#start-check").click()
+            frame.locator("#tab-tools").click()
+            frame.locator("#open-manual-settings").click()
+            frame.locator("#start-check-with-options").click()
             frame.get_by_text("Request accepted", exact=True).wait_for()
             self.assertEqual("neutral", frame.locator("#test-box").get_attribute("data-result"))
             for profile in ("unsupported", "mismatch"):

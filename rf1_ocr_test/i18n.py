@@ -29,6 +29,8 @@ EN_UI = {
     "Rahmen im Ausschnitt (px) ": "Crop coordinates (px) ",
     "Die fehlende Ziffer wurde im verschobenen Rahmen direkt gelesen.": "The missing digit was read directly in the shifted box.",
     "Ziffern aus übereinstimmenden OCR-Versuchen zusammengesetzt.": "Digits were combined from agreeing OCR attempts.",
+    "Unveränderliche führende Stellen aus dem zuletzt bestätigten Stand ergänzt.":
+        "Leading digits that cannot have changed were filled in from the last confirmed reading.",
     "Experimentell · Mehrere Zähler": "Experimental · Multiple meters",
     "Zusätzliche Home-Assistant-Sensoren beobachten. Diese Funktion ist experimentell. Praxistests stehen noch aus.": "Monitor additional Home Assistant sensors. This feature is experimental and has not been field-tested.",
     "Unterstützt fortlaufend steigende Zähler in m³ oder kWh. Pro Zeile eine Entität und optional das Prüfintervall in Minuten, z. B. ": "Supports cumulative meters in m³ or kWh. Enter one entity per line with an optional check interval in minutes, for example ",
@@ -36,7 +38,12 @@ EN_UI = {
     "Zähler speichern": "Save meters",
     "Zähler gespeichert.": "Meters saved.",
     "Bitte Sensor-IDs und Prüfintervalle überprüfen.": "Check the sensor IDs and intervals.",
+    "Verbrauch je Stunde, letzte 24 Stunden": "Hourly usage, last 24 hours",
     "Verbrauch je Stunde": "Hourly usage",
+    "Zählerstand lokal aus dem Kamerabild": "Meter reading, locally from the camera image",
+    'class="meter-hero-label">Zählerstand<': 'class="meter-hero-label">Meter reading<',
+    'aria-label="Zählerstand {ocr}"': 'aria-label="Meter reading {ocr}"',
+    "<span>vor 24 h</span><span>jetzt</span>": "<span>24 h ago</span><span>now</span>",
     "Verlauf nach Tag": "Daily history",
     "Letzte Ablesung ": "Last reading ",
     "Wartet auf Daten": "Waiting for data",
@@ -63,13 +70,7 @@ EN_UI = {
         "Automatic recheck: reading the missing digit with a slightly shifted box.",
     "Frische Aufnahme für den erwarteten Rollenwechsel eingeplant.":
         "A fresh image is scheduled around the expected roller change.",
-    "Roadmap und geplante Funktionen": "Roadmap and planned features",
-    "Für die 0.6-Beta geplant": "Planned for the 0.6 beta",
-    "Mehrere Zähler mit eigenen Quellen, Einstellungen und Verläufen.": "Multiple meters with their own sources, settings and history.",
-    "Hallsensor über ESPHome, am selben oder an einem zweiten ESP.": "Hall sensor via ESPHome on the same ESP or a second ESP.",
-    "Modernere Zählerübersicht mit Verbrauchsdiagrammen.": "A refreshed meter overview with consumption charts.",
-    "Die Funktionen sind in Planung. Ein Veröffentlichungstermin steht noch aus.": "These features are planned. A release date has yet to be set.",
-    "Vollständige Roadmap ansehen": "View the full roadmap",
+    "Roadmap auf GitHub": "Roadmap on GitHub",
     "Automatik wartet auf die Einrichtung. Du kannst sie automatisch oder manuell abschließen.": "Automatic checks are waiting for setup. You can finish setup automatically or manually.",
     "Automatik wartet auf Einrichtung": "Automatic checks are waiting for setup",
     "Selbsteinrichtung wird vorbereitet …": "Preparing automatic setup …",
@@ -459,8 +460,8 @@ EN_UI = {
     "Schließen": "Close",
     "Originalbild zum Ablesen": "Original image for reading",
     "Später einrichten": "Set up later",
-    "Du kannst die Einrichtung jederzeit über „Einrichtung öffnen“ erneut starten.":
-        "You can restart setup at any time using “Open setup wizard”.",
+    "Du kannst die Einrichtung jederzeit über „Einrichtung“ oben rechts erneut starten.":
+        "You can restart setup at any time using “Setup” at the top right.",
     "Stand im Home-Assistant-Dashboard anzeigen": "Show the reading on a Home Assistant dashboard",
     "Wenn AI Meter Reader selbst aus einer ESPHome- oder Home-Assistant-Kamera liest, kannst du den Sensor „OCR-Zählerstand“ zum Dashboard hinzufügen. Seine Entitäts-ID lautet ":
         "When AI Meter Reader reads directly from an ESPHome or Home Assistant camera, you can add its OCR meter reading sensor to your dashboard. Its entity ID is ",
@@ -603,6 +604,10 @@ EN_UI = {
     "Das Prüfintervall gilt auch für die bereits geplante nächste Prüfung. Bei geänderter Vergleichsgenauigkeit beginnt die Trefferzählung neu.":
         "The interval also applies to the next scheduled check. Changing comparison precision resets the match count.",
     "Manueller Test": "Manual test",
+    'id="open-setup">Einrichtung<': 'id="open-setup">Setup<',
+    "Abweichenden Bildausschnitt ausprobieren": "Try a different image crop",
+    "Der Test verwendet den gespeicherten Ausschnitt der Automatik. Dauerhaft änderst du ihn unter Einstellungen → Automatische Prüfung. Hier kannst du eine Variante testen und danach übernehmen.":
+        "The test uses the crop saved for automatic checks. To change it permanently, go to Settings → Automatic check. Here you can try a variant and then apply it.",
     "Test einstellen": "Test settings",
     "Test starten": "Start test",
     "Testeinstellungen": "Test settings",

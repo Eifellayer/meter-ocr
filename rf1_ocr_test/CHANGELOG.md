@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.10 Stable
+
+- **Neue Oberfläche:** Der Zählerstand erscheint als Rollenzählwerk (schwarze Vorkomma-, rote Nachkommarollen, unklare Ziffern gelb) mit Status-Schlagwort sowie letzter und nächster Prüfung. Darunter folgt direkt das letzte Testbild mit den farbigen Ziffernrahmen. Statuswerte stehen in Kacheln, der Verbrauch zusätzlich als Diagramm der letzten 24 Stunden. Neues Farbschema für hellen und dunklen Modus.
+- **Drei Reiter:** Übersicht, Einstellungen und neu **Werkzeuge** mit manuellem Test, Ziffernrahmen-Korrektur und Demo. Das Testbild wird in dem Reiter angezeigt, in dem gerade gearbeitet wird.
+- **Doppelte Bedienelemente zusammengeführt:** ein Knopf „Manueller Test“ statt „Test einstellen“ und „Test starten“, darin genau „Jetzt prüfen“; Selbsteinrichtung nur noch unter Einstellungen; Demo nur noch unter Werkzeuge und im Einrichtungsassistenten. Einen abweichenden Bildausschnitt kann der manuelle Test weiterhin in einem eingeklappten Bereich ausprobieren und übernehmen; dauerhaft wird er unter Einstellungen → Automatische Prüfung geändert.
+- **Unlesbare führende Stellen:** Stellen, die sich seit dem letzten bestätigten Stand bei maximalem Durchfluss nicht ändern können (z. B. eine schwer lesbare führende „1“), ergänzt die Automatik aus diesem Stand. Widerspricht eine eindeutige Lesung, wird nichts ergänzt; das Ergebnis muss Konsens- und Bereichsprüfung bestehen.
+- Die Roadmap wird nur noch auf GitHub gepflegt; die App verlinkt sie unter „Über AI Meter Reader“.
+- Sprachwechsel behält den geöffneten Reiter bei. Ein zusammengedrückter Hinweistext in der Selbsteinrichtung wird wieder in voller Breite angezeigt.
+
 ## 0.6.9 Stable
 
 - Wenn bei fünf Vorkomma- und zwei verglichenen Nachkommastellen nur die siebte Ziffer nicht zuverlässig lesbar ist, prüft die Automatik bei gültiger Raw-/Actual-Referenz, ob die ersten sechs Ziffern in mehreren OCR-Versuchen mehrheitlich übereinstimmen. Ohne aktivierten Präzisionsmodus wird dann ausschließlich dieser Durchlauf mit einer Nachkommastelle und einer ausdrücklichen Warnung teilbestätigt; eine stabile, aber falsche siebte Ziffer gilt weiter als Fehler.

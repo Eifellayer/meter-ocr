@@ -1195,17 +1195,8 @@ Bei anhaltenden Problemen benachrichtigen
 </main>
 
 <footer class="page-footer">Kostenloses Hobbyprojekt · <a href="https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8" target="_blank" rel="noopener noreferrer">Freiwillig mit PayPal unterstützen</a>
-<details class="about-project"><summary>Über AI Meter Reader</summary><p><a href="https://github.com/Eifellayer" target="_blank" rel="noopener noreferrer">Projekt von EifelLayer auf GitHub</a></p><p>KI-unterstützt entwickelt. Keine geeichte Messung oder Gewähr für OCR-Ergebnisse. Bitte Zählerstände bei Bedarf direkt am Gerät prüfen.</p></details>
-<details class="about-project" id="roadmap"><summary>Roadmap und geplante Funktionen</summary>
-<p>Für die 0.6-Beta geplant</p>
-<ul>
-<li>Mehrere Zähler mit eigenen Quellen, Einstellungen und Verläufen.</li>
-<li>Hallsensor über ESPHome, am selben oder an einem zweiten ESP.</li>
-<li>Modernere Zählerübersicht mit Verbrauchsdiagrammen.</li>
-</ul>
-<p>Die Funktionen sind in Planung. Ein Veröffentlichungstermin steht noch aus.</p>
-<p><a href="https://github.com/Eifellayer/meter-ocr/blob/main/RELEASE-PLAN.md" target="_blank" rel="noopener noreferrer">Vollständige Roadmap ansehen</a></p>
-</details></footer>
+<details class="about-project"><summary>Über AI Meter Reader</summary><p><a href="https://github.com/Eifellayer" target="_blank" rel="noopener noreferrer">Projekt von EifelLayer auf GitHub</a></p><p>KI-unterstützt entwickelt. Keine geeichte Messung oder Gewähr für OCR-Ergebnisse. Bitte Zählerstände bei Bedarf direkt am Gerät prüfen.</p><p><a id="roadmap-link" href="https://github.com/Eifellayer/meter-ocr/blob/main/RELEASE-PLAN.md" target="_blank" rel="noopener noreferrer">Roadmap auf GitHub</a></p></details>
+</footer>
 <script>
 let next = {next_check};
 const lang = '{language}';

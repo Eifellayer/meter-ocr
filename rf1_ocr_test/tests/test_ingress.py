@@ -239,7 +239,7 @@ class IngressTests(IngressFixture):
         for invalid in ("2", "3", "101", "x"):
             self.assertEqual(400, self.submit("/selbsteinrichtung", action="start", image_limit=invalid)[0])
         self.assertIsNone(self.calibration)
-        self.assertEqual((303, "./?saved=calibration&ui=settings"),
+        self.assertEqual((303, "./?saved=calibration&ui=overview"),
                          self.submit("/selbsteinrichtung", action="start", image_limit="24"))
         status = json.loads(self.request("/status")[0])["calibration"]
         self.assertEqual(24, status["limit"])
@@ -279,7 +279,8 @@ class IngressTests(IngressFixture):
 
     def test_calibration_accepts_only_a_valid_marked_region(self):
         self.assertEqual(400, self.submit("/selbsteinrichtung", action="start", region="10,900,990,800")[0])
-        self.assertEqual(303, self.submit("/selbsteinrichtung", action="start", region="80,350,890,680")[0])
+        self.assertEqual((303, "./?saved=calibration&ui=overview"),
+                         self.submit("/selbsteinrichtung", action="start", region="80,350,890,680"))
         self.assertEqual((80, 350, 890, 680), self.calibration["region"])
 
     def test_geometry_retry_status_and_default_setup_opt_in(self):
@@ -762,14 +763,14 @@ class IngressTests(IngressFixture):
         self.assertIsNone(self.calibration)
         self.paused = False
         status, location = self.submit("/einrichtung", image_limit=24, **values)
-        self.assertEqual((303, "./?saved=setup-calibration&ui=settings#calibration-settings"), (status, location))
+        self.assertEqual((303, "./?saved=setup-calibration&ui=overview"), (status, location))
         self.assertFalse(self.setup_pending)
         self.assertEqual("camera.meter", self.source["camera"])
         self.assertEqual("setup", self.calibration["action"])
         self.assertEqual(24, self.calibration["limit"])
         self.assertEqual(("manual", "10,20,410,100", 270, -3),
                          tuple(self.rules[key] for key in ("crop_mode", "crop", "width", "rotation")))
-        self.assertIn("Einrichtung gespeichert.", self.request("/?saved=setup-calibration&ui=settings")[0])
+        self.assertIn("Einrichtung gespeichert.", self.request("/?saved=setup-calibration&ui=overview")[0])
 
     def test_setup_wizard_rejects_fallback_without_timestamp_and_keeps_old_settings(self):
         before = dict(self.source)
@@ -989,6 +990,55 @@ class BrowserTests(IngressFixture):
             self.assertAlmostEqual(207, job["width"], delta=2)
             browser.close()
 
+    def test_setup_shows_steps_on_overview_and_background_check_only_as_short_status(self):
+        from playwright.sync_api import sync_playwright
+
+        self.setup_pending = False
+        self.source_selected = True
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(executable_path=os.getenv("RF1_CHROMIUM"))
+            page = browser.new_page(locale="de-DE")
+            page.set_default_timeout(7000)
+            page.goto(self.base + "?ui=settings")
+            self.assertEqual("true", page.locator("#tab-settings").get_attribute("aria-selected"))
+            page.locator("#calibration-start").click()
+            page.locator("#calibration-overview .setup-phase").wait_for(state="visible")
+            self.assertEqual("true", page.locator("#tab-overview").get_attribute("aria-selected"))
+            self.assertIn("saved=calibration", page.url)
+            self.assertIn("ui=overview", page.url)
+            self.assertFalse(page.locator(".activity-status").is_visible())
+            self.calibration.update(state="testing", stage="search", seconds=880)
+            page.locator("#calibration-overview .setup-current-step").filter(
+                has_text="Ziffernreihe finden").wait_for()
+            self.assertTrue(page.locator("#calibration-overview-progress").is_visible())
+            self.assertTrue(page.locator("#calibration-open-region").is_visible())
+
+            # Once the first seven digits have been saved, background-only mode
+            # cannot replace the normal automatic activity or show live diagnostics.
+            self.calibration.update(state="waiting", intensive=True, background=True,
+                                    followup=True, stage="last_digit", confirmations=2,
+                                    preview={"frame": 15, "crop": 15, "reading": "?"})
+            page.locator("#calibration-overview.background-only").wait_for(state="visible")
+            page.locator("#calibration-overview-state").filter(
+                has_text="die dritte Nachkommastelle wird im Hintergrund geprüft").wait_for()
+            self.assertEqual("true", page.locator("#tab-overview").get_attribute("aria-selected"))
+            self.assertTrue(page.locator(".activity-status").is_visible())
+            for selector in (".setup-phase", ".calibration-candidate-panel",
+                             ".calibration-photo-panel", "#calibration-open-region",
+                             "#calibration-overview-progress", ".calibration-skip"):
+                self.assertFalse(page.locator("#calibration-overview " + selector).is_visible(),
+                                 selector)
+            self.assertNotIn("Letzte Rolle prüfen", page.locator("#calibration-overview").inner_text())
+            self.assertNotIn("2/3", page.locator("#calibration-overview-state").inner_text())
+
+            self.calibration.update(state="timeout")
+            page.locator("#calibration-overview-state").filter(
+                has_text="Dritte Nachkommastelle noch offen").wait_for()
+            self.assertTrue(page.locator(".activity-status").is_visible())
+            self.calibration.update(state="saved", background=False)
+            page.locator("#calibration-overview").wait_for(state="hidden")
+            browser.close()
+
     def test_fine_verification_skip_shows_an_accuracy_warning_before_saving(self):
         from playwright.sync_api import sync_playwright
 
@@ -1101,15 +1151,16 @@ class BrowserTests(IngressFixture):
             page.locator('.setup-step[data-step="2"] .setup-next').click()
             page.locator('#setup-form button[type="submit"]').click()
             page.get_by_text("Einrichtung gespeichert.", exact=True).wait_for()
+            self.assertEqual("true", page.locator("#tab-overview").get_attribute("aria-selected"))
+            page.locator("#calibration-overview .setup-phase").wait_for(state="visible")
             self.assertEqual(18, self.calibration["limit"])
             self.assertTrue(self.rules["reflection_estimate_enabled"])
             self.assertEqual("12345,67", self.rules["fallback_value"])
             self.calibration.update(state="testing", stage="ocr", rotation=-6, variant=2, seconds=880)
-            page.locator("#calibration-state").filter(has_text="Prüfe Rahmen 2 mit Drehung -6°").wait_for()
-            page.locator("#calibration-settings .setup-current-step").filter(has_text="Ziffernreihe finden").wait_for()
-            page.locator("#calibration-settings .setup-next-step").filter(has_text="Rahmen und Drehung prüfen").wait_for()
-            self.assertEqual("20", page.locator("#calibration-progress").get_attribute("value"))
-            page.locator("#tab-overview").click()
+            page.locator("#calibration-overview-state").filter(has_text="Prüfe Rahmen 2 mit Drehung -6°").wait_for()
+            page.locator("#calibration-overview .setup-current-step").filter(has_text="Ziffernreihe finden").wait_for()
+            page.locator("#calibration-overview .setup-next-step").filter(has_text="Rahmen und Drehung prüfen").wait_for()
+            self.assertEqual("20", page.locator("#calibration-overview-progress").get_attribute("value"))
             page.locator("#calibration-overview-progress").wait_for(state="visible")
             self.assertEqual("20", page.locator("#calibration-overview-progress").get_attribute("value"))
             for kind, size in (("frame", (600, 400)), ("crop", (300, 50))):
@@ -1170,7 +1221,7 @@ class BrowserTests(IngressFixture):
             page.mouse.move(box["x"] + box["width"] * .8, box["y"] + box["height"] * .7)
             page.mouse.up()
             page.locator("#calibration-guided-start").click()
-            page.wait_for_url("**/?saved=calibration&ui=settings")
+            page.wait_for_url("**/?saved=calibration&ui=overview")
             for actual, expected in zip(self.calibration["region"], (200, 300, 800, 700)):
                 self.assertAlmostEqual(actual, expected, delta=4)
 

@@ -223,6 +223,8 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .calibration-card p{{margin:.55rem 0}}
 .calibration-live{{padding:.75rem .9rem;margin:0 0 .8rem;border:1px solid var(--edge);border-radius:.7rem}}
 .calibration-live p{{margin:0}}
+/* After seven digits are saved, show only a short background-check status on Overview. */
+#calibration-overview.background-only > :not(#calibration-overview-state){{display:none!important}}
 #calibration-state[data-tone]:not([data-tone=""]){{padding:.75rem .9rem;border:1px solid;border-radius:.7rem}}
 .calibration-live[data-tone="ok"],#calibration-state[data-tone="ok"]{{color:light-dark(#185d35,#9ce5b5);background:light-dark(#e9f8ee,#17382a);font-size:1.12rem;font-weight:750}}
 .calibration-skip,#calibration-state[data-tone="warning"],#calibration-overview-state[data-tone="warning"]{{margin:.6rem 0;padding:.75rem .9rem;border:1px solid light-dark(#9b6414,#af8039);border-radius:.7rem;color:light-dark(#704508,#ffe1a0);background:light-dark(#fff5db,#362b19)}}
@@ -2089,6 +2091,9 @@ function refreshCalibration(status) {{
   }}
   if (!status) return;
   const active = status.state === 'waiting' || status.state === 'testing';
+  const background = status.background === true;
+  const overview = document.querySelector('#calibration-overview');
+  overview.classList.toggle('background-only', background);
   const label = document.querySelector('#calibration-state');
   const progress = document.querySelector('#calibration-progress');
   label.hidden = false;
@@ -2199,11 +2204,11 @@ function refreshCalibration(status) {{
   if (status.state === 'failed' && ['reference_mismatch', 'position_error'].includes(reason)) {{
     message = 'Der gelesene Bereich passt nicht zum Vergleichswert. Prüfe den Vergleichswert und markiere das Ziffernfeld.';
   }}
-  if (status.background && active) {{
-    message = 'Sieben Ziffern bestätigt. Die Automatik läuft; die dritte Nachkommastelle wird im Hintergrund zusätzlich geprüft. ' + message;
+  if (background && active) {{
+    message = 'Sieben Ziffern bestätigt. Die Automatik läuft; die dritte Nachkommastelle wird im Hintergrund geprüft.';
   }}
-  if (status.background && ['failed', 'timeout', 'image_timeout'].includes(status.state)) {{
-    message = 'Die Zusatzprüfung der dritten Nachkommastelle blieb offen. Die sieben bestätigten Ziffern und die Automatik bleiben erhalten.';
+  if (background && ['failed', 'timeout', 'image_timeout'].includes(status.state)) {{
+    message = 'Dritte Nachkommastelle noch offen. Die Automatik läuft weiterhin mit sieben bestätigten Ziffern.';
   }} else if (status.intensive && ['failed', 'timeout', 'image_timeout'].includes(status.state)) {{
     message = status.confirmations >= status.required ?
       'Feinprüfung erfolgreich, Gegenprobe offen. Der beste Rahmen steht für den manuellen Test bereit.' :
@@ -2264,12 +2269,14 @@ function refreshCalibration(status) {{
     hint.textContent = imageNote ? 'Hinweis zum Kamerabild. ' + imageNote : '';
   }}
   document.querySelector('#calibration-overview-state').textContent =
-    message + (active && status.confirmations ? ' · ' + status.confirmations + '/' + status.required : '');
-  document.querySelector('.activity-status').hidden = active;
+    message + (!background && active && status.confirmations ? ' · ' + status.confirmations + '/' + status.required : '');
+  // Full calibration steps stay visible on Overview only until the first seven
+  // digits have been saved. The optional eighth digit must not hide normal activity.
+  document.querySelector('.activity-status').hidden = active && !background;
   document.querySelector('#setup-start-actions').hidden = active ||
     document.querySelector('.activity-status').dataset.state !== 'setup_wait';
   for (const bar of [progress, document.querySelector('#calibration-overview-progress')]) {{
-    bar.hidden = !active;
+    bar.hidden = !active || (background && bar.id === 'calibration-overview-progress');
     bar.max = status.duration;
     const elapsed = status.duration - status.seconds;
     if (elapsed > 0) bar.value = elapsed;
@@ -3632,7 +3639,7 @@ def start_panel(
                 setup_success_hidden="" if success else "hidden",
                 setup_duration_hidden="" if duration else "hidden",
                 setup_duration=html.escape(duration),
-                calibration_saved_notice=auto_saved_notice if saved in ("setup-calibration", "crop-restored") else "",
+                calibration_saved_notice=auto_saved_notice if saved == "crop-restored" else "",
                 calibration_hidden="" if control_calibration else "hidden",
                 calibration_intensive_hidden="" if auto_rules["fraction_digits"] == 3 and auto_rules["decimals"] == 3 else "hidden",
                 calibration_precision_notice=(
@@ -3699,9 +3706,11 @@ def start_panel(
                 fallback_value=html.escape(auto_rules["fallback_value"], quote=True),
                 fallback_time=html.escape(auto_rules["fallback_time"], quote=True),
                 wizard_saved_notice=(
-                    auto_saved_notice + '<button type="button" id="setup-image-test">' +
-                    ("Test your own image" if language == "en" else "Eigenes Bild testen") + '</button>'
-                    if saved == "setup" else ""
+                    auto_saved_notice + (
+                        '<button type="button" id="setup-image-test">' +
+                        ("Test your own image" if language == "en" else "Eigenes Bild testen") +
+                        '</button>' if saved == "setup" else ""
+                    ) if saved in ("setup", "setup-calibration") else ""
                 ),
                 manual_open="open" if test == "open" else "",
                 digit_correction_hidden="" if auto_rules["crop_mode"] == "manual" else "hidden",
@@ -4178,7 +4187,7 @@ def start_panel(
                     problem(503)
                     return
                 if learn_crop:
-                    self.redirect("?saved=setup-calibration&ui=settings" + keep_mode + "#calibration-settings")
+                    self.redirect("?saved=setup-calibration&ui=overview" + keep_mode)
                 else:
                     self.redirect("?saved=setup&ui=overview" + keep_mode)
                 return
@@ -4301,7 +4310,7 @@ def start_panel(
                     problem(503)
                     return
                 saved = "crop-restored" if action == "restore" else "calibration"
-                view = "overview" if action == "skip-verification" else "settings"
+                view = "overview" if action in ("start", "intensive", "skip-verification") else "settings"
                 self.redirect(f"?saved={saved}&ui={view}" + keep_mode)
                 return
             if path == "/ziffernrahmen":

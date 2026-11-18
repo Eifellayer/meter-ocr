@@ -4,6 +4,7 @@
 
 - Restzeit der Hintergrundsuche nur noch einmal: „Noch höchstens 9 von 20 min“.
 - Sieben-Ziffern-Modus gilt als normaler Betrieb: grünes „Alles OK. Die 8. Ziffer wird noch abgesichert.“ statt gelber Warnung; der doppelte Optimierungstext im Automatik-Kasten entfällt.
+- Meldungen wie „Einrichtung gespeichert.“ verschwinden nach 10 Sekunden und kommen beim automatischen Neuladen nicht wieder.
 
 ## 0.1.2
 

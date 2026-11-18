@@ -3208,6 +3208,16 @@ function showStale(kind) {{
   syncHero();
 }}
 document.querySelector('#reload-view').addEventListener('click', () => location.reload());
+// A save confirmation is a one-time message: fade it out and drop it from the URL,
+// so it does not linger or come back after the automatic reload.
+setTimeout(() => {{
+  document.querySelectorAll('.save-notice').forEach(notice => {{ notice.hidden = true; }});
+  const url = new URL(location.href);
+  if (url.searchParams.has('saved')) {{
+    url.searchParams.delete('saved');
+    history.replaceState(null, '', url.pathname + (url.searchParams.size ? '?' + url.searchParams : ''));
+  }}
+}}, 10000);
 document.querySelector('#debug-log').addEventListener('toggle', async (event) => {{
   if (!event.target.open) return;
   const target = document.querySelector('#debug-log-text');

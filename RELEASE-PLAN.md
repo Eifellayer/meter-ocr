@@ -11,6 +11,7 @@ Stand: November 2026 · aktuelle Version **0.6.12 Stable**
 | Status | Aufgabe | Abnahme |
 | --- | --- | --- |
 | Beobachten | **Praxis 0.6.10/0.6.11** | Am echten Zähler prüfen, wie oft führende Stellen ergänzt werden und ob die neue Oberfläche in Browser und Companion-App gut bedienbar ist. |
+| Offen | **Anzeige der Hintergrundsuche verständlich machen** | Ist die letzte Ziffer bereits lesbar, zeigt die Startseite nicht mehr „wird gesucht“, sondern z. B. „Optimierung läuft“ mit Restzeit bzw. Höchstdauer (derzeit 20 Minuten); die Rolle wird dann nicht als suchend animiert. Gilt für Startseite, Selbsteinrichtung und Kalibrierungsübersicht. |
 | Offen | **Manuelle Korrektur während der Selbsteinrichtung** | Beim manuellen Markieren des Rahmens pausiert die Einrichtung; Winkel einstellbar; vorhandene Ziffernrahmen verschieben und in der Größe ändern; danach wird die Einrichtung mit den korrigierten Rahmen fortgesetzt. |
 | Offen | **Plausibilität nach eigenem Durchschnittsverbrauch** | Zusätzlich zur festen Höchstdurchfluss-Grenze große Sprünge nur zulassen, wenn sie zum bisherigen Verbrauch passen; bis genug Daten vorliegen, gilt nur die feste Grenze. |
 | Offen | **Einstellungen nachvollziehbar machen** | Sichtbar machen, ob ein Wert aus der App-Konfiguration oder aus der Web-Einstellung (`/data/auto-pruefregeln.json`) greift. Alte Felder nur mit Migrationsplan entfernen. |

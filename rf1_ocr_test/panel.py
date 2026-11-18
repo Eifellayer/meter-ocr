@@ -440,7 +440,7 @@ background:linear-gradient(#0d141a,#26323b 48%,#0d141a);color:#f4f7f9;box-shadow
 .consumption-chart-axis{{display:flex;justify-content:space-between;margin:0;color:var(--muted);font-size:.75rem}}
 #consumption-details summary,.dashboard-help summary,.automatic-images > summary,#recognition-tools > summary,.ocr-details summary{{cursor:pointer;font-weight:650;color:var(--muted)}}
 /* ---------- Images and tools ---------- */
-.automatic-images{{margin:1.1rem 0 0;padding:1rem 1.15rem;border-radius:var(--radius);border:1px solid var(--edge)}}
+.automatic-images{{margin:0 0 1rem;padding:1rem 1.15rem;border-radius:var(--radius);border:1px solid var(--edge)}}
 .automatic-images[open] > summary{{margin-bottom:.4rem}}
 .preview{{border-top:0;padding-top:0}}
 .preview h2{{display:none}}
@@ -598,6 +598,19 @@ header{{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.6rem}}
 <form method="post" action="automatik-pause" id="pause-auto-form" {pause_button_hidden}><input type="hidden" name="lang" value="{language}"><input type="hidden" name="mode" value="{language_mode}"><input type="hidden" name="csrf" value="{csrf}"><input type="hidden" name="paused" value="1"><button type="submit">Automatik pausieren</button></form>
 </div>
 <div class="automatic-interval-hint" id="automatic-interval-hint" hidden><span>Wiederholte Fehlablesung? Ein kürzeres Prüfintervall kann helfen, wenn sich der Zähler nach einer Weile wieder klarer ablesen lässt.</span><button type="button" id="open-interval-settings">Prüfintervall ändern</button></div>
+<details class="automatic-images" id="automatic-images" open><summary>Letztes Testbild</summary>
+<p id="preview-empty" class="legend" {preview_empty_hidden}>Noch kein Testbild verfügbar.</p>
+<div class="preview" id="test-preview" {automatic_preview_hidden}>
+<h2 id="preview-heading">Letztes Testbild</h2>
+<img id="test-preview-image"{automatic_preview_src} alt="Letztes Testbild">
+<p id="ocr-method" class="settings-note" hidden></p>
+<details id="ocr-candidate-details" hidden>
+<summary>Beste Kandidaten der Rahmen-Nachprüfung</summary>
+<ol id="ocr-candidates"></ol>
+</details>
+<p class="legend" id="preview-legend" {preview_legend_hidden}><span class="green-key">Grün:</span> Ziffer gelesen · <span class="yellow-key">Gelb:</span> Ziffer schwankte zwischen OCR-Versuchen oder wurde aus mehreren Versuchen zusammengesetzt · <span class="red-key">Rot:</span> Ziffer weiterhin unklar. Die Farben zeigen OCR-Sicherheit, nicht die Übereinstimmung mit dem Referenzstand. Ohne automatisch erkannte Ziffernrahmen sind die Bereiche nur näherungsweise aufgeteilt.</p>
+</div>
+</details>
 <p class="connection-status" id="source-connection" data-state="{source_connection_state}">Quelle: {source_connection}</p>
 <dl class="fact-grid"><div><dt>Erkannter Stand</dt><dd id="automatic-ocr">{ocr}</dd></div>
 <div><dt title="Stand aus der ersten Aufnahme oder aus einer externen Quelle">Vergleichswert</dt><dd><span id="automatic-reference">{reference}</span>
@@ -668,19 +681,6 @@ header{{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.6rem}}
 <pre><code>type: entity
 entity: sensor.rf1_ocr_zaehlerstand
 name: Zählerstand (OCR)</code></pre>
-</details>
-<details class="automatic-images" id="automatic-images" open><summary>Letztes Testbild</summary>
-<p id="preview-empty" class="legend" {preview_empty_hidden}>Noch kein Testbild verfügbar.</p>
-<div class="preview" id="test-preview" {automatic_preview_hidden}>
-<h2 id="preview-heading">Letztes Testbild</h2>
-<img id="test-preview-image"{automatic_preview_src} alt="Letztes Testbild">
-<p id="ocr-method" class="settings-note" hidden></p>
-<details id="ocr-candidate-details" hidden>
-<summary>Beste Kandidaten der Rahmen-Nachprüfung</summary>
-<ol id="ocr-candidates"></ol>
-</details>
-<p class="legend" id="preview-legend" {preview_legend_hidden}><span class="green-key">Grün:</span> Ziffer gelesen · <span class="yellow-key">Gelb:</span> Ziffer schwankte zwischen OCR-Versuchen oder wurde aus mehreren Versuchen zusammengesetzt · <span class="red-key">Rot:</span> Ziffer weiterhin unklar. Die Farben zeigen OCR-Sicherheit, nicht die Übereinstimmung mit dem Referenzstand. Ohne automatisch erkannte Ziffernrahmen sind die Bereiche nur näherungsweise aufgeteilt.</p>
-</div>
 </details>
 <div class="manual-test-area" id="manual-test-area" {manual_area_hidden}>
 <div class="manual-test-heading"><h2>Manueller Test</h2>

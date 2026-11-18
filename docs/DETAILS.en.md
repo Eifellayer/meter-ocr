@@ -2,13 +2,15 @@
 
 [Quick start and installation](../README.en.md) · [Deutsche Detaildokumentation](DETAILS.md) · [Illustrated guide (German PDF)](Bedienungsanleitung-AI-Meter-Reader.pdf)
 
-This page contains the extended technical and operation guide for **0.6.8 Stable**. Refer to the [English project README](../README.en.md) for a quick start.
+This page contains the extended technical and operation guide for **0.6.9 Stable**. Refer to the [English project README](../README.en.md) for a quick start.
 
 ## What does it check?
 
 By default, the app compares the **five digits for whole cubic meters (m³)**. Up to three decimal places can optionally be included. Values are rounded half up to the selected precision; the next known digit determines the rounding. `?` means a digit was not reliably recognized.
 
 The app downloads the latest available meter image and reference reading from SLFork, or uses the configured Home Assistant camera and optionally a cumulative sensor in m³. It detects digit frames automatically when possible; otherwise you can specify a crop.
+
+With **two required decimal places** (seven digits total with five whole digits), an unclear seventh digit may be **partially verified for that check only** when the first six digits agree across OCR attempts with a valid, non-contradictory reference. The reduced comparison uses the unrounded six-digit prefix; this is not a full match and does not add consumption, confirm the precise meter value, or change saved settings and frames. The app says it is waiting for a higher reading and temporarily schedules the next check in **30 minutes**. The next cycle again requires full precision. Stable but wrong seventh digits, unavailable/inconsistent reference values, and enabled Precision mode do not qualify.
 
 At three decimal places, **Precision mode** requires the final digit to match. With this option off, the automatic check can pass with a yellow note after three distinct images fail on the last digit alone. The app uses the reference reading for consumption after checking its plausibility.
 

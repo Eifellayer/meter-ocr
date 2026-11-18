@@ -16,7 +16,8 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from checks import (FRESH_SAMPLE_AGE, NORMAL_INTERVAL, OCR_PROFILES, RETRY_INTERVAL, WINDOW_SECONDS,
+from checks import (EIGHTH_DIGIT_RETRY_SECONDS, eighth_digit_retry_due, resume_optional_eighth_digit,
+                    FRESH_SAMPLE_AGE, NORMAL_INTERVAL, OCR_PROFILES, RETRY_INTERVAL, WINDOW_SECONDS,
                     LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, compare_sample, explain_uncertain_positions,
                     automatic_interval_minutes, defer_duplicate_cycle, last_check_at, read_register, record_sample,
                     reschedule_next_check, rolling_summary, schedule_next_check, slfork_reference,
@@ -465,6 +466,46 @@ class StateTests(TestCase):
         self.assertEqual("1", history["reflection_estimate"]["digit"])
         self.assertEqual({"time": 220, "value": 12345120}, history["reflection_anchor"])
         self.assertNotIn("reflection_pending", history)
+
+    def test_optional_eighth_digit_search_restarts_only_after_due_time(self):
+        source = {"mode": "camera", "camera": "camera.meter", "reference": "sensor.meter", "selected": True}
+        rules = {"decimals": 3, "fraction_digits": 3, "precision_mode": False,
+                 "crop_revision": "saved",
+                 "stationary_partial_scope": run.calibration_source_id([source, "saved"])}
+        history = {}
+        now = 1600000000
+        calls = []
+
+        def begin():
+            calls.append("start")
+            return True
+
+        self.assertTrue(eighth_digit_retry_due(rules, source, history, now))
+        self.assertTrue(resume_optional_eighth_digit(history, rules, source, now, begin))
+        self.assertEqual(now + EIGHTH_DIGIT_RETRY_SECONDS, history["eighth_digit_retry_at"])
+        self.assertFalse(resume_optional_eighth_digit(history, rules, source, now + 60, begin))
+        self.assertEqual(["start"], calls)
+        self.assertTrue(resume_optional_eighth_digit(
+            history, rules, source, now + EIGHTH_DIGIT_RETRY_SECONDS, begin,
+        ))
+        self.assertEqual(["start", "start"], calls)
+        # Simulate a restart: the persisted next-at time prevents an immediate
+        # duplicate scan. Older histories without this field start the fine check.
+        restored = dict(history)
+        self.assertFalse(eighth_digit_retry_due(rules, source, restored, now + EIGHTH_DIGIT_RETRY_SECONDS + 10))
+        self.assertTrue(eighth_digit_retry_due(rules, source, {}, now))
+        self.assertFalse(resume_optional_eighth_digit({}, {**rules, "precision_mode": True},
+                                                      source, now, begin))
+        self.assertFalse(resume_optional_eighth_digit({}, {**rules, "crop_revision": "other"},
+                                                      source, now, begin))
+        self.assertFalse(resume_optional_eighth_digit({}, rules, {**source, "camera": "other"},
+                                                      now, begin))
+        self.assertFalse(resume_optional_eighth_digit({}, {**rules, "fraction_digits": 2},
+                                                      source, now, begin))
+        self.assertEqual(["start", "start"], calls)
+        refused = {}
+        self.assertFalse(resume_optional_eighth_digit(refused, rules, source, now, lambda: False))
+        self.assertNotIn("eighth_digit_retry_at", refused)
 
     def test_provisional_precision_is_bound_to_the_saved_source_and_crop(self):
         source = {"mode": "camera", "camera": "camera.meter"}

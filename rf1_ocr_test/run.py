@@ -33,6 +33,7 @@ from checks import (
     compare_sample, crop_register, lighting_ocr_profiles, read_register, read_with_retries, record_sample,
     automatic_interval_minutes, defer_duplicate_cycle,
     LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, LAST_DIGIT_RETRIES, SUCCESSFUL_CHECKS,
+    SEVENTH_DIGIT_WAIT_NOTICE,
     differs_only_at_last_digit, last_digit_can_pass, explain_uncertain_positions,
     meter_prefix, common_exact_precision, manual_confirms_failed_auto,
     reschedule_next_check, rolling_summary, sample_epoch, sample_timestamp, schedule_next_check, slfork_reference,
@@ -2004,7 +2005,8 @@ def main():
             wake_worker.wait(timeout=2)
             continue
         if remaining > 0 and not startup and not manual and not source_changed and not run_automatic_now:
-            set_activity("waiting", FRESH_OCR_NOTICE if history.get("fresh_ocr_retry_at") else
+            set_activity("waiting", SEVENTH_DIGIT_WAIT_NOTICE if history.get("seventh_digit_wait") else
+                         FRESH_OCR_NOTICE if history.get("fresh_ocr_retry_at") else
                          REFLECTION_RECHECK_NOTICE if history.get("reflection_retry_at") else
                          STANDALONE_PENDING_NOTICE if history.get("check_status") == STANDALONE_PENDING
                          else "App läuft. Wartet auf die nächste automatische Prüfung.")
@@ -3030,6 +3032,7 @@ def main():
             updated.pop("fresh_ocr_retry_at", None)
             schedule_next_check(updated, outcome, now.timestamp(), interval_minutes)
             if (on_demand and not source_changed and outcome in SUCCESSFUL_CHECKS
+                    and not updated.get("seventh_digit_wait")
                     and history.get("check_status") in SUCCESSFUL_CHECKS
                     and history.get("next_check_at", 0) > now.timestamp()):
                 updated["next_check_at"] = history["next_check_at"]

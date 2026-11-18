@@ -2,6 +2,7 @@
 
 ## 0.6.11 Stable
 
+- Läuft die Hintergrundsuche nach der letzten Ziffer, ist das sichtbar: Die letzte Rolle dreht animiert, daneben stehen ein Ladesymbol, die Restzeit und ein Fortschrittsbalken.
 - Unter dem Zählerstand erklärt ein Hinweis die letzte Rolle: Sie wird entweder gerade im Hintergrund gesucht oder bei der eingestellten Vergleichsgenauigkeit nicht verglichen (z. B. „Die 8. Ziffer wird nicht verglichen (eingestellt: 2 Nachkommastellen)“).
 - Während der Selbsteinrichtung steht dabei, dass die letzte Ziffer bei 3 Nachkommastellen noch nicht gefunden werden muss und nach dem Speichern im Hintergrund weiter gesucht wird – bzw. dass sie bei 2 Nachkommastellen übersprungen wird.
 - Ein unbestätigter Vorschlag für eine unlesbare Ziffer wird nicht mehr angeboten, wenn bestätigte Ablesungen bereits über eine Stunde weitergelaufen sind. Bestätigte Werte bleiben sichtbar.

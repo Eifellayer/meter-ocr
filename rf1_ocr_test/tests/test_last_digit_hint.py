@@ -62,3 +62,29 @@ class LastDigitHintTests(IngressFixture):
             self.assertEqual("Die 8. Ziffer wird nicht verglichen (eingestellt: 2 Nachkommastellen).", note.inner_text())
             self.assertEqual("skipped", note.get_attribute("data-state"))
             browser.close()
+
+    def test_background_search_is_visible_on_the_last_roller(self):
+        from playwright.sync_api import sync_playwright
+
+        self.setup_pending = False
+        self.source_selected = True
+        self.rules.update(integer_digits=5, fraction_digits=3, decimals=3)
+        self.history.write_text(json.dumps({"check_status": "ocr_only", "ocr_value": "10472.94?",
+                                            "comparison_decimals": 2}))
+        self.calibration = {"state": "testing", "background": True, "intensive": True, "followup": True,
+                            "limit": 100, "tested": 4, "confirmations": 0, "required": 3, "seconds": 540,
+                            "duration": 1200, "stage": "capture", "attempts": 12, "max_attempts": 260}
+        Image.new("RGB", (400, 90), "gray").save(self.root / "current.jpg")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(executable_path=os.getenv("RF1_CHROMIUM"))
+            page = browser.new_page(viewport={"width": 390, "height": 844}, locale="de-DE")
+            page.set_default_timeout(7000)
+            page.goto(self.base + "/")
+            note = page.locator("#hero-digit-note")
+            page.wait_for_function("document.querySelector('#hero-digit-note').dataset.state === 'searching'")
+            self.assertEqual("Die 8. Ziffer wird im Hintergrund gesucht. Noch höchstens 9 min.", note.inner_text())
+            self.assertTrue(page.locator("#hero-search-progress").is_visible())
+            self.assertEqual(660, page.locator("#hero-search-progress").evaluate("bar => bar.value"))
+            self.assertIn("searching", page.locator("#meter-odometer .roller.fraction").last.get_attribute("class"))
+            page.screenshot(path=os.environ.get("RF1_SHOT", "/tmp/searching.png"))
+            browser.close()

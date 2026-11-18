@@ -44,7 +44,8 @@ from checks import (
 from calibration import (Calibration, Layout, CAPTURE_INTERVAL, PERFECT_CONFIRMATION_INTERVAL, MIN_IMAGES, MIN_IMAGE_LIMIT, MAX_IMAGES, MAX_ATTEMPTS,
                          DEFAULT_INTENSIVE_AGREEMENT, SHORTLIST_LIMIT, TIME_LIMIT, LAST_DIGIT_CAPTURE_INTERVAL,
                          image_quality_hints, two_decimal_reading, uncertain_slots, valid_intensive_agreement)
-from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, MAX_FLOW_LPH, ImplausibleReading,
+from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, LOWER_PENDING, LOWER_RECOVERED, MAX_FLOW_LPH,
+                         ImplausibleReading, track_lower_series,
                          accumulate_consumption, fallback_detail, format_cubic_metres, record_consumption_sample)
 from layout import (MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, find_digit_row,
                     digit_box_settings, find_raw_digit_row, normalize_digit_boxes, rotated_width, scale_digit_boxes, turn_crop)
@@ -2057,6 +2058,7 @@ def main():
         source_history["check_source"] = source_key
         updated = dict(source_history)
         validation_detail = None
+        lower_recovered = False
         new_consumption = None
         new_standalone = None
         standalone_reference = None
@@ -2622,76 +2624,98 @@ def main():
                         )
                         if (reading_status == "match" or accept_reference
                                 or ((standalone or raw_fallback) and reading_status == "ocr_only")):
-                            try:
-                                if standalone:
-                                    new_standalone = standalone_reading(
-                                        standalone_source, sample, ocr, decimals, history.get("standalone_reading"),
-                                        integer_digits,
-                                    )
-                                    if new_standalone is None:
-                                        raise ImplausibleReading(LOWER_READING)
-                                previous_consumption = history.get("consumption", {})
-                                if not previous_consumption and active_rules["fallback_value"]:
-                                    fallback_prefix = meter_prefix(active_rules["fallback_value"], decimals,
-                                                                   integer_digits)
-                                    fallback_time = active_rules["fallback_time"]
-                                    if fallback_prefix is None or not fallback_time:
-                                        raise ImplausibleReading("Fallback-Wert passt nicht zur Zähleranzeige.")
-                                    fallback_stamp = datetime.fromisoformat(fallback_time).replace(tzinfo=zone).timestamp()
-                                    fallback_step = 10 ** (3 - decimals)
-                                    fallback_litres = fallback_prefix * fallback_step
-                                    previous_consumption = {
-                                        "source": source_key, "timestamp": fallback_stamp,
-                                        "reading_litres": fallback_litres, "anchor_litres": fallback_litres,
-                                        "step_litres": fallback_step, "total_litres": 0,
-                                    }
-                                setup_reference = standalone_calibration_reference(
-                                    active_rules, active_source, source_key, captured, previous_consumption,
-                                ) if standalone else None
-                                if setup_reference and setup_reference.get("image_id") == image_id:
-                                    setup_reference = None
-                                if setup_reference:
-                                    setup_counter = setup_reference["counter"]
-                                    accumulate_consumption(
-                                        setup_counter, source_key, captured, ocr, decimals,
-                                        active_rules["max_flow_lph"], integer_digits,
-                                    )
-                                    if previous_consumption.get("source") != source_key:
-                                        if history.get("statistics_preserved_after_reset"):
-                                            # A new image source establishes a fresh meter-reading baseline,
-                                            # but must not reset the preserved cumulative consumption total.
-                                            setup_counter["total_litres"] = previous_consumption.get("total_litres", 0)
-                                        previous_consumption = setup_counter
-                                new_consumption = accumulate_consumption(
-                                    previous_consumption, source_key, captured,
-                                    sample["actual_value"] if accept_reference else ocr, decimals,
-                                    active_rules["max_flow_lph"], integer_digits,
-                                )
-                                if setup_reference:
-                                    standalone_reference = setup_reference
-                                    updated.pop("standalone_candidate", None)
-                                elif standalone:
-                                    candidate = updated.get("standalone_candidate")
-                                    if (candidate and candidate.get("crop") == (rotation_key or custom_boxes)
-                                            and candidate.get("image_id") not in (None, image_id)
-                                            and 0 < captured - candidate["counter"]["timestamp"] <= FRESH_SAMPLE_AGE):
+                            for allow_lower in (False, True):
+                                try:
+                                    if standalone:
+                                        new_standalone = standalone_reading(
+                                            standalone_source, sample, ocr, decimals,
+                                        None if allow_lower else history.get("standalone_reading"),
+                                            integer_digits,
+                                        )
+                                        if new_standalone is None:
+                                            raise ImplausibleReading(LOWER_READING)
+                                    previous_consumption = history.get("consumption", {})
+                                    if not previous_consumption and active_rules["fallback_value"]:
+                                        fallback_prefix = meter_prefix(active_rules["fallback_value"], decimals,
+                                                                       integer_digits)
+                                        fallback_time = active_rules["fallback_time"]
+                                        if fallback_prefix is None or not fallback_time:
+                                            raise ImplausibleReading("Fallback-Wert passt nicht zur Zähleranzeige.")
+                                        fallback_stamp = datetime.fromisoformat(fallback_time).replace(tzinfo=zone).timestamp()
+                                        fallback_step = 10 ** (3 - decimals)
+                                        fallback_litres = fallback_prefix * fallback_step
+                                        previous_consumption = {
+                                            "source": source_key, "timestamp": fallback_stamp,
+                                            "reading_litres": fallback_litres, "anchor_litres": fallback_litres,
+                                            "step_litres": fallback_step, "total_litres": 0,
+                                        }
+                                    setup_reference = standalone_calibration_reference(
+                                        active_rules, active_source, source_key, captured, previous_consumption,
+                                    ) if standalone else None
+                                    if setup_reference and setup_reference.get("image_id") == image_id:
+                                        setup_reference = None
+                                    if setup_reference:
+                                        setup_counter = setup_reference["counter"]
                                         accumulate_consumption(
-                                            candidate["counter"], source_key, captured, ocr, decimals,
+                                            setup_counter, source_key, captured, ocr, decimals,
                                             active_rules["max_flow_lph"], integer_digits,
                                         )
-                                        standalone_reference = candidate
+                                        if previous_consumption.get("source") != source_key:
+                                            if history.get("statistics_preserved_after_reset"):
+                                                # A new image source establishes a fresh meter-reading baseline,
+                                                # but must not reset the preserved cumulative consumption total.
+                                                setup_counter["total_litres"] = previous_consumption.get("total_litres", 0)
+                                            previous_consumption = setup_counter
+                                    new_consumption = accumulate_consumption(
+                                        previous_consumption, source_key, captured,
+                                        sample["actual_value"] if accept_reference else ocr, decimals,
+                                        active_rules["max_flow_lph"], integer_digits, allow_lower=allow_lower,
+                                    )
+                                    if setup_reference:
+                                        standalone_reference = setup_reference
                                         updated.pop("standalone_candidate", None)
-                                    else:
-                                        updated["standalone_candidate"] = {
-                                            "counter": new_consumption, "reading": ocr, "crop": rotation_key or custom_boxes,
-                                            "rotation_adjustment": rotation_adjustment, "image_id": image_id,
-                                        }
-                                        new_standalone = new_consumption = None
-                            except ImplausibleReading as error:
-                                ocr_confirmed = False
-                                rejected = standalone and updated.pop("standalone_candidate", None)
-                                validation_detail = (f"{STANDALONE_REJECTED_NOTICE} {error}" if rejected else str(error))
-                                new_standalone = new_consumption = None
+                                    elif standalone:
+                                        candidate = updated.get("standalone_candidate")
+                                        if (candidate and candidate.get("crop") == (rotation_key or custom_boxes)
+                                                and candidate.get("image_id") not in (None, image_id)
+                                                and 0 < captured - candidate["counter"]["timestamp"] <= FRESH_SAMPLE_AGE):
+                                            accumulate_consumption(
+                                                candidate["counter"], source_key, captured, ocr, decimals,
+                                                active_rules["max_flow_lph"], integer_digits, allow_lower=allow_lower,
+                                            )
+                                            standalone_reference = candidate
+                                            updated.pop("standalone_candidate", None)
+                                        else:
+                                            updated["standalone_candidate"] = {
+                                                "counter": new_consumption, "reading": ocr, "crop": rotation_key or custom_boxes,
+                                                "rotation_adjustment": rotation_adjustment, "image_id": image_id,
+                                            }
+                                            new_standalone = new_consumption = None
+                                except ImplausibleReading as error:
+                                    if (str(error) == LOWER_READING and not allow_lower and not raw_fallback
+                                            and not accept_reference and captured is not None):
+                                        lower_series, lower_confirmed = track_lower_series(
+                                            history.get("lower_series"), captured, ocr, decimals,
+                                            active_rules["max_flow_lph"], integer_digits,
+                                        )
+                                        updated["lower_series"] = lower_series
+                                        if lower_confirmed:
+                                            print(f"Lesefehler-Korrektur: {len(lower_series)} stimmige niedrigere "
+                                                  f"Ablesungen, übernehme {ocr}")
+                                            continue
+                                        error = ImplausibleReading(LOWER_PENDING)
+                                    ocr_confirmed = False
+                                    rejected = standalone and updated.pop("standalone_candidate", None)
+                                    validation_detail = (f"{STANDALONE_REJECTED_NOTICE} {error}" if rejected else str(error))
+                                    new_standalone = new_consumption = None
+                                else:
+                                    if allow_lower:
+                                        lower_recovered = True
+                                    if new_consumption is not None:
+                                        # Only a committed reading ends the series; with
+                                        # standalone checks the second image commits.
+                                        updated.pop("lower_series", None)
+                                break
                         jpeg, size = transfer_jpeg(register)
                 if sample.get("reference_is_fallback"):
                     validation_detail = fallback_detail(
@@ -2823,6 +2847,8 @@ def main():
                         updated["source_connection_detail"] = SLFORK_RAW_SUCCESS
                     if new_standalone is not None:
                         updated["standalone_reading"] = new_standalone
+                    if lower_recovered and new_consumption is not None and outcome in SUCCESSFUL_CHECKS:
+                        updated["check_detail"] = LOWER_RECOVERED
                     updated["ocr_readings"] = ocr_readings if outcome == "ocr_unclear" else []
                     if outcome == "ocr_unclear" and updated["check_detail"] != LAST_DIGIT_NOTICE:
                         updated["check_detail"] = (validation_detail or ocr_error or unclear_detail

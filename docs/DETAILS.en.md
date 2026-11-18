@@ -2,7 +2,7 @@
 
 [Quick start and installation](../README.en.md) · [Deutsche Detaildokumentation](DETAILS.md) · [Illustrated guide (German PDF)](Bedienungsanleitung-AI-Meter-Reader.pdf)
 
-This page contains the extended technical and operation guide for **0.6.11 Stable**. Refer to the [English project README](../README.en.md) for a quick start.
+This page contains the extended technical and operation guide for **0.6.12 Stable**. Refer to the [English project README](../README.en.md) for a quick start.
 
 ## What does it check?
 

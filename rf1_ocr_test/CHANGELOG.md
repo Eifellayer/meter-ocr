@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.9 Stable
+
+- Wenn bei fünf Vorkomma- und zwei verglichenen Nachkommastellen nur die siebte Ziffer nicht zuverlässig lesbar ist, prüft die Automatik bei gültiger Raw-/Actual-Referenz, ob die ersten sechs Ziffern in mehreren OCR-Versuchen mehrheitlich übereinstimmen. Ohne aktivierten Präzisionsmodus wird dann ausschließlich dieser Durchlauf mit einer Nachkommastelle und einer ausdrücklichen Warnung teilbestätigt; eine stabile, aber falsche siebte Ziffer gilt weiter als Fehler.
+- Die volle Vergleichsgenauigkeit, Ziffernrahmen, Einstellungen und bestehenden Messwerte bleiben unverändert. Die Teilbestätigung schreibt keinen ungesicherten Verbrauch, zählt nicht als vollständig bestätigter Treffer und verhindert einen unnötigen Selbstreparaturversuch wegen des Rollenübergangs.
+- Nach einer solchen Teilbestätigung wartet die App 30 Minuten auf einen höheren Zählerstand; die Übersicht erklärt die längere Pause ausdrücklich. Gleiche/alte Bilder verkürzen die Pause nicht; anschließend wird wieder mit der vollen Genauigkeit geprüft.
+- Separate Regressionstests für Nachkommarolle, fehlende/ungültige Referenz, Konsens, strengen Präzisionsmodus, 30-Minuten-Zeitplan und Rückkehr zum normalen Prüfintervall.
+
 ## 0.6.8 Stable
 
 - Beim Start der Selbsteinrichtung (über Einstellungen oder Einrichtungsassistent) öffnet die App automatisch die Übersicht; dort bleiben während der eigentlichen Einrichtung die Fortschrittsanzeige, Einzelschritte, Kandidaten und Vorschaubilder sichtbar.

@@ -2,13 +2,15 @@
 
 [Zur Kurzbeschreibung und Installation](../README.md) · [English detailed documentation](DETAILS.en.md) · [Bebilderte Anleitung als PDF](Bedienungsanleitung-AI-Meter-Reader.pdf)
 
-Diese Seite enthält die erweiterten technischen Erläuterungen und Bedienhinweise für **0.6.8 Stable**. Die Kurzanleitung, die Projektübersicht und die Installation findest du in der [Haupt-README](../README.md).
+Diese Seite enthält die erweiterten technischen Erläuterungen und Bedienhinweise für **0.6.9 Stable**. Die Kurzanleitung, die Projektübersicht und die Installation findest du in der [Haupt-README](../README.md).
 
 ## Was wird kontrolliert?
 
 Die Standardeinstellung vergleicht **fünf Vorkommastellen, also volle m³**. Erkannte Nachkommastellen werden zusätzlich angezeigt. Ein `?` steht für eine unklare Ziffer. Solange `vergleich_nachkommastellen: 0` eingestellt ist, werden Nachkommastellen nicht bewertet. Bei 1–3 Vergleichsstellen wird der Wert auf die gewählte Stelle gerundet (ab 5 aufwärts); die nächste bekannte Ziffer entscheidet über die Rundung.
 
 Die App holt das letzte vorhandene Foto sowie die zugehörigen Werte aus SLFork. Sie erkennt den Ziffernausschnitt anhand der grünen Rahmen oder nutzt einen eingestellten Bildausschnitt. Tesseract OCR liest den Zählerstand unabhängig aus dem Bild. Bei einer unsicheren automatischen Erstlesung nutzt die App bis zu zehn zusätzliche Bildaufbereitungen (höchstens 15 Versuche insgesamt) und setzt Ziffern nur bei einer strikten Mehrheit zusammen. Nach einer fehlgeschlagenen automatischen Prüfung folgen bis zu zwei weitere Bildprüfungen im Abstand von fünf Minuten. Dabei wird das aktuelle Bild der Quelle erneut abgerufen; ob es neu ist, prüft die App am Zeitstempel. Bleiben drei Prüfungen erfolglos, wartet sie eine Stunde auf einen höheren Zählerstand oder ein neues Bild und versucht es dann erneut. Nach einem erfolgreichen Abgleich gilt wieder das eingestellte Prüfintervall.
+
+Bei **zwei verglichenen Nachkommastellen** (siebenstellige Ablesung mit fünf Vorkommastellen) gilt ab 0.6.9 ein Sonderfall: Ist ausschließlich die siebte Ziffer unklar und stimmen die ersten sechs Ziffern in mehreren OCR-Versuchen mit einer gültigen, widerspruchsfreien Referenz überein, kann genau dieser Durchlauf mit nur einer Nachkommastelle **teilbestätigt** werden. Die verkürzte Kontrolle nutzt keine Rundung anhand der unbekannten siebten Ziffer. Sie wird sichtbar als Warnung ausgewiesen, zählt nicht als vollständiger Treffer und verändert weder Verbrauch noch gespeicherte Genauigkeit, Ziffernrahmen oder Referenzwerte. Die App erklärt, dass sie auf einen höheren Zählerstand wartet und den nächsten Prüfzeitpunkt deshalb auf **30 Minuten** setzt. Danach wird wieder mit der normalen Genauigkeit geprüft. Ein dauerhaft falsch erkanntes siebtes Zeichen, ungültige Referenzen oder aktivierter Präzisionsmodus verhindern diese Teilbestätigung. Ohne Referenz gibt es keinen solchen Fallback.
 
 Im SLFork-Modus gleicht die App den OCR-Wert mit **Raw Value** und **Actual Value** ab. Im Kameramodus kann ein aktueller kumulierter m³-Sensor als Referenz dienen. Ohne Referenzsensor wird nur das OCR-Ergebnis ausgegeben.
 

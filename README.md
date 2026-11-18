@@ -1,6 +1,6 @@
 # AI Meter Reader – lokale Zählerablesung für Home Assistant
 
-**Version 0.6.8 Stable** · [English](README.en.md) · [Änderungen](rf1_ocr_test/CHANGELOG.md)
+**Version 0.6.9 Stable** · [English](README.en.md) · [Änderungen](rf1_ocr_test/CHANGELOG.md)
 
 Liest mechanische Zähler aus Kamerabildern lokal mit Tesseract OCR und prüft den Stand optional gegen **AI on the Edge / SLFork** oder einen Home-Assistant-Sensor. Geeignet insbesondere für Gaszähler mit Rollenziffern und einstellbaren Nachkommastellen. Die App benötigt Home Assistant mit Supervisor (ARM64 oder AMD64).
 
@@ -23,7 +23,7 @@ Der Link öffnet den Dialog zum Hinzufügen des Repositories, nicht automatisch 
 - **Lokale OCR:** flexible Ziffernanzahl, automatischer oder manueller Rahmen, Drehung, nachvollziehbare Mehrfachversuche und Einzelziffernprüfung.
 - **Plausibilitätsprüfung:** Abgleich mit vorhandenem Sensorwert, Kennzeichnung unlesbarer Ziffern statt ungesicherter Messwerte und Schutz vor unplausiblen Verbrauchssprüngen.
 - **Automatik:** einstellbares Intervall, Fehlversuch-Wartezeiten, Benachrichtigungen und optionaler Energie-Dashboard-Sensor `sensor.rf1_verbrauch_gesamt`.
-- **Sieben plus eine Stelle:** der bestätigte Sieben-Ziffern-Rahmen bleibt aktiv, auch wenn die dritte Nachkommastelle durch Spiegelung oder Rollenbewegung unlesbar bleibt.
+- **Sieben plus eine Stelle:** der bestätigte Sieben-Ziffern-Rahmen bleibt aktiv, auch wenn die dritte Nachkommastelle durch Spiegelung oder Rollenbewegung unlesbar bleibt. Wenn ausnahmsweise die siebte Ziffer unlesbar ist, kann eine sichere Referenz die ersten sechs Ziffern nur für diesen Durchlauf teilbestätigen; der Verbrauch bleibt unverändert.
 - **Statistik erhalten:** separater Factory Reset, der Gesamtverbrauch und Verbrauchsstatistik beibehält.
 
 ### Wann prüft die App?
@@ -32,6 +32,7 @@ Der Link öffnet den Dialog zum Hinzufügen des Repositories, nicht automatisch 
 | --- | --- |
 | Erfolgreiche reguläre Prüfung | Eingestelltes Intervall, **standardmäßig 10 Minuten** |
 | Erste oder zweite Fehlprüfung | **5 Minuten** (sofern ein neues Bild verfügbar ist) |
+| Nur siebte Ziffer unsicher, erste sechs mit gültiger Referenz bestätigt (bei zwei Vergleichs-Nachkommastellen) | **30 Minuten** warten auf höheren Stand; temporäre Teilbestätigung ohne neue Verbrauchsbuchung |
 | Drei Fehlprüfungen in Folge | **60 Minuten** Abkühlzeit |
 | Ersteinrichtung / optionale adaptive Funktionen | Können vorübergehend häufiger prüfen; die Übersicht nennt den nächsten Termin |
 

@@ -1,6 +1,6 @@
 # AI Meter Reader – local meter OCR for Home Assistant
 
-**Version 0.6.8 Stable** · [Deutsch](README.md) · [Changelog](rf1_ocr_test/CHANGELOG.md)
+**Version 0.6.9 Stable** · [Deutsch](README.md) · [Changelog](rf1_ocr_test/CHANGELOG.md)
 
 Read mechanical meter registers locally from camera images with Tesseract OCR. Optionally verify results against **AI on the Edge / SLFork** or a Home Assistant sensor. Primarily designed for rolling-digit gas meters with configurable decimal digits. Requires Home Assistant with Supervisor (ARM64 or AMD64).
 
@@ -23,7 +23,7 @@ This link pre-fills the repository dialog; it does **not** automatically install
 - **Local OCR:** configurable digit count, automatic or manual crop, rotation, retry profiles and single-digit checks.
 - **Verification:** comparison with reference readings, explicit uncertainty markers, and plausible consumption bounds.
 - **Automation:** configurable schedule, failure cooldowns, notifications and `sensor.rf1_verbrauch_gesamt` for the Energy dashboard.
-- **Seven plus one digit:** a verified seven-digit crop stays in service while the hard-to-read third decimal digit is investigated separately.
+- **Seven plus one digit:** a verified seven-digit crop stays in service while the hard-to-read third decimal digit is investigated separately. An unclear seventh digit can be partially verified using the first six digits and a reliable reference for one check only, without posting consumption.
 - **Preserve statistics:** a separate factory reset option retains total consumption and consumption history.
 
 ### When does it check?
@@ -32,6 +32,7 @@ This link pre-fills the repository dialog; it does **not** automatically install
 | --- | --- |
 | Successful routine check | Configured interval, **10 minutes by default** |
 | First or second failed check | After **5 minutes**, subject to fresh images |
+| Only the seventh digit is uncertain, six digits match a valid reference (when two decimal digits are required) | Wait **30 minutes** for a higher reading; partial verification without posting consumption |
 | Three consecutive failed checks | **60-minute** cooldown |
 | Setup and optional adaptive functions | May temporarily run more often; see the Overview countdown |
 

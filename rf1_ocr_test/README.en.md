@@ -12,7 +12,7 @@ This is an additional plausibility check, **not a certified measurement device**
 
 ## Installation
 
-**AI Meter Reader 0.6.8** is on the Stable channel. Starting calibration opens Overview with the setup steps visible. After seven digits are saved, Overview only shows a short background-check status for the optional eighth digit and preserves the normal automatic status.
+**AI Meter Reader 0.6.9** is on the Stable channel. Starting calibration opens Overview with the setup steps visible. After seven digits are saved, Overview only shows a short background-check status for the optional eighth digit and preserves the normal automatic status.
 
 Add **Add-ons by Eifellayer** under **Settings → Apps → Install app → ⋮ → Repositories** using the [Stable link](https://github.com/Eifellayer/meter-ocr#stable), then install **AI Meter Reader**. Set `esp_url` for SLFork, or configure `kamera_entitaet` and an optional `referenz_entitaet` sensor.
 
@@ -41,7 +41,7 @@ Expand **More details** to see the individual attempt readings. When a custom cr
 
 ## Schedules and files
 
-Successful automatic checks normally run hourly. After a failed check, up to two more image checks follow at five-minute intervals. If all three fail, the app waits one hour for a higher reading or new image, then tries again. After a successful match, the selected interval applies again. The failed-check count and wait reason appear in the overview. The default delay for `review_due` is four hours. **Pause automatic checks** keeps a large yellow notice visible; manual tests still work. The overview shows whether the app is waiting, capturing an image, or reading it, and whether the ESP/camera returned an image or why it was stale. If the app is stopped or unreachable, an open page reports the lost connection. The **Notifications** panel controls Home Assistant notices, mobile push and email. See the [project guide](../README.en.md#notifications-and-automatic-status).
+Successful automatic checks run every 10 minutes by default. After a failed check, up to two more image checks follow at five-minute intervals. If all three fail, the app waits one hour for a higher reading or new image, then tries again. After a successful match, the selected interval applies again. If only the seventh of seven required digits is unclear, a valid reference and matching first six digits can partially verify that check at reduced precision without posting consumption. The app visibly explains that it is waiting 30 minutes for a higher reading; the configured precision applies again on the next check. The failed-check count and wait reason appear in the overview. The default delay for `review_due` is four hours. **Pause automatic checks** keeps a large yellow notice visible; manual tests still work. The overview shows whether the app is waiting, capturing an image, or reading it, and whether the ESP/camera returned an image or why it was stale. If the app is stopped or unreachable, an open page reports the lost connection. The **Notifications** panel controls Home Assistant notices, mobile push and email. See the [project guide](../README.en.md#notifications-and-automatic-status).
 
 The app publishes `sensor.rf1_kontrollbild` and `sensor.rf1_pruefstatus`, and stores the latest/last-confirmed images in **Media → Local Media → rf1**. Neither entity name is translated because dashboards and automations depend on it.
 

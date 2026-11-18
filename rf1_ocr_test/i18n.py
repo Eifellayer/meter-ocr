@@ -6,7 +6,8 @@ The language only affects text shown in the ingress interface.
 
 import re
 
-from checks import (FALLBACK_NOTICE, LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, STANDALONE_PENDING_NOTICE,
+from checks import (FALLBACK_NOTICE, LAST_DIGIT_NOTICE, LAST_DIGIT_PASS,
+                    SEVENTH_DIGIT_PASS, SEVENTH_DIGIT_WAIT_NOTICE, STANDALONE_PENDING_NOTICE,
                     STANDALONE_REJECTED_NOTICE, STANDALONE_VERIFIED_NOTICE, uncertain_positions)
 from layout import MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR
 
@@ -438,6 +439,17 @@ EN_UI = {
         "Additional checks stabilize automatic recognition during the first 20 minutes. Individual readings may still be inaccurate during this time.",
     "Diagnose der Selbsteinrichtung": "Setup diagnostics",
     LAST_DIGIT_PASS: "The first two decimal places match. The third digit remains unconfirmed.",
+    SEVENTH_DIGIT_PASS: (
+        "The first six digits match the valid reference (without rounding). "
+        "The seventh digit cannot be read reliably: This check is only partially "
+        "verified to one decimal place. Consumption and configured precision "
+        "remain unchanged. Waiting for a higher meter reading; the check "
+        "interval is temporarily set to 30 minutes."
+    ),
+    SEVENTH_DIGIT_WAIT_NOTICE: (
+        "Waiting for a higher meter reading. The next automatic check is "
+        "scheduled in 30 minutes because the seventh digit is unclear."
+    ),
     "Für den Verbrauch verwendet die App den plausiblen Vergleichswert.": "The app uses the plausible reference reading to calculate consumption.",
     "Ablesung und Vergleichswert weichen ab": "Image reading and reference differ",
     "Vergleiche beide Werte mit dem Stand direkt am Zähler.": "Compare both readings with the value on the meter itself.",
@@ -877,7 +889,8 @@ def english_result(detail, status=None, decimals=0, readings=None):
     """Translate a saved result without changing the Home Assistant sensor state."""
     if not isinstance(detail, str):
         return "No result available."
-    if detail in (LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, RAW_ROW_UNCLEAR, MANUAL_ROW_UNCLEAR,
+    if detail in (LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, SEVENTH_DIGIT_PASS,
+                  RAW_ROW_UNCLEAR, MANUAL_ROW_UNCLEAR,
                   STANDALONE_PENDING_NOTICE, STANDALONE_VERIFIED_NOTICE):
         return EN_UI[detail]
     if detail.startswith(STANDALONE_REJECTED_NOTICE):

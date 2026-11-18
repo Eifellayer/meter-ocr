@@ -4,7 +4,7 @@
 
 ## Deutsch
 
-**Version 0.1.3.** Die App liest deinen Zähler lokal aus dem Kamerabild. Sie ist keine geeichte Messung.
+**Version 0.1.4.** Die App liest deinen Zähler lokal aus dem Kamerabild. Sie ist keine geeichte Messung.
 
 ### Einrichtung
 
@@ -24,7 +24,7 @@ Wenn **3 Nachkommastellen** eingestellt sind, aber nach der Einrichtung zunächs
 
 ### Genauigkeit
 
-Standard sind 2 Nachkommastellen. Die dritte Nachkommastelle vergleicht die App nur mit eingeschaltetem **Präzisionsmodus**. Dreht sich die letzte verglichene Rolle gerade, bestätigt sie die Prüfung einmalig mit einer Stelle weniger, statt sie scheitern zu lassen.
+Standard sind 2 Nachkommastellen. Die dritte Nachkommastelle vergleicht die App nur mit eingeschaltetem **Präzisionsmodus**. Dreht sich die letzte verglichene Rolle gerade, bestätigt sie die Prüfung einmalig mit einer Stelle weniger, statt sie scheitern zu lassen. Ist dieselbe Stelle mehrmals hintereinander unklar, sitzt vermutlich ihr Rahmen neben der Rolle: Die App meldet das und sucht den Rahmen der 8. Ziffer im Hintergrund neu.
 
 Praktisch getestet ist bisher nur ein Gaszähler; Wasserzähler sind ungetestet.
 
@@ -47,7 +47,7 @@ Nach einem App-Update oder Neustart lädt die geöffnete Weboberfläche selbst n
 
 ## English
 
-**Version 0.1.3.** The app reads your meter locally from a camera image. It is not a certified measurement.
+**Version 0.1.4.** The app reads your meter locally from a camera image. It is not a certified measurement.
 
 ### Setup
 
@@ -67,7 +67,7 @@ When **3 decimal places** are configured but the setup has only confirmed seven 
 
 ### Precision
 
-By default two decimal places are compared. The third one is compared only with **precision mode** switched on. If the last compared roller is turning, the app confirms that one check with one decimal place less instead of failing it.
+By default two decimal places are compared. The third one is compared only with **precision mode** switched on. If the last compared roller is turning, the app confirms that one check with one decimal place less instead of failing it. If the same digit stays unclear several times in a row, its frame probably sits beside the roller: the app says so and searches the eighth digit's frame again in the background.
 
 So far only one gas meter has been tested in practice; water meters are untested.
 

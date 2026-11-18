@@ -398,10 +398,20 @@ def compare_sample(data, ocr, decimals, *, ocr_confirmed=True, integer_digits=5,
 
 
 LAST_DIGIT_NOTICE = "Nur die dritte Nachkommastelle ist unklar oder weicht ab."
-REDUCED_PRECISION_NOTICE = ("Die letzte verglichene Rolle drehte sich gerade. Diese Prüfung wurde deshalb mit einer "
+REDUCED_PRECISION_NOTICE = ("Die letzte verglichene Rolle war unklar, vermutlich drehte sie sich gerade. Diese Prüfung wurde deshalb mit einer "
                             "Nachkommastelle weniger bestätigt; der Rest folgt bei der nächsten Prüfung.")
 MOVING_DIGIT_NOTICE = ("Nur die letzte verglichene Stelle war unklar – vermutlich drehte sich die Rolle gerade. "
                        "Die nächste Prüfung folgt automatisch.")
+
+
+# The same last position unclear on several checks in a row is not a turning roller:
+# its frame most likely sits beside the roller.
+FRAME_OFF_STREAK = 3
+FRAME_OFF_NOTICE = ("Die letzte verglichene Stelle war mehrmals hintereinander unklar. Das liegt vermutlich nicht "
+                    "an einer drehenden Rolle, sondern daran, dass ihr Rahmen neben der Rolle sitzt. Die App sucht "
+                    "ihn im Hintergrund neu und prüft bis dahin mit einer Nachkommastelle weniger.")
+FRAME_OFF_WAIT_NOTICE = ("Die letzte verglichene Stelle war mehrmals hintereinander unklar. Vermutlich sitzt ihr "
+                         "Rahmen neben der Rolle. Bis das korrigiert ist, prüft die App mit einer Nachkommastelle weniger.")
 
 
 def only_last_compared_unclear(ocr, decimals, integer_digits=5):
@@ -830,6 +840,14 @@ def resume_optional_eighth_digit(history, rules, source, now, begin):
         return False
     history["eighth_digit_retry_at"] = now + EIGHTH_DIGIT_RETRY_SECONDS
     return True
+
+
+def relocate_last_digit_due(history, rules, now):
+    """Should the frame of the eighth digit be searched again after repeated unclear checks?"""
+    blocked_until = history.get("last_digit_relocate_at", 0)
+    return (history.get("last_digit_relocate_due") is True
+            and rules.get("decimals") == 3 and rules.get("fraction_digits") == 3
+            and (type(blocked_until) not in (int, float) or now >= blocked_until))
 
 
 def setup_deadlines(rules, source):

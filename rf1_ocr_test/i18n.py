@@ -609,6 +609,7 @@ EN_UI = {
     '<summary>Debug-Protokoll</summary>': '<summary>Debug log</summary>',
     '<summary>Erweitert</summary>': '<summary>Advanced</summary>',
     "Rolle drehte sich gerade": "Roller was turning",
+    "Rahmen der letzten Stelle sitzt daneben": "Frame of the last digit is off",
     "Ablesung passt nicht zum letzten Stand": "Reading does not fit the last value",
     "Die App sucht die letzte Stelle selbst im Hintergrund. Nur nötig, wenn das dauerhaft nicht klappt.":
         "The app searches for the last digit in the background by itself. Only needed if that keeps failing.",
@@ -827,9 +828,19 @@ EN_UI = {
 }
 
 EN_DETAILS = {
-    ("Die letzte verglichene Rolle drehte sich gerade. Diese Prüfung wurde deshalb mit einer "
+    ("Die letzte verglichene Stelle war mehrmals hintereinander unklar. Das liegt vermutlich nicht "
+     "an einer drehenden Rolle, sondern daran, dass ihr Rahmen neben der Rolle sitzt. Die App sucht "
+     "ihn im Hintergrund neu und prüft bis dahin mit einer Nachkommastelle weniger."):
+        "The last compared digit was unclear several times in a row. This is probably not a turning roller but a "
+        "frame sitting beside the roller. The app searches for it again in the background and checks with one "
+        "decimal place less until then.",
+    ("Die letzte verglichene Stelle war mehrmals hintereinander unklar. Vermutlich sitzt ihr "
+     "Rahmen neben der Rolle. Bis das korrigiert ist, prüft die App mit einer Nachkommastelle weniger."):
+        "The last compared digit was unclear several times in a row. Its frame probably sits beside the roller. "
+        "Until this is corrected, the app checks with one decimal place less.",
+    ("Die letzte verglichene Rolle war unklar, vermutlich drehte sie sich gerade. Diese Prüfung wurde deshalb mit einer "
      "Nachkommastelle weniger bestätigt; der Rest folgt bei der nächsten Prüfung."):
-        "The last compared roller was turning. This check was therefore confirmed with one decimal place less; the rest follows with the next check.",
+        "The last compared roller was unclear, probably turning. This check was therefore confirmed with one decimal place less; the rest follows with the next check.",
     ("Nur die letzte verglichene Stelle war unklar – vermutlich drehte sich die Rolle gerade. "
      "Die nächste Prüfung folgt automatisch."):
         "Only the last compared digit was unclear – the roller was probably turning. The next check follows automatically.",

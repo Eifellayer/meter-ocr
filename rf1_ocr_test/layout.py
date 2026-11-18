@@ -547,3 +547,56 @@ def find_neighbour_digit_rows(frame, whole_digits, fraction_digits, limit=2, min
         if len(result) >= limit:
             break
     return result
+
+
+def _column_activity(gray, left, right, top, bottom):
+    """Vertical variation per column: digit strokes vary, gaps between rollers stay flat."""
+    return [ImageStat.Stat(gray.crop((x, top, x + 1, bottom))).stddev[0] for x in range(left, right)]
+
+
+def _busiest_window(profile, start, width):
+    sums = [sum(profile[i:i + width]) for i in range(0, len(profile) - width + 1)]
+    if not sums:
+        return None
+    best = max(range(len(sums)), key=sums.__getitem__)
+    return start + best + width / 2, sums[best], sums
+
+
+def roll_center(image, boxes):
+    """Horizontal centre (pixels) of the roller after the second-to-last digit box, or None.
+
+    The last roller sits a little farther from its neighbour than the other digits do, so an
+    evenly spaced box often lands beside it. The roller window shows strokes and texture with
+    vertical variation; the gaps between rollers do not. The method is first checked on the
+    neighbour's known position and only trusted if it finds that one again.
+    """
+    if len(boxes) < 3:
+        return None
+    gray = image.convert("L")
+    before, neighbour = boxes[-3], boxes[-2]
+    width = neighbour[2] - neighbour[0]
+    centre = (neighbour[0] + neighbour[2]) / 2
+    pitch = centre - (before[0] + before[2]) / 2
+    if width < 4 or pitch < width * .8:
+        return None
+    top = max(0, min(neighbour[1], boxes[-1][1]))
+    bottom = min(gray.height, max(neighbour[3], boxes[-1][3]))
+    if bottom - top < 4:
+        return None
+    # Self-check on the neighbour, whose centre is known.
+    left, right = max(0, round(centre - pitch)), min(gray.width, round(centre + pitch))
+    found = _busiest_window(_column_activity(gray, left, right, top, bottom), left, width)
+    if found is None or abs(found[0] - centre) > width / 5:
+        return None
+    reference = found[1]
+    left = max(0, round(centre + .75 * pitch - width / 2))
+    right = min(gray.width, round(centre + 1.7 * pitch + width / 2))
+    profile = _column_activity(gray, left, right, top, bottom)
+    found = _busiest_window(profile, left, width)
+    if found is None:
+        return None
+    x, score, sums = found
+    # A roller must show roughly as much detail as its neighbour and clearly more than a gap.
+    if score < .4 * reference or score < 1.2 * min(sums):
+        return None
+    return x

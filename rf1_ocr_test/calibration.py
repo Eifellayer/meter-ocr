@@ -41,6 +41,58 @@ MIN_VERIFICATION_QUALITY = .65
 FRAME_ATTEMPT_LIMIT = 30
 
 
+
+def last_digit_candidates(layout, roll_center=None):
+    """Frames for the last roller: settle its horizontal centre first, then move only vertically.
+
+    Wide horizontal jumps put half of a neighbouring digit into the frame and produce partial
+    readings. The roller does not move sideways, so once its centre is known (``roll_center``,
+    in the layout's 0–1000 crop coordinates) the search only shifts the frame up and down.
+    Without a trusted centre a few small horizontal steps are tried, including the position
+    predicted from the last roller's slightly larger spacing.
+    """
+    left, top, right, bottom = layout.digit_boxes[-1]
+    width, height = right - left, bottom - top
+    centre = (left + right) / 2
+    columns = []
+    step = max(1, width // 10)
+    if roll_center is not None and abs(roll_center - centre) <= width:
+        # Quantised, so the same roller gives the same frame on consecutive images.
+        columns.append(round((roll_center - centre) / step) * step)
+    else:
+        columns.append(0)
+        if len(layout.digit_boxes) >= 3:
+            before, neighbour = layout.digit_boxes[-3:-1]
+            pitch = (neighbour[0] + neighbour[2] - before[0] - before[2]) / 2
+            # The last roller usually sits slightly farther away than the even spacing suggests.
+            for factor in (1.0, 1.1, 1.2):
+                shift = round((neighbour[0] + neighbour[2]) / 2 + factor * pitch - centre)
+                if abs(shift) <= width // 2:
+                    columns.append(shift)
+        columns += [step, -step]
+    rows = [0] + [sign * max(1, round(height * part)) for part in (1 / 8, 1 / 4, 3 / 8) for sign in (1, -1)]
+    candidates, seen = [], set()
+    if roll_center is None:
+        candidates.append(layout)
+        seen.add(layout.digit_boxes[-1])
+    for x in dict.fromkeys(columns):
+        for y in rows:
+            dx = max(-left, min(x, 1000 - right))
+            dy = max(-top, min(y, 1000 - bottom))
+            box = (left + dx, top + dy, right + dx, bottom + dy)
+            if box in seen:
+                continue
+            seen.add(box)
+            boxes = (*layout.digit_boxes[:-1], box)
+            try:
+                digit_box_settings(boxes, len(boxes))
+            except ValueError:
+                continue
+            candidates.append(layout if box == layout.digit_boxes[-1] else replace(layout, digit_boxes=boxes, method="refined"))
+    if layout.digit_boxes[-1] not in seen:
+        candidates.append(layout)
+    return candidates
+
 @dataclass(frozen=True)
 class Layout:
     box: tuple[int, int, int, int]
@@ -950,7 +1002,8 @@ class Calibration:
         self.limit = min(MAX_IMAGES, max(self.limit, len(self.seen) + MIN_IMAGES + 1))
         self.stage = "last_digit"
 
-    def check_last_digit(self, frame, sample, stamp, layout, digits, read, stop, on_image, on_decision):
+    def check_last_digit(self, frame, sample, stamp, layout, digits, read, stop, on_image, on_decision,
+                         roll_center=None):
         if self.search_exhausted() or not self.remember_image(frame, stamp):
             return None
         on_image()
@@ -963,36 +1016,7 @@ class Calibration:
                 on_decision("reference_unavailable")
                 return None
             expected = str(target % 10)
-        candidates = [layout]
-        if not self.verification_pending:
-            left, top, right, bottom = layout.digit_boxes[-1]
-            width, height = right - left, bottom - top
-            dx, dy = max(1, width // 12), max(1, height // 16)
-            shifts = [(0, dy), (0, -dy), (-dx, 0), (dx, 0)]
-            if len(layout.digit_boxes) >= 3:
-                before, neighbour = layout.digit_boxes[-3:-1]
-                predicted_x = neighbour[0] + neighbour[2] - (before[0] + before[2]) / 2
-                predicted_y = neighbour[1] + neighbour[3] - (before[1] + before[3]) / 2
-                shifts.append((round(predicted_x - (left + right) / 2),
-                               round(predicted_y - (top + bottom) / 2)))
-            shifts += [(x, y) for y in (height // 4, -height // 4, height // 2, -height // 2, 0)
-                       for x in (0, width // 4, -width // 4, width // 2, -width // 2)]
-            seen = {layout.digit_boxes[-1]}
-            for x, y in shifts:
-                if abs(x) > width // 2 or abs(y) > height // 2:
-                    continue
-                x = max(-left, min(x, 1000 - right))
-                y = max(-top, min(y, 1000 - bottom))
-                box = (left + x, top + y, right + x, bottom + y)
-                if box in seen:
-                    continue
-                seen.add(box)
-                boxes = (*layout.digit_boxes[:-1], box)
-                try:
-                    digit_box_settings(boxes, len(boxes))
-                except ValueError:
-                    continue
-                candidates.append(replace(layout, digit_boxes=boxes, method="refined"))
+        candidates = last_digit_candidates(layout, roll_center) if not self.verification_pending else [layout]
         for trial in candidates:
             if stop() or self.search_exhausted():
                 return None

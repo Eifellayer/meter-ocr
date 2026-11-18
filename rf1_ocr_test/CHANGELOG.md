@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.4
+
+- **8. Ziffer über die Rollenmitte:** Die Suche bestimmt zuerst waagerecht die Mitte der letzten Rolle (die etwas weiter entfernt sitzt als die übrigen Ziffern) und verschiebt den Rahmen danach nur noch nach oben und unten. Die Mitte wird nur verwendet, wenn das Verfahren auf demselben Bild die bekannte Nachbarziffer wiederfindet; sonst gelten die bisherigen Positionen.
+- **Engerer Suchbereich:** keine Sprünge mehr um eine halbe Ziffernbreite zur Seite, die eine halbe Ziffer in den Rahmen holten und zu Teiltreffern führten.
+- **Rahmen sitzt daneben:** Ist die letzte verglichene Stelle mehrmals hintereinander unklar, meldet die App nicht mehr „Rolle drehte sich gerade“, sondern „Rahmen der letzten Stelle sitzt daneben“ und sucht ihn im Hintergrund neu (höchstens einmal pro Stunde).
+- **Ruhigere Hinweise:** Eine einzelne Fehlprüfung oder eine bestandene Prüfung mit Hinweis wird dezent angezeigt, ohne gelbe Warnung und ohne „Bitte prüfen“. Erst ab drei Fehlprüfungen in Folge wird der Hinweis deutlich.
+
 ## 0.1.3
 
 - Restzeit der Hintergrundsuche nur noch einmal: „Noch höchstens 9 von 20 min“.

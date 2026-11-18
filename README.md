@@ -31,6 +31,10 @@ Home-Assistant-App, die mechanische Zähler (vor allem Gaszähler mit Ziffernrol
 | Nur die 7. Ziffer unsicher, Rest per Referenz bestätigt | 30 Minuten |
 | 3 Fehlprüfungen in Folge | 60 Minuten Pause |
 
+## Getestet
+
+Praktisch erprobt ist die App bisher nur an **einem Gaszähler** (Rollenzählwerk, ESP32-CAM mit AI on the Edge als Kamera). Wasserzähler und andere Gaszähler sind nicht praktisch getestet; ein Test mit öffentlichen Ziffernbildern verschiedener Wasser- und Gaszähler zeigte, dass fremde Zählwerke deutlich schlechter gelesen werden (unklare Stellen meldet die App, statt zu raten). Rückmeldungen mit eigenen Zählern sind sehr willkommen.
+
 ## Hinweise
 
 Die OCR ist keine geeichte Messung; für Abrechnungen gilt der Stand am Gerät. Fehler und Ideen bitte als [GitHub Issue](https://github.com/Eifellayer/meter-ocr/issues) (ohne Zugangsdaten oder private Fotos). Lizenz: [GNU GPLv3 oder später](LICENSE), Drittsoftware siehe [SOURCES.md](SOURCES.md). Wie das Projekt entstanden ist: [Rückblick](docs/HISTORY.md).

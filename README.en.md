@@ -31,6 +31,10 @@ Home Assistant app that reads mechanical meters (mainly gas meters with digit ro
 | Only the 7th digit unclear, rest confirmed by reference | 30 minutes |
 | 3 failed checks in a row | 60-minute pause |
 
+## Tested with
+
+So far the app has only been tried in practice on **one gas meter** (roller counter, ESP32-CAM running AI on the Edge as the camera). Water meters and other gas meters have not been tested in practice; a test with public digit images from various water and gas meters showed that unfamiliar counters are read noticeably worse (the app reports unclear digits instead of guessing). Feedback with your own meter is very welcome.
+
 ## Notes
 
 OCR is not a certified measurement; the physical meter counts for billing. Report bugs and ideas as a [GitHub issue](https://github.com/Eifellayer/meter-ocr/issues) (no credentials or private photos). License: [GNU GPLv3 or later](LICENSE), third-party software in [SOURCES.md](SOURCES.md). How the project came about: [history](docs/HISTORY.md).

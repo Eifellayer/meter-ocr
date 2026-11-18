@@ -20,6 +20,12 @@
 - **Werkzeuge:** manueller Test mit dem aktuellen Bild und abweichendem Bildausschnitt.
 - **Automatik pausieren** hält die Prüfungen an; die Pause übersteht Neustarts.
 
+### Genauigkeit
+
+Standard sind 2 Nachkommastellen. Die dritte Nachkommastelle vergleicht die App nur mit eingeschaltetem **Präzisionsmodus**. Dreht sich die letzte verglichene Rolle gerade, bestätigt sie die Prüfung einmalig mit einer Stelle weniger, statt sie scheitern zu lassen.
+
+Praktisch getestet ist bisher nur ein Gaszähler; Wasserzähler sind ungetestet.
+
 ### Plausibilität
 
 - Jede Prüfung wird mit einem zweiten Bild bestätigt.
@@ -54,6 +60,12 @@ Nach einem App-Update oder Neustart lädt die geöffnete Weboberfläche selbst n
 - **Settings:** check interval, comparison precision, maximum flow, notifications.
 - **Tools:** manual test with the current image and a different crop.
 - **Pause automatic checks** stops scheduled checks; the pause survives restarts.
+
+### Precision
+
+By default two decimal places are compared. The third one is compared only with **precision mode** switched on. If the last compared roller is turning, the app confirms that one check with one decimal place less instead of failing it.
+
+So far only one gas meter has been tested in practice; water meters are untested.
 
 ### Plausibility
 

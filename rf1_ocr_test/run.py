@@ -2627,13 +2627,11 @@ def main():
                             for allow_lower in (False, True):
                                 try:
                                     if standalone:
+                                        # Plausibility against the last *confirmed* value lives in
+                                        # accumulate_consumption; an unconfirmed misread must not block.
                                         new_standalone = standalone_reading(
-                                            standalone_source, sample, ocr, decimals,
-                                        None if allow_lower else history.get("standalone_reading"),
-                                            integer_digits,
+                                            standalone_source, sample, ocr, decimals, None, integer_digits,
                                         )
-                                        if new_standalone is None:
-                                            raise ImplausibleReading(LOWER_READING)
                                     previous_consumption = history.get("consumption", {})
                                     if not previous_consumption and active_rules["fallback_value"]:
                                         fallback_prefix = meter_prefix(active_rules["fallback_value"], decimals,
@@ -2682,6 +2680,7 @@ def main():
                                             accumulate_consumption(
                                                 candidate["counter"], source_key, captured, ocr, decimals,
                                                 active_rules["max_flow_lph"], integer_digits, allow_lower=allow_lower,
+                                                require_consistent=True,
                                             )
                                             standalone_reference = candidate
                                             updated.pop("standalone_candidate", None)

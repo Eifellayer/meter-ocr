@@ -19,33 +19,64 @@ class ConsumptionTests(TestCase):
         return accumulate_consumption(previous, self.source if source is None else source,
                                       stamp, reading, decimals, DEFAULT_FLOW_LPH)
 
+    def confirmed(self, reading="12345.000", decimals=3):
+        first = self.update({}, 0, reading, decimals=decimals)
+        return self.update(first, 300, reading, decimals=decimals)
+
     def test_invalid_measurement_does_not_move_the_baseline(self):
-        first = self.update({}, 0, "12345.000")
-        self.assertEqual(0, first["total_litres"])
+        first = self.confirmed()
+        self.assertEqual((0, 12345000), (first["total_litres"], first["anchor_litres"]))
         with self.assertRaisesRegex(ImplausibleReading, "schneller"):
-            self.update(first, 60, "12346.000")
+            self.update(first, 360, "12346.000")
         with self.assertRaisesRegex(ImplausibleReading, "unter"):
-            self.update(first, 60, "12344.990")
+            self.update(first, 360, "12344.990")
         with self.assertRaisesRegex(ImplausibleReading, "Messzeitpunkt"):
-            self.update(first, 0, "12345.000")
-        second = self.update(first, 60, "12345.080")
-        self.assertEqual(80, second["total_litres"])
+            self.update(first, 300, "12345.000")
+        second = self.update(first, 600, "12345.080")
+        self.assertEqual(0, second["total_litres"], "booked only after the next confirmation")
+        third = self.update(second, 900, "12345.120")
+        self.assertEqual(80, third["total_litres"])
+
+    def test_unconfirmed_high_misread_is_discarded_without_blocking(self):
+        # 18.11.2026: setup read 10475.70 while the meter showed about 10475.05.
+        setup = self.update({}, 0, "10475.700")
+        same_scene = self.update(setup, 40, "10475.700")
+        self.assertIsNone(same_scene["anchor_litres"], "two images of one moment prove nothing")
+        real = self.update(same_scene, 360, "10475.120")
+        self.assertEqual((None, 10475120, 0), (real["anchor_litres"], real["pending_litres"], real["total_litres"]))
+        start = self.update(real, 660, "10475.150")
+        self.assertEqual((10475120, 0), (start["anchor_litres"], start["total_litres"]))
+        later = self.update(start, 960, "10475.200")
+        self.assertEqual(30, later["total_litres"])
+        misread = self.update(later, 1260, "10475.900")
+        self.assertEqual(30, misread["total_litres"], "misread .900 is not booked")
+        back = self.update(misread, 1560, "10475.260")
+        self.assertEqual(30, back["total_litres"])
+        resumed = self.update(back, 1860, "10475.300")
+        self.assertEqual(140, resumed["total_litres"], "no waiting for the misread maximum")
+
+    def test_contradicting_second_image_can_be_rejected(self):
+        first = self.update({}, 0, "12345.000")
+        with self.assertRaisesRegex(ImplausibleReading, "unter"):
+            accumulate_consumption(first, self.source, 40, "12344.500", 3, DEFAULT_FLOW_LPH, require_consistent=True)
 
     def test_rounding_allows_crossing_a_whole_cubic_metre_boundary(self):
-        first = self.update({}, 0, "12345.???", decimals=0)
-        second = self.update(first, 5, "12346.???", decimals=0)
-        self.assertEqual(1000, second["total_litres"])
+        first = self.confirmed("12345.???", decimals=0)
+        second = self.update(first, 600, "12346.???", decimals=0)
+        third = self.update(second, 900, "12346.???", decimals=0)
+        self.assertEqual(1000, third["total_litres"])
         with self.assertRaises(ImplausibleReading):
-            self.update(second, 10, "12348.???", decimals=0)
+            self.update(third, 960, "12348.???", decimals=0)
 
     def test_changing_source_or_precision_contributes_no_phantom_usage(self):
-        first = self.update({}, 0, "12345.000")
-        second = self.update(first, 60, "12345.060")
-        coarser = self.update(second, 120, "12345.???", decimals=0)
-        next_whole = self.update(coarser, 180, "12346.???", decimals=0)
-        other = self.update(next_whole, 240, "00004.250", source=["esphome", "camera.other", ""])
+        first = self.confirmed()
+        second = self.update(first, 600, "12345.060")
+        coarser = self.update(second, 900, "12345.???", decimals=0)
+        next_whole = self.update(coarser, 1500, "12346.???", decimals=0)
+        settled = self.update(next_whole, 1800, "12346.???", decimals=0)
+        other = self.update(settled, 2100, "00004.250", source=["esphome", "camera.other", ""])
         self.assertEqual(60, coarser["total_litres"])
-        self.assertEqual(1000, next_whole["total_litres"])
+        self.assertEqual(1000, settled["total_litres"])
         self.assertEqual(1000, other["total_litres"])
         self.assertEqual(4250, other["reading_litres"])
 

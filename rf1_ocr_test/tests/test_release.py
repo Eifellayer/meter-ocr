@@ -88,6 +88,16 @@ class DocumentationTests(unittest.TestCase):
         self.assertIn("ESP nur als Kamera", de)
         self.assertIn("ESP as camera only", en)
 
+    def test_complete_copyleft_license_is_present(self):
+        license_text = (APP.parent / "LICENSE").read_text(encoding="utf-8")
+        self.assertTrue(license_text.startswith("GNU GENERAL PUBLIC LICENSE"))
+        self.assertIn("Version 3, 29 June 2007", license_text)
+        self.assertIn("END OF TERMS AND CONDITIONS", license_text)
+        self.assertGreater(len(license_text), 30000)
+        for readme in ("README.md", "README.en.md"):
+            text = (APP.parent / readme).read_text(encoding="utf-8")
+            self.assertIn("](LICENSE)", text)
+
     def test_documentation_reference_files_exist(self):
         for path in (
             "docs/DETAILS.md", "docs/DETAILS.en.md", "docs/README.md",

@@ -121,6 +121,12 @@ def accumulate_consumption(previous, source, stamp, reading, decimals, max_flow_
     if floor is None:
         floor = anchor
     start_total = previous.get("start_total")
+    if legacy and total == 0:
+        start_total = 0
+    if (anchor is not None and floor is not None and floor < anchor
+            and start_total is not None and total == start_total):
+        # A corrected misread on which nothing was booked: no reason to wait for it.
+        anchor, anchor_time = floor, previous["timestamp"]
     pending = None if legacy else previous.get("pending_litres")
     pending_time = None if legacy else previous.get("pending_time")
     pending_step = None if legacy else previous.get("pending_step")

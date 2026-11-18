@@ -79,6 +79,14 @@ class CounterRecoveryTests(TestCase):
         counter = accumulate_consumption(counter, SOURCE, 1800, "10475.30", 2, FLOW)
         self.assertEqual(80, counter["total_litres"])
 
+    def test_legacy_corrected_misread_without_bookings_stops_waiting(self):
+        # State left by 0.1.0 on 18.11.2026: anchor at the misread 10475.70, floor corrected.
+        old = {"source": SOURCE, "timestamp": 0, "reading_litres": 10475290, "anchor_litres": 10475700,
+               "floor_litres": 10475290, "step_litres": 10, "total_litres": 0}
+        counter = accumulate_consumption(old, SOURCE, 600, "10475.40", 2, FLOW)
+        counter = accumulate_consumption(counter, SOURCE, 900, "10475.50", 2, FLOW)
+        self.assertEqual(110, counter["total_litres"])
+
     def test_counters_without_floor_behave_as_before(self):
         old = {"source": SOURCE, "timestamp": 0, "reading_litres": 10472000, "anchor_litres": 10472000,
                "step_litres": 10, "total_litres": 500}

@@ -1,5 +1,5 @@
 name: AI Meter Reader
-version: "0.1.1"
+version: "0.1.2"
 slug: rf1_ocr_test
 description: "Lokale Zählerablesung per Kamera / Local camera-based meter reading"
 arch:
@@ -20,7 +20,7 @@ options:
   helle_ziffern: false
   zeitzone: Europe/Berlin
   push_dienst: ""
-  vergleich_nachkommastellen: 0
+  vergleich_nachkommastellen: 2
   ocr_versuche: 5
   kamera_entitaet: ""
   referenz_entitaet: ""

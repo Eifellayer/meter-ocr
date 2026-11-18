@@ -19,7 +19,7 @@ LOWER_RECOVERY_READINGS = 3
 LOWER_RECOVERY_SECONDS = 15 * 60
 LOWER_PENDING = "Zählerstand liegt unter dem letzten gültigen Wert. Bestätigen weitere stimmige Ablesungen den niedrigeren Stand, wird er übernommen."
 LOWER_RECOVERED = ("Mehrere stimmige Ablesungen lagen unter dem gespeicherten Stand. Der höhere Wert war ein Lesefehler, "
-                   "der Zählerstand wurde korrigiert. Verbrauch wird erst wieder gebucht, wenn der frühere Höchststand erreicht ist.")
+                   "der Zählerstand wurde korrigiert.")
 
 
 class ImplausibleReading(ValueError):
@@ -68,13 +68,28 @@ def track_lower_series(series, stamp, reading, decimals, max_flow_lph, integer_d
     return rows, confirmed
 
 
-def accumulate_consumption(previous, source, stamp, reading, decimals, max_flow_lph, integer_digits=5,
-                           allow_lower=False):
-    """Return a proposed new counter state. Rejected and repeated readings add nothing.
+CONFIRM_MIN_SECONDS = 4 * 60
 
-    allow_lower accepts a reading below the stored maximum after track_lower_series
-    confirmed it. The maximum stays the booking anchor, so no negative and no double
-    consumption is booked: counting resumes once the meter passes the old maximum.
+
+def accumulate_consumption(previous, source, stamp, reading, decimals, max_flow_lph, integer_digits=5,
+                           allow_lower=False, require_consistent=False, confirmed=False):
+    """Return a proposed new counter state. Consumption is booked only for confirmed readings.
+
+    A new reading first becomes *pending*. It is booked once a later reading, taken at
+    least CONFIRM_MIN_SECONDS afterwards, agrees with it (not lower, not faster than the
+    maximum flow). A pending value that a later reading contradicts was a misread and is
+    discarded without booking anything, so a too-high misread never blocks later
+    bookings. The first reading of a source is a pending start value in the same way.
+
+    allow_lower accepts a reading below a confirmed anchor after track_lower_series
+    proved the anchor wrong. Nothing booked is taken back; if nothing was booked since
+    the start value, the anchor simply moves to the corrected reading.
+
+    require_consistent raises instead of discarding when the pending value is
+    contradicted (used to cross-check two images of one check).
+
+    confirmed marks a reading that an independent reference already confirmed (e.g. an
+    agreeing SLFork value or a user-entered start value); it is booked immediately.
     """
     prefix = meter_prefix(reading, decimals, integer_digits)
     if prefix is None:
@@ -82,35 +97,91 @@ def accumulate_consumption(previous, source, stamp, reading, decimals, max_flow_
     step = 10 ** (3 - decimals)
     current = prefix * step
     total = previous.get("total_litres", 0)
-    anchor = current
-    floor = current
-    if previous.get("source") == source:
-        elapsed = stamp - previous["timestamp"]
-        observed = current - previous["reading_litres"]
-        if elapsed <= 0:
-            raise ImplausibleReading(INVALID_TIME)
-        previous_anchor = previous.get("anchor_litres", previous["reading_litres"])
-        # floor: lowest acceptable reading. It equals the anchor unless a confirmed
-        # misread has been corrected; then it follows the real meter below the anchor.
-        previous_floor = previous.get("floor_litres", previous_anchor)
-        if current + step <= previous_floor and not allow_lower:
+    if previous.get("source") != source:
+        if confirmed:
+            return {
+                "source": source, "timestamp": stamp, "reading_litres": current, "step_litres": step,
+                "total_litres": total, "start_total": total,
+                "anchor_litres": current, "anchor_time": stamp, "anchor_step": step, "floor_litres": current,
+                "pending_litres": None, "pending_time": None, "pending_step": None,
+            }
+        return {
+            "source": source, "timestamp": stamp, "reading_litres": current, "step_litres": step,
+            "total_litres": total, "start_total": total,
+            "anchor_litres": None, "anchor_time": None, "anchor_step": None, "floor_litres": None,
+            "pending_litres": current, "pending_time": stamp, "pending_step": step,
+        }
+    if stamp - previous["timestamp"] <= 0:
+        raise ImplausibleReading(INVALID_TIME)
+    legacy = "pending_litres" not in previous
+    anchor = previous.get("anchor_litres", previous["reading_litres"]) if legacy else previous.get("anchor_litres")
+    anchor_time = previous["timestamp"] if legacy else previous.get("anchor_time")
+    anchor_step = previous["step_litres"] if legacy else previous.get("anchor_step")
+    floor = previous.get("floor_litres", anchor)
+    if floor is None:
+        floor = anchor
+    start_total = previous.get("start_total")
+    if legacy and total == 0:
+        start_total = 0
+    if (anchor is not None and floor is not None and floor < anchor
+            and start_total is not None and total == start_total):
+        # A corrected misread on which nothing was booked: no reason to wait for it.
+        anchor, anchor_time = floor, previous["timestamp"]
+    pending = None if legacy else previous.get("pending_litres")
+    pending_time = None if legacy else previous.get("pending_time")
+    pending_step = None if legacy else previous.get("pending_step")
+
+    def flow_ok(base, base_time, base_step):
+        return current - base - base_step <= max_flow_lph * (stamp - base_time) / 3600
+
+    if anchor is not None:
+        if current + step <= floor and not allow_lower:
             raise ImplausibleReading(LOWER_READING)
-        # Truncated readings represent an interval, not an exact quantity.
-        if observed - previous["step_litres"] > max_flow_lph * elapsed / 3600:
+        if not flow_ok(anchor, anchor_time, anchor_step):
             raise ImplausibleReading(EXCESSIVE_INCREASE)
-        # A change of precision shifts the numeric baseline without measuring consumption.
-        if step == previous["step_litres"]:
-            total += max(0, current - previous_anchor)
-        anchor = max(current, previous_anchor)
-        floor = current if allow_lower else max(current, previous_floor)
+        if allow_lower and current < anchor:
+            if start_total is not None and total == start_total:
+                anchor, anchor_time, anchor_step = current, stamp, step
+            floor = current
+    new_pending, new_pending_time, new_pending_step = current, stamp, step
+    if confirmed:
+        if anchor is None:
+            anchor, anchor_time, anchor_step = current, stamp, step
+        else:
+            total += max(0, current - anchor)
+            if current > anchor:
+                anchor, anchor_time, anchor_step = current, stamp, step
+        floor = max(floor, current) if floor is not None and not allow_lower else current
+        new_pending = new_pending_time = new_pending_step = None
+    elif pending is not None:
+        consistent = current + step > pending and flow_ok(pending, pending_time, pending_step)
+        if not consistent and require_consistent:
+            raise ImplausibleReading(LOWER_READING if current + step <= pending else EXCESSIVE_INCREASE)
+        if consistent and stamp - pending_time < CONFIRM_MIN_SECONDS:
+            # Too soon to prove anything: keep the older pending value for the next check.
+            new_pending, new_pending_time, new_pending_step = pending, pending_time, pending_step
+        elif consistent and pending >= (floor if floor is not None else pending):
+            if anchor is None:
+                anchor, anchor_time, anchor_step = pending, pending_time, pending_step
+            else:
+                total += max(0, pending - anchor)
+                if pending > anchor:
+                    anchor, anchor_time, anchor_step = pending, pending_time, pending_step
+            floor = max(floor, pending) if floor is not None else pending
     return {
         "source": source,
         "timestamp": stamp,
         "reading_litres": current,
-        "anchor_litres": anchor,
-        "floor_litres": floor,
         "step_litres": step,
         "total_litres": total,
+        "start_total": start_total,
+        "anchor_litres": anchor,
+        "anchor_time": anchor_time,
+        "anchor_step": anchor_step,
+        "floor_litres": floor,
+        "pending_litres": new_pending,
+        "pending_time": new_pending_time,
+        "pending_step": new_pending_step,
     }
 
 
@@ -133,7 +204,7 @@ def fallback_detail(sample, image_time, ocr, readings, previous, source, max_flo
             if meter_prefix(reference, reference_decimals) is not None:
                 baselines.append(accumulate_consumption(
                     {}, source, reference_time, reference, reference_decimals, max_flow_lph,
-                    integer_digits,
+                    integer_digits, confirmed=True,
                 ))
                 break
     if not baselines:

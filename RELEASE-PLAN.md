@@ -1,21 +1,18 @@
 # Roadmap
 
-Stand: 18. November 2026 · Version **0.1.0**
+Stand: 18. November 2026 · Version **0.1.2**
 
-Ziel: einmal einrichten, danach prüft die App selbstständig und zeigt Unsicherheit offen an. Stabilität geht vor neuen großen Funktionen.
+**Leitbild „Fire and Forget“ (Nutzer 18.11.):** Die App soll möglichst autonom arbeiten. Der Nutzer wählt nur Zähler und Kamera; alles andere (Grob- und Feineinrichtung, letzte Stelle, Genauigkeit, Fehlerkorrektur) erledigt sie selbst und zeigt Unsicherheit offen an. Manuelle Knöpfe sind nur Notfallwerkzeuge. Stabilität geht vor neuen großen Funktionen.
 
 ## Als Nächstes
 
 | Aufgabe | Fertig, wenn … |
 | --- | --- |
-| **Praxis 0.1.0 beobachten** | Neuinstallation und Selbsteinrichtung laufen am echten Zähler; Optimierungs-Anzeige, Neuladen nach Neustart und Assistent auf Handy und Desktop bewährt. |
-| **Anzeige der Einrichtung mit sieben Ziffern korrigieren** | Der Hinweis zeigt die eingestellten 3 Nachkommastellen und dass vorübergehend nur 2 verglichen werden; die Suche nach der 8. Ziffer ist sichtbar angekündigt (Start ca. 1 h nach der Einrichtung) statt still pausiert. (Nutzerhinweis 18.11., zweimal gemeldet) |
-| **Laufende 7. Ziffer bei hohem Verbrauch nicht als Fehler werten** | Dreht sich die 2. Nachkommastelle gerade (Lesungen schwanken zwischen n und n+1), gilt der niedrigere Wert als bestätigt, statt „Prüfung fehlgeschlagen“ und 60 Minuten Pause. Bucht nie zu viel, da der Zähler nur vorwärts läuft. |
-| **Genauigkeit an den aktuellen Durchfluss anpassen** | Die App berechnet den Durchfluss aus den letzten bestätigten Ständen. Dreht sich die letzte verglichene Rolle schneller, als sie sicher lesbar ist, vergleicht sie vorübergehend eine Stelle weniger und zeigt z. B. „Zähler läuft gerade schnell (ca. 10 l/min) – vorübergehend 1 Nachkommastelle“. Sinkt der Verbrauch, geht sie automatisch zur eingestellten Genauigkeit zurück. (Nutzeridee 18.11.) |
-| **Nie wieder „warten, bis der alte Höchststand erreicht ist“** | Ziel des Nutzers (18.11., das Problem von AI on the Edge): Ein zu hoher Lesefehler darf weder Verbrauch buchen noch spätere Buchungen blockieren. Umsetzung: Verbrauch eines neuen Stands erst buchen, wenn die nächste Prüfung ihn bestätigt (gleich oder höher, im Durchflussrahmen); ein nicht bestätigter hoher Wert wird einfach verworfen und der Anker bleibt beim letzten bestätigten Stand. Startwert der Einrichtung ebenso erst nach zweiter stimmiger Prüfung übernehmen. Gesamtverbrauch bleibt streng steigend (kein Rücksprung im Energie-Dashboard). Anlass: Einrichtung übernahm 10475,70 statt ca. 10475,0x. |
-| **Irreführende Fehlerhinweise bereinigen** | Fundliste 18.11.: (1) „Es wird auf einen höheren Zählerstand gewartet“ nach 3 Fehlprüfungen bleibt (Nutzer: wichtig, damit man es weiß), ergänzt um die Uhrzeit des nächsten Versuchs; (2) „Ein kürzeres Prüfintervall kann helfen“ erscheint bei jeder Fehlprüfung, auch wenn eine drehende Rolle die Ursache ist; (3) „Prüfe Bilddrehung, Kamerawinkel, Fokus und Beleuchtung“, obwohl nur die laufende letzte Stelle unklar ist; (4) Status-Chip zeigt während einer Prüfung nur „–“ statt „Prüft …“; (5) Navigation: „Anleitung“ allein in zweiter Zeile, Modusauswahl abgeschnitten. |
-| **Debug-Protokoll** | Nutzeridee 18.11.: Die App führt ein eigenes Protokoll der letzten Prüfungen (alle OCR-Durchläufe, Entscheidung, Grund, verglichene Stellen, Verbrauchsanker/-buchung); unter „Werkzeuge“ ansehen und herunterladen, ohne Home-Assistant-Logs. Keine Bilder, keine Zugangsdaten. |
-| **Manuelle Zusatzknöpfe zurücknehmen** | Nutzer 18.11.: Knöpfe wie „Dritte Nachkommastelle intensiv prüfen“ sind viel zu prominent, obwohl die App das automatisch macht. Nur noch klein unter „Erweitert“ bzw. in „Werkzeuge“. |
+| **Praxis 0.1.2 beobachten** | Verbrauch wird erst nach Bestätigung gebucht, ohne Warten auf alte Höchststände; Hinweise und Debug-Protokoll im Alltag hilfreich. |
+| **Laufende Rolle / Genauigkeit nach Durchfluss (beobachten)** | Die Fehlprüfungen am 18.11. kamen nicht vom Durchfluss, sondern vom falschen Startwert (in 0.1.1 behoben). Nur umsetzen, wenn das Debug-Protokoll zeigt, dass eine drehende Rolle bei hohem Verbrauch Prüfungen scheitern lässt: dann niedrigeren Wert nehmen bzw. vorübergehend eine Stelle weniger vergleichen, mit Hinweis „Zähler läuft gerade schnell“. |
+| **Fremde Zähler und Wasserzähler** | Test 18.11. mit ca. 2000 öffentlichen Ziffernbildern (Wasser-/Gaszähler): Einzelziffern nur zu etwa 45 % richtig, „1“ besonders schwach (oft unklar oder als 4 gelesen). Praktisch getestet ist nur der eigene Gaszähler (Stromzähler bereits vernetzt, Wasserzähler nicht zugänglich). Verbesserung über einen Einzelziffern-Klassifikator prüfen (siehe Später). |
+| **Vorprüfung ohne geöffnete App** | Sobald Bildquelle bzw. Kamera feststeht, startet die Grob-Einrichtung von selbst im Hintergrund, auch wenn niemand die Weboberfläche offen hat. |
+| **Auffindbarkeit** | Repository-Beschreibung und Topics (home-assistant, ocr, gas-meter …), Screenshot mit Demo-Daten im README, Vorstellung im Home-Assistant-Forum/Community-Store vorbereiten. |
 | **Manuelle Korrektur in der Selbsteinrichtung** | Beim Markieren des Rahmens pausiert die Einrichtung; Winkel einstellbar; Ziffernrahmen verschieben und in der Größe ändern; danach geht es mit den korrigierten Rahmen weiter. |
 | **Plausibilität nach eigenem Durchschnittsverbrauch** | Große Sprünge zählen nur, wenn sie zum bisherigen Verbrauch passen; bis genug Daten vorliegen, gilt nur der maximale Durchfluss. |
 | **Anleitung mit Bildern neu** | Kurze bebilderte Anleitung aus der Demo (keine privaten Zählerfotos). |

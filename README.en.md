@@ -1,6 +1,6 @@
 # AI Meter Reader
 
-**Version 0.1.1** · [Deutsch](README.md) · [Guide](rf1_ocr_test/DOCS.md) · [Changelog](rf1_ocr_test/CHANGELOG.md) · [Roadmap](RELEASE-PLAN.md)
+**Version 0.1.2** · [Deutsch](README.md) · [Guide](rf1_ocr_test/DOCS.md) · [Changelog](rf1_ocr_test/CHANGELOG.md) · [Roadmap](RELEASE-PLAN.md)
 
 <img src="assets/project-logo.png" alt="AI Meter Reader" width="110">
 
@@ -31,6 +31,10 @@ Home Assistant app that reads mechanical meters (mainly gas meters with digit ro
 | 1st or 2nd failed check | 5 minutes |
 | Only the 7th digit unclear, rest confirmed by reference | 30 minutes |
 | 3 failed checks in a row | 60-minute pause |
+
+## Tested with
+
+So far the app has only been tried in practice on **one gas meter** (roller counter, ESP32-CAM running AI on the Edge as the camera). Water meters and other gas meters have not been tested in practice; a test with public digit images from various water and gas meters showed that unfamiliar counters are read noticeably worse (the app reports unclear digits instead of guessing). Feedback with your own meter is very welcome.
 
 ## Notes
 

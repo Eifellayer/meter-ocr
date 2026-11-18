@@ -433,17 +433,21 @@ class IngressTests(IngressFixture):
         self.assertEqual(87, self.rules["intensive_agreement"])
 
     def test_last_digit_warning_and_optional_precision_mode(self):
-        self.rules.update(decimals=3)
+        self.rules.update(decimals=2)
         page = self.request("/")[0]
         self.assertIn('data-precision-options >', page)
         self.assertNotIn('name="precision_mode" value="1" checked', page)
-        form = dict(decimals=3, attempts=3, crop_mode="auto", polarity="auto", precision_mode=1)
+        self.assertNotIn('<option value="3"', page.split('name="decimals">', 2)[2].split("</select>")[0])
+        form = dict(decimals=2, attempts=3, crop_mode="auto", polarity="auto", precision_mode=1)
         self.assertEqual((303, "./?saved=1"), self.submit("/automatik", **form))
-        self.assertTrue(self.rules["precision_mode"])
+        self.assertEqual((True, 3), (self.rules["precision_mode"], self.rules["decimals"]))
         self.assertIn('name="precision_mode" value="1" checked', self.request("/")[0])
-        self.rules["precision_mode"] = False
+        form.pop("precision_mode")
+        self.assertEqual(303, self.submit("/automatik", **form)[0])
+        self.assertEqual((False, 2), (self.rules["precision_mode"], self.rules["decimals"]))
+        self.rules.update(decimals=3, precision_mode=True)
         self.history.write_text(json.dumps({
-            "check_status": "match_with_warning", "comparison_decimals": 3,
+            "check_status": "match_with_warning", "comparison_decimals": 3, "precision_mode": True,
             "check_detail": "Die ersten zwei Nachkommastellen stimmen überein. Die dritte Stelle bleibt unbestätigt.",
         }))
         status = json.loads(self.request("/automatic")[0])
@@ -476,7 +480,8 @@ class IngressTests(IngressFixture):
         self.assertIn("Eingestellt: 3 Nachkommastellen", page)
         self.rules["precision_mode"] = True
         strict = json.loads(self.request("/automatic")[0])
-        self.assertFalse(strict["partial_eighth_digit"])
+        # 0.1.2: precision mode only means "compare three decimals"; partial mode still applies.
+        self.assertTrue(strict["partial_eighth_digit"])
         self.assertEqual(3, strict["configured_decimals"])
 
     def test_regular_cross_check_replaces_setup_message_with_healthy_status(self):

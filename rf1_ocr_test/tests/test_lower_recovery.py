@@ -48,8 +48,10 @@ class LowerSeriesTests(TestCase):
 class CounterRecoveryTests(TestCase):
     def test_misread_high_value_is_corrected_without_negative_or_double_booking(self):
         counter = accumulate_consumption({}, SOURCE, 0, "10472.00", 2, FLOW)
-        # One misread that is still inside the flow limit: +2 m³ within an hour.
+        counter = accumulate_consumption(counter, SOURCE, 600, "10472.00", 2, FLOW)
+        # The same misread on two checks in a row (+2 m³ within an hour) gets confirmed.
         counter = accumulate_consumption(counter, SOURCE, 3600, "10474.00", 2, FLOW)
+        counter = accumulate_consumption(counter, SOURCE, 3900, "10474.00", 2, FLOW)
         self.assertEqual(2000, counter["total_litres"])
         with self.assertRaises(ImplausibleReading) as rejected:
             accumulate_consumption(counter, SOURCE, 4200, "10472.20", 2, FLOW)
@@ -59,16 +61,31 @@ class CounterRecoveryTests(TestCase):
         self.assertEqual((10472300, 10474000, 10472300, 2000),
                          tuple(counter[key] for key in ("reading_litres", "anchor_litres", "floor_litres",
                                                         "total_litres")))
-        # Following normal readings are accepted again, but book nothing below the old maximum ...
+        # Booked consumption is never taken back or booked twice below the confirmed maximum.
         counter = accumulate_consumption(counter, SOURCE, 5400, "10473.10", 2, FLOW)
+        counter = accumulate_consumption(counter, SOURCE, 6000, "10472.80", 2, FLOW)
         self.assertEqual(2000, counter["total_litres"])
-        # ... and still never go backwards.
-        with self.assertRaises(ImplausibleReading):
-            accumulate_consumption(counter, SOURCE, 6000, "10472.80", 2, FLOW)
-        # Once the meter passes the old maximum, only the real increase above it is booked.
         counter = accumulate_consumption(counter, SOURCE, 7200, "10474.10", 2, FLOW)
+        counter = accumulate_consumption(counter, SOURCE, 7800, "10474.20", 2, FLOW)
         self.assertEqual(2100, counter["total_litres"])
         self.assertEqual(10474100, counter["floor_litres"])
+
+    def test_misread_start_value_is_corrected_without_losing_consumption(self):
+        counter = accumulate_consumption({}, SOURCE, 0, "10475.70", 2, FLOW)
+        counter = accumulate_consumption(counter, SOURCE, 600, "10475.70", 2, FLOW)
+        counter = accumulate_consumption(counter, SOURCE, 1200, "10475.12", 2, FLOW, allow_lower=True)
+        self.assertEqual(10475120, counter["anchor_litres"])
+        counter = accumulate_consumption(counter, SOURCE, 1500, "10475.20", 2, FLOW)
+        counter = accumulate_consumption(counter, SOURCE, 1800, "10475.30", 2, FLOW)
+        self.assertEqual(80, counter["total_litres"])
+
+    def test_legacy_corrected_misread_without_bookings_stops_waiting(self):
+        # State left by 0.1.0 on 18.11.2026: anchor at the misread 10475.70, floor corrected.
+        old = {"source": SOURCE, "timestamp": 0, "reading_litres": 10475290, "anchor_litres": 10475700,
+               "floor_litres": 10475290, "step_litres": 10, "total_litres": 0}
+        counter = accumulate_consumption(old, SOURCE, 600, "10475.40", 2, FLOW)
+        counter = accumulate_consumption(counter, SOURCE, 900, "10475.50", 2, FLOW)
+        self.assertEqual(110, counter["total_litres"])
 
     def test_counters_without_floor_behave_as_before(self):
         old = {"source": SOURCE, "timestamp": 0, "reading_litres": 10472000, "anchor_litres": 10472000,
@@ -76,7 +93,10 @@ class CounterRecoveryTests(TestCase):
         with self.assertRaises(ImplausibleReading):
             accumulate_consumption(old, SOURCE, 600, "10471.90", 2, FLOW)
         updated = accumulate_consumption(old, SOURCE, 600, "10472.10", 2, FLOW)
-        self.assertEqual((600, 10472100), (updated["total_litres"], updated["floor_litres"]))
+        self.assertEqual((500, 10472000, 10472100),
+                         (updated["total_litres"], updated["floor_litres"], updated["pending_litres"]))
+        confirmed = accumulate_consumption(updated, SOURCE, 900, "10472.20", 2, FLOW)
+        self.assertEqual(600, confirmed["total_litres"])
 
 
 class LowerRecoveryWorkerTests(TestCase):

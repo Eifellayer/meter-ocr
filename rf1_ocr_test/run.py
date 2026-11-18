@@ -48,6 +48,8 @@ from calibration import (Calibration, Layout, CAPTURE_INTERVAL, PERFECT_CONFIRMA
 from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, LOWER_PENDING, LOWER_RECOVERED, MAX_FLOW_LPH,
                          ImplausibleReading, track_lower_series,
                          accumulate_consumption, fallback_detail, format_cubic_metres, record_consumption_sample)
+from checks import MOVING_DIGIT_NOTICE, REDUCED_PRECISION_NOTICE, only_last_compared_unclear
+import debug_log
 from layout import (MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, find_digit_row,
                     digit_box_settings, find_raw_digit_row, normalize_digit_boxes, rotated_width, scale_digit_boxes, turn_crop)
 from meter_learning import (GEOMETRY_REPAIR_LIMIT, GEOMETRY_REPAIR_SECONDS, alignment_rollback, observe_flow,
@@ -869,6 +871,7 @@ def main():
         configured_source, setup_pending = validated, False
         source_selected = True
 
+    # Two decimals by default (config.yaml); 3 means precision mode is on.
     default_decimals = options["vergleich_nachkommastellen"]
     default_attempts = options["ocr_versuche"]
     wake_worker = Event()
@@ -881,7 +884,7 @@ def main():
 
     auto_rules = {"decimals": default_decimals, "attempts": default_attempts, "polarity": "auto",
                   "intensive_agreement": DEFAULT_INTENSIVE_AGREEMENT,
-                  "precision_mode": False, "fine_alignment_enabled": False, "adaptive_interval_enabled": False, "self_repair_enabled": False,
+                  "precision_mode": default_decimals == 3, "fine_alignment_enabled": False, "adaptive_interval_enabled": False, "self_repair_enabled": False,
                   "reflection_estimate_enabled": False, "reflection_suggestion_hidden": False,
                   "reflection_confirmed_id": "",
                   "crop_mode": "auto", "crop": options["ausschnitt"],
@@ -955,7 +958,7 @@ def main():
                           "max_flow_lph": max_flow, "interval_minutes": interval_minutes,
                           "integer_digits": integer_digits, "fraction_digits": fraction_digits,
                           "meter_display": meter_display, "fallback_value": fallback_value,
-                          "precision_mode": saved_rules.get("precision_mode") is True,
+                          "precision_mode": saved_rules.get("precision_mode") is True or saved_rules["decimals"] == 3,
                           "calibration_reference": saved_rules.get("calibration_reference"),
                           "setup_completed": saved_rules.get("setup_completed"),
                           "setup_success": saved_rules.get("setup_success"),
@@ -1312,8 +1315,7 @@ def main():
                 now = time.monotonic()
                 configuration = calibration_configuration_now()
                 rules = configuration[0]
-                simplified = rules["decimals"] == 3 and (
-                    action == "setup" or action == "start" and not rules["precision_mode"])
+                simplified = rules["decimals"] == 3 and action in ("setup", "start")
                 intensive = action == "intensive"
                 if intensive and (rules["fraction_digits"] != 3 or rules["decimals"] != 3):
                     raise ValueError("The meter must display three decimal digits")
@@ -1515,7 +1517,7 @@ def main():
                         if stamp < captured:
                             baseline = accumulate_consumption(
                                 {}, "calibration", stamp, active_rules["fallback_value"], min(precision, configured_rules["decimals"]),
-                                active_rules["max_flow_lph"], active_rules["integer_digits"],
+                                active_rules["max_flow_lph"], active_rules["integer_digits"], confirmed=True,
                             )
                     with Image.open(io.BytesIO(picture)) as frame:
                         if frame.width * frame.height > MAX_IMAGE_PIXELS:
@@ -2642,6 +2644,23 @@ def main():
                     if not manual:
                         reading_status, _ = compare_sample(sample, ocr, decimals, ocr_confirmed=ocr_confirmed,
                                                            integer_digits=integer_digits, exact_prefix=stationary_partial)
+                        reduced_precision = False
+                        if (reading_status == "ocr_unclear" and decimals > 0 and not ocr_error
+                                and only_last_compared_unclear(ocr, decimals, integer_digits)):
+                            # Only the last compared roller is unreadable (typically turning):
+                            # accept this one check one decimal coarser instead of failing.
+                            # The truncated value is a safe lower bound for booking.
+                            coarse, coarse_confirmed = resolve_ocr_readings(
+                                ocr_readings or [ocr, ocr], decimals - 1, integer_digits,
+                                standalone=require_consensus, standalone_composition=True,
+                            )
+                            coarse_status, _ = compare_sample(sample, ocr, decimals - 1, ocr_confirmed=coarse_confirmed,
+                                                              integer_digits=integer_digits, exact_prefix=True)
+                            if coarse_confirmed and coarse_status in ("match", "ocr_only"):
+                                print(f"Letzte verglichene Stelle unklar ({ocr}), prüfe diesmal mit "
+                                      f"{decimals - 1} Nachkommastelle(n)")
+                                decimals -= 1
+                                reading_status, ocr_confirmed, reduced_precision = coarse_status, True, True
                         accept_reference = (
                             decimals == 3 and reading_status in ("difference", "ocr_unclear")
                             and last_digit_can_pass(updated, precision_mode)
@@ -2652,13 +2671,11 @@ def main():
                             for allow_lower in (False, True):
                                 try:
                                     if standalone:
+                                        # Plausibility against the last *confirmed* value lives in
+                                        # accumulate_consumption; an unconfirmed misread must not block.
                                         new_standalone = standalone_reading(
-                                            standalone_source, sample, ocr, decimals,
-                                        None if allow_lower else history.get("standalone_reading"),
-                                            integer_digits,
+                                            standalone_source, sample, ocr, decimals, None, integer_digits,
                                         )
-                                        if new_standalone is None:
-                                            raise ImplausibleReading(LOWER_READING)
                                     previous_consumption = history.get("consumption", {})
                                     if not previous_consumption and active_rules["fallback_value"]:
                                         fallback_prefix = meter_prefix(active_rules["fallback_value"], decimals,
@@ -2695,6 +2712,7 @@ def main():
                                         previous_consumption, source_key, captured,
                                         sample["actual_value"] if accept_reference else ocr, decimals,
                                         active_rules["max_flow_lph"], integer_digits, allow_lower=allow_lower,
+                                        confirmed=reading_status == "match" or accept_reference,
                                     )
                                     if setup_reference:
                                         standalone_reference = setup_reference
@@ -2707,6 +2725,7 @@ def main():
                                             accumulate_consumption(
                                                 candidate["counter"], source_key, captured, ocr, decimals,
                                                 active_rules["max_flow_lph"], integer_digits, allow_lower=allow_lower,
+                                                require_consistent=True,
                                             )
                                             standalone_reference = candidate
                                             updated.pop("standalone_candidate", None)
@@ -2727,6 +2746,7 @@ def main():
                                         if lower_confirmed:
                                             print(f"Lesefehler-Korrektur: {len(lower_series)} stimmige niedrigere "
                                                   f"Ablesungen, übernehme {ocr}")
+                                            debug_log.record(kind="correction", ocr=ocr, lower_series=len(lower_series))
                                             continue
                                         error = ImplausibleReading(LOWER_PENDING)
                                     ocr_confirmed = False
@@ -2778,7 +2798,7 @@ def main():
                           and status in ("difference", "ocr_unclear")
                           and differs_only_at_last_digit(sample, ocr, ocr_readings, integer_digits)):
                         detail = LAST_DIGIT_NOTICE
-                        if ocr_attempts >= LAST_DIGIT_RETRIES and not precision_mode:
+                        if ocr_attempts >= LAST_DIGIT_RETRIES:
                             status, detail = "match_with_warning", LAST_DIGIT_PASS
                     elif status == "match" and not manual_reference:
                         precise = common_exact_precision(
@@ -2874,8 +2894,15 @@ def main():
                         updated["standalone_reading"] = new_standalone
                     if lower_recovered and new_consumption is not None and outcome in SUCCESSFUL_CHECKS:
                         updated["check_detail"] = LOWER_RECOVERED
+                    if (locals().get("reduced_precision") and outcome in SUCCESSFUL_CHECKS
+                            and not validation_detail and not lower_recovered):
+                        updated["check_detail"] = REDUCED_PRECISION_NOTICE
                     updated["ocr_readings"] = ocr_readings if outcome == "ocr_unclear" else []
                     if outcome == "ocr_unclear" and updated["check_detail"] != LAST_DIGIT_NOTICE:
+                        if not validation_detail and not ocr_error and only_last_compared_unclear(
+                                ocr, comparison_decimals if "comparison_decimals" in locals() else decimals,
+                                integer_digits):
+                            unclear_detail = MOVING_DIGIT_NOTICE
                         updated["check_detail"] = (validation_detail or ocr_error or unclear_detail
                                                    or explain_uncertain_positions(ocr_readings, decimals, integer_digits))
                     elif validation_detail:
@@ -3169,6 +3196,15 @@ def main():
             print(f"Kontrollbild bereit: {data['esp_timestamp']} | Ausschnitt: {source} | "
                   f"OCR: {ocr or '?'} ({data['ocr_attempts']} Durchläufe) | "
                   f"SLFork: {data['actual_value']} | Ergebnis: {outcome}")
+            local = locals()
+            debug_log.record(
+                kind="manual" if manual else "automatic", image=data.get("esp_timestamp"), crop=source,
+                ocr=ocr, readings=local.get("ocr_readings"), attempts=data.get("ocr_attempts"),
+                method=local.get("ocr_method"), outcome=outcome, detail=updated.get("check_detail"),
+                compared_decimals=local.get("comparison_decimals"), reference=data.get("actual_value"),
+                consumption=updated.get("consumption"), failures=updated.get("failure_attempts"),
+                lower_series=len(updated.get("lower_series") or []) or None,
+            )
         try:
             publish_check(history, now, token, review_after)
             if pending_image is not None:

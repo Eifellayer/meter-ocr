@@ -1,6 +1,6 @@
 # AI Meter Reader
 
-**Version 0.1.1** · [English](README.en.md) · [Anleitung](rf1_ocr_test/DOCS.md) · [Änderungen](rf1_ocr_test/CHANGELOG.md) · [Roadmap](RELEASE-PLAN.md)
+**Version 0.1.2** · [English](README.en.md) · [Anleitung](rf1_ocr_test/DOCS.md) · [Änderungen](rf1_ocr_test/CHANGELOG.md) · [Roadmap](RELEASE-PLAN.md)
 
 <img src="assets/project-logo.png" alt="AI Meter Reader" width="110">
 
@@ -31,6 +31,10 @@ Home-Assistant-App, die mechanische Zähler (vor allem Gaszähler mit Ziffernrol
 | 1. oder 2. Fehlprüfung | 5 Minuten |
 | Nur die 7. Ziffer unsicher, Rest per Referenz bestätigt | 30 Minuten |
 | 3 Fehlprüfungen in Folge | 60 Minuten Pause |
+
+## Getestet
+
+Praktisch erprobt ist die App bisher nur an **einem Gaszähler** (Rollenzählwerk, ESP32-CAM mit AI on the Edge als Kamera). Wasserzähler und andere Gaszähler sind nicht praktisch getestet; ein Test mit öffentlichen Ziffernbildern verschiedener Wasser- und Gaszähler zeigte, dass fremde Zählwerke deutlich schlechter gelesen werden (unklare Stellen meldet die App, statt zu raten). Rückmeldungen mit eigenen Zählern sind sehr willkommen.
 
 ## Hinweise
 

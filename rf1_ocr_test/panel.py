@@ -21,6 +21,7 @@ from urllib.parse import parse_qs, urlsplit
 from PIL import Image
 
 from app_channel import APP_NAME, NAMESPACE
+import debug_log
 
 INSTANCE_ID = token_urlsafe(8)
 from calibration import (
@@ -31,7 +32,9 @@ from checks import (DEFAULT_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, WARNING_DETA
                     OCR_PROFILES, crop_register, read_register, LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, REFLECTION_SUGGEST_AFTER, STANDALONE_PENDING, STANDALONE_REJECTED_NOTICE,
                     STANDALONE_VERIFIED_NOTICE, last_check_at, recommended_comparison_decimals, reschedule_next_check,
                     setup_deadlines, setup_source_id, stabilization_interval, stationary_partial_active, valid_interval_minutes)
-from consumption import DEFAULT_FLOW_LPH, consumption_statistics, format_cubic_metres, parse_flow_limit
+from checks import MOVING_DIGIT_NOTICE
+from consumption import (DEFAULT_FLOW_LPH, EXCESSIVE_INCREASE, LOWER_PENDING, LOWER_READING,
+                         consumption_statistics, format_cubic_metres, parse_flow_limit)
 from demo import run_demo
 from i18n import EN_UI, english_progress, english_result, translate_page
 from language import MODES, SUPPORTED, USER_ID, browser_locale, profile_script
@@ -485,6 +488,12 @@ white-space:pre-line;line-height:1.24em;text-align:center;animation:roll 2.2s li
 .manual-panel[open] > summary::after{{content:"";transform:rotate(-135deg)}}
 .setup-dialog{{border-radius:calc(var(--radius) + .2rem);box-shadow:0 1.5rem 4rem #0006}}
 .page-footer{{margin-top:2rem}}
+.advanced-actions{{margin-top:.6rem;font-size:.9rem}}
+.advanced-actions > summary{{color:var(--muted);cursor:pointer}}
+.advanced-actions button{{font-size:.85rem;min-height:2.2rem;padding:.3rem .8rem;background:transparent}}
+.debug-log-text{{max-height:22rem;overflow:auto;white-space:pre-wrap;word-break:break-all;font-size:.75rem;background:var(--surface-2);border:1px solid var(--edge);border-radius:var(--radius-sm);padding:.6rem}}
+#debug-log{{margin-top:1rem}}
+.button-link{{display:inline-flex;align-items:center;min-height:2.4rem;padding:.4rem 1rem;border-radius:99px;border:1px solid var(--edge);background:var(--surface-2);color:var(--ink);text-decoration:none;font-weight:650}}
 /* ---------- Setup wizard in the new design ---------- */
 .setup-dialog{{height:min(90dvh,44rem);scrollbar-gutter:stable;padding:1.1rem 1.3rem 1rem}}
 .setup-dialog .manual-content{{border-top:0;padding-top:0;margin-top:.25rem}}
@@ -531,7 +540,12 @@ white-space:pre-line;line-height:1.24em;text-align:center;animation:roll 2.2s li
 .dialog-heading{{flex-wrap:wrap}}
 .dialog-heading h2{{flex:1 1 10rem;min-width:0}}
 @media(max-width:420px){{.main-menu{{flex-wrap:wrap;border-radius:1.2rem;gap:.15rem}}.main-tabs{{flex-basis:100%;gap:.15rem}}
-.main-tabs button{{padding-inline:.35rem;font-size:.84rem;min-height:2.6rem}}.main-guide{{flex-basis:100%;min-height:2.2rem;padding:.2rem;font-size:.82rem}}}}
+.main-tabs button{{padding-inline:.35rem;font-size:.84rem;min-height:2.6rem}}}}
+@media(max-width:640px){{.main-menu{{flex-wrap:nowrap}}.main-tabs{{flex:1 1 auto;min-width:0;flex-basis:auto}}
+nav.main-menu a.main-guide{{flex:none;width:2.6rem;min-height:2.6rem;padding:0;font-size:0;line-height:0;display:inline-grid;place-items:center;overflow:hidden}}
+nav.main-menu a.main-guide::before{{content:"?";font-size:1.05rem;line-height:1;font-weight:750}}
+header{{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}header .brand{{grid-column:1/-1}}
+header #open-setup,header .language-bar,header .language-bar select{{width:100%;min-width:0}}}}
 header{{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.6rem}}
 .main-tabs button[aria-selected="true"]:not(:disabled):hover{{background:var(--ink);color:var(--surface)}}
 .calibration-card form > :is(p,div,details){{grid-column:1/-1}}
@@ -767,6 +781,12 @@ name: Zählerstand (OCR)</code></pre>
 <button type="button" id="open-manual-settings">Manueller Test</button>
 </div>
 </details>
+<details id="debug-log">
+<summary>Debug-Protokoll</summary>
+<p class="settings-note">Die letzten Prüfungen mit allen OCR-Durchläufen, Entscheidung und Verbrauchsstand. Ohne Bilder und Zugangsdaten. Hilfreich für Fehlermeldungen.</p>
+<p><a class="button-link" id="debug-log-download" href="debug-protokoll" download="ai-meter-reader-debug.jsonl">Protokoll herunterladen</a></p>
+<pre id="debug-log-text" class="debug-log-text">–</pre>
+</details>
 <div class="manual-test-area" id="manual-test-area" {manual_area_hidden}>
 <div class="manual-test-heading"><h2>Manueller Test</h2>
 <button type="button" id="close-manual-test">Schließen</button></div>
@@ -916,11 +936,17 @@ name: Zählerstand (OCR)</code></pre>
 <p id="calibration-precision-notice">{calibration_precision_notice}</p>
 <div class="crop-actions">
 <button id="calibration-start" type="submit" name="action" value="start">Selbsteinrichtung starten</button>
-<button id="calibration-intensive" type="submit" name="action" value="intensive" {calibration_intensive_hidden}>Dritte Nachkommastelle intensiv suchen</button>
-<button id="calibration-manual-digit" type="button" {calibration_intensive_hidden}>Dritte Nachkommastelle manuell markieren</button>
 <button id="calibration-restore" type="submit" name="action" value="restore" formnovalidate {calibration_restore_hidden}>Gesicherten Ausschnitt wiederherstellen</button>
 <button id="calibration-cancel" type="submit" name="action" value="cancel" formnovalidate hidden>Selbsteinrichtung stoppen</button>
 </div>
+<details class="advanced-actions" id="calibration-advanced" {calibration_intensive_hidden}>
+<summary>Erweitert</summary>
+<p class="settings-note">Die App sucht die letzte Stelle selbst im Hintergrund. Nur nötig, wenn das dauerhaft nicht klappt.</p>
+<div class="crop-actions">
+<button id="calibration-intensive" type="submit" name="action" value="intensive">Dritte Nachkommastelle intensiv suchen</button>
+<button id="calibration-manual-digit" type="button">Dritte Nachkommastelle manuell markieren</button>
+</div>
+</details>
 </form>
 </section>
 <div class="panel" id="settings"><h2>Einstellungen</h2>
@@ -976,7 +1002,7 @@ name: Zählerstand (OCR)</code></pre>
 <div class="settings-note setup-help" data-precision-options {precision_hidden}>
 <p>Die letzte Stelle kann beim Weiterdrehen schwer lesbar sein. Das kann zu Fehlmeldungen führen.</p>
 <p {wizard_initial_hidden}>Die dritte Nachkommastelle ist bei Rollen oft schwer zu erkennen. „Automatische Selbsteinrichtung“ bestätigt bei der Ersteinrichtung die ersten zwei Stellen. Die dritte bleibt unbestätigt und kann später intensiv gesucht oder im Kamerabild manuell markiert werden.</p>
-<label class="check-option" {wizard_precision_hidden}><input type="checkbox" name="precision_mode" value="1" {precision_checked} {wizard_precision_disabled}> Präzisionsmodus: Alle drei Nachkommastellen müssen stimmen</label>
+<label class="check-option"><input type="checkbox" name="precision_mode" value="1" {precision_checked}> Präzisionsmodus: auch die dritte Nachkommastelle vergleichen</label>
 </div>
 <p class="settings-note setup-help">Die Vergleichsgenauigkeit darf kleiner sein als die angezeigte Stellenzahl. Kleine Zeiger werden nicht automatisch gelesen; bei Rollen und Zeigern bitte nur die Ziffernrollen einstellen.</p>
 <div class="setup-controls"><button type="button" class="setup-back">Zurück</button><span class="setup-count"></span><button type="button" class="setup-next">Weiter</button></div>
@@ -1109,7 +1135,7 @@ name: Zählerstand (OCR)</code></pre>
 <select name="decimals">{auto_decimal_options}</select></label>
 <div class="settings-note" data-precision-options {precision_hidden}>
 <p>Die letzte Stelle kann beim Weiterdrehen schwer lesbar sein. Das kann zu Fehlmeldungen führen.</p>
-<label class="check-option"><input type="checkbox" name="precision_mode" value="1" {precision_checked}> Präzisionsmodus: Alle drei Nachkommastellen müssen stimmen</label>
+<label class="check-option"><input type="checkbox" name="precision_mode" value="1" {precision_checked}> Präzisionsmodus: auch die dritte Nachkommastelle vergleichen</label>
 </div>
 <label title="Nach einer unklaren Ablesung folgt ein zusätzlicher Versuch nach fünf Minuten. Schlägt auch der fehl, gilt wieder dieses Intervall.">Prüfintervall (Minuten)
 <input name="interval_minutes" type="number" min="1" max="{max_interval_minutes}" value="{interval_minutes}" required>
@@ -1695,8 +1721,10 @@ setupForm.querySelector('[name="fraction_digits"]').addEventListener('change', e
 }});
 document.querySelectorAll('[data-precision-options]').forEach(options => {{
   const select = options.closest('form').querySelector('[name="decimals"]');
-  const showPrecisionOptions = () => {{ options.hidden = select.value !== '3'; }};
-  select.addEventListener('change', showPrecisionOptions);
+  const fraction = options.closest('form').querySelector('[name="fraction_digits"]');
+  if (!fraction) return;
+  const showPrecisionOptions = () => {{ options.hidden = fraction.value !== '3'; }};
+  fraction.addEventListener('change', showPrecisionOptions);
   showPrecisionOptions();
 }});
 document.querySelector('#close-manual-test').addEventListener('click', () => {{
@@ -2298,6 +2326,7 @@ let lastDigitSearching = false;
 let lastDigitProgress = null;
 let comparedDecimals = null;
 let configuredDecimals = null;
+let lastDigitSearchAt = null;
 let partialEighthDigit = false;
 let previousCalibrationState = '';
 let routineOk = {automatic_routine_ok};
@@ -2960,7 +2989,9 @@ function syncHero() {{
   const labels = lang === 'en'
     ? {{ok: 'Running', warning: 'Needs attention', problem: 'Problem'}}
     : {{ok: 'Läuft', warning: 'Bitte prüfen', problem: 'Problem'}};
-  let label = !document.querySelector('#paused-notice').hidden ? (lang === 'en' ? 'Paused' : 'Pausiert') : (labels[tone] || '–');
+  const busy = document.querySelector('.activity-status')?.dataset.state === 'working';
+  let label = !document.querySelector('#paused-notice').hidden ? (lang === 'en' ? 'Paused' : 'Pausiert')
+    : (labels[tone] || (busy ? (lang === 'en' ? 'Checking …' : 'Prüft …') : '–'));
   if (staleView) label = lang === 'en' ? 'Not current' : 'Nicht aktuell';
   if (chip.textContent !== label) chip.textContent = label;
   chip.dataset.tone = staleView ? 'stale' : tone;
@@ -2985,10 +3016,15 @@ function syncHero() {{
     if (minutesLeft) noteText += lang === 'en'
       ? ` Maximum ${{maxMinutes}} min, at most ${{minutesLeft}} min left.`
       : ` Höchstdauer ${{maxMinutes}} min, noch höchstens ${{minutesLeft}} min.`;
-  }} else if (partialEighthDigit && configuredDecimals === 3 && comparedDecimals === 2) {{
+  }} else if (comparedDecimals !== null && configuredDecimals !== null && comparedDecimals < configuredDecimals) {{
+    const at = lastDigitSearchAt && lastDigitSearchAt * 1000 > Date.now()
+      ? new Date(lastDigitSearchAt * 1000).toLocaleTimeString(lang === 'en' ? 'en-GB' : 'de-DE', {{hour: '2-digit', minute: '2-digit'}})
+      : '';
     noteText = lang === 'en'
-      ? 'Configured: 3 decimal places. Currently only 2 are verified; the eighth digit is still unconfirmed. The background search will retry automatically.'
-      : 'Eingestellt: 3 Nachkommastellen. Aktuell werden nur 2 sicher verglichen; die 8. Ziffer ist noch unbestätigt. Die Hintergrundsuche wird automatisch wiederholt.';
+      ? `Temporarily only ${{comparedDecimals}} decimal places are compared (setting: ${{configuredDecimals}}). `
+        + (at ? `The search for the ${{position}}th digit starts at about ${{at}}.` : `The background search for the ${{position}}th digit is retried automatically.`)
+      : `Vorübergehend werden nur ${{comparedDecimals}} Nachkommastellen verglichen (eingestellt: ${{configuredDecimals}}). `
+        + (at ? `Die Suche nach der ${{position}}. Ziffer beginnt gegen ${{at}} Uhr.` : `Die Suche nach der ${{position}}. Ziffer wird automatisch wiederholt.`);
     noteState = 'skipped';
   }} else if (fractionDigits.endsWith('?') && comparedDecimals !== null && comparedDecimals < fractionDigits.length) {{
     noteText = lang === 'en'
@@ -3172,6 +3208,18 @@ function showStale(kind) {{
   syncHero();
 }}
 document.querySelector('#reload-view').addEventListener('click', () => location.reload());
+document.querySelector('#debug-log').addEventListener('toggle', async (event) => {{
+  if (!event.target.open) return;
+  const target = document.querySelector('#debug-log-text');
+  try {{
+    const response = await fetch('debug-protokoll?limit=40', {{cache: 'no-store'}});
+    const text = response.ok ? await response.text() : '';
+    target.textContent = text.trim().split(String.fromCharCode(10)).reverse().join(String.fromCharCode(10))
+      || (lang === 'en' ? 'No entries yet.' : 'Noch keine Einträge.');
+  }} catch (_) {{
+    target.textContent = lang === 'en' ? 'Log could not be loaded.' : 'Protokoll konnte nicht geladen werden.';
+  }}
+}});
 async function refreshAutomatic() {{
   let refreshDelay = 15000;
   let sample;
@@ -3212,7 +3260,8 @@ async function refreshAutomatic() {{
     next = sample.next_check;
     renderConsumption(sample.consumption);
     comparedDecimals = Number.isInteger(sample.decimals) ? sample.decimals : null;
-    configuredDecimals = Number.isInteger(sample.configured_decimals) ? sample.configured_decimals : null;
+    configuredDecimals = Number.isInteger(sample.configured_decimals) ? sample.configured_decimals : comparedDecimals;
+    lastDigitSearchAt = typeof sample.last_digit_search_at === 'number' ? sample.last_digit_search_at : null;
     partialEighthDigit = sample.partial_eighth_digit === true;
     if (experimental.open) refreshExperimental().catch(() => {{}});
     document.querySelector('#paused-notice').hidden = !sample.paused;
@@ -3224,7 +3273,7 @@ async function refreshAutomatic() {{
     comparison.querySelector('button').textContent = sample.precision_suggestion_label;
     automaticBanner.dataset.tone = sample.tone;
     automaticBanner.dataset.incident = sample.incident;
-    document.querySelector('#automatic-interval-hint').hidden = !(sample.failure_attempts > 0 && sample.tone !== 'ok');
+    document.querySelector('#automatic-interval-hint').hidden = !(sample.interval_hint && sample.tone !== 'ok');
     ignoreWarning.hidden = !sample.incident;
     const heading = document.querySelector('#automatic-status-heading');
     const icon = automaticBanner.querySelector('.automatic-banner-icon');
@@ -3666,6 +3715,12 @@ def start_panel(
                           english_result(history["check_detail"], status))
             elif history.get("check_detail") in (RAW_ROW_UNCLEAR, MANUAL_ROW_UNCLEAR):
                 detail = history["check_detail"] if language == "de" else EN_UI[history["check_detail"]]
+            elif history.get("check_detail") == MOVING_DIGIT_NOTICE:
+                heading = "Rolle drehte sich gerade"
+                detail = history["check_detail"] if language == "de" else english_result(history["check_detail"], status)
+            elif history.get("check_detail") in (LOWER_PENDING, LOWER_READING, EXCESSIVE_INCREASE):
+                heading = "Ablesung passt nicht zum letzten Stand"
+                detail = history["check_detail"] if language == "de" else english_result(history["check_detail"], status)
             elif history.get("check_detail") == LAST_DIGIT_NOTICE:
                 heading = "Letzte Nachkommastelle unsicher"
                 detail = LAST_DIGIT_NOTICE if language == "de" else EN_UI[LAST_DIGIT_NOTICE]
@@ -3714,11 +3769,15 @@ def start_panel(
                                if language == "en" else
                                f"Bisherige Fehlprüfungen: {failure_attempts}. Die Automatik ist pausiert.")
         elif failure_attempts and retry_suppressed:
+            next_at = history.get("next_check_at")
+            clock = (datetime.fromtimestamp(next_at, statistics_zone).strftime("%H:%M")
+                     if type(next_at) in (int, float) and next_at > 0 else "")
             recovery_notice = (
                 f"{failure_attempts} automatic checks failed. Waiting for a higher meter reading or a new image."
+                + (f" Next attempt at about {clock}." if clock else "")
                 if language == "en" else
                 f"{failure_attempts} automatische Prüfungen fehlgeschlagen. Es wird auf einen höheren Zählerstand "
-                "oder ein neues Bild gewartet."
+                "oder ein neues Bild gewartet." + (f" Nächster Versuch gegen {clock} Uhr." if clock else "")
             )
         elif failure_attempts:
             recovery_notice = (
@@ -3779,6 +3838,10 @@ def start_panel(
             "recovery_notice": recovery_notice,
             "geometry_warning": geometry_warning(history, auto_rules, language) if now >= optimization_until else "",
             "stabilizing_until": stabilizing_until,
+            "configured_decimals": auto_rules["decimals"],
+            "interval_hint": bool(failure_attempts) and history.get("check_detail") in (RAW_ROW_UNCLEAR, MANUAL_ROW_UNCLEAR),
+            "last_digit_search_at": (max(optimization_until, history.get("eighth_digit_retry_at") or 0)
+                                     if decimals < auto_rules["decimals"] else None),
             "reflection_estimate": reflection_estimate,
             "reflection_live_estimate": (history.get("reflection_live_estimate")
                                         if auto_rules.get("reflection_estimate_enabled") else None),
@@ -3795,7 +3858,6 @@ def start_panel(
             "source_connection": source_connection,
             "source_connection_state": history.get("source_connection_status", "unknown"),
             "decimals": history.get("comparison_decimals", default_decimals),
-            "configured_decimals": auto_rules["decimals"],
             "partial_eighth_digit": partial_eighth_digit,
             "eighth_digit_retry_at": history.get("eighth_digit_retry_at"),
             "current": image_version(current_image),
@@ -3857,6 +3919,13 @@ def start_panel(
                     self.send_error(404)
                 else:
                     self.reply(content, "image/jpeg")
+                return
+            if path == "/debug-protokoll":
+                try:
+                    limit = max(1, min(600, int(query.get("limit", ["600"])[0])))
+                except ValueError:
+                    limit = 600
+                self.reply(debug_log.read_text(limit).encode("utf-8"), "text/plain; charset=utf-8")
                 return
             if path == "/anzeigefehler":
                 message = re.sub(r"[^\w .,:;()'/<>=-]", "?", query.get("m", [""])[0])[:300]
@@ -4095,8 +4164,8 @@ def start_panel(
                 calibration_min=MIN_IMAGE_LIMIT, calibration_max=MAX_IMAGES,
                 calibration_limit=calibration["limit"] if calibration else DEFAULT_LIMIT,
                 setup_first_run=str(bool(setup_pending or reset_state == "done")).lower(),
-                precision_hidden="" if auto_rules["decimals"] == 3 else "hidden",
-                precision_checked="checked" if auto_rules.get("precision_mode") else "",
+                precision_hidden="" if auto_rules["fraction_digits"] == 3 else "hidden",
+                precision_checked="checked" if auto_rules["decimals"] == 3 else "",
                 intensive_agreement=auto_rules.get("intensive_agreement", DEFAULT_INTENSIVE_AGREEMENT),
                 reflection_enabled_checked="checked" if auto_rules.get("reflection_estimate_enabled") else "",
                 fine_alignment_checked="checked" if auto_rules.get("fine_alignment_enabled") else "",
@@ -4127,7 +4196,7 @@ def start_panel(
                                                       str(auto_rules["fraction_digits"])),
                 wizard_decimal_options=select_options(
                     {key: label for key, label in (DECIMALS_EN if language == "en" else DECIMALS).items()
-                     if int(key) <= auto_rules["fraction_digits"]}, str(auto_rules["decimals"])),
+                     if int(key) <= min(2, auto_rules["fraction_digits"])}, str(min(2, auto_rules["decimals"]))),
                 wizard_crop_options=radio_options("crop_mode", {
                     **({"learn": "Automatic setup (recommended)" if language == "en"
                         else "Automatische Selbsteinrichtung (empfohlen)"} if control_calibration else {}),
@@ -4171,7 +4240,8 @@ def start_panel(
                     comparable_decimals, str(manual_precision),
                 ),
                 auto_decimal_options=select_options(
-                    comparable_decimals, str(auto_rules["decimals"]),
+                    {key: label for key, label in comparable_decimals.items() if int(key) <= 2},
+                    str(min(2, auto_rules["decimals"])),
                 ),
                 auto_attempt_options=select_options(
                     {value: label for value, label in ATTEMPTS.items()
@@ -4545,6 +4615,8 @@ def start_panel(
                         "delivery_hours": int(field("delivery_hours")),
                         "push": field("push"), "target": field("target"),
                     })
+                    precise = field("precision_mode") == "1" and fraction_digits == 3
+                    decimals = 3 if precise else min(2, decimals)
                     rules_values = {
                         **old_rules, "decimals": decimals, "attempts": attempts,
                         "polarity": polarity, "crop_mode": crop_mode, "crop": crop,
@@ -4554,7 +4626,7 @@ def start_panel(
                             and rotation == old_rules.get("rotation", 0) and width == old_rules["width"]
                             and integer_digits == old_rules["integer_digits"] and fraction_digits == old_rules["fraction_digits"]
                         ) else [], "max_flow_lph": max_flow,
-                        "precision_mode": field("precision_mode") == "1",
+                        "precision_mode": precise,
                         "self_repair_enabled": field("self_repair_enabled") == "1",
                         "fine_alignment_enabled": (field("fine_alignment_enabled") == "1"
                                                   if field("fine_alignment_option_present") == "1"
@@ -4598,8 +4670,6 @@ def start_panel(
                                     "Resume automatic checks before starting automatic setup.")
                             return
                         previous_source, initial_setup = get_source()
-                        if initial_setup:
-                            rules_values["precision_mode"] = False
                         save_source(source_values)
                         if not learn_crop or fallback_value and (
                                 fallback_value != old_rules.get("fallback_value") or previous_source != get_source()[0]):
@@ -4864,9 +4934,11 @@ def start_panel(
                             problem(400, "Die Übereinstimmung für die Intensivprüfung muss zwischen 1 und 100 Prozent liegen.",
                                     "Enter an intensive-check agreement threshold between 1 and 100 percent.")
                             return
-                        save_auto_rules({"decimals": int(decimals[0]), "attempts": int(attempts[0]),
+                        precise = field("precision_mode") == "1" and old_rules["fraction_digits"] == 3
+                        save_auto_rules({"decimals": 3 if precise else min(2, int(decimals[0])),
+                                         "attempts": int(attempts[0]),
                                          "intensive_agreement": intensive_agreement,
-                                         "precision_mode": field("precision_mode") == "1",
+                                         "precision_mode": precise,
                                          "reflection_estimate_enabled": field("reflection_estimate_enabled") == "1",
                                          "fine_alignment_enabled": field("fine_alignment_enabled") == "1",
                                          "self_repair_enabled": field("self_repair_enabled") == "1",

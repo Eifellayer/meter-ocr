@@ -347,7 +347,7 @@ EN_UI = {
     "Vergleichswert": "Reference reading",
     "Die letzte Stelle kann beim Weiterdrehen schwer lesbar sein. Das kann zu Fehlmeldungen führen.":
         "The last digit can be hard to read as it turns, which can cause false alerts.",
-    "Präzisionsmodus: Alle drei Nachkommastellen müssen stimmen": "Precision mode: Require all three decimal places to match",
+    "Präzisionsmodus: auch die dritte Nachkommastelle vergleichen": "Precision mode: also compare the third decimal place",
     "Prüfung bestanden mit Hinweis": "Check passed with a note",
     "Test bestanden mit Hinweis": "Test passed with a note",
     "Letzte Nachkommastelle unsicher": "Last decimal digit uncertain",
@@ -606,6 +606,15 @@ EN_UI = {
     "Manueller Test": "Manual test",
     'id="open-setup">Einrichtung<': 'id="open-setup">Setup<',
     'id="reload-view">Neu laden<': 'id="reload-view">Reload<',
+    '<summary>Debug-Protokoll</summary>': '<summary>Debug log</summary>',
+    '<summary>Erweitert</summary>': '<summary>Advanced</summary>',
+    "Rolle drehte sich gerade": "Roller was turning",
+    "Ablesung passt nicht zum letzten Stand": "Reading does not fit the last value",
+    "Die App sucht die letzte Stelle selbst im Hintergrund. Nur nötig, wenn das dauerhaft nicht klappt.":
+        "The app searches for the last digit in the background by itself. Only needed if that keeps failing.",
+    "Die letzten Prüfungen mit allen OCR-Durchläufen, Entscheidung und Verbrauchsstand. Ohne Bilder und Zugangsdaten. Hilfreich für Fehlermeldungen.":
+        "The latest checks with all OCR runs, decision and consumption state. No images or credentials. Useful for bug reports.",
+    '>Protokoll herunterladen<': '>Download log<',
     '<li data-step="0" data-state="current">Bildquelle</li><li data-step="1">Anzeige</li><li data-step="2">Ausschnitt</li><li data-step="3">Hinweise</li>':
         '<li data-step="0" data-state="current">Source</li><li data-step="1">Display</li><li data-step="2">Crop</li><li data-step="3">Alerts</li>',
     'aria-label="Schritte"': 'aria-label="Steps"',
@@ -818,6 +827,12 @@ EN_UI = {
 }
 
 EN_DETAILS = {
+    ("Die letzte verglichene Rolle drehte sich gerade. Diese Prüfung wurde deshalb mit einer "
+     "Nachkommastelle weniger bestätigt; der Rest folgt bei der nächsten Prüfung."):
+        "The last compared roller was turning. This check was therefore confirmed with one decimal place less; the rest follows with the next check.",
+    ("Nur die letzte verglichene Stelle war unklar – vermutlich drehte sich die Rolle gerade. "
+     "Die nächste Prüfung folgt automatisch."):
+        "Only the last compared digit was unclear – the roller was probably turning. The next check follows automatically.",
     FALLBACK_NOTICE: "The ESP is using a fallback reading.",
     "OCR-Zuwachs plausibel. Warte auf den Abgleich.": "OCR increase looks plausible. Waiting for a match.",
     "Für die Plausibilitätsprüfung fehlt ein gültiger Messzeitpunkt.":
@@ -827,9 +842,9 @@ EN_DETAILS = {
     "Zählerstand liegt unter dem letzten gültigen Wert. Bestätigen weitere stimmige Ablesungen den niedrigeren Stand, wird er übernommen.":
         "Reading is lower than the last accepted value. If further consistent readings confirm the lower value, it will be taken over.",
     ("Mehrere stimmige Ablesungen lagen unter dem gespeicherten Stand. Der höhere Wert war ein Lesefehler, "
-     "der Zählerstand wurde korrigiert. Verbrauch wird erst wieder gebucht, wenn der frühere Höchststand erreicht ist."):
+     "der Zählerstand wurde korrigiert."):
         ("Several consistent readings were below the stored value. The higher value was a misread and the reading "
-         "has been corrected. Consumption is booked again once the earlier maximum is passed."),
+         "has been corrected."),
     "Zählerstand steigt schneller als der eingestellte Durchfluss erlaubt.":
         "Reading increased faster than the configured maximum flow.",
     "Messzeitpunkt liegt vor der letzten gültigen Messung.": "The reading is older than the last accepted measurement.",

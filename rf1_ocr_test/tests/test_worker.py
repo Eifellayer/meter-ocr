@@ -524,15 +524,15 @@ class StateTests(TestCase):
         restored = dict(history)
         self.assertFalse(eighth_digit_retry_due(rules, source, restored, now + EIGHTH_DIGIT_RETRY_SECONDS + 10))
         self.assertTrue(eighth_digit_retry_due(rules, source, {}, now))
-        self.assertFalse(resume_optional_eighth_digit({}, {**rules, "precision_mode": True},
-                                                      source, now, begin))
+        self.assertTrue(resume_optional_eighth_digit({}, {**rules, "precision_mode": True},
+                                                     source, now, begin))
         self.assertFalse(resume_optional_eighth_digit({}, {**rules, "crop_revision": "other"},
                                                       source, now, begin))
         self.assertFalse(resume_optional_eighth_digit({}, rules, {**source, "camera": "other"},
                                                       now, begin))
         self.assertFalse(resume_optional_eighth_digit({}, {**rules, "fraction_digits": 2},
                                                       source, now, begin))
-        self.assertEqual(["start", "start"], calls)
+        self.assertEqual(["start", "start", "start"], calls)
         refused = {}
         self.assertFalse(resume_optional_eighth_digit(refused, rules, source, now, lambda: False))
         self.assertNotIn("eighth_digit_retry_at", refused)
@@ -544,7 +544,9 @@ class StateTests(TestCase):
         self.assertTrue(run.stationary_partial_active(rules, source))
         self.assertFalse(run.stationary_partial_active(rules, {**source, "camera": "camera.other"}))
         self.assertFalse(run.stationary_partial_active({**rules, "crop_revision": "43"}, source))
-        self.assertFalse(run.stationary_partial_active({**rules, "precision_mode": True}, source))
+        # Since 0.1.1 the precision mode only means "compare three decimals"; the
+        # seven-digit setup with a background search for the last digit applies there too.
+        self.assertTrue(run.stationary_partial_active({**rules, "precision_mode": True}, source))
 
     def test_existing_calibration_seed_requires_a_verified_matching_crop_revision(self):
         rules = {"crop_mode": "manual", "crop": "0,0,400,90", "width": 250, "rotation": 0,
@@ -740,7 +742,7 @@ class StateTests(TestCase):
         self.assertTrue(access["status"]()["intensive"])
         access["save"]({**access["rules"](), "precision_mode": True})
         access["control"]("start", 4)
-        self.assertFalse(access["status"]()["simplified"])
+        self.assertTrue(access["status"]()["simplified"], "precision mode no longer forces all eight digits")
 
         layout = run.Layout((120, 160, 525, 315), 1, 280)
         fine = run.Calibration(limit=4, started=0, intensive=True, candidate=layout, confirmations=2)
@@ -927,7 +929,7 @@ class StateTests(TestCase):
                                                   readings=readings, precision_mode=strict))
                     self.assertFalse(record_sample(history, data, "12345.222", timezone.utc, now, 3,
                                                    readings=readings, precision_mode=strict))
-                    if index < 2 or strict:
+                    if index < 2:
                         self.assertEqual(("difference", LAST_DIGIT_NOTICE),
                                          (history["status"], history["check_detail"]))
                     else:
@@ -1314,10 +1316,20 @@ class StateTests(TestCase):
             self.assertEqual("JPEG", overlay.format)
             self.assertGreater(overlay.width, 0)
 
-        initial["consumption"]["timestamp"] -= 3600
-        files["HISTORY"].write_text(json.dumps(initial))
+        def age(history, seconds):
+            for key in ("timestamp", "pending_time", "anchor_time"):
+                if history["consumption"].get(key):
+                    history["consumption"][key] -= seconds
+            files["HISTORY"].write_text(json.dumps(history))
+
+        age(initial, 3600)
         self.assertEqual("standalone_pending", check("12347.???")["check_status"])
         self.assertEqual("12345", published[run.OCR_ENTITY]["state"])
+        first_confirmation = check("12347.???")
+        # The start value 12345 is now confirmed; 12347 waits for the next check.
+        self.assertEqual("0", published[run.CONSUMPTION_ENTITY]["state"])
+        age(first_confirmation, 600)
+        self.assertEqual("standalone_pending", check("12347.???")["check_status"])
         second = check("12347.???")
         self.assertEqual("2", published[run.CONSUMPTION_ENTITY]["state"])
         self.assertEqual("standalone_pending", check("12347.???")["check_status"])

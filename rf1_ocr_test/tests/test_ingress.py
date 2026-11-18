@@ -450,6 +450,35 @@ class IngressTests(IngressFixture):
         self.assertEqual(("warning", "Prüfung bestanden mit Hinweis"), (status["tone"], status["heading"]))
 
 
+    def test_partial_eighth_digit_distinguishes_configured_and_active_precision(self):
+        self.setup_pending = False
+        self.source_selected = True
+        source = {**self.source, "selected": True}
+        self.rules.update(decimals=3, fraction_digits=3, precision_mode=False,
+                          crop_revision="partial")
+        self.rules["stationary_partial_scope"] = panel.setup_source_id([source, "partial"])
+        self.history.write_text(json.dumps({
+            "check_status": "match", "check_detail": "Bestätigt", "comparison_decimals": 2,
+            "ocr_value": "10475.15?", "source_connection_status": "ok",
+        }))
+        status = json.loads(self.request("/automatic")[0])
+        self.assertEqual(3, status["configured_decimals"])
+        self.assertEqual(2, status["decimals"])
+        self.assertTrue(status["partial_eighth_digit"])
+        self.assertEqual("warning", status["tone"])
+        self.assertIn("achte Ziffer offen", status["heading"])
+        self.assertIn("aktuell 2 verglichen", status["detail"])
+        self.assertFalse(status["routine_ok"])
+        english = json.loads(self.request("/automatic?lang=en")[0])
+        self.assertIn("3 decimal places", english["detail"])
+        page, _ = self.request("/")
+        self.assertIn("partialEighthDigit", page)
+        self.assertIn("Eingestellt: 3 Nachkommastellen", page)
+        self.rules["precision_mode"] = True
+        strict = json.loads(self.request("/automatic")[0])
+        self.assertFalse(strict["partial_eighth_digit"])
+        self.assertEqual(3, strict["configured_decimals"])
+
     def test_regular_cross_check_replaces_setup_message_with_healthy_status(self):
         self.setup_pending = False
         self.source_selected = True

@@ -12,7 +12,7 @@ This is an additional plausibility check, **not a certified measurement device**
 
 ## Installation
 
-**AI Meter Reader 0.6.7** is on the Stable channel. Setup immediately saves seven confirmed digits and searches for the optional eighth digit in the background, while temporarily unreadable rolling digits are rechecked on fresh frames.
+**AI Meter Reader 0.6.8** is on the Stable channel. Starting calibration opens Overview with the setup steps visible. After seven digits are saved, Overview only shows a short background-check status for the optional eighth digit and preserves the normal automatic status.
 
 Add **Add-ons by Eifellayer** under **Settings → Apps → Install app → ⋮ → Repositories** using the [Stable link](https://github.com/Eifellayer/meter-ocr#stable), then install **AI Meter Reader**. Set `esp_url` for SLFork, or configure `kamera_entitaet` and an optional `referenz_entitaet` sensor.
 

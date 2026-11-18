@@ -483,8 +483,7 @@ class IngressTests(IngressFixture):
         self.setup_pending = False
         self.source_selected = True
         source = {**self.source, "selected": True}
-        self.rules.update(decimals=3, crop_revision="saved")
-        self.rules["stationary_partial_scope"] = panel.setup_source_id([source, "saved"])
+        self.rules.update(decimals=2, crop_revision="saved")
         sample = {"check_status": "ocr_only", "check_detail": STANDALONE_VERIFIED_NOTICE,
                   "comparison_decimals": 2, "source_connection_status": "ok"}
         self.history.write_text(json.dumps(sample))

@@ -2575,6 +2575,7 @@ async function refreshTestStatus() {{
     method.textContent = showManual || !job.automatic_preview ? '' : ({{
       shifted: 'Die fehlende Ziffer wurde im verschobenen Rahmen direkt gelesen.',
       composed: 'Ziffern aus übereinstimmenden OCR-Versuchen zusammengesetzt.',
+      anchored: 'Unveränderliche führende Stellen aus dem zuletzt bestätigten Stand ergänzt.',
     }}[job.ocr_method] || '');
     method.hidden = !method.textContent;
     const candidateList = document.querySelector('#ocr-candidates');

@@ -31,6 +31,7 @@ from checks import (
     STANDALONE_PENDING, STANDALONE_PENDING_NOTICE, STANDALONE_REJECTED_NOTICE, STANDALONE_VERIFIED_NOTICE,
     STANDALONE_CACHED_CAPTURE_DELAY, MAX_OCR_ATTEMPTS, missing_digit_pattern, single_missing_digit, disputed_digit_pattern, resolve_ocr_readings,
     compare_sample, crop_register, lighting_ocr_profiles, read_register, read_with_retries, record_sample,
+    anchored_leading_digits, within_anchor_bounds,
     automatic_interval_minutes, defer_duplicate_cycle,
     LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, LAST_DIGIT_RETRIES, SUCCESSFUL_CHECKS,
     SEVENTH_DIGIT_WAIT_NOTICE,
@@ -2576,6 +2577,26 @@ def main():
                                                           fraction_boxes=fractions, source=kind)
                                         rotation_adjustment = adjustment
                                         break
+                        if (not manual and not ocr_confirmed and not raw_fallback and ocr_readings
+                                and not sample.get("reference_is_fallback") and read_state["captured"] is not None):
+                            anchor = history.get("reflection_anchor")
+                            anchored = anchored_leading_digits(
+                                ocr_readings, anchor, read_state["captured"], comparison_decimals,
+                                integer_digits, active_rules["max_flow_lph"],
+                            )
+                            if anchored:
+                                anchored_readings, filled_positions = anchored
+                                value, confirmed = resolve_ocr_readings(
+                                    anchored_readings, comparison_decimals, integer_digits,
+                                    standalone=require_consensus, standalone_composition=True,
+                                )
+                                if confirmed and within_anchor_bounds(
+                                        value, anchor, read_state["captured"], comparison_decimals,
+                                        integer_digits, active_rules["max_flow_lph"]):
+                                    print(f"Führende Stelle(n) {', '.join(str(p + 1) for p in filled_positions)} "
+                                          f"aus bestätigtem Stand ergänzt: {ocr} -> {value}")
+                                    ocr, ocr_confirmed, ocr_readings = value, True, anchored_readings
+                                    ocr_method = "anchored"
                         register = read_state["register"]
                         integer_width = read_state["integer_width"]
                         whole_boxes = read_state["whole_boxes"]

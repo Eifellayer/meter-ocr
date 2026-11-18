@@ -497,6 +497,73 @@ def provisional_digit_estimate(ocr, readings, stamp, previous, decimals, integer
     return {"reading": match, "positions": positions, "time": stamp} if match is not None else None
 
 
+ANCHORED_LEADING_NOTICE = "Unveränderliche führende Stellen aus dem zuletzt bestätigten Stand ergänzt."
+
+
+def anchor_bounds(anchor, stamp, decimals, max_flow_lph):
+    """Return the litre range a meter can show at stamp after a verified anchor."""
+    if (not isinstance(anchor, dict) or type(anchor.get("value")) is not int
+            or type(anchor.get("time")) not in (int, float)
+            or type(stamp) not in (int, float) or type(max_flow_lph) not in (int, float) or max_flow_lph <= 0):
+        return None
+    elapsed = stamp - anchor["time"]
+    if not 0 < elapsed <= WINDOW_SECONDS or anchor["value"] < 0:
+        return None
+    step = 10 ** (3 - decimals)
+    low = anchor["value"]
+    return low, low + step + int(max_flow_lph * elapsed / 3600)
+
+
+def anchored_leading_digits(readings, anchor, stamp, decimals, integer_digits, max_flow_lph):
+    """Fill unreadable leading whole digits that cannot have changed since a verified reading.
+
+    Between the anchor and the maximum possible flow, every reachable value shares
+    a common leading prefix. Only unclear positions inside that prefix are filled.
+    A majority reading that contradicts the anchor aborts the fill. Returns the
+    normalized readings and the filled 0-based positions, or None.
+    """
+    bounds = anchor_bounds(anchor, stamp, decimals, max_flow_lph)
+    if bounds is None or not readings or not 1 <= integer_digits <= 9:
+        return None
+    low, high = (value // 1000 for value in bounds)
+    if high >= 10 ** integer_digits:
+        return None
+    lowest, highest = str(low).zfill(integer_digits), str(high).zfill(integer_digits)
+    frozen = 0
+    while frozen < integer_digits and lowest[frozen] == highest[frozen]:
+        frozen += 1
+    rows = [str(value) for value in readings]
+    if frozen == 0 or any(len(row) < integer_digits or not re.fullmatch(r"[0-9?]+", row[:integer_digits])
+                          for row in rows):
+        return None
+    majority = len(rows) // 2 + 1
+    filled = []
+    for position in range(frozen):
+        votes = Counter(row[position] for row in rows if row[position].isdigit())
+        digit, count = votes.most_common(1)[0] if votes else ("", 0)
+        if count >= majority:
+            if digit != lowest[position]:
+                return None
+        else:
+            filled.append(position)
+    if not filled:
+        return None
+    normalized = [lowest[:frozen] + row[frozen:] for row in rows]
+    return normalized, filled
+
+
+def within_anchor_bounds(ocr, anchor, stamp, decimals, integer_digits, max_flow_lph):
+    """Accept an anchored result only inside the physically reachable range."""
+    bounds = anchor_bounds(anchor, stamp, decimals, max_flow_lph)
+    value = meter_prefix(ocr, decimals, integer_digits)
+    if bounds is None or value is None:
+        return False
+    step = 10 ** (3 - decimals)
+    litres = value * step
+    # One display step below tolerates a jittering last roller between two photographs.
+    return bounds[0] - step <= litres <= bounds[1]
+
+
 def track_reflection(history, ocr, readings, stamp, *, verified, unclear, decimals,
                      integer_digits, max_flow_lph, enabled, manual_anchor=None):
     pattern = single_missing_digit(ocr, readings, decimals, integer_digits) if unclear else None

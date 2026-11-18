@@ -29,6 +29,8 @@ EN_UI = {
     "Rahmen im Ausschnitt (px) ": "Crop coordinates (px) ",
     "Die fehlende Ziffer wurde im verschobenen Rahmen direkt gelesen.": "The missing digit was read directly in the shifted box.",
     "Ziffern aus übereinstimmenden OCR-Versuchen zusammengesetzt.": "Digits were combined from agreeing OCR attempts.",
+    "Unveränderliche führende Stellen aus dem zuletzt bestätigten Stand ergänzt.":
+        "Leading digits that cannot have changed were filled in from the last confirmed reading.",
     "Experimentell · Mehrere Zähler": "Experimental · Multiple meters",
     "Zusätzliche Home-Assistant-Sensoren beobachten. Diese Funktion ist experimentell. Praxistests stehen noch aus.": "Monitor additional Home Assistant sensors. This feature is experimental and has not been field-tested.",
     "Unterstützt fortlaufend steigende Zähler in m³ oder kWh. Pro Zeile eine Entität und optional das Prüfintervall in Minuten, z. B. ": "Supports cumulative meters in m³ or kWh. Enter one entity per line with an optional check interval in minutes, for example ",

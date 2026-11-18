@@ -374,6 +374,18 @@ def compare_sample(data, ocr, decimals, *, ocr_confirmed=True, integer_digits=5)
 LAST_DIGIT_NOTICE = "Nur die dritte Nachkommastelle ist unklar oder weicht ab."
 LAST_DIGIT_PASS = "Die ersten zwei Nachkommastellen stimmen überein. Die dritte Stelle bleibt unbestätigt."
 LAST_DIGIT_RETRIES = 3
+SEVENTH_DIGIT_WAIT_SECONDS = 30 * 60
+SEVENTH_DIGIT_WAIT_NOTICE = (
+    "Warte auf einen höheren Zählerstand. Die nächste automatische Prüfung erfolgt "
+    "wegen der unklaren siebten Ziffer in 30 Minuten."
+)
+SEVENTH_DIGIT_PASS = (
+    "Die ersten sechs Ziffern stimmen mit der gültigen Referenz überein (ohne Rundung). "
+    "Die siebte Ziffer ist noch nicht sicher lesbar: Für diesen Durchlauf nur "
+    "eine Nachkommastelle teilbestätigt. Der Verbrauch und die eingestellte "
+    "Genauigkeit bleiben unverändert. Die App wartet auf einen höheren "
+    "Zählerstand; deshalb wird das Prüfintervall vorübergehend auf 30 Minuten gesetzt."
+)
 SUCCESSFUL_CHECKS = ("match", "match_with_warning", "ocr_only")
 STANDALONE_PENDING = "standalone_pending"
 STANDALONE_PENDING_NOTICE = "Erstes Bild gelesen. Warte auf die zweite Aufnahme zur Gegenprüfung."
@@ -541,6 +553,33 @@ def differs_only_at_last_digit(data, ocr, readings, integer_digits=5):
     return agreeing >= 2 and agreeing > len(readings) // 2
 
 
+def seventh_digit_can_pass(data, ocr, readings, integer_digits=5):
+    """Safely accept six matching digits when only the seventh roller is unclear.
+
+    This is a *partial* reference comparison without rounding. Do not synthesize a
+    precise OCR reading, confirm consumption, or modify configured precision.
+    """
+    if data.get("reference_required") is False or len(readings) < 2:
+        return False
+    reference = data.get("actual_value")
+    if not reference or compare_sample(data, reference, 2, integer_digits=integer_digits)[0] != "match":
+        return False
+    prefix = meter_prefix(reference, 1, integer_digits)
+    if (prefix is None or meter_prefix(data["raw_value"], 1, integer_digits) != prefix
+            or meter_prefix(ocr, 1, integer_digits) != prefix):
+        return False
+    agreeing = [
+        str(reading).replace(",", ".").partition(".")[2][1:2]
+        for reading in readings if meter_prefix(reading, 1, integer_digits) == prefix
+    ]
+    if len(agreeing) < 2 or len(agreeing) <= len(readings) // 2:
+        return False
+    # A consistently recognized but *wrong* seventh digit is a real mismatch,
+    # not a roller transition. The seventh position must actually be uncertain.
+    most_common = Counter(agreeing).most_common(1)[0]
+    return most_common[1] * 2 <= len(agreeing)
+
+
 def rolling_summary(history, now, review_after=REVIEW_AFTER):
     epoch = now.timestamp()
     count = sum(epoch - WINDOW_SECONDS < stamp <= epoch for stamp in history.get("confirmations", ()))
@@ -634,6 +673,12 @@ def record_sample(history, data, ocr, zone, now, decimals=0, *, ocr_confirmed=Tr
             status, detail = "match_with_warning", LAST_DIGIT_PASS
     else:
         history.pop("last_digit_failures", None)
+    if (decimals == 2 and not precision_mode and status in ("difference", "ocr_unclear")
+            and seventh_digit_can_pass(data, ocr, readings, integer_digits)):
+        status, detail = "match_with_warning", SEVENTH_DIGIT_PASS
+        history["seventh_digit_wait"] = True
+    else:
+        history.pop("seventh_digit_wait", None)
     if status == "match":
         history["confirmations"].append(captured)
         history["last_match_at"] = captured
@@ -682,8 +727,10 @@ def defer_duplicate_cycle(history, fetched_at, interval_minutes):
     """Wait for a fresh cycle without changing the outcome, counters or last check."""
     checked_at = last_check_at(history)
     suppressed = history.get("retry_suppressed", False)
-    wait = _check_delay(history["check_status"], interval_minutes, suppressed)
-    if not suppressed:
+    seventh_wait = bool(history.get("seventh_digit_wait"))
+    wait = _check_delay(history["check_status"], interval_minutes, suppressed,
+                        seventh_digit_wait=seventh_wait)
+    if not suppressed and not seventh_wait:
         wait = min(wait, RETRY_INTERVAL)
     if checked_at is not None:
         history["last_check_at"] = checked_at
@@ -691,8 +738,10 @@ def defer_duplicate_cycle(history, fetched_at, interval_minutes):
     history["check_interval_minutes"] = interval_minutes
 
 
-def _check_delay(outcome, interval_minutes, retry_suppressed=False):
+def _check_delay(outcome, interval_minutes, retry_suppressed=False, *, seventh_digit_wait=False):
     interval = interval_minutes * 60
+    if outcome == "match_with_warning" and seventh_digit_wait:
+        return SEVENTH_DIGIT_WAIT_SECONDS
     if outcome == STANDALONE_PENDING:
         return STANDALONE_SECOND_CAPTURE_DELAY
     if outcome in SUCCESSFUL_CHECKS:
@@ -717,7 +766,8 @@ def schedule_next_check(history, outcome, checked_at, interval_minutes=DEFAULT_I
     else:
         history.pop("capture_failure_since", None)
     history["next_check_at"] = checked_at + _check_delay(
-        outcome, interval_minutes, history.get("retry_suppressed", False)
+        outcome, interval_minutes, history.get("retry_suppressed", False),
+        seventh_digit_wait=bool(history.get("seventh_digit_wait")),
     )
     history["check_interval_minutes"] = interval_minutes
 
@@ -733,7 +783,10 @@ def last_check_at(history):
     interval_minutes = history.get("check_interval_minutes", LEGACY_INTERVAL_MINUTES)
     if not valid_interval_minutes(interval_minutes):
         interval_minutes = LEGACY_INTERVAL_MINUTES
-    return deadline - _check_delay(outcome, interval_minutes, history.get("retry_suppressed", False))
+    return deadline - _check_delay(
+        outcome, interval_minutes, history.get("retry_suppressed", False),
+        seventh_digit_wait=bool(history.get("seventh_digit_wait")),
+    )
 
 
 def reschedule_next_check(history, interval_minutes):
@@ -744,7 +797,8 @@ def reschedule_next_check(history, interval_minutes):
     if checked_at is None:
         return False
     history["next_check_at"] = checked_at + _check_delay(
-        history["check_status"], interval_minutes, history.get("retry_suppressed", False)
+        history["check_status"], interval_minutes, history.get("retry_suppressed", False),
+        seventh_digit_wait=bool(history.get("seventh_digit_wait")),
     )
     history["check_interval_minutes"] = interval_minutes
     return True

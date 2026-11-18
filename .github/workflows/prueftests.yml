@@ -1,0 +1,62 @@
+name: Prüftests
+
+on:
+  push:
+    paths:
+      - "rf1_ocr_test/**"
+      - "repository.yaml"
+      - "README.md"
+      - "README.en.md"
+      - "docs/**"
+      - "RELEASE-PLAN.md"
+      - ".github/workflows/prueftests.yml"
+  pull_request:
+    paths:
+      - "rf1_ocr_test/**"
+      - "repository.yaml"
+      - "README.md"
+      - "README.en.md"
+      - "docs/**"
+      - "RELEASE-PLAN.md"
+      - ".github/workflows/prueftests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Installiere Testabhängigkeiten
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr-eng tesseract-ocr fonts-dejavu-core
+          python -m pip install pillow websocket-client playwright pyyaml
+          python -m playwright install --with-deps --only-shell chromium
+      - name: Prüfe Python-Syntax
+        run: python -m compileall -q rf1_ocr_test
+      - name: Prüfe OCR-Regeln, Konfiguration und Weboberfläche
+        run: python -m unittest discover -s rf1_ocr_test/tests -v
+      - name: Prüfe JavaScript-Syntax
+        run: |
+          python rf1_ocr_test/tests/test_release.py --write-js /tmp/meter-ocr-panel.js
+          node --check /tmp/meter-ocr-panel.js
+          python rf1_ocr_test/tests/test_release.py --write-js-en /tmp/meter-ocr-panel-en.js
+          node --check /tmp/meter-ocr-panel-en.js
+
+  container:
+    strategy:
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: App-Image bauen und Laufzeit prüfen
+        run: |
+          docker build --tag meter-ocr-test rf1_ocr_test
+          docker run --rm --entrypoint /usr/bin/python3 meter-ocr-test -c 'import run, checks, language, panel, reminder, consumption'
+          docker run --rm --entrypoint tesseract meter-ocr-test --list-langs | grep -x eng

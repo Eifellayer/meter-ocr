@@ -1,0 +1,38 @@
+name: AI Meter Reader
+version: "0.1.0"
+slug: rf1_ocr_test
+description: "Lokale Zählerablesung per Kamera / Local camera-based meter reading"
+arch:
+  - aarch64
+  - amd64
+startup: application
+boot: auto
+homeassistant_api: true
+ingress: true
+ingress_port: 8099
+map:
+  - type: media
+    read_only: false
+options:
+  esp_url: "http://esp-gaszaehler.local"
+  ausschnitt: "52,56,564,132"
+  vorkomma_breite: 305
+  helle_ziffern: false
+  zeitzone: Europe/Berlin
+  push_dienst: ""
+  vergleich_nachkommastellen: 0
+  ocr_versuche: 5
+  kamera_entitaet: ""
+  referenz_entitaet: ""
+schema:
+  esp_url: url
+  ausschnitt: str
+  vorkomma_breite: int(1,9999)
+  helle_ziffern: bool
+  zeitzone: str
+  push_dienst: str?
+  intervall_sekunden: int?
+  vergleich_nachkommastellen: int(0,3)
+  ocr_versuche: int(1,10)
+  kamera_entitaet: str?
+  referenz_entitaet: str?

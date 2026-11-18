@@ -9,7 +9,8 @@ Ziel: einmal einrichten, danach prüft die App selbstständig und zeigt Unsicher
 | Aufgabe | Fertig, wenn … |
 | --- | --- |
 | **Praxis 0.1.0 beobachten** | Neuinstallation und Selbsteinrichtung laufen am echten Zähler; Optimierungs-Anzeige, Neuladen nach Neustart und Assistent auf Handy und Desktop bewährt. |
-| **Hinweis zur 8. Ziffer nach der Einrichtung korrigieren** | Wurde nur mit sieben Ziffern eingerichtet, sagt der Hinweis nicht mehr „eingestellt: 2 Nachkommastellen“, sondern dass vorübergehend nur 2 verglichen werden, die eingestellten 3 bleiben und die 8. Ziffer ab etwa einer Stunde nach der Einrichtung im Hintergrund gesucht wird. |
+| **Anzeige der Einrichtung mit sieben Ziffern korrigieren** | Der Hinweis zeigt die eingestellten 3 Nachkommastellen und dass vorübergehend nur 2 verglichen werden; die Suche nach der 8. Ziffer ist sichtbar angekündigt (Start ca. 1 h nach der Einrichtung) statt still pausiert. (Nutzerhinweis 18.11., zweimal gemeldet) |
+| **Laufende 7. Ziffer bei hohem Verbrauch nicht als Fehler werten** | Dreht sich die 2. Nachkommastelle gerade (Lesungen schwanken zwischen n und n+1), gilt der niedrigere Wert als bestätigt, statt „Prüfung fehlgeschlagen“ und 60 Minuten Pause. Bucht nie zu viel, da der Zähler nur vorwärts läuft. |
 | **Manuelle Korrektur in der Selbsteinrichtung** | Beim Markieren des Rahmens pausiert die Einrichtung; Winkel einstellbar; Ziffernrahmen verschieben und in der Größe ändern; danach geht es mit den korrigierten Rahmen weiter. |
 | **Plausibilität nach eigenem Durchschnittsverbrauch** | Große Sprünge zählen nur, wenn sie zum bisherigen Verbrauch passen; bis genug Daten vorliegen, gilt nur der maximale Durchfluss. |
 | **Anleitung mit Bildern neu** | Kurze bebilderte Anleitung aus der Demo (keine privaten Zählerfotos). |

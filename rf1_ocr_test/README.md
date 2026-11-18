@@ -12,7 +12,7 @@ Die ausführliche Einführung, Voraussetzungen, Installation und Konfiguration f
 
 ## Installation
 
-**AI Meter Reader 0.6.7** ist auf Stable. Die Selbsteinrichtung übernimmt sieben bestätigte Ziffern sofort und prüft die achte Ziffer anschließend zusätzlich im Hintergrund. Eine vorübergehend drehende siebte Rolle wird mit frischen Bildern erneut geprüft, ohne den gefundenen Rahmen sofort zu verlieren.
+**AI Meter Reader 0.6.8** ist auf Stable. Nach dem Start der Selbsteinrichtung wechselt die App zur Übersicht und zeigt die Einrichtungsschritte. Sobald sieben Ziffern gespeichert sind, erscheint nur noch ein kurzer Hinweis auf die zusätzliche Suche nach der achten Ziffer; die normalen Automatikdaten bleiben sichtbar.
 
 Über **Einstellungen → Apps → App installieren → ⋮ → Repositories** den [Stable-Link](https://github.com/Eifellayer/meter-ocr#stable) hinzufügen und **AI Meter Reader** installieren. Im SLFork-Modus die `esp_url` eintragen, starten und die Weboberfläche öffnen.
 

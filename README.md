@@ -51,7 +51,7 @@ Bei ausstehendem Update kann in **Entwicklerwerkzeuge → Aktionen** `homeassist
 
 ## Mitmachen und Rückmeldungen
 
-Fehlerberichte und Vorschläge bitte als [GitHub Issue](https://github.com/Eifellayer/meter-ocr/issues) mit App-Version, Bildquelle, Zählertyp und erwartetem Ergebnis melden. **Keine Zugangsdaten oder ungeschwärzten privaten Fotos veröffentlichen.** Das Projekt ist ein kostenloses Hobbyprojekt; eine explizite Open-Source-Lizenz ist noch nicht festgelegt. Beiträge und Weiterverwendungsrechte sollten deshalb vorab geklärt werden.
+Fehlerberichte und Vorschläge bitte als [GitHub Issue](https://github.com/Eifellayer/meter-ocr/issues) mit App-Version, Bildquelle, Zählertyp und erwartetem Ergebnis melden. **Keine Zugangsdaten oder ungeschwärzten privaten Fotos veröffentlichen.** Das Projekt ist kostenlos und quelloffen unter der **GNU GPLv3 oder einer späteren Version**. Eigene Weiterentwicklungen und Forks sind willkommen. Wenn du eine bearbeitete Version weitergibst, musst du die GPL-Bedingungen beachten und den entsprechenden vollständigen Quellcode bereitstellen. Änderungen an der offiziellen App erfolgen weiterhin nur nach Prüfung durch den Maintainer. Siehe [LICENSE](LICENSE) und [Quellen/Drittlizenzen](SOURCES.md).
 
 ## Hinweise zur Nutzung
 

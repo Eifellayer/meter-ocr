@@ -2380,6 +2380,7 @@ def main():
                         regular_limit = min(configured_attempts, ocr_limit) if local_enabled else ocr_limit - reserve_for_rotation
                         regular_attempts = min(configured_attempts, regular_limit)
                         comparison_decimals = manual_options["decimals"] if manual else decimals
+                        exact_partial = stationary_partial and not manual
 
                         def stop_ocr():
                             return (not manual and get_auto_paused()) or (live_source and time.monotonic() >= live_deadline)
@@ -2408,9 +2409,11 @@ def main():
                             force_all_attempts=manual,
                             profiles=lighting_ocr_profiles(register),
                             defer_composition=digit_probe_enabled,
+                            exact_prefix=exact_partial,
                         )
                         regular_status, _ = compare_sample(sample, ocr, comparison_decimals,
-                                                           ocr_confirmed=ocr_confirmed, integer_digits=integer_digits)
+                                                           ocr_confirmed=ocr_confirmed, integer_digits=integer_digits,
+                                                           exact_prefix=exact_partial)
                         same_frame = read_state["frame_reads"]
                         observed = same_frame[-1] if same_frame else ""
                         pattern = disputed_digit_pattern(same_frame, comparison_decimals, integer_digits)
@@ -2473,6 +2476,7 @@ def main():
                                     lambda: stop_ocr() or time.monotonic() >= digit_deadline,
                                     lambda candidate: compare_sample(
                                         sample, candidate, comparison_decimals, integer_digits=integer_digits,
+                                        exact_prefix=exact_partial,
                                     )[0] in ("match", "ocr_only"),
                                 )
                                 ocr_attempts += used
@@ -2484,6 +2488,7 @@ def main():
                                     read_state.update(whole_boxes=whole, fraction_boxes=fraction)
                                     regular_status = compare_sample(
                                         sample, ocr, comparison_decimals, integer_digits=integer_digits,
+                                        exact_prefix=exact_partial,
                                     )[0]
                         if digit_probe_enabled and not ocr_confirmed:
                             # A moving meter can show different digits on separate photographs.
@@ -2496,6 +2501,7 @@ def main():
                                 ocr_method = "composed"
                             regular_status = compare_sample(
                                 sample, ocr, comparison_decimals, ocr_confirmed=ocr_confirmed, integer_digits=integer_digits,
+                                exact_prefix=exact_partial,
                             )[0]
                         if local_enabled:
                             required = integer_digits + comparison_decimals
@@ -2542,7 +2548,8 @@ def main():
                                                if index not in weak for row in rows):
                                             continue
                                         if compare_sample(sample, values[0], comparison_decimals,
-                                                          integer_digits=integer_digits)[0] not in ("match", "ocr_only"):
+                                                          integer_digits=integer_digits,
+                                                          exact_prefix=exact_partial)[0] not in ("match", "ocr_only"):
                                             continue
                                         ocr, ocr_confirmed, ocr_readings = values[0], True, values
                                         ocr_method = None
@@ -2579,13 +2586,14 @@ def main():
                                         max_attempts=2, progress=report_rotation, trace=tilted_readings,
                                         standalone=require_consensus, integer_digits=integer_digits,
                                         stop_before_attempt=stop_ocr,
+                                        exact_prefix=exact_partial,
                                     )
                                     ocr_attempts += attempts
                                     if attempts:
                                         rotation_trials += 1
                                     rotated_status, _ = compare_sample(
                                         sample, value, comparison_decimals, ocr_confirmed=confirmed,
-                                        integer_digits=integer_digits,
+                                        integer_digits=integer_digits, exact_prefix=exact_partial,
                                     )
                                     if rotated_status in ("match", "ocr_only"):
                                         ocr, ocr_confirmed = value, confirmed
@@ -2633,7 +2641,7 @@ def main():
                         ocr_confirmed, ocr_attempts = True, 0
                     if not manual:
                         reading_status, _ = compare_sample(sample, ocr, decimals, ocr_confirmed=ocr_confirmed,
-                                                           integer_digits=integer_digits)
+                                                           integer_digits=integer_digits, exact_prefix=stationary_partial)
                         accept_reference = (
                             decimals == 3 and reading_status in ("difference", "ocr_unclear")
                             and last_digit_can_pass(updated, precision_mode)
@@ -2840,7 +2848,7 @@ def main():
                 elif record_sample(updated, sample, ocr, zone, datetime.now(zone), decimals,
                                    ocr_confirmed=ocr_confirmed, integer_digits=integer_digits,
                                    readings=ocr_readings if not validation_detail else (),
-                                   precision_mode=precision_mode):
+                                   precision_mode=precision_mode, exact_prefix=stationary_partial):
                     atomic_write(DESTINATION, picture, 0o644)
                     if not automatic_preview_ready:
                         AUTOMATIC_PREVIEW.unlink(missing_ok=True)

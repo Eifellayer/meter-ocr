@@ -30,7 +30,7 @@ class AppIdentityTests(unittest.TestCase):
     def test_release_metadata_preserves_stable_app_identity(self):
         config = yaml.safe_load((APP / "config.yaml").read_text(encoding="utf-8"))
         repository = yaml.safe_load((APP.parent / "repository.yaml").read_text(encoding="utf-8"))
-        self.assertEqual("0.6.10", config["version"])
+        self.assertEqual("0.6.11", config["version"])
         self.assertEqual("rf1_ocr_test", config["slug"])
         self.assertEqual("AI Meter Reader", config["name"])
         self.assertNotIn("stage", config)
@@ -68,7 +68,7 @@ class DocumentationTests(unittest.TestCase):
                 self.assertIn(title, page)
                 self.assertIn(f"]({detail})", page)
                 self.assertTrue((APP.parent / detail).is_file())
-                self.assertIn("0.6.10 Stable", page)
+                self.assertIn("0.6.11 Stable", page)
                 self.assertIn("supervisor_add_addon_repository", page)
                 self.assertIn("repository_url=https%3A%2F%2Fgithub.com%2FEifellayer%2Fmeter-ocr", page)
 
@@ -84,7 +84,7 @@ class DocumentationTests(unittest.TestCase):
         self.assertIn("10 minutes by default", en)
         self.assertIn("5 minutes", en)
         self.assertIn("60-minute", en)
-        self.assertIn("0.6.10 Stable", app_docs)
+        self.assertIn("0.6.11 Stable", app_docs)
         self.assertNotIn("Version 0.5.2", app_docs)
         self.assertNotIn("Pulse sensor work resumes in 0.6", app_docs)
         self.assertIn("ESP nur als Kamera", de)

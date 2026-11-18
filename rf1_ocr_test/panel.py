@@ -71,6 +71,8 @@ CALIBRATION_PREVIEW_HTML = """<details class="calibration-photo-panel" open hidd
 <p class="calibration-preview-help">Die App sucht in diesem Bild nach der Ziffernreihe.</p>
 </details>"""
 
+REFLECTION_OFFER_SECONDS = 60 * 60
+
 PAGE = """<!doctype html>
 <html lang="{language}"><meta charset="utf-8"><meta name="viewport" content="width=device-width">
 <title>{app_name}</title>
@@ -408,6 +410,9 @@ background:linear-gradient(#0d141a,#26323b 48%,#0d141a);color:#f4f7f9;box-shadow
 .odometer .separator{{align-self:end;padding:0 .02em;color:var(--muted)}}
 .odometer .unit{{align-self:end;margin-left:.35rem;font:600 .38em/1.4 system-ui,sans-serif;color:var(--muted)}}
 .odometer-empty{{color:var(--muted);font:600 1rem system-ui,sans-serif;align-self:center}}
+.meter-hero-note{{margin:-.35rem 0 0;color:var(--muted);font-size:.85rem}}
+.meter-hero-note::before{{content:"ⓘ ";}}
+.meter-hero-note[data-state="searching"]{{color:var(--warn)}}
 .meter-hero-meta{{display:flex;gap:.4rem 1.2rem;flex-wrap:wrap;margin:0;color:var(--muted);font-size:.86rem}}
 .meter-hero-meta strong{{color:var(--ink);font-weight:650;font-variant-numeric:tabular-nums}}
 /* ---------- Status, facts and actions ---------- */
@@ -515,6 +520,7 @@ header{{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.6rem}}
 <span class="status-chip" id="hero-status" data-tone="{automatic_tone}"></span>
 </div>
 <div class="odometer" id="meter-odometer" role="img" aria-label="Zählerstand {ocr}" data-reading="{ocr}"></div>
+<p class="meter-hero-note" id="hero-digit-note" hidden></p>
 <p class="meter-hero-meta"><span>Letzte Prüfung <strong id="hero-last-check">–</strong></span>
 <span>Nächste Prüfung <strong id="hero-countdown">–</strong></span></p>
 </div>
@@ -573,6 +579,7 @@ header{{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.6rem}}
 </dialog>
 <div id="calibration-overview" class="calibration-live" hidden>
 <p id="calibration-overview-state" role="status"></p>
+<p class="calibration-last-digit-note settings-note" hidden></p>
 <dl class="setup-phase" hidden><div><dt>Aktueller Schritt</dt><dd class="setup-current-step"></dd></div>
 <div><dt>Nächster Schritt</dt><dd class="setup-next-step"></dd></div></dl>
 <details class="setup-help calibration-candidate-panel" hidden><summary>Kandidaten</summary><ol class="calibration-candidates"></ol></details>
@@ -821,6 +828,7 @@ name: Zählerstand (OCR)</code></pre>
 <details id="calibration-diagnostics" open hidden>
 <summary>Diagnose der Selbsteinrichtung</summary>
 <p id="calibration-state" role="status" hidden></p>
+<p class="calibration-last-digit-note settings-note" hidden></p>
 <ol class="calibration-candidates"></ol>
 {calibration_preview_html}
 </details>
@@ -2226,6 +2234,8 @@ function refreshCalibrationImages(preview) {{
 }}
 
 let calibrationWasActive = false;
+let lastDigitSearching = false;
+let comparedDecimals = null;
 let previousCalibrationState = '';
 let routineOk = {automatic_routine_ok};
 let calibrationNoticeUntil = 0;
@@ -2243,6 +2253,27 @@ function refreshCalibration(status) {{
   if (!status) return;
   const active = status.state === 'waiting' || status.state === 'testing';
   const background = status.background === true;
+  lastDigitSearching = background && active;
+  const setupReading = String(status.preview?.reading || status.candidates?.[0]?.reading || '');
+  const setupFraction = setupReading.replace(',', '.').split('.')[1] || '';
+  const setupDigits = setupReading.replace(/[^0-9?]/g, '').length;
+  const lastDigitLabel = setupDigits
+    ? (lang === 'en' ? `The ${{setupDigits}}th digit` : `Die ${{setupDigits}}. Ziffer`)
+    : (lang === 'en' ? 'The last decimal digit' : 'Die letzte Nachkommastelle');
+  let lastDigitNote = '';
+  if (active && !background && status.simplified) {{
+    lastDigitNote = lastDigitLabel + (lang === 'en'
+      ? ' does not need to be found for setup. After saving, the app keeps searching for it in the background.'
+      : ' muss für die Einrichtung noch nicht gefunden werden. Nach dem Speichern sucht die App sie im Hintergrund weiter.');
+  }} else if (active && !background && !status.intensive && comparedDecimals === 2 && setupFraction.length === 3) {{
+    lastDigitNote = lastDigitLabel + (lang === 'en'
+      ? ' is skipped with 2 decimal places. Choose 3 decimal places to have it searched in the background after setup.'
+      : ' wird bei 2 Nachkommastellen übersprungen. Mit 3 Nachkommastellen sucht die App sie nach der Einrichtung im Hintergrund.');
+  }}
+  for (const element of document.querySelectorAll('.calibration-last-digit-note')) {{
+    if (element.textContent !== lastDigitNote) element.textContent = lastDigitNote;
+    element.hidden = !lastDigitNote;
+  }}
   const overview = document.querySelector('#calibration-overview');
   overview.classList.toggle('background-only', background);
   const label = document.querySelector('#calibration-state');
@@ -2867,6 +2898,24 @@ function syncHero() {{
   const label = !document.querySelector('#paused-notice').hidden ? (lang === 'en' ? 'Paused' : 'Pausiert') : (labels[tone] || '–');
   if (chip.textContent !== label) chip.textContent = label;
   chip.dataset.tone = tone;
+  const note = document.querySelector('#hero-digit-note');
+  const reading = (document.querySelector('#automatic-ocr').textContent || '').trim().replace(',', '.');
+  const [wholeDigits, fractionDigits = ''] = reading.split('.');
+  const position = wholeDigits.length + fractionDigits.length;
+  let noteText = '', noteState = '';
+  if (/[0-9?]/.test(reading) && lastDigitSearching) {{
+    noteText = lang === 'en' ? `The ${{position}}th digit is being searched in the background.`
+      : `Die ${{position}}. Ziffer wird im Hintergrund gesucht.`;
+    noteState = 'searching';
+  }} else if (fractionDigits.endsWith('?') && comparedDecimals !== null && comparedDecimals < fractionDigits.length) {{
+    noteText = lang === 'en'
+      ? `The ${{position}}th digit is not compared (setting: ${{comparedDecimals}} decimal places).`
+      : `Die ${{position}}. Ziffer wird nicht verglichen (eingestellt: ${{comparedDecimals}} Nachkommastellen).`;
+    noteState = 'skipped';
+  }}
+  if (note.textContent !== noteText) note.textContent = noteText;
+  note.dataset.state = noteState;
+  note.hidden = !noteText;
   for (const [from, to] of [['#countdown', '#hero-countdown'], ['#automatic-last-check', '#hero-last-check']]) {{
     const value = document.querySelector(from).textContent;
     const target = document.querySelector(to);
@@ -3023,6 +3072,7 @@ async function refreshAutomatic() {{
     updateCalibrationNotice();
     next = sample.next_check;
     renderConsumption(sample.consumption);
+    comparedDecimals = Number.isInteger(sample.decimals) ? sample.decimals : null;
     if (experimental.open) refreshExperimental().catch(() => {{}});
     document.querySelector('#paused-notice').hidden = !sample.paused;
     document.querySelector('#pause-auto-form').hidden = sample.paused;
@@ -3362,7 +3412,13 @@ def start_panel(
         if not estimate or not auto_rules.get("reflection_estimate_enabled", False):
             return None
         estimate_id = f"{estimate['time']}:{estimate['left']}{estimate['digit']}{estimate['right']}"
-        return {**estimate, "id": estimate_id, "confirmed": auto_rules.get("reflection_confirmed_id") == estimate_id}
+        confirmed = auto_rules.get("reflection_confirmed_id") == estimate_id
+        anchor_time = (history.get("reflection_anchor") or {}).get("time")
+        # An unconfirmed suggestion is outdated once verified readings have moved on for an hour.
+        if (not confirmed and type(anchor_time) in (int, float) and type(estimate.get("time")) in (int, float)
+                and anchor_time - estimate["time"] > REFLECTION_OFFER_SECONDS):
+            return None
+        return {**estimate, "id": estimate_id, "confirmed": confirmed}
 
     def geometry_warning(history, auto_rules, language):
         recovery = history.get("geometry_recovery", {})

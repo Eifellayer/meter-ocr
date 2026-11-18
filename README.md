@@ -1,6 +1,6 @@
 # AI Meter Reader – lokale Zählerablesung für Home Assistant
 
-**Version 0.6.10 Stable** · [English](README.en.md) · [Änderungen](rf1_ocr_test/CHANGELOG.md)
+**Version 0.6.11 Stable** · [English](README.en.md) · [Änderungen](rf1_ocr_test/CHANGELOG.md)
 
 Liest mechanische Zähler aus Kamerabildern lokal mit Tesseract OCR und prüft den Stand optional gegen **AI on the Edge / SLFork** oder einen Home-Assistant-Sensor. Geeignet insbesondere für Gaszähler mit Rollenziffern und einstellbaren Nachkommastellen. Die App benötigt Home Assistant mit Supervisor (ARM64 oder AMD64).
 

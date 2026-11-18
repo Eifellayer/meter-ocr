@@ -1,6 +1,6 @@
 # Roadmap und Freigabeplan
 
-Stand: November 2026 · aktuelle Version **0.6.10 Stable**
+Stand: November 2026 · aktuelle Version **0.6.11 Stable**
 
 **Leitbild „Fire and Forget“:** Einmal möglichst automatisch einrichten. Danach prüft die App eigenständig, übernimmt nur belegte Verbesserungen und zeigt Unsicherheit sichtbar an. Ein errechneter Zwischenstand verändert keine bestätigten Messwerte oder Verbrauchszähler.
 
@@ -10,7 +10,7 @@ Stand: November 2026 · aktuelle Version **0.6.10 Stable**
 
 | Status | Aufgabe | Abnahme |
 | --- | --- | --- |
-| Beobachten | **Praxis 0.6.10** | Am echten Zähler prüfen, wie oft führende Stellen ergänzt werden und ob die neue Oberfläche in Browser und Companion-App gut bedienbar ist. |
+| Beobachten | **Praxis 0.6.10/0.6.11** | Am echten Zähler prüfen, wie oft führende Stellen ergänzt werden und ob die neue Oberfläche in Browser und Companion-App gut bedienbar ist. |
 | Offen | **Einstellungen nachvollziehbar machen** | Sichtbar machen, ob ein Wert aus der App-Konfiguration oder aus der Web-Einstellung (`/data/auto-pruefregeln.json`) greift. Alte Felder nur mit Migrationsplan entfernen. |
 | Offen | **Reproduzierbare Foto-Regressionstests** | Versionierte Offline-Testbilder mit Sollwerten in GitHub Actions; Regressionen werden gemeldet. Rechte der Ausgangsbilder klären. |
 | Offen | **GitHub-Releases, Topics und Screenshot** | Releases zu veröffentlichten Stable-Commits, Repository-Topics, anonymisierter Screenshot nur mit Demo-Daten. |
@@ -47,6 +47,7 @@ Diese Funktionen kommen erst, wenn der Einzelzähler im Alltag zuverlässig läu
 
 | Version | Ergebnis |
 | --- | --- |
+| 0.6.11 | Hinweise zur letzten Rolle in Übersicht und Selbsteinrichtung; veraltete Ziffernvorschläge laufen ab. |
 | 0.6.10 | Neue Oberfläche mit Rollenzählwerk, Kacheln, 24-Stunden-Diagramm und Reiter „Werkzeuge“; doppelte Bedienelemente zusammengeführt; unveränderliche führende Stellen werden aus dem bestätigten Stand ergänzt; Roadmap nur noch auf GitHub. |
 | 0.6.9 | Unklare siebte Ziffer: einzelner Durchlauf wird mit einer Nachkommastelle teilbestätigt, danach 30 Minuten Wartezeit. |
 | 0.6.7–0.6.8 | Sieben-Ziffern-Einrichtung wird sofort gespeichert; die achte Ziffer wird im Hintergrund gesucht, ohne die Automatik zu blockieren. |

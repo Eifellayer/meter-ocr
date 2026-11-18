@@ -2,7 +2,7 @@
 
 [Zur Kurzbeschreibung und Installation](../README.md) · [English detailed documentation](DETAILS.en.md) · [Bebilderte Anleitung als PDF](Bedienungsanleitung-AI-Meter-Reader.pdf)
 
-Diese Seite enthält die erweiterten technischen Erläuterungen und Bedienhinweise für **0.6.10 Stable**. Die Kurzanleitung, die Projektübersicht und die Installation findest du in der [Haupt-README](../README.md).
+Diese Seite enthält die erweiterten technischen Erläuterungen und Bedienhinweise für **0.6.11 Stable**. Die Kurzanleitung, die Projektübersicht und die Installation findest du in der [Haupt-README](../README.md).
 
 ## Was wird kontrolliert?
 

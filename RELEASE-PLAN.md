@@ -1,6 +1,6 @@
 # Roadmap
 
-Stand: 18. November 2026 · Version **0.1.1**
+Stand: 18. November 2026 · Version **0.1.2**
 
 **Leitbild „Fire and Forget“ (Nutzer 18.11.):** Die App soll möglichst autonom arbeiten. Der Nutzer wählt nur Zähler und Kamera; alles andere (Grob- und Feineinrichtung, letzte Stelle, Genauigkeit, Fehlerkorrektur) erledigt sie selbst und zeigt Unsicherheit offen an. Manuelle Knöpfe sind nur Notfallwerkzeuge. Stabilität geht vor neuen großen Funktionen.
 
@@ -8,7 +8,7 @@ Stand: 18. November 2026 · Version **0.1.1**
 
 | Aufgabe | Fertig, wenn … |
 | --- | --- |
-| **Praxis 0.1.1 beobachten** | Verbrauch wird erst nach Bestätigung gebucht, ohne Warten auf alte Höchststände; Hinweise und Debug-Protokoll im Alltag hilfreich. |
+| **Praxis 0.1.2 beobachten** | Verbrauch wird erst nach Bestätigung gebucht, ohne Warten auf alte Höchststände; Hinweise und Debug-Protokoll im Alltag hilfreich. |
 | **Laufende Rolle / Genauigkeit nach Durchfluss (beobachten)** | Die Fehlprüfungen am 18.11. kamen nicht vom Durchfluss, sondern vom falschen Startwert (in 0.1.1 behoben). Nur umsetzen, wenn das Debug-Protokoll zeigt, dass eine drehende Rolle bei hohem Verbrauch Prüfungen scheitern lässt: dann niedrigeren Wert nehmen bzw. vorübergehend eine Stelle weniger vergleichen, mit Hinweis „Zähler läuft gerade schnell“. |
 | **Fremde Zähler und Wasserzähler** | Test 18.11. mit ca. 2000 öffentlichen Ziffernbildern (Wasser-/Gaszähler): Einzelziffern nur zu etwa 45 % richtig, „1“ besonders schwach (oft unklar oder als 4 gelesen). Praktisch getestet ist nur der eigene Gaszähler (Stromzähler bereits vernetzt, Wasserzähler nicht zugänglich). Verbesserung über einen Einzelziffern-Klassifikator prüfen (siehe Später). |
 | **Vorprüfung ohne geöffnete App** | Sobald Bildquelle bzw. Kamera feststeht, startet die Grob-Einrichtung von selbst im Hintergrund, auch wenn niemand die Weboberfläche offen hat. |

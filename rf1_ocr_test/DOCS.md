@@ -4,7 +4,7 @@
 
 ## Deutsch
 
-**Version 0.1.1.** Die App liest deinen Zähler lokal aus dem Kamerabild. Sie ist keine geeichte Messung.
+**Version 0.1.2.** Die App liest deinen Zähler lokal aus dem Kamerabild. Sie ist keine geeichte Messung.
 
 ### Einrichtung
 
@@ -12,6 +12,8 @@
 2. **Bildquelle:** ESPHome- oder Home-Assistant-Kamera, AI on the Edge / SLFork oder **ESP nur als Kamera** (die App holt nur das Bild und liest selbst).
 3. **Selbsteinrichtung:** Die App sucht den Ziffernbereich und bestätigt ihn an mehreren Bildern. Sind sieben Ziffern sicher, läuft die Automatik. Die achte Stelle stimmt sie im Hintergrund fein ab („Optimierung läuft“, mit Höchstdauer).
 4. Passt der automatisch gefundene Rahmen nicht, kannst du ihn im Assistenten selbst ziehen.
+
+Wenn **3 Nachkommastellen** eingestellt sind, aber nach der Einrichtung zunächst nur sieben Ziffern bestätigt werden, arbeitet die normale Prüfung vorläufig mit **2 Nachkommastellen**. Das ist keine Änderung der gespeicherten Einstellung. Die sieben bestätigten Ziffern werden dabei exakt **ohne Rundung** mit der Referenz verglichen, sodass eine unbekannte achte Ziffer nicht zu einem Fehlvergleich führt. Die Übersicht kennzeichnet den offenen achten Wert; die separate Hintergrundsuche startet nach Neustarts und nach erfolglosen Versuchen erneut (mit mindestens einer Stunde Abstand zwischen Starts). Die bisher bestätigte siebenstellige Ablesung und die Verbrauchsstatistik bleiben erhalten. Die dritte Nachkommastelle gilt erst nach erfolgreicher Gegenprüfung als bestätigt.
 
 ### Bedienung
 
@@ -45,7 +47,7 @@ Nach einem App-Update oder Neustart lädt die geöffnete Weboberfläche selbst n
 
 ## English
 
-**Version 0.1.1.** The app reads your meter locally from a camera image. It is not a certified measurement.
+**Version 0.1.2.** The app reads your meter locally from a camera image. It is not a certified measurement.
 
 ### Setup
 
@@ -53,6 +55,8 @@ Nach einem App-Update oder Neustart lädt die geöffnete Weboberfläche selbst n
 2. **Image source:** ESPHome or Home Assistant camera, AI on the Edge / SLFork, or **ESP as camera only** (the app only fetches the image and reads it itself).
 3. **Automatic setup:** the app finds the digit area and confirms it on several images. Once seven digits are certain, automatic checks run. The eighth digit is fine-tuned in the background ("Optimisation running", with a maximum duration).
 4. If the detected frame is wrong, draw it yourself in the wizard.
+
+When **3 decimal places** are configured but the setup has only confirmed seven digits, routine checks temporarily compare **2 decimal places**. The saved setting is not changed. The seven verified digits are compared with the reference **without rounding** by the unknown eighth digit. The overview marks the eighth digit as unconfirmed, and the separate background search resumes after restarts and unsuccessful runs (at least one hour between starts). Previously verified seven-digit readings and consumption history remain intact. The third decimal place becomes verified only after a successful cross-check.
 
 ### Using the app
 

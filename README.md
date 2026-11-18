@@ -1,6 +1,6 @@
 # AI Meter Reader
 
-**Version 0.1.1** · [English](README.en.md) · [Anleitung](rf1_ocr_test/DOCS.md) · [Änderungen](rf1_ocr_test/CHANGELOG.md) · [Roadmap](RELEASE-PLAN.md)
+**Version 0.1.2** · [English](README.en.md) · [Anleitung](rf1_ocr_test/DOCS.md) · [Änderungen](rf1_ocr_test/CHANGELOG.md) · [Roadmap](RELEASE-PLAN.md)
 
 <img src="assets/project-logo.png" alt="AI Meter Reader" width="110">
 
@@ -19,6 +19,7 @@ Home-Assistant-App, die mechanische Zähler (vor allem Gaszähler mit Ziffernrol
 
 - Liest den Zählerstand aus dem Kamerabild und bestätigt jede Prüfung mit einem zweiten Bild.
 - Erkennt unlesbare Ziffern, statt zu raten, und bucht keinen negativen oder doppelten Verbrauch.
+- Sind drei Nachkommastellen eingestellt, aber nur sieben Ziffern bestätigt, zeigt die App **3 eingestellt / 2 vorläufig verglichen** und wiederholt die Suche nach der achten Ziffer auch nach Neustarts.
 - Stellt `sensor.rf1_ocr_zaehlerstand` und `sensor.rf1_verbrauch_gesamt` (Energie-Dashboard) bereit.
 - Optional: Abgleich mit einem vorhandenen Sensor, Benachrichtigungen, Demo ohne Kamera.
 

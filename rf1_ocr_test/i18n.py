@@ -947,6 +947,12 @@ def english_result(detail, status=None, decimals=0, readings=None):
         ]
     if status == "ocr_unclear":
         return english_uncertain_positions(readings or [], decimals)
+    if status == "match" and detail.startswith("Bestätigt: Die ersten ") and "ohne Rundung" in detail:
+        return (f"Verified: The first {decimals} decimal places match the reference without rounding. "
+                "The next digit is still unconfirmed.")
+    if status == "difference" and detail.startswith("Abweichung: Die ersten ") and "ohne Rundung" in detail:
+        return (f"Mismatch: The first {decimals} decimal places do not match the reference "
+                "without rounding.")
     if status == "match":
         if decimals == 0:
             return "Confirmed: Whole cubic meters match. Decimal digits were ignored."

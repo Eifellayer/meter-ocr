@@ -772,6 +772,19 @@ def stationary_partial_active(rules, source):
             and rules.get("stationary_partial_scope") == setup_source_id([source, revision]))
 
 
+# A failed optional eighth-digit search must not permanently strand a saved
+# seven-digit setup. Retry infrequently and remember the deadline across restarts.
+EIGHTH_DIGIT_RETRY_SECONDS = 60 * 60
+
+
+def eighth_digit_retry_due(rules, source, history, now):
+    """Can a saved seven-digit setup attempt its optional eighth digit again?"""
+    deadline = history.get("eighth_digit_retry_at", 0)
+    return (stationary_partial_active(rules, source)
+            and rules.get("fraction_digits") == 3
+            and (type(deadline) not in (int, float) or now >= deadline))
+
+
 def setup_deadlines(rules, source):
     completed = rules.get("setup_completed")
     if isinstance(completed, dict) and completed.get("source") == setup_source_id(source):

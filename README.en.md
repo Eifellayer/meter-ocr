@@ -51,7 +51,7 @@ To refresh the update status, run `homeassistant.update_entity` on `update.meter
 
 ## Feedback and contributions
 
-Use [GitHub Issues](https://github.com/Eifellayer/meter-ocr/issues) and include the version, source, meter type and expected reading. **Do not post credentials or unredacted private photos.** This is a free hobby project. An explicit open-source license has not yet been selected; contribution and reuse permissions therefore need clarification.
+Use [GitHub Issues](https://github.com/Eifellayer/meter-ocr/issues) and include the version, source, meter type and expected reading. **Do not post credentials or unredacted private photos.** This free hobby project is open source under the **GNU GPL version 3 or any later version**. Forks and independent improvements are welcome. If you distribute a modified version, the GPL requires providing the complete corresponding source under its conditions. The maintainer still decides what goes into the official app. See [LICENSE](LICENSE) and [third-party credits](SOURCES.md).
 
 ## Usage notes
 

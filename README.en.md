@@ -1,6 +1,6 @@
 # AI Meter Reader
 
-**Version 0.1.0** · [Deutsch](README.md) · [Guide](rf1_ocr_test/DOCS.md) · [Changelog](rf1_ocr_test/CHANGELOG.md) · [Roadmap](RELEASE-PLAN.md)
+**Version 0.1.1** · [Deutsch](README.md) · [Guide](rf1_ocr_test/DOCS.md) · [Changelog](rf1_ocr_test/CHANGELOG.md) · [Roadmap](RELEASE-PLAN.md)
 
 <img src="assets/project-logo.png" alt="AI Meter Reader" width="110">
 
@@ -19,6 +19,7 @@ Home Assistant app that reads mechanical meters (mainly gas meters with digit ro
 
 - Reads the meter from the camera image and confirms every check with a second image.
 - Marks unreadable digits instead of guessing and never books negative or duplicate consumption.
+- When three decimal places are configured but only seven digits are verified, the UI says **3 configured / 2 provisionally checked** and resumes the eighth-digit background search after restarts.
 - Provides `sensor.rf1_ocr_zaehlerstand` and `sensor.rf1_verbrauch_gesamt` (Energy dashboard).
 - Optional: comparison with an existing sensor, notifications, demo without a camera.
 

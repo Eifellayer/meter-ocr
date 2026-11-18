@@ -47,6 +47,7 @@ from calibration import (Calibration, Layout, CAPTURE_INTERVAL, PERFECT_CONFIRMA
 from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, LOWER_PENDING, LOWER_RECOVERED, MAX_FLOW_LPH,
                          ImplausibleReading, track_lower_series,
                          accumulate_consumption, fallback_detail, format_cubic_metres, record_consumption_sample)
+from checks import MOVING_DIGIT_NOTICE, only_last_compared_unclear
 import debug_log
 from layout import (MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, find_digit_row,
                     digit_box_settings, find_raw_digit_row, normalize_digit_boxes, rotated_width, scale_digit_boxes, turn_crop)
@@ -1515,7 +1516,7 @@ def main():
                         if stamp < captured:
                             baseline = accumulate_consumption(
                                 {}, "calibration", stamp, active_rules["fallback_value"], min(precision, configured_rules["decimals"]),
-                                active_rules["max_flow_lph"], active_rules["integer_digits"],
+                                active_rules["max_flow_lph"], active_rules["integer_digits"], confirmed=True,
                             )
                     with Image.open(io.BytesIO(picture)) as frame:
                         if frame.width * frame.height > MAX_IMAGE_PIXELS:
@@ -2669,6 +2670,7 @@ def main():
                                         previous_consumption, source_key, captured,
                                         sample["actual_value"] if accept_reference else ocr, decimals,
                                         active_rules["max_flow_lph"], integer_digits, allow_lower=allow_lower,
+                                        confirmed=reading_status == "match" or accept_reference,
                                     )
                                     if setup_reference:
                                         standalone_reference = setup_reference
@@ -2852,6 +2854,10 @@ def main():
                         updated["check_detail"] = LOWER_RECOVERED
                     updated["ocr_readings"] = ocr_readings if outcome == "ocr_unclear" else []
                     if outcome == "ocr_unclear" and updated["check_detail"] != LAST_DIGIT_NOTICE:
+                        if not validation_detail and not ocr_error and only_last_compared_unclear(
+                                ocr, comparison_decimals if "comparison_decimals" in locals() else decimals,
+                                integer_digits):
+                            unclear_detail = MOVING_DIGIT_NOTICE
                         updated["check_detail"] = (validation_detail or ocr_error or unclear_detail
                                                    or explain_uncertain_positions(ocr_readings, decimals, integer_digits))
                     elif validation_detail:

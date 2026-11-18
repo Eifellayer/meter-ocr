@@ -72,7 +72,7 @@ CONFIRM_MIN_SECONDS = 4 * 60
 
 
 def accumulate_consumption(previous, source, stamp, reading, decimals, max_flow_lph, integer_digits=5,
-                           allow_lower=False, require_consistent=False):
+                           allow_lower=False, require_consistent=False, confirmed=False):
     """Return a proposed new counter state. Consumption is booked only for confirmed readings.
 
     A new reading first becomes *pending*. It is booked once a later reading, taken at
@@ -87,6 +87,9 @@ def accumulate_consumption(previous, source, stamp, reading, decimals, max_flow_
 
     require_consistent raises instead of discarding when the pending value is
     contradicted (used to cross-check two images of one check).
+
+    confirmed marks a reading that an independent reference already confirmed (e.g. an
+    agreeing SLFork value or a user-entered start value); it is booked immediately.
     """
     prefix = meter_prefix(reading, decimals, integer_digits)
     if prefix is None:
@@ -95,6 +98,13 @@ def accumulate_consumption(previous, source, stamp, reading, decimals, max_flow_
     current = prefix * step
     total = previous.get("total_litres", 0)
     if previous.get("source") != source:
+        if confirmed:
+            return {
+                "source": source, "timestamp": stamp, "reading_litres": current, "step_litres": step,
+                "total_litres": total, "start_total": total,
+                "anchor_litres": current, "anchor_time": stamp, "anchor_step": step, "floor_litres": current,
+                "pending_litres": None, "pending_time": None, "pending_step": None,
+            }
         return {
             "source": source, "timestamp": stamp, "reading_litres": current, "step_litres": step,
             "total_litres": total, "start_total": total,
@@ -128,7 +138,16 @@ def accumulate_consumption(previous, source, stamp, reading, decimals, max_flow_
                 anchor, anchor_time, anchor_step = current, stamp, step
             floor = current
     new_pending, new_pending_time, new_pending_step = current, stamp, step
-    if pending is not None:
+    if confirmed:
+        if anchor is None:
+            anchor, anchor_time, anchor_step = current, stamp, step
+        else:
+            total += max(0, current - anchor)
+            if current > anchor:
+                anchor, anchor_time, anchor_step = current, stamp, step
+        floor = max(floor, current) if floor is not None and not allow_lower else current
+        new_pending = new_pending_time = new_pending_step = None
+    elif pending is not None:
         consistent = current + step > pending and flow_ok(pending, pending_time, pending_step)
         if not consistent and require_consistent:
             raise ImplausibleReading(LOWER_READING if current + step <= pending else EXCESSIVE_INCREASE)
@@ -179,7 +198,7 @@ def fallback_detail(sample, image_time, ocr, readings, previous, source, max_flo
             if meter_prefix(reference, reference_decimals) is not None:
                 baselines.append(accumulate_consumption(
                     {}, source, reference_time, reference, reference_decimals, max_flow_lph,
-                    integer_digits,
+                    integer_digits, confirmed=True,
                 ))
                 break
     if not baselines:

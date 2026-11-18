@@ -32,7 +32,9 @@ from checks import (DEFAULT_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, WARNING_DETA
                     OCR_PROFILES, crop_register, read_register, LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, REFLECTION_SUGGEST_AFTER, STANDALONE_PENDING, STANDALONE_REJECTED_NOTICE,
                     STANDALONE_VERIFIED_NOTICE, last_check_at, recommended_comparison_decimals, reschedule_next_check,
                     setup_deadlines, setup_source_id, stabilization_interval, stationary_partial_active, valid_interval_minutes)
-from consumption import DEFAULT_FLOW_LPH, consumption_statistics, format_cubic_metres, parse_flow_limit
+from checks import MOVING_DIGIT_NOTICE
+from consumption import (DEFAULT_FLOW_LPH, EXCESSIVE_INCREASE, LOWER_PENDING, LOWER_READING,
+                         consumption_statistics, format_cubic_metres, parse_flow_limit)
 from demo import run_demo
 from i18n import EN_UI, english_progress, english_result, translate_page
 from language import MODES, SUPPORTED, USER_ID, browser_locale, profile_script
@@ -486,6 +488,9 @@ white-space:pre-line;line-height:1.24em;text-align:center;animation:roll 2.2s li
 .manual-panel[open] > summary::after{{content:"";transform:rotate(-135deg)}}
 .setup-dialog{{border-radius:calc(var(--radius) + .2rem);box-shadow:0 1.5rem 4rem #0006}}
 .page-footer{{margin-top:2rem}}
+.advanced-actions{{margin-top:.6rem;font-size:.9rem}}
+.advanced-actions > summary{{color:var(--muted);cursor:pointer}}
+.advanced-actions button{{font-size:.85rem;min-height:2.2rem;padding:.3rem .8rem;background:transparent}}
 .debug-log-text{{max-height:22rem;overflow:auto;white-space:pre-wrap;word-break:break-all;font-size:.75rem;background:var(--surface-2);border:1px solid var(--edge);border-radius:var(--radius-sm);padding:.6rem}}
 #debug-log{{margin-top:1rem}}
 .button-link{{display:inline-flex;align-items:center;min-height:2.4rem;padding:.4rem 1rem;border-radius:99px;border:1px solid var(--edge);background:var(--surface-2);color:var(--ink);text-decoration:none;font-weight:650}}
@@ -535,7 +540,12 @@ white-space:pre-line;line-height:1.24em;text-align:center;animation:roll 2.2s li
 .dialog-heading{{flex-wrap:wrap}}
 .dialog-heading h2{{flex:1 1 10rem;min-width:0}}
 @media(max-width:420px){{.main-menu{{flex-wrap:wrap;border-radius:1.2rem;gap:.15rem}}.main-tabs{{flex-basis:100%;gap:.15rem}}
-.main-tabs button{{padding-inline:.35rem;font-size:.84rem;min-height:2.6rem}}.main-guide{{flex-basis:100%;min-height:2.2rem;padding:.2rem;font-size:.82rem}}}}
+.main-tabs button{{padding-inline:.35rem;font-size:.84rem;min-height:2.6rem}}}}
+@media(max-width:640px){{.main-menu{{flex-wrap:nowrap}}.main-tabs{{flex:1 1 auto;min-width:0;flex-basis:auto}}
+nav.main-menu a.main-guide{{flex:none;width:2.6rem;min-height:2.6rem;padding:0;font-size:0;line-height:0;display:inline-grid;place-items:center;overflow:hidden}}
+nav.main-menu a.main-guide::before{{content:"?";font-size:1.05rem;line-height:1;font-weight:750}}
+header{{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}header .brand{{grid-column:1/-1}}
+header #open-setup,header .language-bar,header .language-bar select{{width:100%;min-width:0}}}}
 header{{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.6rem}}
 .main-tabs button[aria-selected="true"]:not(:disabled):hover{{background:var(--ink);color:var(--surface)}}
 .calibration-card form > :is(p,div,details){{grid-column:1/-1}}
@@ -926,11 +936,17 @@ name: Zählerstand (OCR)</code></pre>
 <p id="calibration-precision-notice">{calibration_precision_notice}</p>
 <div class="crop-actions">
 <button id="calibration-start" type="submit" name="action" value="start">Selbsteinrichtung starten</button>
-<button id="calibration-intensive" type="submit" name="action" value="intensive" {calibration_intensive_hidden}>Dritte Nachkommastelle intensiv suchen</button>
-<button id="calibration-manual-digit" type="button" {calibration_intensive_hidden}>Dritte Nachkommastelle manuell markieren</button>
 <button id="calibration-restore" type="submit" name="action" value="restore" formnovalidate {calibration_restore_hidden}>Gesicherten Ausschnitt wiederherstellen</button>
 <button id="calibration-cancel" type="submit" name="action" value="cancel" formnovalidate hidden>Selbsteinrichtung stoppen</button>
 </div>
+<details class="advanced-actions" id="calibration-advanced" {calibration_intensive_hidden}>
+<summary>Erweitert</summary>
+<p class="settings-note">Die App sucht die letzte Stelle selbst im Hintergrund. Nur nötig, wenn das dauerhaft nicht klappt.</p>
+<div class="crop-actions">
+<button id="calibration-intensive" type="submit" name="action" value="intensive">Dritte Nachkommastelle intensiv suchen</button>
+<button id="calibration-manual-digit" type="button">Dritte Nachkommastelle manuell markieren</button>
+</div>
+</details>
 </form>
 </section>
 <div class="panel" id="settings"><h2>Einstellungen</h2>
@@ -2970,7 +2986,9 @@ function syncHero() {{
   const labels = lang === 'en'
     ? {{ok: 'Running', warning: 'Needs attention', problem: 'Problem'}}
     : {{ok: 'Läuft', warning: 'Bitte prüfen', problem: 'Problem'}};
-  let label = !document.querySelector('#paused-notice').hidden ? (lang === 'en' ? 'Paused' : 'Pausiert') : (labels[tone] || '–');
+  const busy = document.querySelector('.activity-status')?.dataset.state === 'working';
+  let label = !document.querySelector('#paused-notice').hidden ? (lang === 'en' ? 'Paused' : 'Pausiert')
+    : (labels[tone] || (busy ? (lang === 'en' ? 'Checking …' : 'Prüft …') : '–'));
   if (staleView) label = lang === 'en' ? 'Not current' : 'Nicht aktuell';
   if (chip.textContent !== label) chip.textContent = label;
   chip.dataset.tone = staleView ? 'stale' : tone;
@@ -3247,7 +3265,7 @@ async function refreshAutomatic() {{
     comparison.querySelector('button').textContent = sample.precision_suggestion_label;
     automaticBanner.dataset.tone = sample.tone;
     automaticBanner.dataset.incident = sample.incident;
-    document.querySelector('#automatic-interval-hint').hidden = !(sample.failure_attempts > 0 && sample.tone !== 'ok');
+    document.querySelector('#automatic-interval-hint').hidden = !(sample.interval_hint && sample.tone !== 'ok');
     ignoreWarning.hidden = !sample.incident;
     const heading = document.querySelector('#automatic-status-heading');
     const icon = automaticBanner.querySelector('.automatic-banner-icon');
@@ -3688,6 +3706,12 @@ def start_panel(
                           english_result(history["check_detail"], status))
             elif history.get("check_detail") in (RAW_ROW_UNCLEAR, MANUAL_ROW_UNCLEAR):
                 detail = history["check_detail"] if language == "de" else EN_UI[history["check_detail"]]
+            elif history.get("check_detail") == MOVING_DIGIT_NOTICE:
+                heading = "Rolle drehte sich gerade"
+                detail = history["check_detail"] if language == "de" else english_result(history["check_detail"], status)
+            elif history.get("check_detail") in (LOWER_PENDING, LOWER_READING, EXCESSIVE_INCREASE):
+                heading = "Ablesung passt nicht zum letzten Stand"
+                detail = history["check_detail"] if language == "de" else english_result(history["check_detail"], status)
             elif history.get("check_detail") == LAST_DIGIT_NOTICE:
                 heading = "Letzte Nachkommastelle unsicher"
                 detail = LAST_DIGIT_NOTICE if language == "de" else EN_UI[LAST_DIGIT_NOTICE]
@@ -3797,6 +3821,7 @@ def start_panel(
             "geometry_warning": geometry_warning(history, auto_rules, language) if now >= optimization_until else "",
             "stabilizing_until": stabilizing_until,
             "configured_decimals": auto_rules["decimals"],
+            "interval_hint": bool(failure_attempts) and history.get("check_detail") in (RAW_ROW_UNCLEAR, MANUAL_ROW_UNCLEAR),
             "last_digit_search_at": optimization_until if decimals < auto_rules["decimals"] else None,
             "reflection_estimate": reflection_estimate,
             "reflection_live_estimate": (history.get("reflection_live_estimate")

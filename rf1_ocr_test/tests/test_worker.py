@@ -1243,10 +1243,20 @@ class StateTests(TestCase):
             self.assertEqual("JPEG", overlay.format)
             self.assertGreater(overlay.width, 0)
 
-        initial["consumption"]["timestamp"] -= 3600
-        files["HISTORY"].write_text(json.dumps(initial))
+        def age(history, seconds):
+            for key in ("timestamp", "pending_time", "anchor_time"):
+                if history["consumption"].get(key):
+                    history["consumption"][key] -= seconds
+            files["HISTORY"].write_text(json.dumps(history))
+
+        age(initial, 3600)
         self.assertEqual("standalone_pending", check("12347.???")["check_status"])
         self.assertEqual("12345", published[run.OCR_ENTITY]["state"])
+        first_confirmation = check("12347.???")
+        # The start value 12345 is now confirmed; 12347 waits for the next check.
+        self.assertEqual("0", published[run.CONSUMPTION_ENTITY]["state"])
+        age(first_confirmation, 600)
+        self.assertEqual("standalone_pending", check("12347.???")["check_status"])
         second = check("12347.???")
         self.assertEqual("2", published[run.CONSUMPTION_ENTITY]["state"])
         self.assertEqual("standalone_pending", check("12347.???")["check_status"])

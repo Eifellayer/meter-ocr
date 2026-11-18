@@ -607,6 +607,11 @@ EN_UI = {
     'id="open-setup">Einrichtung<': 'id="open-setup">Setup<',
     'id="reload-view">Neu laden<': 'id="reload-view">Reload<',
     '<summary>Debug-Protokoll</summary>': '<summary>Debug log</summary>',
+    '<summary>Erweitert</summary>': '<summary>Advanced</summary>',
+    "Rolle drehte sich gerade": "Roller was turning",
+    "Ablesung passt nicht zum letzten Stand": "Reading does not fit the last value",
+    "Die App sucht die letzte Stelle selbst im Hintergrund. Nur nötig, wenn das dauerhaft nicht klappt.":
+        "The app searches for the last digit in the background by itself. Only needed if that keeps failing.",
     "Die letzten Prüfungen mit allen OCR-Durchläufen, Entscheidung und Verbrauchsstand. Ohne Bilder und Zugangsdaten. Hilfreich für Fehlermeldungen.":
         "The latest checks with all OCR runs, decision and consumption state. No images or credentials. Useful for bug reports.",
     '>Protokoll herunterladen<': '>Download log<',
@@ -822,6 +827,9 @@ EN_UI = {
 }
 
 EN_DETAILS = {
+    ("Nur die letzte verglichene Stelle war unklar – vermutlich drehte sich die Rolle gerade. "
+     "Die nächste Prüfung folgt automatisch."):
+        "Only the last compared digit was unclear – the roller was probably turning. The next check follows automatically.",
     FALLBACK_NOTICE: "The ESP is using a fallback reading.",
     "OCR-Zuwachs plausibel. Warte auf den Abgleich.": "OCR increase looks plausible. Waiting for a match.",
     "Für die Plausibilitätsprüfung fehlt ein gültiger Messzeitpunkt.":

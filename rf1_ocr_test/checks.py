@@ -372,6 +372,17 @@ def compare_sample(data, ocr, decimals, *, ocr_confirmed=True, integer_digits=5)
 
 
 LAST_DIGIT_NOTICE = "Nur die dritte Nachkommastelle ist unklar oder weicht ab."
+MOVING_DIGIT_NOTICE = ("Nur die letzte verglichene Stelle war unklar – vermutlich drehte sich die Rolle gerade. "
+                       "Die nächste Prüfung folgt automatisch.")
+
+
+def only_last_compared_unclear(ocr, decimals, integer_digits=5):
+    """True if exactly the last compared position of the display is unreadable."""
+    text = str(ocr or "")
+    compared = integer_digits + (decimals + 1 if decimals else 0)
+    shown = text[:compared]
+    return (len(shown) == compared and shown[-1] == "?"
+            and "?" not in shown[:-1] and shown[:integer_digits].isdigit())
 LAST_DIGIT_PASS = "Die ersten zwei Nachkommastellen stimmen überein. Die dritte Stelle bleibt unbestätigt."
 LAST_DIGIT_RETRIES = 3
 SEVENTH_DIGIT_WAIT_SECONDS = 30 * 60

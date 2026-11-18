@@ -763,14 +763,14 @@ class IngressTests(IngressFixture):
         self.assertIsNone(self.calibration)
         self.paused = False
         status, location = self.submit("/einrichtung", image_limit=24, **values)
-        self.assertEqual((303, "./?saved=setup-calibration&ui=settings#calibration-settings"), (status, location))
+        self.assertEqual((303, "./?saved=setup-calibration&ui=overview"), (status, location))
         self.assertFalse(self.setup_pending)
         self.assertEqual("camera.meter", self.source["camera"])
         self.assertEqual("setup", self.calibration["action"])
         self.assertEqual(24, self.calibration["limit"])
         self.assertEqual(("manual", "10,20,410,100", 270, -3),
                          tuple(self.rules[key] for key in ("crop_mode", "crop", "width", "rotation")))
-        self.assertIn("Einrichtung gespeichert.", self.request("/?saved=setup-calibration&ui=settings")[0])
+        self.assertIn("Einrichtung gespeichert.", self.request("/?saved=setup-calibration&ui=overview")[0])
 
     def test_setup_wizard_rejects_fallback_without_timestamp_and_keeps_old_settings(self):
         before = dict(self.source)
@@ -1221,7 +1221,7 @@ class BrowserTests(IngressFixture):
             page.mouse.move(box["x"] + box["width"] * .8, box["y"] + box["height"] * .7)
             page.mouse.up()
             page.locator("#calibration-guided-start").click()
-            page.wait_for_url("**/?saved=calibration&ui=settings")
+            page.wait_for_url("**/?saved=calibration&ui=overview")
             for actual, expected in zip(self.calibration["region"], (200, 300, 800, 700)):
                 self.assertAlmostEqual(actual, expected, delta=4)
 

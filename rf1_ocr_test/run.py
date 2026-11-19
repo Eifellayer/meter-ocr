@@ -63,7 +63,7 @@ from reminder import Reminder
 from notification_settings import (DEFAULT_DELIVERY_HOURS, DEFAULT_REVIEW_MINUTES, PUSH_SERVICE,
                                    notification_rules)
 from settings import DEFAULTS, SCHEMA_VERSION, load_options
-from source_settings import (CAMERA, DISCOVERY_TEMPLATE, ESP_ADDRESS_MODES, REFERENCE,
+from source_settings import (LIGHT, CAMERA, DISCOVERY_TEMPLATE, ESP_ADDRESS_MODES, REFERENCE,
                              discovered_sources, source_check_key, source_rules)
 from panel import start_panel
 from experimental_meters import ExperimentalMeters
@@ -445,6 +445,43 @@ def switch_light_off(light, token, *, fetch, post, sleep=time.sleep):
     return False
 
 
+CAMERA_LIGHT_CACHE = {}
+CAMERA_LIGHT_SECONDS = 10 * 60
+
+
+def camera_light(camera, token, *, post=None, now=time.monotonic):
+    """The light that belongs to the same Home Assistant device as the camera (its own flash LED).
+
+    Looked up through the device registry by template and cached for a few minutes.
+    Returns "" when the camera has no light of its own.
+    """
+    cached = CAMERA_LIGHT_CACHE.get(camera)
+    if cached and now() - cached[1] < CAMERA_LIGHT_SECONDS:
+        return cached[0]
+    template = ("{%% set d = device_id('%s') %%}{{ (device_entities(d) if d else []) "
+                "| select('match', '^light\\.') | list | first | default('') }}" % camera)
+    light = ""
+    try:
+        answer = (post or post_json)("http://supervisor/core/api/template", token, {"template": template})
+        value = (answer.decode("utf-8") if isinstance(answer, bytes) else str(answer or "")).strip()
+        light = value if LIGHT.fullmatch(value) else ""
+    except (OSError, ValueError, UnicodeDecodeError) as error:
+        print(f"Licht der Kamera konnte nicht ermittelt werden: {type(error).__name__}")
+        return cached[0] if cached else ""
+    CAMERA_LIGHT_CACHE[camera] = (light, now())
+    return light
+
+
+def capture_light(source, camera, token, *, post=None):
+    """External light if one is set, otherwise the camera's own light unless switched off."""
+    external = (source or {}).get("light") or ""
+    if external:
+        return external
+    if (source or {}).get("camera_light", True) is False or not camera:
+        return ""
+    return camera_light(camera, token, post=post)
+
+
 def capture_camera(camera, reference, token, zone, timeout=8, *, fetch=None, light="", post=None):
     fetch = fetch or get_bytes
     base = "http://supervisor/core/api"
@@ -686,7 +723,8 @@ def wizard_camera_preview(source, token, zone, *, full_size=False):
     elif mode == "slfork_camera":
         picture, _, _ = capture_edge_camera(source["url"].rstrip("/"), zone)
     else:
-        picture, _, _ = capture_camera(source["camera"], "", token, zone, timeout=5, light=source.get("light", ""))
+        picture, _, _ = capture_camera(source["camera"], "", token, zone, timeout=5,
+                                       light=capture_light(source, source["camera"], token))
     try:
         with Image.open(io.BytesIO(picture)) as frame:
             if frame.width * frame.height > MAX_IMAGE_PIXELS:
@@ -1721,7 +1759,7 @@ def main():
                 result = capture_edge_camera(base, zone, fetch=fetch)
             elif camera:
                 result = capture_camera(camera, reference, token, zone, fetch=fetch,
-                                        light=get_source()[0].get("light", ""))
+                                        light=capture_light(get_source()[0], camera, token))
             round_log["fetch_seconds"] = time.monotonic() - round_started
             if result is not None and not stopped():
                 round_log["captured"] = True
@@ -2439,7 +2477,7 @@ def main():
                     result = capture_camera(
                         camera, reference, token, zone,
                         timeout=min(8, max(0.2, live_deadline - time.monotonic())) if live_deadline else 8,
-                        light=active_source.get("light", ""),
+                        light=capture_light(active_source, camera, token),
                     )
                 elif esp_camera_only:
                     result = capture_edge_camera(base, zone)
@@ -2644,7 +2682,7 @@ def main():
                                 latest = capture_camera(
                                     camera, reference, token, zone,
                                     timeout=min(8, max(0.2, remaining)),
-                                    light=active_source.get("light", ""),
+                                    light=capture_light(active_source, camera, token),
                                 )
                                 if latest is None:
                                     return "?"

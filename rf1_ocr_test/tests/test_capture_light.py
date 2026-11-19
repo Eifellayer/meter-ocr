@@ -92,3 +92,33 @@ class LightOffRetryTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CameraLightTest(unittest.TestCase):
+    def setUp(self):
+        import run
+        run.CAMERA_LIGHT_CACHE.clear()
+
+    def test_own_light_is_found_and_cached(self):
+        from run import camera_light
+        calls = []
+
+        def post(url, token, payload):
+            calls.append(payload["template"])
+            return b"light.esp_blitz\n"
+
+        self.assertEqual("light.esp_blitz", camera_light("camera.esp", "t", post=post, now=lambda: 0))
+        self.assertEqual("light.esp_blitz", camera_light("camera.esp", "t", post=post, now=lambda: 60))
+        self.assertEqual(1, len(calls))
+        self.assertIn("device_id('camera.esp')", calls[0])
+
+    def test_external_light_wins_and_switch_off_is_respected(self):
+        from run import capture_light
+        post = lambda url, token, payload: b"light.esp_blitz"
+        self.assertEqual("light.keller", capture_light({"light": "light.keller"}, "camera.esp", "t", post=post))
+        self.assertEqual("", capture_light({"light": "", "camera_light": False}, "camera.esp", "t", post=post))
+        self.assertEqual("light.esp_blitz", capture_light({"light": ""}, "camera.esp", "t", post=post))
+
+    def test_garbage_answer_means_no_light(self):
+        from run import camera_light
+        self.assertEqual("", camera_light("camera.x", "t", post=lambda u, t, p: b"<html>", now=lambda: 0))

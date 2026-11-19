@@ -1271,6 +1271,8 @@ class StateTests(TestCase):
             raise StopLoop
 
         self.enterContext(patch.object(run, "publish_consumption", finish_run))
+        # This camera has no light of its own in the device registry.
+        self.enterContext(patch.object(run, "camera_light", lambda *args, **kwargs: ""))
 
         snapshots = 0
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.19
+
+- Einrichtung schneller und ohne Unsinn: Liest ein Kandidat das Zählwerk schon gut (mindestens die eingestellte Übereinstimmung, z. B. 88 %), prüft die App Kandidaten ohne Erkennung (0 %) oder mit mehr als 40 Prozentpunkten Abstand nicht mehr intensiv nach, etwa um 90° gedrehtes Kleingedrucktes oder die Seriennummer.
+- Hinweis zur Grobprüfung: „Grobprüfung: Die App testet mehrere feste Rahmen und Winkel und schaltet danach auf die Feinjustierung um …“.
+
 ## 0.1.18
 
 - Winkel nach der Einrichtung: Misst die Einrichtung eine Schräglage über ±0,5°, behält sie wie bisher höchstens ±0,5° als Feinwinkel und gibt den Rest als Startwert an die laufende Schräglagenkorrektur. Die ersten automatischen Prüfungen arbeiten so sofort mit dem gemessenen Winkel, statt sich über viele Prüfungen heranzutasten (Beobachtung: −0,5° gespeichert, −1,5° gemessen, die 8 wurde als 6 gelesen).

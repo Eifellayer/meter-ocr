@@ -2314,7 +2314,7 @@ function refreshCalibrationImages(preview) {{
     unclear: 'Mindestens eine benötigte Ziffer blieb unklar.',
     penultimate_unclear: 'Die letzte Rolle war lesbar. Die vorletzte blieb trotz gezielter Prüfung offen.',
     soft_image: 'Der Ausschnitt ist deutlich weniger scharf oder kontrastreich als zuvor. Die App wartet auf ein besseres Bild.',
-    collecting: 'Grobsuche läuft. Die besten Zwischenkandidaten werden gespeichert.',
+    collecting: 'Grobprüfung läuft: Die App testet mehrere feste Rahmen und Winkel. Die besten Kandidaten werden gespeichert, danach folgt die Feinjustierung.',
     disagree: 'Die OCR-Versuche lieferten unterschiedliche Ziffern.',
     reference_unavailable: 'Kein gültiger Vergleichswert zu diesem Bild.',
     reference_mismatch: 'Der gelesene Stand weicht vom Vergleichswert ab.',
@@ -2454,7 +2454,7 @@ function refreshCalibration(status) {{
       status.known_good_available ? 'Die App prüft zuerst den zuletzt bestätigten Rahmen.' :
       'Selbsteinrichtung wird vorbereitet …',
     capture: 'Kamerabild wird abgerufen …',
-    search: 'Grobsuche: Die App sucht die Ziffernreihe …',
+    search: 'Grobprüfung: Die App testet mehrere feste Rahmen und Winkel und schaltet danach auf die Feinjustierung um …',
     shortlist: 'Intensivprüfung für Kandidat ' + status.variant + ' …',
     digit_probe: 'Die vermutete Position der letzten Rolle wird auf diesem Bild getestet …',
     angle: 'Drehung wird geprüft. Der Winkel steht am Vorschaubild.',

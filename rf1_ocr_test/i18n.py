@@ -239,7 +239,7 @@ EN_UI = {
     "Ziffernfeld auswählen ": "Select digit row ",
     "Die gelesene Ziffernreihe ist gegenüber dem Vergleichswert vermutlich um eine Stelle verschoben.": "The digit row appears shifted by one position relative to the reference.",
     "Kein neues Kamerabild erhalten. Prüfe die Bildquelle.": "No new camera image received. Check the image source.",
-    "Grobsuche: Die App sucht die Ziffernreihe …": "Coarse calibration: Looking for the digit row …",
+    "Grobprüfung: Die App testet mehrere feste Rahmen und Winkel und schaltet danach auf die Feinjustierung um …": "Coarse check: the app tests several fixed frames and angles, then switches to fine adjustment …",
     "Feinkalibrierung: Rahmen und Drehung werden am vorhandenen Bild geprüft …": "Fine calibration: Testing digit boxes and rotation on the current image …",
     "Noch kein Ziffernbereich gefunden. Die App prüft gleich das nächste Bild …": "No digit region found yet. Waiting for a new image …",
     "In diesem Bild wurde kein Ziffernbereich gefunden.": "No digit region was found in this image.",
@@ -395,8 +395,8 @@ EN_UI = {
         "The crop has noticeably less detail or contrast than before. Waiting for a better image.",
     "Gegenprobe wartet auf ein besseres Bild. Der bestätigte Rahmen bleibt ausgewählt.":
         "Waiting for a better image for verification. The confirmed crop remains selected.",
-    "Grobsuche läuft. Die besten Zwischenkandidaten werden gespeichert.":
-        "Coarse search in progress. Saving the highest-ranked candidates.",
+    "Grobprüfung läuft: Die App testet mehrere feste Rahmen und Winkel. Die besten Kandidaten werden gespeichert, danach folgt die Feinjustierung.":
+        "Coarse check in progress: the app tests several fixed frames and angles, keeps the best candidates and then switches to fine adjustment.",
     "Intensivprüfung für Kandidat ": "Intensive check for candidate ",
     "Grobtests: ": "Coarse attempts: ",
     "Grün bedeutet lesbar. Ein gültiger Vergleichswert für dieses Bild fehlt.":

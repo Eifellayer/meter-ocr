@@ -1,6 +1,6 @@
 # AI Meter Reader
 
-**Version 0.1.25** · [Deutsch](README.md) · [Guide](rf1_ocr_test/DOCS.md) · [Changelog](rf1_ocr_test/CHANGELOG.md) · [Roadmap](RELEASE-PLAN.md)
+**Version 0.1.26** · [Deutsch](README.md) · [Guide](rf1_ocr_test/DOCS.md) · [Changelog](rf1_ocr_test/CHANGELOG.md) · [Roadmap](RELEASE-PLAN.md)
 
 <img src="assets/project-logo.png" alt="AI Meter Reader" width="110">
 

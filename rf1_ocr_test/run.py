@@ -1017,10 +1017,21 @@ def check_reminder(reminder, history, now, review_after=REVIEW_AFTER):
 SETUP_WAIT_NOTICE = "Automatik wartet auf die Einrichtung. Du kannst sie automatisch oder manuell abschließen."
 SETUP_RETRY_NOTICE = ("Die Einrichtung hat noch keinen sicheren Rahmen gefunden. "
                       "Die App startet sie in wenigen Minuten automatisch neu.")
+SETUP_RETRY_LONG_NOTICE = ("Die Einrichtung hat noch keinen sicheren Rahmen gefunden. "
+                           "Die App versucht es stündlich von selbst erneut. Häufige Ursachen: "
+                           "unscharfes Bild (Objektiv scharfstellen) oder eine Spiegelung des Blitzes auf den Ziffern.")
 # A user-started setup that ended without result is restarted, so the app does not wait forever.
 SETUP_RETRY_STATES = ("timeout", "image_timeout", "failed")
 SETUP_RETRY_SECONDS = 300
 SETUP_RETRY_LIMIT = 3
+# After the quick retries the setup keeps trying hourly, so a later fix at the camera
+# (focus, glare) is picked up without anyone tapping a button.
+SETUP_RETRY_LONG_SECONDS = 3600
+
+
+def setup_retry_delay(count):
+    """Seconds until the next automatic setup restart after `count` earlier restarts."""
+    return SETUP_RETRY_SECONDS if count < SETUP_RETRY_LIMIT else SETUP_RETRY_LONG_SECONDS
 
 
 def app_build():
@@ -2377,10 +2388,9 @@ def main():
                 except (OSError, ValueError):
                     print("Selbsteinrichtung konnte nach dem Update nicht automatisch starten.")
             if (job is not None and job.simplified and not job.automatic and not job.background
-                    and not job.intensive and job.state in SETUP_RETRY_STATES
-                    and setup_retry["count"] < SETUP_RETRY_LIMIT):
+                    and not job.intensive and job.state in SETUP_RETRY_STATES):
                 if setup_retry["job"] is not job:
-                    setup_retry.update(job=job, at=time.monotonic() + SETUP_RETRY_SECONDS)
+                    setup_retry.update(job=job, at=time.monotonic() + setup_retry_delay(setup_retry["count"]))
                 if time.monotonic() >= setup_retry["at"]:
                     setup_retry.update(job=None, count=setup_retry["count"] + 1)
                     try:
@@ -2388,7 +2398,8 @@ def main():
                     except (OSError, ValueError):
                         print("Selbsteinrichtung konnte nicht automatisch neu gestartet werden.")
                     continue
-                set_activity("setup_wait", SETUP_RETRY_NOTICE)
+                set_activity("setup_wait", SETUP_RETRY_NOTICE if setup_retry["count"] < SETUP_RETRY_LIMIT
+                             else SETUP_RETRY_LONG_NOTICE)
             else:
                 setup_retry["job"] = None
                 set_activity("setup_wait", SETUP_WAIT_NOTICE)

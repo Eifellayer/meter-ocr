@@ -1,5 +1,5 @@
 name: AI Meter Reader
-version: "0.1.25"
+version: "0.1.26"
 slug: rf1_ocr_test
 description: "Lokale Zählerablesung per Kamera / Local camera-based meter reading"
 arch:

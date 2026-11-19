@@ -507,6 +507,22 @@ def skip_small_labels(candidates):
                     and layout.box[3] - layout.box[1] <= height * .80)]
 
 
+INTENSIVE_GAP = 40
+
+
+def worth_intensive(items, shortlist, best, threshold):
+    """Drop candidates without a chance once one candidate already reads the meter well.
+
+    With a candidate at or above the agreement threshold, crops that read nothing (0 %) or
+    lag far behind it, e.g. tiny print turned by 90°, are not re-read with extra profiles.
+    """
+    if best < threshold:
+        return items
+    kept = [item for item in items
+            if shortlist.get(item[1], (0,))[0] > 0 and shortlist.get(item[1], (0,))[0] >= best - INTENSIVE_GAP]
+    return kept or items
+
+
 def refinement_workers():
     cores = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count() or 1
     try:
@@ -1376,6 +1392,7 @@ class Calibration:
             # Read stable crops immediately, including when this image has no usable reference.
             intensive = ([item for item in coarse if item[1] == perfect] if perfect is not None
                          else coarse if self.optimizing else stable)
+            intensive = worth_intensive(intensive, self.shortlist, found_percent, self.agreement_threshold)
             for index, (score, layout, readings) in enumerate(intensive[:SHORTLIST_LIMIT], start=1):
                 if stop() or self.attempts >= min(self.attempt_limit, frame_ceiling):
                     return None

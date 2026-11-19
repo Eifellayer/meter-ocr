@@ -50,3 +50,18 @@ class LearnableShiftTest(unittest.TestCase):
         self.assertIsNone(learnable_shift(False, ["k"], 0, boxes, (420, 60), 1))
         self.assertIsNone(learnable_shift(True, ["k"], 0, boxes, (420, 60), None))
         self.assertIsNone(learnable_shift(True, ["k"], 0, list(reversed(boxes)), (420, 60), 1))
+
+
+class WorthIntensiveTest(unittest.TestCase):
+    def test_hopeless_candidates_are_skipped_once_one_reads_well(self):
+        from calibration import worth_intensive
+        items = [((0,), "meter", []), ((0,), "label90", []), ((0,), "serial", []), ((0,), "close", [])]
+        shortlist = {"meter": (88, 1.0, 80), "label90": (0, 0.2, 80), "serial": (12, 0.4, 80), "close": (62, 0.8, 80)}
+        kept = [item[1] for item in worth_intensive(items, shortlist, 88, 80)]
+        self.assertEqual(["meter", "close"], kept)
+
+    def test_everything_stays_without_a_good_candidate(self):
+        from calibration import worth_intensive
+        items = [((0,), "a", []), ((0,), "b", [])]
+        shortlist = {"a": (50, 1.0, 80), "b": (0, 0.2, 80)}
+        self.assertEqual(items, worth_intensive(items, shortlist, 50, 80))

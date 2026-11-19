@@ -597,6 +597,7 @@ class Calibration:
     stream_unavailable: bool = False
     followup: bool = False
     background: bool = False  # Fine check does not suspend confirmed seven-digit readings.
+    purpose: str = ""  # "relocate": search again for a last-digit frame that sits beside its roller
     unclear_frames: int = 0
     followup_baseline: dict | None = None
     rank_candidates: bool = False
@@ -765,7 +766,7 @@ class Calibration:
                 "coarse_complete": self.full_hits >= MIN_IMAGES,
                 "awaiting_start_value": self.confirmations >= MIN_IMAGES and not (self.anchored or self.advanced),
                 "simplified": self.simplified, "intensive": self.intensive, "setup_last_digit": self.setup_last_digit, "followup": self.followup,
-                "background": self.background,
+                "background": self.background, "purpose": self.purpose,
                 "coarse_attempts": self.coarse_attempts, "coarse_limit": COARSE_LIMIT,
                 "shortlist": [score[0] for score in self.shortlist.values() if len(score) == 3],
                 "candidates": [{"percent": score[0], "reading": self.candidate_readings.get(layout, "")}

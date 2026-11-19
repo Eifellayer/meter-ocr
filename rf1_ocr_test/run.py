@@ -1022,6 +1022,9 @@ def main():
                                                                  CALORIFIC_RANGE),
                           "kwh_conversion_factor": valid_energy_factor(saved_rules.get("kwh_conversion_factor"),
                                                                        CONVERSION_RANGE),
+                          "last_frame_relocated_at": (saved_rules.get("last_frame_relocated_at")
+                                                      if type(saved_rules.get("last_frame_relocated_at")) in (int, float)
+                                                      else None),
                           "integer_digits": integer_digits, "fraction_digits": fraction_digits,
                           "meter_display": meter_display, "fallback_value": fallback_value,
                           "precision_mode": saved_rules.get("precision_mode") is True or saved_rules["decimals"] == 3,
@@ -1348,7 +1351,8 @@ def main():
         if len(tilts) >= 2:
             # Fine angle within ±0.5°; anything beyond is left to the routine tilt correction.
             fine = max(-0.5, min(0.5, round(median(tilts), 1)))
-        save_auto_rules({**rules, **layout.settings(), "rotation_fine": valid_fine_rotation(fine),
+        relocated = {"last_frame_relocated_at": time.time()} if attempt.purpose == "relocate" and not provisional else {}
+        save_auto_rules({**rules, **layout.settings(), **relocated, "rotation_fine": valid_fine_rotation(fine),
                          "crop_revision": revision,
                          "setup_input_source": setup_source_id(source),
                          "calibration_reference": reference, "stationary_partial_scope": partial_scope,
@@ -1440,6 +1444,7 @@ def main():
                                           rank_candidates=not (repair or intensive), shortlist=shortlist,
                                           simplified=simplified, intensive=intensive,
                                           background=background, followup=background,
+                                          purpose="relocate" if action == "relocate_last" else "",
                                           duration=GEOMETRY_REPAIR_SECONDS if repair else TIME_LIMIT,
                                           attempt_limit=GEOMETRY_REPAIR_LIMIT if repair else MAX_ATTEMPTS,
                                           previous_layout=previous, region=region,
@@ -1458,6 +1463,9 @@ def main():
                 return None
             status = calibration.status(time.monotonic())
             status["preview"] = dict(calibration_preview)
+            relocated_at = auto_rules.get("last_frame_relocated_at")
+            if calibration.purpose == "relocate" and type(relocated_at) in (int, float):
+                status["relocated_at"] = relocated_at
             if not status["seconds"] and status["state"] in ("waiting", "testing"):
                 status["state"] = "timeout"
             elif status["state"] == "waiting" and calibration.image_wait_expired(time.monotonic()):
@@ -2419,11 +2427,18 @@ def main():
                         register, integer_width, whole_boxes, fraction_boxes, source = prepare_register(
                             frame, selected_overlay
                         )
-                        if skew_key is not None and not base_adjustment:
+                        tilt_measured, tilt_skip = None, None
+                        if skew_key is None:
+                            tilt_skip = "no_frames" if crop_rules["crop_mode"] == "manual" else "auto_crop"
+                        elif base_adjustment:
+                            tilt_skip = "learned_rotation"
+                        else:
                             try:
-                                updated["skew"] = note_skew(skew_state, digit_row_tilt(register, whole_boxes))
-                            except (OSError, ValueError, ZeroDivisionError):
-                                pass
+                                tilt_measured = digit_row_tilt(register, whole_boxes)
+                                tilt_skip = None if tilt_measured is not None else f"unmeasured:{len(whole_boxes)}"
+                                updated["skew"] = note_skew(skew_state, tilt_measured)
+                            except (OSError, ValueError, ZeroDivisionError) as error:
+                                tilt_skip = type(error).__name__
                         read_state = {"register": register, "integer_width": integer_width,
                                       "whole_boxes": whole_boxes, "fraction_boxes": fraction_boxes,
                                       "source": source, "picture": picture, "captured": captured,
@@ -3368,8 +3383,11 @@ def main():
                 consumption=updated.get("consumption"), failures=updated.get("failure_attempts"),
                 lower_series=len(updated.get("lower_series") or []) or None,
                 tilt={"offset": skew_offset(updated.get("skew")),
-                      "last": (updated.get("skew") or {}).get("samples", [None])[-1:] or None,
-                      "angle": local.get("view_rotation")} if updated.get("skew") else None,
+                      "samples": len((updated.get("skew") or {}).get("samples", [])),
+                      "measured": (round(local["tilt_measured"], 2)
+                                   if type(local.get("tilt_measured")) is float else None),
+                      "skip": local.get("tilt_skip"),
+                      "angle": local.get("view_rotation")} if "view_rotation" in local else None,
             )
         try:
             publish_check(history, now, token, review_after)

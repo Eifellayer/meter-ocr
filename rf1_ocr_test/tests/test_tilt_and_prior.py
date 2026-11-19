@@ -92,3 +92,20 @@ class EnergyTests(TestCase):
         self.assertIsNone(energy_kwh(10000, None, 11.25))
         self.assertEqual(108.4, energy_kwh(10000, None, None, 10.84))
         self.assertEqual(108.4, energy_kwh(10000, 0.9636, 11.25, 10.84))  # finished factor wins
+
+
+class SetupConfirmationTests(TestCase):
+    def test_same_digits_found_a_few_pixels_apart_count_as_the_same_layout(self):
+        from calibration import Layout, similar_layout
+        boxes = tuple((index * 120, 100, index * 120 + 100, 900) for index in range(8))
+        first = Layout((50, 40, 560, 130), -1, 300, boxes, method="neighbours")
+        jitter = Layout((52, 41, 561, 128), -2, 302, tuple((l + 8, t + 20, r + 6, b - 15) for l, t, r, b in boxes),
+                        method="register_window")
+        refined = Layout((52, 41, 561, 128), -1, 302, boxes, method="refined")
+        self.assertFalse(similar_layout(first, refined))
+        self.assertTrue(similar_layout(first, jitter))
+        elsewhere = Layout((150, 40, 660, 130), -1, 300, boxes, method="neighbours")
+        self.assertFalse(similar_layout(first, elsewhere))
+        shifted_digit = Layout((50, 40, 560, 130), -1, 300, (*boxes[:-1], (900, 100, 1000, 900)), method="neighbours")
+        self.assertFalse(similar_layout(first, shifted_digit))
+        self.assertFalse(similar_layout(first, None))

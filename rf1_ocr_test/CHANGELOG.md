@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.9
+
+- **Selbsteinrichtung zählt stabiler hoch:** Findet die Einrichtung dieselbe Ziffernreihe auf dem nächsten Bild wieder, nur ein paar Pixel oder ein Grad anders, zählt das jetzt als Bestätigung. Bisher galt das als neuer Rahmen, und die Zählung sprang auf 1/3 zurück. Absichtlich nachjustierte Rahmen zählen weiterhin neu.
+
 ## 0.1.8
 
 - **Feinwinkel schon in der Selbsteinrichtung:** Die grobe Suche findet die Ziffern weiterhin in ganzen Grad. Für jeden gefundenen Rahmen misst die Einrichtung auf den Einrichtungsbildern zusätzlich die Schräglage der Ziffernreihe und speichert den Mittelwert als Feinwinkel (bis ±0,5°) gleich mit. Was darüber hinausgeht, gleichen die normalen Prüfungen aus.

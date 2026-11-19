@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.16
+
+- Texte nach der Einrichtung: „In den nächsten 20 Minuten optimiert die App im Hintergrund noch Rahmen und Winkel.“ und „Optimierung läuft (noch höchstens X min): Alle Ziffern sind gelesen, die App verbessert noch Rahmen und Winkel.“ Die doppelte Minutenangabe entfällt; der Hinweis zu 2 von 3 Nachkommastellen steht jetzt am Ende.
+- Texte überarbeitet: Statusmeldungen der Einrichtung als Zustand statt als Aufforderung („Ausschnitt und Drehung werden geprüft …“ statt „Prüfe …“), klarere Meldungen zu dritter Nachkommastelle, Rohbild-Fallback, Gegenprüfung und eingeschränkter Genauigkeit (DE und EN).
+
 ## 0.1.15
 
 - **Schräglage pendelt sich dauerhaft ein:** Der gelernte Ausgleich bleibt erhalten, wenn die App einzelne Rahmen (z. B. die letzte Stelle) neu setzt; bisher begann er dann wieder bei null. Er korrigiert jetzt in kleineren Schritten (70 % der gemessenen Abweichung, ab 0,2°) und läuft dauerhaft weiter mit.

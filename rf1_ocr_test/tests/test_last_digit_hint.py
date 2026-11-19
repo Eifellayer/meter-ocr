@@ -109,7 +109,7 @@ class LastDigitHintTests(IngressFixture):
             page.goto(self.base + "/")
             page.wait_for_function("document.querySelector('#hero-digit-note').dataset.state === 'optimizing'")
             self.assertIn("Optimierung läuft", page.locator("#hero-digit-note").inner_text())
-            self.assertIn("von 20 min", page.locator("#hero-digit-note").inner_text())
+            self.assertIn("noch höchstens 9 min", page.locator("#hero-digit-note").inner_text())
             self.assertNotIn("searching", page.locator("#meter-odometer .roller.fraction").last.get_attribute("class"))
             self.assertFalse(page.locator("#hero-stale").is_visible())
             browser.close()

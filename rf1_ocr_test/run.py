@@ -100,7 +100,7 @@ INTENSIVE_ROTATIONS = (-6, 6)
 MAX_LEARNED_ROTATION = 18
 FRESH_OCR_NOTICE = "Der Zählerstand konnte nicht bestätigt werden. Ein frisches Kamerabild folgt in Kürze."
 SINGLE_DIGIT_RECHECK = "Automatik-Nachprüfung: Die App prüft die fehlende Ziffer mit leicht verschobenem Rahmen."
-INTENSIVE_ROTATION_STATUS = "Intensivtest: Prüfe eine leicht gedrehte Aufnahme."
+INTENSIVE_ROTATION_STATUS = "Intensivtest: Die App prüft das Bild leicht gedreht."
 
 
 def failed_angle_requires_fresh_image(trials, outcome):
@@ -109,7 +109,7 @@ def failed_angle_requires_fresh_image(trials, outcome):
 
 SLFORK_RAW_SOURCE = "slfork_raw"
 SLFORK_RAW_NOTICE = "Aufbereitetes ESP-Bild fehlt oder ist zu alt. Die App prüft ein frisches Rohbild."
-SLFORK_RAW_SUCCESS = "Rohbild gelesen. Mögliche Ursache: Bildausrichtung oder Referenzmarken in AI on the Edge."
+SLFORK_RAW_SUCCESS = "Rohbild gelesen. Das aufbereitete ESP-Bild war nicht nutzbar – prüfe in AI on the Edge die Bildausrichtung und die Referenzmarken."
 SLFORK_RAW_FAILED = "Aufbereitetes ESP-Bild nicht nutzbar. Es konnte kein frisches Rohbild geladen werden."
 Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
 

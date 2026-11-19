@@ -1547,4 +1547,5 @@ class TwoMissingDigitsTests(TestCase):
         self.assertIsNone(missing_digit_pattern("12345.1??", 3, 5))
         self.assertEqual("12345.1??", missing_digit_pattern("12345.1??", 3, 5, 2))
         self.assertIsNone(missing_digit_pattern("12345.???", 3, 5, 2))
+        self.assertEqual("1234?.?4?", missing_digit_pattern("1234?.?4?", 3, 5, 3))
         self.assertEqual("12345.1??", single_missing_digit("12345.1??", ["12345.1??"] * 3, 3, 5, 2))

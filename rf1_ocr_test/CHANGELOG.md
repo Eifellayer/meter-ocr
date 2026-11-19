@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.6
+
+- Nachschieben fehlender Ziffern jetzt für bis zu **drei** unklare Stellen (z. B. `1047?.?4?`). Kamera und Winkel ändern sich zwischen zwei Prüfungen praktisch nie; meist sitzen dann nur einzelne Rahmen leicht daneben. Weiterhin höchstens 10 zusätzliche Einzelziffer-Lesungen, und die übrigen Ziffern müssen sicher gelesen sein.
+
 ## 0.1.5
 
 - **Fehlende Ziffern nachschieben:** Bleiben nach den OCR-Versuchen eine oder zwei Ziffern unklar (z. B. `10477.9??`), verschiebt die App nur deren Rahmen in kleinen Schritten und liest sie neu, bis beide mit zwei übereinstimmenden OCR-Profilen gelesen sind (höchstens 10 zusätzliche Einzelziffer-Lesungen). Übernommen wird der Wert nur, wenn er zum Vergleichs- bzw. Vorwert passt. Bisher ging das nur für genau eine Ziffer.

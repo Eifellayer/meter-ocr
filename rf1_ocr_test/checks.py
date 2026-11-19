@@ -53,7 +53,7 @@ MAX_CONFIGURED_OCR_ATTEMPTS = 10
 MAX_OCR_ATTEMPTS = len(OCR_PROFILES)
 # Digits still missing after the regular attempts get their own frames nudged and re-read:
 # at most this many positions and this many additional single-digit reads per check.
-SHIFTED_DIGIT_POSITIONS = 2
+SHIFTED_DIGIT_POSITIONS = 3
 SHIFTED_DIGIT_READS = 10
 
 

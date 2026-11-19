@@ -1,6 +1,6 @@
 # Roadmap
 
-Stand: 19. November 2026 · Version **0.1.5**
+Stand: 19. November 2026 · Version **0.1.6**
 
 **Leitbild „Fire and Forget“ (Nutzer 18.11.):** Die App soll möglichst autonom arbeiten. Der Nutzer wählt nur Zähler und Kamera; alles andere (Grob- und Feineinrichtung, letzte Stelle, Genauigkeit, Fehlerkorrektur) erledigt sie selbst und zeigt Unsicherheit offen an. Manuelle Knöpfe sind nur Notfallwerkzeuge. Stabilität geht vor neuen großen Funktionen.
 
@@ -8,7 +8,7 @@ Stand: 19. November 2026 · Version **0.1.5**
 
 | Aufgabe | Fertig, wenn … |
 | --- | --- |
-| **Praxis 0.1.5 beobachten** | Nachschieben fehlender Ziffern (bis 2 Stellen, max. 10 Lesungen) im Alltag beobachten: hilft es bei `?`, ohne Fehlwerte zu übernehmen? |
+| **Praxis 0.1.6 beobachten** | Nachschieben fehlender Ziffern (bis 3 Stellen, max. 10 Lesungen) im Alltag beobachten: hilft es bei `?`, ohne Fehlwerte zu übernehmen? |
 | **Aus 0.1.4 beobachten** | Verbrauch wird erst nach Bestätigung gebucht; die 8. Ziffer wird über die Rollenmitte gefunden (bisher nur an synthetischen Bildern getestet, am echten Zähler beobachten: findet die Selbstprüfung die Mitte, sitzt der Rahmen danach mittig?); „Rahmen sitzt daneben“ löst die neue Suche aus; einzelne Fehlprüfungen bleiben dezent. |
 | **Laufende Rolle / Genauigkeit nach Durchfluss (beobachten)** | Die Fehlprüfungen am 18.11. kamen nicht vom Durchfluss, sondern vom falschen Startwert (in 0.1.1 behoben). Nur umsetzen, wenn das Debug-Protokoll zeigt, dass eine drehende Rolle bei hohem Verbrauch Prüfungen scheitern lässt: dann niedrigeren Wert nehmen bzw. vorübergehend eine Stelle weniger vergleichen, mit Hinweis „Zähler läuft gerade schnell“. |
 | **Fremde Zähler und Wasserzähler** | Test 18.11. mit ca. 2000 öffentlichen Ziffernbildern (Wasser-/Gaszähler): Einzelziffern nur zu etwa 45 % richtig, „1“ besonders schwach (oft unklar oder als 4 gelesen). Praktisch getestet ist nur der eigene Gaszähler (Stromzähler bereits vernetzt, Wasserzähler nicht zugänglich). Verbesserung über einen Einzelziffern-Klassifikator prüfen (siehe Später). |

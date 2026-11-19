@@ -4,7 +4,7 @@
 
 ## Deutsch
 
-**Version 0.1.5.** Die App liest deinen Zähler lokal aus dem Kamerabild. Sie ist keine geeichte Messung.
+**Version 0.1.6.** Die App liest deinen Zähler lokal aus dem Kamerabild. Sie ist keine geeichte Messung.
 
 ### Einrichtung
 
@@ -31,7 +31,7 @@ Praktisch getestet ist bisher nur ein Gaszähler; Wasserzähler sind ungetestet.
 ### Plausibilität
 
 - Jede Prüfung wird mit einem zweiten Bild bestätigt.
-- Bleiben nach den OCR-Versuchen eine oder zwei Ziffern unklar, verschiebt die App nur deren Rahmen leicht und liest sie neu (höchstens 10 zusätzliche Einzelziffer-Lesungen).
+- Bleiben nach den OCR-Versuchen bis zu drei Ziffern unklar, verschiebt die App nur deren Rahmen leicht und liest sie neu (höchstens 10 zusätzliche Einzelziffer-Lesungen).
 - Sprünge über dem maximalen Durchfluss (Standard 6 m³/h, nach Qmax des Zählers einstellen) werden verworfen.
 - Ein einzelner niedrigerer Wert wird verworfen. Zeigen mindestens drei Ablesungen über 15 Minuten stimmig einen niedrigeren Stand, übernimmt die App ihn, ohne negativen oder doppelten Verbrauch zu buchen.
 
@@ -48,7 +48,7 @@ Nach einem App-Update oder Neustart lädt die geöffnete Weboberfläche selbst n
 
 ## English
 
-**Version 0.1.5.** The app reads your meter locally from a camera image. It is not a certified measurement.
+**Version 0.1.6.** The app reads your meter locally from a camera image. It is not a certified measurement.
 
 ### Setup
 
@@ -75,7 +75,7 @@ So far only one gas meter has been tested in practice; water meters are untested
 ### Plausibility
 
 - Every check is confirmed with a second image.
-- If one or two digits stay unclear after the OCR attempts, the app nudges only their frames and reads them again (at most 10 extra single-digit reads).
+- If up to three digits stay unclear after the OCR attempts, the app nudges only their frames and reads them again (at most 10 extra single-digit reads).
 - Jumps above the maximum flow (default 6 m³/h, set it to the meter's Qmax) are rejected.
 - A single lower reading is rejected. If at least three consistent readings over 15 minutes show a lower value, the app accepts it without booking negative or duplicate consumption.
 

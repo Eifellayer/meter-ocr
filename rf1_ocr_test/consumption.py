@@ -41,6 +41,47 @@ def parse_flow_limit(text):
     return litres
 
 
+# Gas billing: kWh = m³ × Zustandszahl (state factor) × Brennwert (calorific value, kWh/m³).
+STATE_FACTOR_RANGE = (0.8, 1.1)
+CALORIFIC_RANGE = (8.0, 13.0)
+# Some bills only state the finished conversion factor (Umrechnungsfaktor = Z × Hs).
+CONVERSION_RANGE = (6.0, 14.0)
+
+
+def parse_energy_factor(text, limits):
+    """Optional factor from the settings form; empty means "not set"."""
+    text = str(text or "").strip().replace(",", ".")
+    if not text:
+        return None
+    if not re.fullmatch(r"[0-9]{1,2}(?:\.[0-9]{1,4})?", text):
+        raise ValueError("Ungültiger Umrechnungswert")
+    value = round(float(text), 4)
+    if not limits[0] <= value <= limits[1]:
+        raise ValueError("Umrechnungswert außerhalb des üblichen Bereichs")
+    return value
+
+
+def valid_energy_factor(value, limits):
+    return round(float(value), 4) if type(value) in (int, float) and limits[0] <= value <= limits[1] else None
+
+
+def kwh_factor(state_factor, calorific_value, conversion_factor=None):
+    """kWh per m³: the bill's finished conversion factor, otherwise Zustandszahl × Brennwert."""
+    if conversion_factor is not None:
+        return conversion_factor
+    if state_factor is None or calorific_value is None:
+        return None
+    return state_factor * calorific_value
+
+
+def energy_kwh(total_litres, state_factor, calorific_value, conversion_factor=None):
+    """Consumption in kWh, or None until the billing factors are set."""
+    factor = kwh_factor(state_factor, calorific_value, conversion_factor)
+    if type(total_litres) is not int or factor is None:
+        return None
+    return round(total_litres / 1000 * factor, 2)
+
+
 def track_lower_series(series, stamp, reading, decimals, max_flow_lph, integer_digits=5):
     """Collect consecutive readings below the stored maximum and decide when they prove a misread.
 

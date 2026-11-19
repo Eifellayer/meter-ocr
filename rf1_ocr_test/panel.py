@@ -35,7 +35,8 @@ from checks import (DEFAULT_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, WARNING_DETA
 QUIET_FAILURES = 3
 from checks import FRAME_OFF_NOTICE, FRAME_OFF_WAIT_NOTICE, MOVING_DIGIT_NOTICE
 from consumption import (DEFAULT_FLOW_LPH, EXCESSIVE_INCREASE, LOWER_PENDING, LOWER_READING,
-                         consumption_statistics, format_cubic_metres, parse_flow_limit)
+                         CALORIFIC_RANGE, CONVERSION_RANGE, STATE_FACTOR_RANGE, consumption_statistics, format_cubic_metres,
+                         parse_energy_factor, parse_flow_limit)
 from demo import run_demo
 from i18n import EN_UI, english_progress, english_result, translate_page
 from language import MODES, SUPPORTED, USER_ID, browser_locale, profile_script
@@ -389,6 +390,11 @@ button:disabled{{opacity:.5;cursor:not-allowed}}
 #start-automatic,#start-check-with-options,#save-digit-correction,form button[type="submit"]:not(.crop-reset){{background:var(--accent);border-color:transparent;color:var(--accent-ink)}}
 #start-automatic:not(:disabled):hover,#start-check-with-options:not(:disabled):hover,form button[type="submit"]:not(.crop-reset):not(:disabled):hover{{background:light-dark(#097a6a,#5fd8c3)}}
 select,input{{border-radius:var(--radius-sm);background:var(--surface);border:1px solid var(--edge)}}
+/* Compact form fields (0.1.7): smaller selects and inputs, less visual weight in settings, tools and setup. */
+form select,form input:not([type="checkbox"]):not([type="radio"]):not([type="file"]){{min-height:2.25rem;padding:.4rem .65rem;font-size:.92rem}}
+.setup-step select,#wizard-camera-search{{min-height:2.35rem}}
+.setup-step details.setup-help > summary{{min-height:2.3rem;padding:.45rem .2rem}}
+form label{{gap:.2rem}}
 button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible,a:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b088);outline-offset:2px}}
 label{{color:var(--muted)}}
 /* ---------- Meter hero ---------- */
@@ -527,6 +533,7 @@ white-space:pre-line;line-height:1.24em;text-align:center;animation:roll 2.2s li
 .setup-step details.setup-help[open]{{padding-bottom:.8rem}}
 .setup-step input,.setup-step select{{width:100%;box-sizing:border-box}}
 .setup-step input[type="checkbox"],.setup-step input[type="radio"]{{width:auto}}
+.energy-factors{{display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:.5rem;margin:.5rem 0}}
 .setup-controls{{position:sticky;bottom:-1rem;z-index:2;margin:.4rem -1.3rem -1rem;padding:.75rem 1.3rem;background:var(--surface);border-top:1px solid var(--edge)}}
 .setup-controls .setup-next,.setup-controls button[type="submit"]{{background:var(--accent);color:var(--accent-ink);border-color:transparent;margin-left:auto}}
 .setup-count{{color:var(--muted);font-size:.85rem;white-space:nowrap}}
@@ -1151,6 +1158,15 @@ name: Zählerstand (OCR)</code></pre>
 <small>Ab diesem Wert wechselt die Selbsteinrichtung in die Intensivprüfung. Eine einzelne vermutete Ziffernposition kann sie auch früher gezielt prüfen.</small></label>
 <label title="Qmax steht auf deinem Zähler. Die Vorgabe für einen G4 beträgt 6 m³/h.">Maximaler Durchfluss (m³/h)
 <input name="max_flow" type="text" inputmode="decimal" maxlength="10" value="{max_flow}" required></label>
+<details class="help">
+<summary>Verbrauch auch in kWh</summary>
+<div class="energy-factors">
+<label>Zustandszahl<input name="gas_state_factor" type="text" inputmode="decimal" maxlength="7" placeholder="z. B. 0,9636" value="{gas_state_factor}"></label>
+<label>Brennwert (kWh/m³)<input name="calorific_value" type="text" inputmode="decimal" maxlength="7" placeholder="z. B. 11,25" value="{calorific_value}"></label>
+<label>oder Umrechnungsfaktor<input name="kwh_conversion_factor" type="text" inputmode="decimal" maxlength="7" placeholder="z. B. 10,84" value="{kwh_conversion_factor}"></label>
+</div>
+<small>Die Werte stehen auf der Gasabrechnung oder beim Netzbetreiber. Entweder Zustandszahl und Brennwert eintragen oder nur den fertigen Umrechnungsfaktor (er hat Vorrang). Dann gibt es zusätzlich <code>sensor.rf1_verbrauch_gesamt_kwh</code> für das Energie-Dashboard. Leer lassen schaltet es ab.</small>
+</details>
 <label>Ziffernfarbe
 <select name="polarity">{auto_polarity_options}</select></label>
 <details class="help setup-help">
@@ -3389,6 +3405,13 @@ refreshAutomatic();
 </script></html>"""
 
 
+def format_factor(value, language="de"):
+    if type(value) not in (int, float):
+        return ""
+    text = f"{value:.4f}".rstrip("0").rstrip(".")
+    return text if language == "en" else text.replace(".", ",")
+
+
 def editable_rotation(values):
     angle = values.get("rotation", 0)
     if type(angle) is not int:
@@ -4282,6 +4305,9 @@ def start_panel(
                 auto_crop_value=html.escape(auto_rules["crop"], quote=True),
                 auto_width_value=auto_rules["width"],
                 max_flow=format_cubic_metres(auto_rules.get("max_flow_lph", DEFAULT_FLOW_LPH)),
+                gas_state_factor=format_factor(auto_rules.get("gas_state_factor"), language),
+                calorific_value=format_factor(auto_rules.get("calorific_value"), language),
+                kwh_conversion_factor=format_factor(auto_rules.get("kwh_conversion_factor"), language),
                 max_interval_minutes=MAX_INTERVAL_MINUTES,
                 slfork_interval_hidden="" if source["mode"] == "slfork" else "hidden",
                 interval_minutes=auto_rules.get("interval_minutes", DEFAULT_INTERVAL_MINUTES),
@@ -4650,6 +4676,9 @@ def start_panel(
                             and rotation == old_rules.get("rotation", 0) and width == old_rules["width"]
                             and integer_digits == old_rules["integer_digits"] and fraction_digits == old_rules["fraction_digits"]
                         ) else [], "max_flow_lph": max_flow,
+                        "gas_state_factor": parse_energy_factor(field("gas_state_factor"), STATE_FACTOR_RANGE),
+                        "calorific_value": parse_energy_factor(field("calorific_value"), CALORIFIC_RANGE),
+                        "kwh_conversion_factor": parse_energy_factor(field("kwh_conversion_factor"), CONVERSION_RANGE),
                         "precision_mode": precise,
                         "self_repair_enabled": field("self_repair_enabled") == "1",
                         "fine_alignment_enabled": (field("fine_alignment_enabled") == "1"

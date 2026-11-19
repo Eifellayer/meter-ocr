@@ -13,6 +13,16 @@ from layout import MANUAL_ROW_UNCLEAR, PARTLY_UNCLEAR, RAW_ROW_UNCLEAR
 
 
 EN_UI = {
+    "Verbrauch auch in kWh": "Consumption in kWh too",
+    "Zustandszahl": "Gas state factor (Z)",
+    "Brennwert (kWh/m³)": "Calorific value (kWh/m³)",
+    "z. B. 0,9636": "e.g. 0.9636",
+    "z. B. 11,25": "e.g. 11.25",
+    "Die Werte stehen auf der Gasabrechnung oder beim Netzbetreiber. Entweder Zustandszahl und Brennwert eintragen oder nur den fertigen Umrechnungsfaktor (er hat Vorrang). Dann gibt es zusätzlich":
+        "The values are on your gas bill or available from the grid operator. Enter either the gas state factor and calorific value or just the finished conversion factor (it takes precedence). There is then also",
+    "oder Umrechnungsfaktor": "or conversion factor",
+    "z. B. 10,84": "e.g. 10.84",
+    "für das Energie-Dashboard. Leer lassen schaltet es ab.": "for the Energy dashboard. Leave empty to switch it off.",
     "Automatische Prüfung angefordert.": "Automatic check requested.",
     "Automatische Prüfung jetzt starten": "Run automatic check now",
     "Eine Nachkommastelle blieb wiederholt unklar. Du kannst den Vergleich auf weniger Stellen begrenzen.":

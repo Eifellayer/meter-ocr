@@ -46,7 +46,8 @@ from calibration import (Calibration, Layout, CAPTURE_INTERVAL, PERFECT_CONFIRMA
                          DEFAULT_INTENSIVE_AGREEMENT, SHORTLIST_LIMIT, TIME_LIMIT, LAST_DIGIT_CAPTURE_INTERVAL,
                          image_quality_hints, two_decimal_reading, uncertain_slots, valid_intensive_agreement)
 from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, LOWER_PENDING, LOWER_RECOVERED, MAX_FLOW_LPH,
-                         ImplausibleReading, track_lower_series,
+                         CALORIFIC_RANGE, CONVERSION_RANGE, STATE_FACTOR_RANGE, ImplausibleReading, energy_kwh, track_lower_series,
+                         valid_energy_factor,
                          accumulate_consumption, fallback_detail, format_cubic_metres, record_consumption_sample)
 from checks import (FRAME_OFF_NOTICE, FRAME_OFF_STREAK, FRAME_OFF_WAIT_NOTICE, MOVING_DIGIT_NOTICE,
                     REDUCED_PRECISION_NOTICE, only_last_compared_unclear)
@@ -89,6 +90,7 @@ ENTITY = f"sensor.{NAMESPACE}_kontrollbild"
 CORE_URL = f"http://supervisor/core/api/states/{ENTITY}"
 OCR_ENTITY = f"sensor.{NAMESPACE}_ocr_zaehlerstand"
 CONSUMPTION_ENTITY = f"sensor.{NAMESPACE}_verbrauch_gesamt"
+ENERGY_ENTITY = f"sensor.{NAMESPACE}_verbrauch_gesamt_kwh"
 MAX_IMAGE_PIXELS = 4_000_000
 LIVE_CAPTURE_WINDOW_SECONDS = 20
 LIVE_CAPTURE_MAX_ATTEMPTS = 10
@@ -776,6 +778,26 @@ def factory_reset_history(history, keep_statistics=False):
     return retained
 
 
+def publish_energy(history, token, rules):
+    """Consumption in kWh, only once both billing factors are set."""
+    consumption = history.get("consumption")
+    if isinstance(consumption, dict) and isinstance(rules, dict):
+        kwh = energy_kwh(consumption.get("total_litres"),
+                         valid_energy_factor(rules.get("gas_state_factor"), STATE_FACTOR_RANGE),
+                         valid_energy_factor(rules.get("calorific_value"), CALORIFIC_RANGE),
+                         valid_energy_factor(rules.get("kwh_conversion_factor"), CONVERSION_RANGE))
+        if kwh is not None:
+            publish_state(f"http://supervisor/core/api/states/{ENERGY_ENTITY}", {
+                "state": f"{kwh:.2f}",
+                "attributes": {
+                    "friendly_name": "Meter OCR Gasverbrauch gesamt (kWh)" + LABEL_SUFFIX,
+                    "unit_of_measurement": "kWh", "device_class": "energy", "state_class": "total_increasing",
+                    "zustandszahl": rules.get("gas_state_factor"), "brennwert_kwh_m3": rules.get("calorific_value"),
+                    "umrechnungsfaktor": rules.get("kwh_conversion_factor"),
+                },
+            }, token)
+
+
 def publish_consumption(history, token):
     consumption = history.get("consumption")
     if consumption is not None:
@@ -975,6 +997,12 @@ def main():
                           "crop_revision": (str(saved_rules.get("crop_revision", ""))[:30]
                                             if crop_mode == "manual" else ""),
                           "max_flow_lph": max_flow, "interval_minutes": interval_minutes,
+                          "gas_state_factor": valid_energy_factor(saved_rules.get("gas_state_factor"),
+                                                                  STATE_FACTOR_RANGE),
+                          "calorific_value": valid_energy_factor(saved_rules.get("calorific_value"),
+                                                                 CALORIFIC_RANGE),
+                          "kwh_conversion_factor": valid_energy_factor(saved_rules.get("kwh_conversion_factor"),
+                                                                       CONVERSION_RANGE),
                           "integer_digits": integer_digits, "fraction_digits": fraction_digits,
                           "meter_display": meter_display, "fallback_value": fallback_value,
                           "precision_mode": saved_rules.get("precision_mode") is True or saved_rules["decimals"] == 3,
@@ -2081,6 +2109,7 @@ def main():
                         publish_standalone(history, standalone_source, token)
                         published_standalone = standalone
                     publish_consumption(history, token)
+                    publish_energy(history, token, get_auto_rules())
                 except OSError as error:
                     print(f"Prüfstatus konnte nicht übertragen werden: {error}")
                 check_reminder(reminder, history, now, review_after)
@@ -3304,6 +3333,7 @@ def main():
                 publish_standalone(history, standalone_source, token)
                 published_standalone = standalone
             publish_consumption(history, token)
+            publish_energy(history, token, get_auto_rules())
         except OSError as error:
             print(f"Home Assistant konnte nicht aktualisiert werden: {error}")
         check_reminder(reminder, history, now, review_after)

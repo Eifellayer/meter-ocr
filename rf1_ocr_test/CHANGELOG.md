@@ -5,6 +5,8 @@
 - **Bilddrehung in 0,1°-Schritten:** z. B. −1,5° statt nur −1° oder −2°.
 - **Schräglage automatisch ausgleichen:** Bei manuellem Ausschnitt misst die App bei jeder Prüfung, wie schief die Ziffernreihe liegt (Linie durch die Ziffernmitten, robust gegen eine drehende Rolle). Stimmen sieben Messungen überein und weichen sie um mindestens 0,3° ab, dreht sie das Bild fein nach (höchstens ±2°). Steht im Debug-Protokoll unter `tilt`.
 - **Letzter Stand als Lesehilfe:** Vorkommastellen, die nach dem letzten bestätigten Stand und dem maximalen Durchfluss unmöglich sind, zählen nicht mehr mit. Beispiel 19.11.: `10478.65?` statt `1047?.65?`, weil die 8 manchmal als 6 gelesen wurde.
+- **Verbrauch auch in kWh:** Unter Einstellungen Zustandszahl und Brennwert von der Gasabrechnung eintragen oder nur den fertigen Umrechnungsfaktor; dann gibt es zusätzlich `sensor.rf1_verbrauch_gesamt_kwh` für das Energie-Dashboard.
+- **Kompaktere Formulare:** Auswahl- und Eingabefelder in Einstellungen, Werkzeugen und Einrichtung sind kleiner.
 - **Ehrlicherer Fehlertext:** Sind nur einzelne Ziffern unklar, heißt es „Einzelne Ziffern waren nicht eindeutig lesbar. Die App versucht es automatisch weiter.“ statt des Rats, Kamera, Fokus und Licht zu prüfen.
 
 ## 0.1.6

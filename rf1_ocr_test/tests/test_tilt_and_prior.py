@@ -79,3 +79,16 @@ class PriorReadingTests(TestCase):
     def test_no_aid_without_a_recent_confirmed_reading(self):
         self.assertIsNone(plausible_integer_digits(None, None, 0, 6000, 5))
         self.assertIsNone(plausible_integer_digits(10478548, 0.0, 30 * 86400.0, 6000, 5))
+
+
+class EnergyTests(TestCase):
+    def test_kwh_from_billing_factors(self):
+        from consumption import CALORIFIC_RANGE, STATE_FACTOR_RANGE, energy_kwh, parse_energy_factor
+        self.assertEqual(0.9636, parse_energy_factor("0,9636", STATE_FACTOR_RANGE))
+        self.assertIsNone(parse_energy_factor("", CALORIFIC_RANGE))
+        with self.assertRaises(ValueError):
+            parse_energy_factor("50", CALORIFIC_RANGE)
+        self.assertAlmostEqual(108.41, energy_kwh(10000, 0.9636, 11.25), delta=.01)
+        self.assertIsNone(energy_kwh(10000, None, 11.25))
+        self.assertEqual(108.4, energy_kwh(10000, None, None, 10.84))
+        self.assertEqual(108.4, energy_kwh(10000, 0.9636, 11.25, 10.84))  # finished factor wins

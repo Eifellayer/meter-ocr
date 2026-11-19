@@ -43,6 +43,7 @@ Praktisch getestet ist bisher nur ein Gaszähler; Wasserzähler sind ungetestet.
 | --- | --- |
 | `sensor.rf1_ocr_zaehlerstand` | erkannter Zählerstand |
 | `sensor.rf1_verbrauch_gesamt` | Gesamtverbrauch für das Energie-Dashboard (als Gas auswählen) |
+| `sensor.rf1_verbrauch_gesamt_kwh` | Gesamtverbrauch in kWh, wenn Zustandszahl und Brennwert oder der Umrechnungsfaktor eingetragen sind |
 | `sensor.rf1_pruefstatus` | Ergebnis der letzten Prüfung |
 | `sensor.rf1_kontrollbild` | letztes Kontrollbild |
 
@@ -89,6 +90,7 @@ So far only one gas meter has been tested in practice; water meters are untested
 | --- | --- |
 | `sensor.rf1_ocr_zaehlerstand` | recognised meter reading |
 | `sensor.rf1_verbrauch_gesamt` | total consumption for the Energy dashboard (select as gas) |
+| `sensor.rf1_verbrauch_gesamt_kwh` | total consumption in kWh once gas state factor and calorific value, or the conversion factor, are set |
 | `sensor.rf1_pruefstatus` | result of the last check |
 | `sensor.rf1_kontrollbild` | latest control image |
 

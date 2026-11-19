@@ -9,9 +9,13 @@ class CaptureLightTest(unittest.TestCase):
     def setup_calls(self, state="off", fail_take=False, fail_on=False):
         calls = []
 
+        reads = {"count": 0}
+
         def fetch(url, token, timeout=8):
             calls.append(("get", url.rsplit("/", 1)[-1]))
-            return json.dumps({"state": state}).encode()
+            reads["count"] += 1
+            # First read: state before the picture; later reads: state after switching off.
+            return json.dumps({"state": state if reads["count"] == 1 else "off"}).encode()
 
         def post(url, token, payload):
             calls.append(("post", url.rsplit("/", 1)[-1]))
@@ -30,14 +34,15 @@ class CaptureLightTest(unittest.TestCase):
         calls, fetch, post, take = self.setup_calls()
         waits = []
         self.assertEqual(b"jpeg", lit_picture("light.blitz", take, "t", fetch=fetch, post=post, sleep=waits.append))
-        self.assertEqual([("get", "light.blitz"), ("post", "turn_on"), ("take", ""), ("post", "turn_off")], calls)
-        self.assertEqual([1.5], waits)
+        self.assertEqual([("get", "light.blitz"), ("post", "turn_on"), ("take", ""), ("post", "turn_off"),
+                          ("get", "light.blitz")], calls)
+        self.assertEqual([1.5, 1], waits)
 
     def test_light_goes_off_when_the_picture_fails(self):
         calls, fetch, post, take = self.setup_calls(fail_take=True)
         with self.assertRaises(OSError):
             lit_picture("light.blitz", take, "t", fetch=fetch, post=post, sleep=lambda _: None)
-        self.assertEqual(("post", "turn_off"), calls[-1])
+        self.assertIn(("post", "turn_off"), calls)
 
     def test_light_that_was_on_stays_on(self):
         calls, fetch, post, take = self.setup_calls(state="on")
@@ -62,6 +67,27 @@ class CaptureLightTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             source_rules({**base, "mode": "camera", "light": "switch.blitz"})
         self.assertEqual("", source_rules({**base, "mode": "camera"})["light"])
+
+
+class LightOffRetryTest(unittest.TestCase):
+    def test_off_is_repeated_until_the_light_reports_off(self):
+        from run import switch_light_off
+        states = iter(["on", "on", "off"])
+        posts = []
+        ok = switch_light_off("light.blitz", "t",
+                              fetch=lambda url, token, timeout=8: json.dumps({"state": next(states)}).encode(),
+                              post=lambda url, token, payload: posts.append(url), sleep=lambda _: None)
+        self.assertTrue(ok)
+        self.assertEqual(3, len(posts))
+
+    def test_gives_up_after_a_few_attempts(self):
+        from run import switch_light_off
+        posts = []
+        ok = switch_light_off("light.blitz", "t",
+                              fetch=lambda url, token, timeout=8: json.dumps({"state": "on"}).encode(),
+                              post=lambda url, token, payload: posts.append(url), sleep=lambda _: None)
+        self.assertFalse(ok)
+        self.assertEqual(4, len(posts))
 
 
 if __name__ == "__main__":

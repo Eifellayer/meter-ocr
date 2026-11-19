@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.22
+
+- Licht für die Aufnahme bleibt nicht mehr an: Nach dem Ausschalten liest die App den Zustand zurück und wiederholt den Befehl bis zu viermal, wenn das Licht noch „an“ meldet. Ein ausgelasteter Kamera-ESP hatte „Licht aus“ verzögert oder gar nicht umgesetzt.
+- Anleitung: ESPHome-Beispiel mit Abschaltung nach 30 Sekunden im ESP selbst, aktueller Bildrate (Standbilder höchstens eine Sekunde alt) und ohne Drehung/Spiegelung durch ESPHome.
+
 ## 0.1.21
 
 - Blitzlicht für Home-Assistant- und ESPHome-Kameras: Neues Feld „Licht für die Aufnahme“ bei der Bildquelle (Assistent und Einstellungen). Die App schaltet das Licht wie AI on the Edge für jede Aufnahme kurz ein, wartet 1,5 Sekunden, holt das Bild und schaltet es wieder aus – auch wenn der Abruf fehlschlägt. Ein Licht, das vorher schon an war, bleibt an.

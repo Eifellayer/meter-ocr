@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.13
+
+- Meldung nach erfolgreicher Einrichtung: „Die Automatik läuft. In den nächsten 20 Minuten stimmt die App die Rahmen noch im Hintergrund fein ab.“ statt „… prüft sie häufiger“.
+- **kWh im Einrichtungsassistenten:** Zustandszahl und Brennwert oder der fertige Umrechnungsfaktor lassen sich jetzt auch im Assistenten eintragen (aufklappbar, optional), nicht nur unter Einstellungen.
+- Hinweis im Einrichtungsassistenten aktualisiert: Die dritte Nachkommastelle sucht die App nach der Einrichtung automatisch im Hintergrund und justiert die Rahmen selbst nach – nicht mehr „kann später intensiv gesucht oder manuell markiert werden“.
+
 ## 0.1.12
 
 - **Schräglagenmessung korrigiert:** Sie misst nur noch innerhalb der Ziffernrahmen und erkennt helle Fensterkanten (Zeilen, die fast über den ganzen Rahmen leuchten) als solche. Vorher geriet die beleuchtete Kante des Zählwerkfensters mit in die Messung und ergab Werte wie 16°, die verworfen wurden – der Ausgleich blieb dadurch wirkungslos.

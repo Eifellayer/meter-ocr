@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.23
+
+- „Licht für die Aufnahme“: Der Beispieltext im leeren Feld sah wie ein eingetragener Wert aus („light.esp_gaszaehler_blitz“). Jetzt steht dort „leer = ohne Licht, z. B. light.kamera_blitz“.
+
 ## 0.1.22
 
 - Licht für die Aufnahme bleibt nicht mehr an: Nach dem Ausschalten liest die App den Zustand zurück und wiederholt den Befehl bis zu viermal, wenn das Licht noch „an“ meldet. Ein ausgelasteter Kamera-ESP hatte „Licht aus“ verzögert oder gar nicht umgesetzt.

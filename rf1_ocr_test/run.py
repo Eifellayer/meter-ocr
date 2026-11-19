@@ -33,14 +33,14 @@ from checks import (
     STANDALONE_PENDING, STANDALONE_PENDING_NOTICE, STANDALONE_REJECTED_NOTICE, STANDALONE_VERIFIED_NOTICE,
     STANDALONE_CACHED_CAPTURE_DELAY, MAX_OCR_ATTEMPTS, DEFAULT_FAILURE_PAUSE_MINUTES, MAX_FAILURE_PAUSE_MINUTES, MIN_FAILURE_PAUSE_MINUTES, SHIFTED_DIGIT_POSITIONS, ROW_SHIFT_READS, ROW_SHIFT_TRIALS, plausible_integer_digits, note_skew, skew_offset, SHIFTED_DIGIT_READS, missing_digit_pattern, single_missing_digit, disputed_digit_pattern, resolve_ocr_readings,
     compare_sample, crop_register, lighting_ocr_profiles, read_register, read_with_retries, record_sample,
-    anchored_leading_digits, within_anchor_bounds,
+    anchored_leading_digits, anchored_hidden_digits, within_anchor_bounds,
     automatic_interval_minutes, defer_duplicate_cycle,
     LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, LAST_DIGIT_RETRIES, SUCCESSFUL_CHECKS,
     SEVENTH_DIGIT_WAIT_NOTICE,
     differs_only_at_last_digit, last_digit_can_pass, explain_uncertain_positions,
     meter_prefix, common_exact_precision, manual_confirms_failed_auto,
     reschedule_next_check, rolling_summary, sample_epoch, sample_timestamp, schedule_next_check, slfork_reference,
-    timestamp_epoch, track_reflection,
+    timestamp_epoch, track_reflection, system_idle,
     resume_optional_eighth_digit, relocate_last_digit_due, EIGHTH_DIGIT_RETRY_SECONDS,
     setup_deadlines, setup_source_id, stabilization_interval, stationary_partial_active, valid_interval_minutes,
 )
@@ -54,6 +54,7 @@ from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, LOWER_PENDING, LOWER_R
 from checks import (without_light, unclear_trailing_decimals, setup_tilt, initial_skew_state, FRAME_OFF_NOTICE, FRAME_OFF_STREAK, FRAME_OFF_WAIT_NOTICE, MOVING_DIGIT_NOTICE,
                     REDUCED_PRECISION_NOTICE, REDUCED_PRECISION2_NOTICE, MOVING_DIGITS_NOTICE, only_last_compared_unclear)
 import debug_log
+import experiments
 from layout import (MANUAL_ROW_UNCLEAR, PARTLY_UNCLEAR, RAW_ROW_UNCLEAR, digit_row_tilt, fine_rotation as valid_fine_rotation, crop_coordinates, find_digit_row,
                     digit_box_settings, find_raw_digit_row, normalize_digit_boxes, glyph_clipped, roll_center, rotated_width, scale_digit_boxes, turn_crop)
 from meter_learning import (GEOMETRY_REPAIR_LIMIT, GEOMETRY_REPAIR_SECONDS, alignment_rollback, observe_flow,
@@ -569,6 +570,66 @@ def select_tilted_register(frame, crop, whole_width, rotation, adjustment, whole
     adjusted_whole = max(1, round(whole_width * rotated_width(width, height, angle) /
                                   rotated_width(width, height, rotation)))
     return select_register(frame, None, crop, adjusted_whole, angle, whole_digits, fraction_digits)
+
+
+def hidden_reflection_slots(rules, source):
+    """Slots permanently hidden by a reflection (marked by the user or found by the setup)."""
+    marked = rules.get("setup_reflection")
+    if (not rules.get("reflection_estimate_enabled") or not isinstance(marked, dict)
+            or marked.get("source") != setup_source_id(source)):
+        return []
+    positions = marked.get("positions")
+    if not isinstance(positions, list) or not all(type(slot) is int and slot >= 0 for slot in positions):
+        return []
+    return positions[:2]
+
+
+def manual_reading_anchor(rules, zone):
+    """The reading entered by hand (fallback value with time) as an anchor, if any."""
+    value, stamp = str(rules.get("fallback_value") or ""), rules.get("fallback_time")
+    match = re.fullmatch(r"([0-9]{1,9})(?:[.,]([0-9]{1,3}))?", value)
+    if not match or not stamp:
+        return None
+    try:
+        return {"time": timestamp_epoch(stamp, zone),
+                "value": int(match[1]) * 1000 + int((match[2] or "").ljust(3, "0"))}
+    except (TypeError, ValueError):
+        return None
+
+
+def newest_anchor(first, second, before):
+    candidates = [item for item in (first, second)
+                  if isinstance(item, dict) and type(item.get("time")) in (int, float) and item["time"] < before]
+    return max(candidates, key=lambda item: item["time"], default=None)
+
+
+def valid_experiments(value):
+    """Only known experiments, each switched on or off."""
+    value = value if isinstance(value, dict) else {}
+    return {name: value.get(name) is True for name in experiments.EXPERIMENTS}
+
+
+def shadow_experiments(rules, manual, register, boxes, stable, light, forced):
+    """Read the same register with each ticked experiment, only with spare CPU capacity."""
+    names = experiments.enabled_experiments(rules)
+    if not names or manual or register is None or len(boxes) < 3:
+        return None
+    load = experiments.host_load()
+    if not system_idle():
+        return {"skipped": "busy", "load": load}
+    record = {"stable": stable, "load": load}
+
+    def read_box(image, box):
+        return read_digit(image, box, lambda picture, digits: read_register(
+            picture, light, digits, profile=OCR_PROFILES[0], force_polarity=forced, isolated_digit=True))
+
+    for name in names:
+        try:
+            if name == "perspective":
+                record[name] = experiments.shadow_perspective(register, boxes, read_box)
+        except (OSError, ValueError, subprocess.SubprocessError) as error:
+            record[name] = {"error": type(error).__name__}
+    return record
 
 
 def read_digit(register, box, read, trim_vertical=False):
@@ -1144,6 +1205,7 @@ def main():
     auto_rules = {"decimals": default_decimals, "attempts": default_attempts, "polarity": "auto",
                   "intensive_agreement": DEFAULT_INTENSIVE_AGREEMENT,
                   "precision_mode": default_decimals == 3, "fine_alignment_enabled": False, "adaptive_interval_enabled": True, "self_repair_enabled": False,
+                  "experiments_enabled": False, "experiments": {},
                   "reflection_estimate_enabled": False, "reflection_suggestion_hidden": False,
                   "reflection_confirmed_id": "",
                   "crop_mode": "auto", "crop": options["ausschnitt"],
@@ -1248,6 +1310,8 @@ def main():
                           "fine_alignment_enabled": saved_rules.get("fine_alignment_enabled") is True,
                           "self_repair_enabled": saved_rules.get("self_repair_enabled") is True,
                           "adaptive_interval_enabled": saved_rules.get("adaptive_interval_enabled") is True,
+                          "experiments_enabled": saved_rules.get("experiments_enabled") is True,
+                          "experiments": valid_experiments(saved_rules.get("experiments")),
                           "reflection_estimate_enabled": saved_rules.get("reflection_estimate_enabled") is True,
                           "reflection_suggestion_hidden": saved_rules.get("reflection_suggestion_hidden") is True,
                           "reflection_confirmed_id": str(saved_rules.get("reflection_confirmed_id", ""))[:80],
@@ -1316,6 +1380,8 @@ def main():
                          "fraction_digits": fraction_digits, "meter_display": meter_display,
                          "precision_mode": precision_mode, "fine_alignment_enabled": fine_alignment,
                          "adaptive_interval_enabled": adaptive_interval, "self_repair_enabled": self_repair,
+                         "experiments_enabled": values.get("experiments_enabled", auto_rules.get("experiments_enabled")) is True,
+                         "experiments": valid_experiments(values.get("experiments", auto_rules.get("experiments"))),
                          "reflection_estimate_enabled": reflection_estimate_enabled,
                          "reflection_suggestion_hidden": reflection_suggestion_hidden,
                          "reflection_confirmed_id": reflection_confirmed_id,
@@ -2166,6 +2232,16 @@ def main():
                     # of normal automatic consumption readings.
                     save_calibration_layout(attempt, selected, provisional=provisional,
                                             verified=not provisional, reflected=reflected)
+                    if reflected and attempt.auto_reflection:
+                        # Fire and Forget: a reflection found by the app is remembered like a marked one.
+                        save_auto_rules({**get_auto_rules(), "reflection_estimate_enabled": True,
+                                         "setup_reflection": {
+                                             "source": setup_source_id(active_source),
+                                             "positions": list(attempt.reflected_positions),
+                                             **selected.settings(), "automatic": True}},
+                                        request_check=False)
+                        debug_log.record(kind="setup_glare", positions=list(attempt.reflected_positions),
+                                         visible=(attempt.auto_glare or {}).get("visible"))
                     if not provisional and not attempt.automatic:
                         remember_known_good_layout(get_auto_rules(), active_source, selected)
                         history["setup_first_check_revision"] = get_auto_rules()["crop_revision"]
@@ -2453,6 +2529,7 @@ def main():
                           "standalone_candidate",
                           "learned_rotation", "geometry_recovery",
                           "reflection_anchor", "reflection_pending", "reflection_estimate", "reflection_streak", "reflection_live_estimate",
+                          "hidden_digit_prompt",
                           "reflection_rechecks", "reflection_retry_at", "fresh_ocr_retry_at", "ocr_candidates", "ocr_method",
                           "last_slfork_match", "last_reference", "last_reference_time",
                           "last_reference_is_fallback", "ocr_value", "ocr_readings"):
@@ -3110,6 +3187,20 @@ def main():
                                 ocr_readings, anchor, read_state["captured"], comparison_decimals,
                                 integer_digits, active_rules["max_flow_lph"],
                             )
+                            hidden_slots = hidden_reflection_slots(active_rules, active_source)
+                            if not anchored and hidden_slots:
+                                anchor = newest_anchor(anchor, manual_reading_anchor(active_rules, zone),
+                                                       read_state["captured"])
+                                anchored = anchored_hidden_digits(
+                                    ocr_readings, anchor, read_state["captured"], comparison_decimals,
+                                    integer_digits, active_rules["max_flow_lph"], hidden_slots,
+                                )
+                                if anchored:
+                                    updated.pop("hidden_digit_prompt", None)
+                                elif anchor is None:
+                                    # No verified or entered reading to fill the hidden digit from: ask once.
+                                    updated["hidden_digit_prompt"] = {
+                                        "positions": [slot + 1 for slot in hidden_slots], "time": time.time()}
                             if anchored:
                                 anchored_readings, filled_positions = anchored
                                 value, confirmed = resolve_ocr_readings(
@@ -3278,6 +3369,11 @@ def main():
                             preview.save(buffer, "JPEG", quality=88, optimize=True)
                             atomic_write(AUTOMATIC_PREVIEW, buffer.getvalue(), 0o600)
                             automatic_preview_ready = True
+                        if active_rules.get("experiments_enabled"):
+                            # Plain digit strip (window only, no labels) for /testbild-streifen.
+                            with io.BytesIO() as buffer:
+                                register.convert("RGB").save(buffer, "PNG")
+                                atomic_write(HISTORY.with_name("ocr-ziffernstreifen.png"), buffer.getvalue(), 0o600)
                     except (OSError, ValueError) as error:
                         print(f"Automatische OCR-Vorschau konnte nicht erstellt werden: {error}")
                 if source == "manual":
@@ -3727,7 +3823,13 @@ def main():
                   f"OCR: {ocr or '?'} ({data['ocr_attempts']} Durchläufe) | "
                   f"SLFork: {data['actual_value']} | Ergebnis: {outcome}")
             local = locals()
+            experiment = shadow_experiments(
+                active_rules, manual, local.get("register"),
+                [*(local.get("whole_boxes") or []), *(local.get("fraction_boxes") or [])], ocr,
+                options["helle_ziffern"] if active_rules["polarity"] == "auto" else active_rules["polarity"] == "light",
+                active_rules["polarity"] != "auto")
             debug_log.record(
+                experiment=experiment,
                 kind="manual" if manual else "automatic", image=data.get("esp_timestamp"), crop=source,
                 ocr=ocr, readings=local.get("ocr_readings"), attempts=data.get("ocr_attempts"),
                 method=local.get("ocr_method"), outcome=outcome, detail=updated.get("check_detail"),

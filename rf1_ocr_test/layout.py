@@ -857,3 +857,42 @@ def glyph_clipped(image, box):
         return False
     edge = max(1, width // 12)
     return max(profile[:edge]) > busiest * .75 or max(profile[-edge:]) > busiest * .75
+
+
+def glare_slots(register, boxes):
+    """Return the indices of digit frames that are washed out by a reflection of the light.
+
+    A flash reflection is far brighter than every glyph: in the darkest colour channel a large
+    part of that frame lies well above the brightest strokes of the other frames.
+    """
+    if len(boxes) < 3:
+        return []
+    from PIL import ImageChops
+
+    image = register.convert("RGB")
+    red, green, blue = image.split()
+    darkest = ImageChops.darker(ImageChops.darker(red, green), blue)
+    histograms = []
+    for left, top, right, bottom in boxes:
+        left, top = max(0, left), max(0, top)
+        right, bottom = min(darkest.width, right), min(darkest.height, bottom)
+        histograms.append(darkest.crop((left, top, right, bottom)).histogram()
+                          if right - left >= 2 and bottom - top >= 2 else None)
+    peaks = []
+    for histogram in histograms:
+        if histogram is None:
+            peaks.append(0)
+            continue
+        total, seen, peak = sum(histogram), 0, 255
+        for level in range(255, -1, -1):
+            seen += histogram[level]
+            if seen >= total * .01:
+                peak = level
+                break
+        peaks.append(peak)
+    level = max(140, min(245, round(1.8 * median(peaks))))
+    if level <= median(peaks) + 30:
+        return []
+    shares = [sum(histogram[level:]) / max(1, sum(histogram)) if histogram else 0 for histogram in histograms]
+    found = [index for index, share in enumerate(shares) if share >= .2]
+    return found if len(found) <= 2 else []

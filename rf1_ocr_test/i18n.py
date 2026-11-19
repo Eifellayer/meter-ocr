@@ -13,6 +13,22 @@ from layout import MANUAL_ROW_UNCLEAR, PARTLY_UNCLEAR, RAW_ROW_UNCLEAR
 
 
 EN_UI = {
+    "Klappt es dauerhaft nicht? <a": "Still not working? <a",
+    "(öffnet ein vorausgefülltes Formular auf GitHub, ohne private Daten).": "(opens a prefilled form on GitHub, without private data).",
+    "ⓘ Experimentelle Funktionen": "ⓘ Experimental functions",
+    "> Experimentelle Funktionen testen<": "> Test experimental functions<",
+    "> Perspektivkorrektur (Kippung)<": "> Perspective correction (keystone)<",
+    "Die App liest jedes Bild zusätzlich mit den angehakten Experimenten, aber nur, wenn der Rechner gerade Leistung frei hat. Es zählt weiterhin nur das bewährte Ergebnis; beide stehen im Debug-Protokoll. Die meisten brauchen das nicht.":
+        "The app additionally reads each image with the ticked experiments, but only while the computer has spare capacity. Only the proven result counts; both are written to the debug log. Most users do not need this.",
+    "<strong>Ziffer verdeckt.</strong>": "<strong>Digit hidden.</strong>",
+    "Eine Stelle ist durch eine Spiegelung verdeckt.": "A digit is hidden by a reflection.",
+    "Trag einmal den aktuellen Zählerstand ein. Danach ergänzt die App die verdeckte Stelle selbst, solange nur ein Wert zum Verbrauch passt.":
+        "Enter the current meter reading once. After that the app fills in the hidden digit itself as long as only one value fits the consumption.",
+    ">Aktueller Zählerstand<input": ">Current meter reading<input",
+    'placeholder="z. B. 10486,16"': 'placeholder="e.g. 10486.16"',
+    ">Zählerstand übernehmen<": ">Use meter reading<",
+    "'Stelle ' + hiddenPrompt.positions.join(' und ') + ' ist durch eine Spiegelung verdeckt.'":
+        "'Digit ' + hiddenPrompt.positions.join(' and ') + ' is hidden by a reflection.'",
     "Pause nach drei Fehlprüfungen (Minuten)": "Pause after three failed checks (minutes)",
     "Danach prüft die App wieder normal. Bleibt nur die letzte Rolle unklar, pausiert sie nicht.":
         "Afterwards the app checks normally again. If only the last roller is unclear, it does not pause.",

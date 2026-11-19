@@ -4,7 +4,7 @@
 
 ## Deutsch
 
-**Version 0.1.26.** Die App liest deinen Zähler lokal aus dem Kamerabild. Sie ist keine geeichte Messung.
+**Version 0.2.0.** Die App liest deinen Zähler lokal aus dem Kamerabild. Sie ist keine geeichte Messung.
 
 ### Einrichtung
 
@@ -83,6 +83,12 @@ light:
       - light.turn_off: blitz
 ```
 
+### Schwierige Bilder, Spiegelungen und Experimente
+
+- **Spiegelung des Blitzes:** Überstrahlt ein Reflex dauerhaft dieselbe Ziffer, erkennt die Selbsteinrichtung das selbst und schließt mit den übrigen Ziffern ab. Die verdeckte Stelle ergänzt die App aus dem letzten bestätigten Stand, wenn nur ein Wert zum maximalen Durchfluss passt. Fehlt ein solcher Stand, bittet die Übersicht einmal um den aktuellen Zählerstand.
+- **Experimentelle Funktionen** (Einstellungen → Automatik im Hintergrund verbessern → Experimentelle Funktionen): standardmäßig aus. Angehakte Experimente lesen jedes Bild zusätzlich mit, nur bei freier Rechenleistung; es zählt weiterhin nur das bewährte Ergebnis, beide stehen im Debug-Protokoll (Feld `experiment`). Erstes Experiment: Perspektivkorrektur (Kippung).
+- **Fehler melden** (Werkzeuge → Debug-Protokoll, und im Hinweis bei wiederholten Fehlprüfungen): öffnet ein vorausgefülltes GitHub-Formular ohne private Daten. Das Debug-Protokoll hängst du selbst an.
+
 ### Home Assistant
 
 | Entität | Inhalt |
@@ -97,7 +103,7 @@ Nach einem App-Update oder Neustart lädt die geöffnete Weboberfläche selbst n
 
 ## English
 
-**Version 0.1.26.** The app reads your meter locally from a camera image. It is not a certified measurement.
+**Version 0.2.0.** The app reads your meter locally from a camera image. It is not a certified measurement.
 
 ### Setup
 
@@ -175,6 +181,12 @@ light:
       - delay: 30s
       - light.turn_off: blitz
 ```
+
+### Difficult images, reflections and experiments
+
+- **Flash reflection:** If a reflection permanently washes out the same digit, automatic setup detects it and finishes with the remaining digits. The app fills the hidden digit from the last confirmed reading when only one value fits the maximum flow. Without such a reading the overview asks once for the current meter reading.
+- **Experimental functions** (Settings → Improve automatic checks in the background → Experimental functions): off by default. Ticked experiments read each image additionally, only with spare capacity; only the proven result counts, both are written to the debug log (field `experiment`). First experiment: perspective correction (keystone).
+- **Report a problem** (Tools → Debug log, and in the notice after repeated failed checks): opens a prefilled GitHub form without private data. Attach the debug log yourself.
 
 ### Home Assistant
 

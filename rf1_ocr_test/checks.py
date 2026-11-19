@@ -130,7 +130,6 @@ def read_register(picture, light_digits, digits=5, *, force_polarity=False, prof
             reads.add(value)
     return next(iter(reads)) if len(reads) == 1 else None
 
-
 def reduce_uneven_lighting(image):
     """Estimate broad shadows on a small image while excluding the dark strokes."""
     background = image.copy()
@@ -683,6 +682,56 @@ def anchored_leading_digits(readings, anchor, stamp, decimals, integer_digits, m
         return None
     normalized = [lowest[:frozen] + row[frozen:] for row in rows]
     return normalized, filled
+
+
+HIDDEN_DIGIT_NOTICE = "Verdeckte Stelle aus dem zuletzt bestätigten Stand ergänzt."
+
+
+def anchored_hidden_digits(readings, anchor, stamp, decimals, integer_digits, max_flow_lph, positions):
+    """Fill digits that a reflection hides permanently, from a verified reading.
+
+    Only the given slots (0-based, without the decimal point) may be filled, every other
+    compared digit needs a majority. The fill is accepted only when exactly one completion
+    lies inside the physically reachable range since the anchor. Returns the normalized
+    readings and the filled slots, or None.
+    """
+    bounds = anchor_bounds(anchor, stamp, decimals, max_flow_lph)
+    if bounds is None or not readings or not positions or not 1 <= integer_digits <= 9:
+        return None
+    length = integer_digits + (decimals + 1 if decimals else 0)
+    rows = [str(value)[:length] for value in readings]
+    if any(len(row) != length or not re.fullmatch(r"[0-9?]+(?:\.[0-9?]+)?", row) for row in rows):
+        return None
+    majority = len(rows) // 2 + 1
+    pattern = []
+    for index in range(length):
+        if decimals and index == integer_digits:
+            pattern.append(".")
+            continue
+        votes = Counter(row[index] for row in rows if row[index].isdigit())
+        digit, count = votes.most_common(1)[0] if votes else ("?", 0)
+        pattern.append(digit if count >= majority else "?")
+    allowed = {slot + (1 if decimals and slot >= integer_digits else 0) for slot in positions}
+    hidden = [index for index, char in enumerate(pattern) if char == "?"]
+    if not hidden or len(hidden) > 2 or not set(hidden) <= allowed:
+        return None
+    step = 10 ** (3 - decimals)
+    low, high = bounds
+    match = None
+    for digits in product("0123456789", repeat=len(hidden)):
+        chars = list(pattern)
+        for index, digit in zip(hidden, digits):
+            chars[index] = digit
+        reading = "".join(chars)
+        value = int(reading.replace(".", "")) * step
+        if low - step <= value <= high:
+            if match is not None:
+                return None
+            match = reading
+    if match is None:
+        return None
+    slots = [index - (1 if decimals and index > integer_digits else 0) for index in hidden]
+    return [match] * len(rows), slots
 
 
 def within_anchor_bounds(ocr, anchor, stamp, decimals, integer_digits, max_flow_lph):

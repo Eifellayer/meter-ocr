@@ -16,7 +16,7 @@ from checks import OCR_PROFILES, compare_sample, crop_register, meter_prefix, re
 from consumption import accumulate_consumption
 from layout import (crop_coordinates, digit_box_settings, find_digit_row, find_neighbour_digit_rows,
                     dark_register_cells, find_dark_register, find_dark_strip, find_glyph_register, find_raw_digit_rows, normalize_digit_boxes,
-                    rotated_width, same_digit_region, scale_digit_boxes, turn_crop)
+                    rotated_width, same_digit_region, scale_digit_boxes, turn_crop, glare_slots)
 
 from meter_learning import propose_digit_boxes
 
@@ -668,6 +668,9 @@ class Calibration:
     known_good_layout: Layout | None = None
     reflected_layout: Layout | None = None
     reflected_positions: tuple = ()
+    # Reflection found by the app itself (no marked positions): layout, positions, visible digits, images.
+    auto_glare: dict | None = None
+    auto_reflection: bool = False
     reflected_confirmations: int = 0
     region: tuple | None = None
     focused: bool = False
@@ -685,6 +688,50 @@ class Calibration:
     def stationary_crop_ready(self):
         return (self.simplified and not self.automatic and self.candidate is not None
                 and self.confirmations >= MIN_IMAGES and not (self.anchored or self.advanced))
+
+    def note_auto_glare(self, frame, coarse, required_rows, required_slots, digits, reference_digits, on_selected):
+        """Recognise a digit hidden by a reflection of the light without the user marking it.
+
+        Only the washed-out frames may stay unclear; all other required digits must agree in both
+        readings, and the same frames must be washed out with the same visible whole digits on
+        MIN_IMAGES different images. Then the layout is handled like a marked reflection.
+        """
+        for _, layout, readings in coarse:
+            rows = required_rows(readings)
+            weak = uncertain_slots(rows, required_slots)
+            if not 1 <= len(weak) <= 2 or required_slots - len(weak) < 4:
+                continue
+            try:
+                left, top, right, bottom = layout.box
+                register = turn_crop(frame.crop((left, top, right, bottom)), layout.rotation)
+                boxes = scale_digit_boxes(layout.digit_boxes, register.size) if layout.digit_boxes else ()
+            except (ValueError, TypeError):
+                continue
+            if len(boxes) < required_slots:
+                continue
+            glared = glare_slots(register, boxes)
+            if not glared or not set(weak) <= set(glared):
+                continue
+            visible = "".join("?" if index in weak else rows[0][index] for index in range(digits))
+            if reference_digits is not None and any(
+                    char != reference_digits[index] for index, char in enumerate(visible) if char != "?"):
+                continue
+            previous = self.auto_glare
+            if (previous is not None and similar_layout(layout, previous["layout"])
+                    and previous["positions"] == tuple(weak) and previous["visible"][:-1] == visible[:-1]):
+                count = previous["count"] + 1
+            else:
+                count = 1
+            self.auto_glare = {"layout": layout, "positions": tuple(weak), "visible": visible, "count": count}
+            if on_selected is not None:
+                on_selected(layout, readings)
+            if count >= MIN_IMAGES:
+                self.reflected_layout = layout
+                self.reflected_positions = tuple(weak)
+                self.reflected_confirmations = count
+                self.auto_reflection = True
+            return True
+        return False
 
     def reflection_crop_ready(self):
         return self.reflected_layout is not None and self.reflected_confirmations >= MIN_IMAGES
@@ -1345,6 +1392,13 @@ class Calibration:
                     on_decision("reflected_geometry")
                     return None
             self.reflected_confirmations = 0
+
+        if (self.reflected_layout is None and self.simplified and not self.automatic and not self.intensive
+                and not any(reliable(score) for score, _, _ in coarse)):
+            if self.note_auto_glare(frame, coarse, required_rows, required_slots, digits, reference_digits,
+                                    on_selected):
+                on_decision("reflected_geometry")
+                return None
 
         def ranked_crop(item):
             score, layout, readings = item

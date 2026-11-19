@@ -895,8 +895,17 @@ SETUP_OPTIMIZATION_PAUSE_SECONDS = 60 * 60
 SETUP_CHECK_INTERVAL_MINUTES = 5
 
 
+def without_light(value):
+    """The capture light does not change which camera is read, so it is not part of its identity."""
+    if isinstance(value, dict):
+        return {key: item for key, item in value.items() if key != "light"}
+    if isinstance(value, list):
+        return [without_light(item) for item in value]
+    return value
+
+
 def setup_source_id(source):
-    return hashlib.sha256(json.dumps(source, sort_keys=True).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(without_light(source), sort_keys=True).encode()).hexdigest()
 
 
 def stationary_partial_active(rules, source):

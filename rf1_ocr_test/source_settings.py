@@ -8,6 +8,7 @@ ESP_ADDRESS_MODES = ("slfork", "slfork_camera")
 SOURCE_MODES = (*ESP_ADDRESS_MODES, "camera", "esphome")
 CAMERA = re.compile(r"camera\.[a-z0-9_]+")
 REFERENCE = re.compile(r"sensor\.[a-z0-9_]+")
+LIGHT = re.compile(r"light\.[a-z0-9_]+")
 
 DISCOVERY_TEMPLATE = """
 {% set found = namespace(cameras=[], devices=[]) %}
@@ -42,7 +43,10 @@ def source_rules(values):
         raise ValueError("Ungültige Kamera-Entität")
     if mode == "camera" and reference and not REFERENCE.fullmatch(reference):
         raise ValueError("Ungültiger Referenzsensor")
-    return dict(mode=mode, url=url, camera=camera, reference=reference)
+    light = str(values.get("light") or "").strip() if mode not in ESP_ADDRESS_MODES else ""
+    if light and not LIGHT.fullmatch(light):
+        raise ValueError("Ungültige Licht-Entität")
+    return dict(mode=mode, url=url, camera=camera, reference=reference, light=light)
 
 
 def source_check_key(source):

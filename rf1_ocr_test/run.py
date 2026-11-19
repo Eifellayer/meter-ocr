@@ -51,7 +51,7 @@ from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, LOWER_PENDING, LOWER_R
                          CALORIFIC_RANGE, CONVERSION_RANGE, STATE_FACTOR_RANGE, ImplausibleReading, energy_kwh, track_lower_series,
                          valid_energy_factor,
                          accumulate_consumption, fallback_detail, format_cubic_metres, record_consumption_sample)
-from checks import (unclear_trailing_decimals, setup_tilt, initial_skew_state, FRAME_OFF_NOTICE, FRAME_OFF_STREAK, FRAME_OFF_WAIT_NOTICE, MOVING_DIGIT_NOTICE,
+from checks import (without_light, unclear_trailing_decimals, setup_tilt, initial_skew_state, FRAME_OFF_NOTICE, FRAME_OFF_STREAK, FRAME_OFF_WAIT_NOTICE, MOVING_DIGIT_NOTICE,
                     REDUCED_PRECISION_NOTICE, REDUCED_PRECISION2_NOTICE, MOVING_DIGITS_NOTICE, only_last_compared_unclear)
 import debug_log
 from layout import (MANUAL_ROW_UNCLEAR, PARTLY_UNCLEAR, RAW_ROW_UNCLEAR, digit_row_tilt, fine_rotation as valid_fine_rotation, crop_coordinates, find_digit_row,
@@ -382,10 +382,52 @@ def capture(base, diagnostics, *, fetch=None):
     }
 
 
-def capture_camera(camera, reference, token, zone, timeout=8, *, fetch=None):
+LIGHT_DELAY = 1.5
+
+
+def post_json(url, token, payload, timeout=8):
+    request = Request(url, data=json.dumps(payload).encode("utf-8"), method="POST",
+                      headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
+    with open_core(request, timeout=timeout) as response:
+        return response.read(MAX_RESPONSE_BYTES)
+
+
+def lit_picture(light, take, token, *, fetch, post, delay=LIGHT_DELAY, sleep=time.sleep):
+    """Switch a Home Assistant light on for one picture, like AI on the Edge's flash.
+
+    A light that was already on is left on; a light the app switched on is always
+    switched off again, also when taking the picture fails.
+    """
+    if not light:
+        return take()
+    base = "http://supervisor/core/api"
+    try:
+        already_on = json.loads(fetch(f"{base}/states/{light}", token, timeout=4)).get("state") == "on"
+    except (OSError, ValueError, TypeError, AttributeError):
+        already_on = False
+    switched = False
+    try:
+        if not already_on:
+            try:
+                post(f"{base}/services/light/turn_on", token, {"entity_id": light})
+                switched = True
+                sleep(delay)
+            except OSError as error:
+                print(f"Licht für die Aufnahme konnte nicht eingeschaltet werden: {type(error).__name__}")
+        return take()
+    finally:
+        if switched:
+            try:
+                post(f"{base}/services/light/turn_off", token, {"entity_id": light})
+            except OSError as error:
+                print(f"Licht für die Aufnahme konnte nicht ausgeschaltet werden: {type(error).__name__}")
+
+
+def capture_camera(camera, reference, token, zone, timeout=8, *, fetch=None, light="", post=None):
     fetch = fetch or get_bytes
     base = "http://supervisor/core/api"
-    picture = fetch(f"{base}/camera_proxy/{camera}", token, timeout=timeout)
+    picture = lit_picture(light, lambda: fetch(f"{base}/camera_proxy/{camera}", token, timeout=timeout), token,
+                          fetch=fetch, post=post or post_json)
     captured = datetime.now(zone)
     value = None
     reference_time = None
@@ -622,7 +664,7 @@ def wizard_camera_preview(source, token, zone, *, full_size=False):
     elif mode == "slfork_camera":
         picture, _, _ = capture_edge_camera(source["url"].rstrip("/"), zone)
     else:
-        picture, _, _ = capture_camera(source["camera"], "", token, zone, timeout=5)
+        picture, _, _ = capture_camera(source["camera"], "", token, zone, timeout=5, light=source.get("light", ""))
     try:
         with Image.open(io.BytesIO(picture)) as frame:
             if frame.width * frame.height > MAX_IMAGE_PIXELS:
@@ -746,7 +788,7 @@ def last_verified_configured_geometry(history, rules, source_key):
 
 
 def calibration_source_id(source):
-    return hashlib.sha256(json.dumps(source, sort_keys=True).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(without_light(source), sort_keys=True).encode()).hexdigest()
 
 
 def standalone_calibration_reference(rules, source, source_key, captured, previous):
@@ -1349,7 +1391,7 @@ def main():
     def candidate_scope(configuration, region, simplified, intensive):
         rules, source = configuration
         relevant = ("integer_digits", "fraction_digits", "decimals", "polarity", "meter_display")
-        key = [source, [rules[name] for name in relevant], region, simplified, intensive]
+        key = [without_light(source), [rules[name] for name in relevant], region, simplified, intensive]
         return hashlib.sha256(json.dumps(key, sort_keys=True).encode()).hexdigest()
 
     def load_calibration_candidates(scope, rules):
@@ -1377,7 +1419,7 @@ def main():
     def read_geometry_backup():
         try:
             backup = json.loads(geometry_backup.read_text(encoding="utf-8"))
-            return backup["rules"] if backup["source"] == get_source()[0] else None
+            return backup["rules"] if without_light(backup["source"]) == without_light(get_source()[0]) else None
         except (OSError, ValueError, TypeError, KeyError):
             return None
 
@@ -1656,7 +1698,8 @@ def main():
             elif mode == "slfork_camera":
                 result = capture_edge_camera(base, zone, fetch=fetch)
             elif camera:
-                result = capture_camera(camera, reference, token, zone, fetch=fetch)
+                result = capture_camera(camera, reference, token, zone, fetch=fetch,
+                                        light=get_source()[0].get("light", ""))
             round_log["fetch_seconds"] = time.monotonic() - round_started
             if result is not None and not stopped():
                 round_log["captured"] = True
@@ -2374,6 +2417,7 @@ def main():
                     result = capture_camera(
                         camera, reference, token, zone,
                         timeout=min(8, max(0.2, live_deadline - time.monotonic())) if live_deadline else 8,
+                        light=active_source.get("light", ""),
                     )
                 elif esp_camera_only:
                     result = capture_edge_camera(base, zone)
@@ -2578,6 +2622,7 @@ def main():
                                 latest = capture_camera(
                                     camera, reference, token, zone,
                                     timeout=min(8, max(0.2, remaining)),
+                                    light=active_source.get("light", ""),
                                 )
                                 if latest is None:
                                     return "?"

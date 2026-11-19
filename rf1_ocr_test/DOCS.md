@@ -4,7 +4,7 @@
 
 ## Deutsch
 
-**Version 0.1.20.** Die App liest deinen Zähler lokal aus dem Kamerabild. Sie ist keine geeichte Messung.
+**Version 0.1.21.** Die App liest deinen Zähler lokal aus dem Kamerabild. Sie ist keine geeichte Messung.
 
 ### Einrichtung
 
@@ -37,6 +37,46 @@ Praktisch getestet ist bisher nur ein Gaszähler; Wasserzähler sind ungetestet.
 - Sprünge über dem maximalen Durchfluss (Standard 6 m³/h, nach Qmax des Zählers einstellen) werden verworfen.
 - Ein einzelner niedrigerer Wert wird verworfen. Zeigen mindestens drei Ablesungen über 15 Minuten stimmig einen niedrigeren Stand, übernimmt die App ihn, ohne negativen oder doppelten Verbrauch zu buchen.
 
+### ESPHome-Kamera mit Blitz (ESP32-CAM)
+
+Im ESPHome Device Builder ein neues ESP32-Gerät anlegen (WLAN, API und OTA erzeugt der Assistent), dann diesen Teil ergänzen. `max_power: 60%` verhindert Neustarts durch die helle LED und mindert Spiegelungen. In der App als Bildquelle **ESPHome-/Home-Assistant-Kamera** wählen und unter **Licht für die Aufnahme** die Blitz-Entität eintragen: Die App schaltet sie wie AI on the Edge kurz ein (1,5 Sekunden), holt das Bild und schaltet sie wieder aus.
+
+```yaml
+esp32:
+  board: esp32cam
+
+esp32_camera:
+  name: Gaszähler
+  external_clock:
+    pin: GPIO0
+    frequency: 20MHz
+  i2c_pins:
+    sda: GPIO26
+    scl: GPIO27
+  data_pins: [GPIO5, GPIO18, GPIO19, GPIO21, GPIO36, GPIO39, GPIO34, GPIO35]
+  vsync_pin: GPIO25
+  href_pin: GPIO23
+  pixel_clock_pin: GPIO22
+  power_down_pin: GPIO32
+  resolution: 800x600
+  jpeg_quality: 10
+  max_framerate: 1 fps
+  idle_framerate: 0.1 fps
+
+output:
+  - platform: ledc
+    pin: GPIO4
+    id: blitz_ausgang
+    max_power: 60%
+
+light:
+  - platform: monochromatic
+    output: blitz_ausgang
+    name: Blitz
+    restore_mode: ALWAYS_OFF
+    default_transition_length: 0s
+```
+
 ### Home Assistant
 
 | Entität | Inhalt |
@@ -51,7 +91,7 @@ Nach einem App-Update oder Neustart lädt die geöffnete Weboberfläche selbst n
 
 ## English
 
-**Version 0.1.20.** The app reads your meter locally from a camera image. It is not a certified measurement.
+**Version 0.1.21.** The app reads your meter locally from a camera image. It is not a certified measurement.
 
 ### Setup
 
@@ -83,6 +123,46 @@ So far only one gas meter has been tested in practice; water meters are untested
 - If up to three digits stay unclear after the OCR attempts, the app nudges only their frames and reads them again (at most 10 extra single-digit reads).
 - Jumps above the maximum flow (default 6 m³/h, set it to the meter's Qmax) are rejected.
 - A single lower reading is rejected. If at least three consistent readings over 15 minutes show a lower value, the app accepts it without booking negative or duplicate consumption.
+
+### ESPHome camera with flash (ESP32-CAM)
+
+Create a new ESP32 device in the ESPHome Device Builder (the wizard creates Wi-Fi, API and OTA settings), then add this part. `max_power: 60%` prevents resets caused by the bright LED and reduces glare. In the app choose **ESPHome / Home Assistant camera** as image source and enter the flash entity under **Light for the picture**: like AI on the Edge, the app switches it on briefly (1.5 seconds), takes the picture and switches it off again.
+
+```yaml
+esp32:
+  board: esp32cam
+
+esp32_camera:
+  name: Gaszähler
+  external_clock:
+    pin: GPIO0
+    frequency: 20MHz
+  i2c_pins:
+    sda: GPIO26
+    scl: GPIO27
+  data_pins: [GPIO5, GPIO18, GPIO19, GPIO21, GPIO36, GPIO39, GPIO34, GPIO35]
+  vsync_pin: GPIO25
+  href_pin: GPIO23
+  pixel_clock_pin: GPIO22
+  power_down_pin: GPIO32
+  resolution: 800x600
+  jpeg_quality: 10
+  max_framerate: 1 fps
+  idle_framerate: 0.1 fps
+
+output:
+  - platform: ledc
+    pin: GPIO4
+    id: blitz_ausgang
+    max_power: 60%
+
+light:
+  - platform: monochromatic
+    output: blitz_ausgang
+    name: Blitz
+    restore_mode: ALWAYS_OFF
+    default_transition_length: 0s
+```
 
 ### Home Assistant
 

@@ -1,6 +1,6 @@
 # AI Meter Reader
 
-**Version 0.1.13** · [English](README.en.md) · [Anleitung](rf1_ocr_test/DOCS.md) · [Änderungen](rf1_ocr_test/CHANGELOG.md) · [Roadmap](RELEASE-PLAN.md)
+**Version 0.1.14** · [English](README.en.md) · [Anleitung](rf1_ocr_test/DOCS.md) · [Änderungen](rf1_ocr_test/CHANGELOG.md) · [Roadmap](RELEASE-PLAN.md)
 
 <img src="assets/project-logo.png" alt="AI Meter Reader" width="110">
 
@@ -28,9 +28,9 @@ Home-Assistant-App, die mechanische Zähler (vor allem Gaszähler mit Ziffernrol
 | Situation | Nächste Prüfung |
 | --- | --- |
 | Erfolgreiche Prüfung | eingestelltes Intervall, standardmäßig 10 Minuten |
-| 1. oder 2. Fehlprüfung | 5 Minuten |
+| 1. oder 2. Fehlprüfung | 2 Minuten bei freier Rechenleistung, sonst 5 Minuten |
 | Nur die 7. Ziffer unsicher, Rest per Referenz bestätigt | 30 Minuten |
-| 3 Fehlprüfungen in Folge | 60 Minuten Pause |
+| 3 Fehlprüfungen in Folge | Pause, einstellbar, Standard 30 Minuten (keine Pause, wenn nur die letzte Rolle unklar ist) |
 
 ## Getestet
 

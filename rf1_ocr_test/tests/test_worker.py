@@ -27,6 +27,8 @@ from layout import crop_coordinates, find_digit_row, rotated_width, turn_crop
 from settings import load_options
 from source_settings import discovered_sources
 import run
+import checks as _checks_for_timing
+_checks_for_timing.system_idle = lambda: False  # deterministic retry timing in tests
 
 
 def sample(now):

@@ -1,6 +1,6 @@
 # AI Meter Reader
 
-**Version 0.1.13** · [Deutsch](README.md) · [Guide](rf1_ocr_test/DOCS.md) · [Changelog](rf1_ocr_test/CHANGELOG.md) · [Roadmap](RELEASE-PLAN.md)
+**Version 0.1.14** · [Deutsch](README.md) · [Guide](rf1_ocr_test/DOCS.md) · [Changelog](rf1_ocr_test/CHANGELOG.md) · [Roadmap](RELEASE-PLAN.md)
 
 <img src="assets/project-logo.png" alt="AI Meter Reader" width="110">
 
@@ -28,9 +28,9 @@ Home Assistant app that reads mechanical meters (mainly gas meters with digit ro
 | Situation | Next check |
 | --- | --- |
 | Successful check | configured interval, 10 minutes by default |
-| 1st or 2nd failed check | 5 minutes |
+| 1st or 2nd failed check | 2 minutes when the host has spare capacity, otherwise 5 minutes |
 | Only the 7th digit unclear, rest confirmed by reference | 30 minutes |
-| 3 failed checks in a row | 60-minute pause |
+| 3 failed checks in a row | pause, adjustable, 30 minutes by default (no pause if only the last roller is unclear) |
 
 ## Tested with
 

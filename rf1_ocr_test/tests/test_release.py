@@ -16,6 +16,8 @@ from checks import (compare_sample, common_exact_precision, explain_uncertain_po
 from i18n import english_progress, english_result, english_uncertain_positions, translate_page  # noqa: E402
 from panel import PAGE  # noqa: E402
 from run import draw_test_preview  # noqa: E402
+import checks as _checks_for_timing
+_checks_for_timing.system_idle = lambda: False  # deterministic retry timing in tests
 
 
 def formatted_page(language="de"):
@@ -30,7 +32,7 @@ class AppIdentityTests(unittest.TestCase):
     def test_release_metadata_preserves_stable_app_identity(self):
         config = yaml.safe_load((APP / "config.yaml").read_text(encoding="utf-8"))
         repository = yaml.safe_load((APP.parent / "repository.yaml").read_text(encoding="utf-8"))
-        self.assertEqual("0.1.13", config["version"])
+        self.assertEqual("0.1.14", config["version"])
         self.assertEqual("rf1_ocr_test", config["slug"])
         self.assertEqual("AI Meter Reader", config["name"])
         self.assertNotIn("stage", config)
@@ -64,7 +66,7 @@ class DocumentationTests(unittest.TestCase):
                 self.assertLess(len(page), 4000)
                 self.assertIn(title, page)
                 self.assertIn("](rf1_ocr_test/DOCS.md)", page)
-                self.assertIn("Version 0.1.13", page)
+                self.assertIn("Version 0.1.14", page)
                 self.assertIn("supervisor_add_addon_repository", page)
                 self.assertIn("repository_url=https%3A%2F%2Fgithub.com%2FEifellayer%2Fmeter-ocr", page)
                 self.assertIn("](docs/HISTORY.md)", page)
@@ -73,14 +75,14 @@ class DocumentationTests(unittest.TestCase):
         de = (APP.parent / "README.md").read_text(encoding="utf-8")
         en = (APP.parent / "README.en.md").read_text(encoding="utf-8")
         app_docs = (APP / "DOCS.md").read_text(encoding="utf-8")
-        for text in ("10 Minuten", "5 Minuten", "60 Minuten", "30 Minuten", "ESP nur als Kamera"):
+        for text in ("10 Minuten", "5 Minuten", "Standard 30 Minuten", "ESP nur als Kamera"):
             self.assertIn(text, de)
-        for text in ("10 minutes by default", "5 minutes", "60-minute", "30 minutes", "ESP as camera only"):
+        for text in ("10 minutes by default", "5 minutes", "30 minutes by default", "ESP as camera only"):
             self.assertIn(text, en)
-        self.assertIn("Version 0.1.13", app_docs)
+        self.assertIn("Version 0.1.14", app_docs)
         self.assertIn("sensor.rf1_verbrauch_gesamt", app_docs)
         changelog = (APP / "CHANGELOG.md").read_text(encoding="utf-8")
-        self.assertIn("## 0.1.13", changelog)
+        self.assertIn("## 0.1.14", changelog)
         self.assertIn("## 0.1.0", changelog)
         self.assertNotIn("## 0.6", changelog)
 
@@ -161,10 +163,10 @@ class ComparisonTests(unittest.TestCase):
         self.assertEqual(1_300 + 300, history["next_check_at"])
         schedule_next_check(history, "ocr_unclear", 1_600, 60)
         self.assertTrue(history["retry_suppressed"])
-        self.assertEqual(1_600 + 3_600, history["next_check_at"])
+        self.assertEqual(1_600 + 1_800, history["next_check_at"])  # default pause 30 min
         self.assertEqual(3, history["failure_attempts"])
         schedule_next_check(history, "ocr_unclear", 5_200, 60)
-        self.assertEqual(5_200 + 3_600, history["next_check_at"])
+        self.assertEqual(5_200 + 1_800, history["next_check_at"])
         self.assertEqual(4, history["failure_attempts"])
         schedule_next_check(history, "match", 8_800, 60)
         self.assertNotIn("retry_suppressed", history)

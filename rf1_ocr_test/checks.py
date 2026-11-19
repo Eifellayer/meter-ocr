@@ -5,6 +5,7 @@ from decimal import Decimal
 import io
 import hashlib
 import json
+import os
 from itertools import product
 import re
 from statistics import median
@@ -23,7 +24,21 @@ RETRY_INTERVAL = 5 * 60
 STANDALONE_SECOND_CAPTURE_DELAY = 5
 STANDALONE_CACHED_CAPTURE_DELAY = 15
 FAILURE_RETRY_LIMIT = 3
-FAILURE_COOLDOWN_INTERVAL = 60 * 60
+FAILURE_COOLDOWN_INTERVAL = 30 * 60  # default pause after three failed checks (settable)
+MIN_FAILURE_PAUSE_MINUTES, MAX_FAILURE_PAUSE_MINUTES = 5, 240
+DEFAULT_FAILURE_PAUSE_MINUTES = FAILURE_COOLDOWN_INTERVAL // 60
+# When the host has spare capacity, retry sooner: a failed check usually just met a turning roller.
+QUICK_RETRY_INTERVAL = 2 * 60
+IDLE_LOAD_PER_CPU = 0.6
+
+
+def system_idle():
+    """True when the host (e.g. the Pi running Home Assistant) has spare CPU capacity."""
+    try:
+        load = os.getloadavg()[0]
+    except (AttributeError, OSError):
+        return False
+    return load < (os.cpu_count() or 1) * IDLE_LOAD_PER_CPU
 WARNING_DETAIL_AFTER = 60 * 60
 REVIEW_AFTER = 4 * 60 * 60
 FRESH_SAMPLE_AGE = 15 * 60
@@ -56,6 +71,9 @@ MAX_OCR_ATTEMPTS = len(OCR_PROFILES)
 # at most this many positions and this many additional single-digit reads per check.
 SHIFTED_DIGIT_POSITIONS = 3
 SHIFTED_DIGIT_READS = 10
+# Then up to three trials with the whole row of frames moved slightly (two reads each).
+ROW_SHIFT_TRIALS = 3
+ROW_SHIFT_READS = 6
 
 
 def lighting_ocr_profiles(picture):
@@ -953,7 +971,7 @@ def defer_duplicate_cycle(history, fetched_at, interval_minutes):
     suppressed = history.get("retry_suppressed", False)
     seventh_wait = bool(history.get("seventh_digit_wait"))
     wait = _check_delay(history["check_status"], interval_minutes, suppressed,
-                        seventh_digit_wait=seventh_wait)
+                        seventh_digit_wait=seventh_wait, pause=history.get("failure_pause_minutes"))
     if not suppressed and not seventh_wait:
         wait = min(wait, RETRY_INTERVAL)
     if checked_at is not None:
@@ -962,7 +980,14 @@ def defer_duplicate_cycle(history, fetched_at, interval_minutes):
     history["check_interval_minutes"] = interval_minutes
 
 
-def _check_delay(outcome, interval_minutes, retry_suppressed=False, *, seventh_digit_wait=False):
+def failure_pause_seconds(value):
+    """Pause after three failed checks, from the setting in minutes (default 30)."""
+    if type(value) is int and MIN_FAILURE_PAUSE_MINUTES <= value <= MAX_FAILURE_PAUSE_MINUTES:
+        return value * 60
+    return FAILURE_COOLDOWN_INTERVAL
+
+
+def _check_delay(outcome, interval_minutes, retry_suppressed=False, *, seventh_digit_wait=False, pause=None):
     interval = interval_minutes * 60
     if outcome == "match_with_warning" and seventh_digit_wait:
         return SEVENTH_DIGIT_WAIT_SECONDS
@@ -970,7 +995,9 @@ def _check_delay(outcome, interval_minutes, retry_suppressed=False, *, seventh_d
         return STANDALONE_SECOND_CAPTURE_DELAY
     if outcome in SUCCESSFUL_CHECKS:
         return interval
-    return FAILURE_COOLDOWN_INTERVAL if retry_suppressed else min(interval, RETRY_INTERVAL)
+    if retry_suppressed:
+        return failure_pause_seconds(pause)
+    return min(interval, QUICK_RETRY_INTERVAL if system_idle() else RETRY_INTERVAL)
 
 
 def schedule_next_check(history, outcome, checked_at, interval_minutes=DEFAULT_INTERVAL_MINUTES):
@@ -979,6 +1006,11 @@ def schedule_next_check(history, outcome, checked_at, interval_minutes=DEFAULT_I
     if outcome in (*SUCCESSFUL_CHECKS, STANDALONE_PENDING):
         history.pop("failure_since", None)
         history.pop("failure_attempts", None)
+        history.pop("retry_suppressed", None)
+    elif history.get("check_detail") == MOVING_DIGIT_NOTICE:
+        # Only the last compared roller was turning: everything else was read. That is no
+        # reason for a warning or a long pause; simply look again soon.
+        history.setdefault("failure_since", checked_at)
         history.pop("retry_suppressed", None)
     else:
         history.setdefault("failure_since", checked_at)
@@ -992,6 +1024,7 @@ def schedule_next_check(history, outcome, checked_at, interval_minutes=DEFAULT_I
     history["next_check_at"] = checked_at + _check_delay(
         outcome, interval_minutes, history.get("retry_suppressed", False),
         seventh_digit_wait=bool(history.get("seventh_digit_wait")),
+        pause=history.get("failure_pause_minutes"),
     )
     history["check_interval_minutes"] = interval_minutes
 
@@ -1010,6 +1043,7 @@ def last_check_at(history):
     return deadline - _check_delay(
         outcome, interval_minutes, history.get("retry_suppressed", False),
         seventh_digit_wait=bool(history.get("seventh_digit_wait")),
+        pause=history.get("failure_pause_minutes"),
     )
 
 
@@ -1023,6 +1057,7 @@ def reschedule_next_check(history, interval_minutes):
     history["next_check_at"] = checked_at + _check_delay(
         history["check_status"], interval_minutes, history.get("retry_suppressed", False),
         seventh_digit_wait=bool(history.get("seventh_digit_wait")),
+        pause=history.get("failure_pause_minutes"),
     )
     history["check_interval_minutes"] = interval_minutes
     return True

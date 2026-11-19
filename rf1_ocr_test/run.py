@@ -29,7 +29,7 @@ from app_channel import APP_NAME, CHECK_ENTITY, LABEL_SUFFIX, NAMESPACE
 from checks import (
     DEFAULT_INTERVAL_MINUTES, FRESH_SAMPLE_AGE, RETRY_INTERVAL, REVIEW_AFTER, OCR_PROFILES,
     STANDALONE_PENDING, STANDALONE_PENDING_NOTICE, STANDALONE_REJECTED_NOTICE, STANDALONE_VERIFIED_NOTICE,
-    STANDALONE_CACHED_CAPTURE_DELAY, MAX_OCR_ATTEMPTS, missing_digit_pattern, single_missing_digit, disputed_digit_pattern, resolve_ocr_readings,
+    STANDALONE_CACHED_CAPTURE_DELAY, MAX_OCR_ATTEMPTS, SHIFTED_DIGIT_POSITIONS, SHIFTED_DIGIT_READS, missing_digit_pattern, single_missing_digit, disputed_digit_pattern, resolve_ocr_readings,
     compare_sample, crop_register, lighting_ocr_profiles, read_register, read_with_retries, record_sample,
     anchored_leading_digits, within_anchor_bounds,
     automatic_interval_minutes, defer_duplicate_cycle,
@@ -443,41 +443,57 @@ def single_digit_frames(boxes, index, size, *, last_roller=False):
 
 
 def recover_single_digit(layout, pattern, current, whole_digits, fraction_digits, read, available, report, stop, accept):
-    """Probe the missing slot on this register, with two agreeing OCR profiles."""
+    """Probe each missing slot on this register with nudged frames and two agreeing OCR profiles.
+
+    Only the unclear positions are re-read; every other digit stays as read. All slots have to
+    be filled, and the completed value still has to pass ``accept`` (reference, flow and
+    previous reading), otherwise nothing changes.
+    """
     register, width, whole_boxes, fraction_boxes = layout
-    position = pattern.index("?")
-    index = position - (position > whole_digits)
     whole = whole_boxes or approximate_whole_boxes(width, register.height, whole_digits)
     boxes = [*whole, *fraction_boxes]
     if len(boxes) != whole_digits + fraction_digits:
         return None, 0
-    seen = {boxes[index]}
     attempted = 0
-    last_roller = fraction_digits > 0 and index == len(boxes) - 1
-    for box in single_digit_frames(boxes, index, register.size, last_roller=last_roller):
-        if attempted + 2 > available or stop():
-            break
-        if box in seen or box[2] - box[0] < 8 or box[3] - box[1] < 12:
-            continue
-        seen.add(box)
-        report(attempted)
-        first = read(box, OCR_PROFILES[0])
-        attempted += 1
-        if first not in "0123456789" or len(first) != 1 or stop():
-            report(attempted, box, "unclear")
-            continue
-        report(attempted)
-        second = read(box, OCR_PROFILES[1])
-        attempted += 1
-        candidate = pattern[:position] + first + pattern[position + 1:] + current[len(pattern):]
-        accepted = first == second and accept(candidate)
-        evidence = "accepted" if accepted else "agreement" if first == second else "disagreement"
-        report(attempted, box, evidence)
-        if accepted:
-            moved = boxes.copy()
+    filled = pattern
+    moved = boxes.copy()
+    positions = [position for position, char in enumerate(pattern) if char == "?"]
+    for number, position in enumerate(positions):
+        index = position - (position > whole_digits)
+        seen = {boxes[index]}
+        last_roller = fraction_digits > 0 and index == len(boxes) - 1
+        final = number == len(positions) - 1
+        found = False
+        for box in single_digit_frames(boxes, index, register.size, last_roller=last_roller):
+            if attempted + 2 > available or stop():
+                return None, attempted
+            if box in seen or box[2] - box[0] < 8 or box[3] - box[1] < 12:
+                continue
+            seen.add(box)
+            report(attempted, position=position)
+            first = read(box, OCR_PROFILES[0])
+            attempted += 1
+            if first not in "0123456789" or len(first) != 1 or stop():
+                report(attempted, box, "unclear", position=position)
+                continue
+            report(attempted, position=position)
+            second = read(box, OCR_PROFILES[1])
+            attempted += 1
+            if first != second:
+                report(attempted, box, "disagreement", position=position)
+                continue
+            candidate = filled[:position] + first + filled[position + 1:]
+            if final and not accept(candidate + current[len(pattern):]):
+                report(attempted, box, "agreement", position=position)
+                continue
+            report(attempted, box, "accepted" if final else "agreement", position=position)
+            filled = candidate
             moved[index] = box
-            return (candidate, moved[:whole_digits], moved[whole_digits:]), attempted
-    return None, attempted
+            found = True
+            break
+        if not found:
+            return None, attempted
+    return (filled + current[len(pattern):], moved[:whole_digits], moved[whole_digits:]), attempted
 
 
 def read_visible_digits(register, integer_width, whole_boxes, fraction_boxes, light_digits, polarity, *, profile,
@@ -2437,24 +2453,28 @@ def main():
                                                            exact_prefix=exact_partial)
                         same_frame = read_state["frame_reads"]
                         observed = same_frame[-1] if same_frame else ""
-                        pattern = disputed_digit_pattern(same_frame, comparison_decimals, integer_digits)
+                        pattern = disputed_digit_pattern(same_frame, comparison_decimals, integer_digits,
+                                                         SHIFTED_DIGIT_POSITIONS)
                         near_hit = (digit_probe_enabled and regular_status != "match"
                                     and read_state["captured"] is not None and not sample.get("reference_is_fallback")
                                     and (pattern or not ocr_confirmed
-                                         and missing_digit_pattern(observed, comparison_decimals, integer_digits))
+                                         and missing_digit_pattern(observed, comparison_decimals, integer_digits,
+                                                                   SHIFTED_DIGIT_POSITIONS))
                                     and not stop_ocr())
-                        if near_hit and ocr_attempts + 2 <= MAX_OCR_ATTEMPTS:
+                        if near_hit:
                             layout = tuple(read_state[key] for key in (
                                 "register", "integer_width", "whole_boxes", "fraction_boxes",
                             ))
-                            budget = MAX_OCR_ATTEMPTS
-                            digit_deadline = time.monotonic() + 5
+                            # Only digits that are really missing get extra reads, up to SHIFTED_DIGIT_READS.
+                            budget = ocr_attempts + SHIFTED_DIGIT_READS
+                            digit_deadline = time.monotonic() + 10
                             if live_source:
                                 digit_deadline = min(digit_deadline, live_deadline)
 
-                            def report_digit(attempts, box=None, evidence=None):
+                            def report_digit(attempts, box=None, evidence=None, position=None):
                                 if box is not None and pattern:
-                                    position = pattern.index("?")
+                                    if position is None:
+                                        position = pattern.index("?")
                                     candidate = {
                                         "position": position + (position < integer_digits), "box": box,
                                         "angle": rotation + base_adjustment, "evidence": evidence,
@@ -2478,8 +2498,10 @@ def main():
                                 except (OSError, subprocess.SubprocessError):
                                     pass
                                 ocr_attempts += 1
-                            pattern = (disputed_digit_pattern(same_frame, comparison_decimals, integer_digits)
-                                       or single_missing_digit(observed, same_frame, comparison_decimals, integer_digits))
+                            pattern = (disputed_digit_pattern(same_frame, comparison_decimals, integer_digits,
+                                                              SHIFTED_DIGIT_POSITIONS)
+                                       or single_missing_digit(observed, same_frame, comparison_decimals, integer_digits,
+                                                               SHIFTED_DIGIT_POSITIONS))
                             if pattern:
                                 register_for_digit = layout[0]
                                 polarity = active_rules["polarity"]

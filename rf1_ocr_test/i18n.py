@@ -345,8 +345,9 @@ EN_UI = {
     STANDALONE_VERIFIED_NOTICE: "Meter reading cross-checked against a second snapshot.",
     STANDALONE_REJECTED_NOTICE: "The second image does not confirm the first meter reading.",
     "Vergleichswert": "Reference reading",
-    "Die letzte Stelle kann beim Weiterdrehen schwer lesbar sein. Das kann zu Fehlmeldungen führen.":
-        "The last digit can be hard to read as it turns, which can cause false alerts.",
+    "Der Präzisionsmodus ist experimentell. Der Wert selbst ist genau, aber die schnell laufende letzte Rolle wird oft nicht sicher erkannt. Dann prüft die App vorübergehend mit zwei Nachkommastellen.":
+        "Precision mode is experimental. The value itself is exact, but the fast-moving last roller is often not "
+        "recognised reliably. The app then checks with two decimal places for a while.",
     "Präzisionsmodus: auch die dritte Nachkommastelle vergleichen": "Precision mode: also compare the third decimal place",
     "Prüfung bestanden mit Hinweis": "Check passed with a note",
     "Test bestanden mit Hinweis": "Test passed with a note",

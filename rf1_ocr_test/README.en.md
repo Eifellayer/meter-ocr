@@ -2,4 +2,4 @@
 
 Reads mechanical meters locally from a camera image (Tesseract OCR) and provides the reading and total consumption to Home Assistant.
 
-Version **0.1.4** · [Guide](DOCS.md) · [Changelog](CHANGELOG.md) · [Deutsch](README.md)
+Version **0.1.5** · [Guide](DOCS.md) · [Changelog](CHANGELOG.md) · [Deutsch](README.md)

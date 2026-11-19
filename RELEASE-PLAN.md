@@ -1,6 +1,6 @@
 # Roadmap
 
-Stand: 18. November 2026 · Version **0.1.4**
+Stand: 19. November 2026 · Version **0.1.5**
 
 **Leitbild „Fire and Forget“ (Nutzer 18.11.):** Die App soll möglichst autonom arbeiten. Der Nutzer wählt nur Zähler und Kamera; alles andere (Grob- und Feineinrichtung, letzte Stelle, Genauigkeit, Fehlerkorrektur) erledigt sie selbst und zeigt Unsicherheit offen an. Manuelle Knöpfe sind nur Notfallwerkzeuge. Stabilität geht vor neuen großen Funktionen.
 
@@ -8,9 +8,8 @@ Stand: 18. November 2026 · Version **0.1.4**
 
 | Aufgabe | Fertig, wenn … |
 | --- | --- |
-| **Praxis 0.1.4 beobachten** | Verbrauch wird erst nach Bestätigung gebucht; die 8. Ziffer wird über die Rollenmitte gefunden (bisher nur an synthetischen Bildern getestet, am echten Zähler beobachten: findet die Selbstprüfung die Mitte, sitzt der Rahmen danach mittig?); „Rahmen sitzt daneben“ löst die neue Suche aus; einzelne Fehlprüfungen bleiben dezent. |
-| **Fehlende Ziffern nach den OCR-Versuchen gezielt nachschieben** | Vorschlag Nutzer 18.11.: Bringen die regulären Versuche (z. B. 5) kein passendes Ergebnis, die Rahmen nur der fehlenden Ziffern leicht verschieben und neu lesen. Stand 0.1.4: Das gibt es nur für genau **eine** unklare Ziffer im selben Durchlauf (`recover_single_digit`) und als vorsichtige Nachprüfung bei manuellem Ausschnitt erst nach drei gleichen Fehlbildern (höchstens 2 Varianten). Fehlt: zwei unklare Stellen im selben Durchlauf (z. B. `10477.9??`), auch ohne manuellen Ausschnitt; kleine Schritte (keine halben Ziffern), Ergebnis nur mit zwei übereinstimmenden OCR-Profilen und passend zum Referenz-/Vorwert übernehmen. Gilt für die reguläre Prüfung; die erste Prüfung nach der Einrichtung läuft über dieselbe Routine. |
-| **Präzisionsmodus als „experimentell“ kennzeichnen** | Vorschlag Nutzer 18.11.: Beim Einschalten des Präzisionsmodus ein kurzer Hinweis, dass er experimentell ist. Der Wert selbst ist genau, aber die 3. Nachkommastelle (schnell laufende 8. Rolle) wird oft nicht sicher erkannt; dann prüft die App vorübergehend mit 2 Stellen. Kein Warnton, nur ehrliche Einordnung. |
+| **Praxis 0.1.5 beobachten** | Nachschieben fehlender Ziffern (bis 2 Stellen, max. 10 Lesungen) im Alltag beobachten: hilft es bei `?`, ohne Fehlwerte zu übernehmen? |
+| **Aus 0.1.4 beobachten** | Verbrauch wird erst nach Bestätigung gebucht; die 8. Ziffer wird über die Rollenmitte gefunden (bisher nur an synthetischen Bildern getestet, am echten Zähler beobachten: findet die Selbstprüfung die Mitte, sitzt der Rahmen danach mittig?); „Rahmen sitzt daneben“ löst die neue Suche aus; einzelne Fehlprüfungen bleiben dezent. |
 | **Laufende Rolle / Genauigkeit nach Durchfluss (beobachten)** | Die Fehlprüfungen am 18.11. kamen nicht vom Durchfluss, sondern vom falschen Startwert (in 0.1.1 behoben). Nur umsetzen, wenn das Debug-Protokoll zeigt, dass eine drehende Rolle bei hohem Verbrauch Prüfungen scheitern lässt: dann niedrigeren Wert nehmen bzw. vorübergehend eine Stelle weniger vergleichen, mit Hinweis „Zähler läuft gerade schnell“. |
 | **Fremde Zähler und Wasserzähler** | Test 18.11. mit ca. 2000 öffentlichen Ziffernbildern (Wasser-/Gaszähler): Einzelziffern nur zu etwa 45 % richtig, „1“ besonders schwach (oft unklar oder als 4 gelesen). Praktisch getestet ist nur der eigene Gaszähler (Stromzähler bereits vernetzt, Wasserzähler nicht zugänglich). Verbesserung über einen Einzelziffern-Klassifikator prüfen (siehe Später). |
 | **Vorprüfung ohne geöffnete App** | Sobald Bildquelle bzw. Kamera feststeht, startet die Grob-Einrichtung von selbst im Hintergrund, auch wenn niemand die Weboberfläche offen hat. |

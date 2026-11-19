@@ -51,6 +51,10 @@ OCR_PROFILES = (
 )
 MAX_CONFIGURED_OCR_ATTEMPTS = 10
 MAX_OCR_ATTEMPTS = len(OCR_PROFILES)
+# Digits still missing after the regular attempts get their own frames nudged and re-read:
+# at most this many positions and this many additional single-digit reads per check.
+SHIFTED_DIGIT_POSITIONS = 2
+SHIFTED_DIGIT_READS = 10
 
 
 def lighting_ocr_profiles(picture):
@@ -443,19 +447,19 @@ STANDALONE_REJECTED_NOTICE = "Die zweite Aufnahme passt nicht zum ersten Zähler
 REFLECTION_SUGGEST_AFTER = 3
 
 
-def missing_digit_pattern(ocr, decimals, integer_digits):
-    """Find a single missing digit among the positions required for comparison."""
+def missing_digit_pattern(ocr, decimals, integer_digits, limit=1):
+    """Find up to ``limit`` missing digits among the positions required for comparison."""
     size = integer_digits + (decimals + 1 if decimals else 0)
     pattern = str(ocr or "")[:size]
     decimal_part = rf"\.[0-9?]{{{decimals}}}" if decimals else ""
-    if not re.fullmatch(rf"[0-9?]{{{integer_digits}}}{decimal_part}", pattern) or pattern.count("?") != 1:
+    if not re.fullmatch(rf"[0-9?]{{{integer_digits}}}{decimal_part}", pattern) or not 1 <= pattern.count("?") <= limit:
         return None
     return pattern
 
 
-def single_missing_digit(ocr, readings, decimals, integer_digits):
+def single_missing_digit(ocr, readings, decimals, integer_digits, limit=1):
     """Require majority evidence for all the visible neighbours."""
-    pattern = missing_digit_pattern(ocr, decimals, integer_digits)
+    pattern = missing_digit_pattern(ocr, decimals, integer_digits, limit)
     if pattern is None:
         return None
     votes = max(2, len(readings) // 2 + 1)
@@ -465,15 +469,15 @@ def single_missing_digit(ocr, readings, decimals, integer_digits):
     return pattern
 
 
-def disputed_digit_pattern(readings, decimals, integer_digits):
-    """A frame is worth rechecking when exactly one required position lacks agreement."""
+def disputed_digit_pattern(readings, decimals, integer_digits, limit=1):
+    """A frame is worth rechecking when one (up to ``limit``) required position lacks agreement."""
     length = integer_digits + (decimals + 1 if decimals else 0)
     rows = [value[:length] for value in readings]
     shape = rf"[0-9?]{{{integer_digits}}}" + (rf"\.[0-9?]{{{decimals}}}" if decimals else "")
     if len(rows) < 2 or any(not re.fullmatch(shape, row) for row in rows):
         return None
     consensus = "".join(column[0] if len(set(column)) == 1 else "?" for column in zip(*rows))
-    return consensus if consensus.count("?") == 1 else None
+    return consensus if 1 <= consensus.count("?") <= limit else None
 
 
 def recommended_comparison_decimals(history, decimals, integer_digits):

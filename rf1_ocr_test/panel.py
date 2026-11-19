@@ -1004,7 +1004,7 @@ name: Zählerstand (OCR)</code></pre>
 <label>Nachkommastellen auf dem Zähler<select name="fraction_digits">{fraction_digit_options}</select></label>
 <label>Verglichen wird bis<select name="decimals">{wizard_decimal_options}</select></label>
 <div class="settings-note setup-help" data-precision-options {precision_hidden}>
-<p>Die letzte Stelle kann beim Weiterdrehen schwer lesbar sein. Das kann zu Fehlmeldungen führen.</p>
+<p>Der Präzisionsmodus ist experimentell. Der Wert selbst ist genau, aber die schnell laufende letzte Rolle wird oft nicht sicher erkannt. Dann prüft die App vorübergehend mit zwei Nachkommastellen.</p>
 <p {wizard_initial_hidden}>Die dritte Nachkommastelle ist bei Rollen oft schwer zu erkennen. „Automatische Selbsteinrichtung“ bestätigt bei der Ersteinrichtung die ersten zwei Stellen. Die dritte bleibt unbestätigt und kann später intensiv gesucht oder im Kamerabild manuell markiert werden.</p>
 <label class="check-option"><input type="checkbox" name="precision_mode" value="1" {precision_checked}> Präzisionsmodus: auch die dritte Nachkommastelle vergleichen</label>
 </div>
@@ -1138,7 +1138,7 @@ name: Zählerstand (OCR)</code></pre>
 <label>Vergleich
 <select name="decimals">{auto_decimal_options}</select></label>
 <div class="settings-note" data-precision-options {precision_hidden}>
-<p>Die letzte Stelle kann beim Weiterdrehen schwer lesbar sein. Das kann zu Fehlmeldungen führen.</p>
+<p>Der Präzisionsmodus ist experimentell. Der Wert selbst ist genau, aber die schnell laufende letzte Rolle wird oft nicht sicher erkannt. Dann prüft die App vorübergehend mit zwei Nachkommastellen.</p>
 <label class="check-option"><input type="checkbox" name="precision_mode" value="1" {precision_checked}> Präzisionsmodus: auch die dritte Nachkommastelle vergleichen</label>
 </div>
 <label title="Nach einer unklaren Ablesung folgt ein zusätzlicher Versuch nach fünf Minuten. Schlägt auch der fehl, gilt wieder dieses Intervall.">Prüfintervall (Minuten)

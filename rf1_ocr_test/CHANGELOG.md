@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.5
+
+- **Fehlende Ziffern nachschieben:** Bleiben nach den OCR-Versuchen eine oder zwei Ziffern unklar (z. B. `10477.9??`), verschiebt die App nur deren Rahmen in kleinen Schritten und liest sie neu, bis beide mit zwei übereinstimmenden OCR-Profilen gelesen sind (höchstens 10 zusätzliche Einzelziffer-Lesungen). Übernommen wird der Wert nur, wenn er zum Vergleichs- bzw. Vorwert passt. Bisher ging das nur für genau eine Ziffer.
+- **Präzisionsmodus als experimentell gekennzeichnet:** kurzer Hinweis, dass der Wert genau ist, die schnell laufende letzte Rolle aber oft nicht sicher erkannt wird.
+
 ## 0.1.4
 
 - **8. Ziffer über die Rollenmitte:** Die Suche bestimmt zuerst waagerecht die Mitte der letzten Rolle (die etwas weiter entfernt sitzt als die übrigen Ziffern) und verschiebt den Rahmen danach nur noch nach oben und unten. Die Mitte wird nur verwendet, wenn das Verfahren auf demselben Bild die bekannte Nachbarziffer wiederfindet; sonst gelten die bisherigen Positionen.

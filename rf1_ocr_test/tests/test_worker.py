@@ -370,7 +370,7 @@ class SingleDigitRecheckTests(TestCase):
         layout = (register, 250, boxes[:5], boxes[5:])
         read = Mock(return_value="4")
         result, used = run.recover_single_digit(
-            layout, "10465.9?", "10465.9?2", 5, 3, read, 10, lambda *_: None,
+            layout, "10465.9?", "10465.9?2", 5, 3, read, 10, lambda *_, **__: None,
             lambda: False, lambda reading: reading == "10465.942",
         )
         recovered, whole, fraction = result
@@ -387,7 +387,7 @@ class SingleDigitRecheckTests(TestCase):
         layout = (register, 250, boxes[:5], boxes[5:])
         read = Mock(side_effect=["4", "7", "4", "7"])
         result, used = run.recover_single_digit(
-            layout, "10465.9?", "10465.9?2", 5, 3, read, 4, lambda *_: None,
+            layout, "10465.9?", "10465.9?2", 5, 3, read, 4, lambda *_, **__: None,
             lambda: False, lambda _: True,
         )
         self.assertIsNone(result)
@@ -409,7 +409,7 @@ class SingleDigitRecheckTests(TestCase):
                     preferred = (left + dx, top, right + dx, bottom)
                     read = Mock(side_effect=lambda box, _: digit if box == preferred else "?")
                     result, _ = run.recover_single_digit(
-                        layout, pattern, pattern, 5, 3, read, 10, lambda *_: None,
+                        layout, pattern, pattern, 5, 3, read, 10, lambda *_, **__: None,
                         lambda: False, lambda candidate: candidate == value,
                     )
                     recovered, whole, fraction = result
@@ -429,7 +429,7 @@ class SingleDigitRecheckTests(TestCase):
         preferred = (left, top + 7, right, bottom)
         read = Mock(side_effect=lambda box, _: "2" if box == preferred else "?")
         result, used = run.recover_single_digit(layout, "10465.94?", "10465.94?", 5, 3, read, 6,
-                                                 lambda *_: None, lambda: False, lambda _: True)
+                                                 lambda *_, **__: None, lambda: False, lambda _: True)
         self.assertEqual("10465.942", result[0])
         self.assertEqual(3, used)
         self.assertEqual(boxes[:7], [*result[1], *result[2][:-1]])
@@ -1506,3 +1506,45 @@ class StateTests(TestCase):
         self.assertEqual(0, history["comparison_decimals"])
         self.assertEqual(0, history["consumption"]["total_litres"])
         self.assertTrue(paths["GOOD_IMAGE"].exists())
+
+
+class TwoMissingDigitsTests(TestCase):
+    def test_two_missing_digits_are_both_nudged_and_must_pass_together(self):
+        from PIL import Image
+        register = Image.new("L", (400, 60), 0)
+        boxes = [(index * 50, 5, index * 50 + 40, 55) for index in range(8)]
+        layout = (register, 250, boxes[:5], boxes[5:])
+        answers = {6: "4", 7: "2"}
+
+        def read(box, _profile):
+            for index, original in enumerate(boxes):
+                if box != original and abs(box[0] - original[0]) < 20 and box[1] == original[1]:
+                    return answers.get(index, "?")
+            return "?"
+
+        accepted = []
+        result, used = run.recover_single_digit(
+            layout, "10465.9??", "10465.9??", 5, 3, read, 10, lambda *_, **__: None,
+            lambda: False, lambda candidate: accepted.append(candidate) or candidate == "10465.942")
+        self.assertEqual("10465.942", result[0])
+        self.assertEqual(["10465.942"], accepted)
+        self.assertLessEqual(used, 10)
+
+    def test_gives_up_when_one_of_them_stays_unclear(self):
+        from PIL import Image
+        register = Image.new("L", (400, 60), 0)
+        boxes = [(index * 50, 5, index * 50 + 40, 55) for index in range(8)]
+        layout = (register, 250, boxes[:5], boxes[5:])
+        result, used = run.recover_single_digit(
+            layout, "10465.9??", "10465.9??", 5, 3,
+            lambda box, _: "4" if box[0] < 330 and box not in boxes else "?", 10,
+            lambda *_, **__: None, lambda: False, lambda _: True)
+        self.assertIsNone(result)
+        self.assertLessEqual(used, 10)
+
+    def test_patterns_allow_two_missing_positions_only_on_request(self):
+        from checks import missing_digit_pattern, single_missing_digit
+        self.assertIsNone(missing_digit_pattern("12345.1??", 3, 5))
+        self.assertEqual("12345.1??", missing_digit_pattern("12345.1??", 3, 5, 2))
+        self.assertIsNone(missing_digit_pattern("12345.???", 3, 5, 2))
+        self.assertEqual("12345.1??", single_missing_digit("12345.1??", ["12345.1??"] * 3, 3, 5, 2))

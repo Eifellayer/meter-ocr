@@ -4,7 +4,7 @@
 
 ## Deutsch
 
-**Version 0.1.4.** Die App liest deinen Zähler lokal aus dem Kamerabild. Sie ist keine geeichte Messung.
+**Version 0.1.5.** Die App liest deinen Zähler lokal aus dem Kamerabild. Sie ist keine geeichte Messung.
 
 ### Einrichtung
 
@@ -24,13 +24,14 @@ Wenn **3 Nachkommastellen** eingestellt sind, aber nach der Einrichtung zunächs
 
 ### Genauigkeit
 
-Standard sind 2 Nachkommastellen. Die dritte Nachkommastelle vergleicht die App nur mit eingeschaltetem **Präzisionsmodus**. Dreht sich die letzte verglichene Rolle gerade, bestätigt sie die Prüfung einmalig mit einer Stelle weniger, statt sie scheitern zu lassen. Ist dieselbe Stelle mehrmals hintereinander unklar, sitzt vermutlich ihr Rahmen neben der Rolle: Die App meldet das und sucht den Rahmen der 8. Ziffer im Hintergrund neu.
+Standard sind 2 Nachkommastellen. Die dritte Nachkommastelle vergleicht die App nur mit eingeschaltetem **Präzisionsmodus**; er ist experimentell, weil die schnell laufende letzte Rolle oft nicht sicher erkannt wird. Dreht sich die letzte verglichene Rolle gerade, bestätigt sie die Prüfung einmalig mit einer Stelle weniger, statt sie scheitern zu lassen. Ist dieselbe Stelle mehrmals hintereinander unklar, sitzt vermutlich ihr Rahmen neben der Rolle: Die App meldet das und sucht den Rahmen der 8. Ziffer im Hintergrund neu.
 
 Praktisch getestet ist bisher nur ein Gaszähler; Wasserzähler sind ungetestet.
 
 ### Plausibilität
 
 - Jede Prüfung wird mit einem zweiten Bild bestätigt.
+- Bleiben nach den OCR-Versuchen eine oder zwei Ziffern unklar, verschiebt die App nur deren Rahmen leicht und liest sie neu (höchstens 10 zusätzliche Einzelziffer-Lesungen).
 - Sprünge über dem maximalen Durchfluss (Standard 6 m³/h, nach Qmax des Zählers einstellen) werden verworfen.
 - Ein einzelner niedrigerer Wert wird verworfen. Zeigen mindestens drei Ablesungen über 15 Minuten stimmig einen niedrigeren Stand, übernimmt die App ihn, ohne negativen oder doppelten Verbrauch zu buchen.
 
@@ -47,7 +48,7 @@ Nach einem App-Update oder Neustart lädt die geöffnete Weboberfläche selbst n
 
 ## English
 
-**Version 0.1.4.** The app reads your meter locally from a camera image. It is not a certified measurement.
+**Version 0.1.5.** The app reads your meter locally from a camera image. It is not a certified measurement.
 
 ### Setup
 
@@ -67,13 +68,14 @@ When **3 decimal places** are configured but the setup has only confirmed seven 
 
 ### Precision
 
-By default two decimal places are compared. The third one is compared only with **precision mode** switched on. If the last compared roller is turning, the app confirms that one check with one decimal place less instead of failing it. If the same digit stays unclear several times in a row, its frame probably sits beside the roller: the app says so and searches the eighth digit's frame again in the background.
+By default two decimal places are compared. The third one is compared only with **precision mode** switched on; it is experimental because the fast-moving last roller is often not recognised reliably. If the last compared roller is turning, the app confirms that one check with one decimal place less instead of failing it. If the same digit stays unclear several times in a row, its frame probably sits beside the roller: the app says so and searches the eighth digit's frame again in the background.
 
 So far only one gas meter has been tested in practice; water meters are untested.
 
 ### Plausibility
 
 - Every check is confirmed with a second image.
+- If one or two digits stay unclear after the OCR attempts, the app nudges only their frames and reads them again (at most 10 extra single-digit reads).
 - Jumps above the maximum flow (default 6 m³/h, set it to the meter's Qmax) are rejected.
 - A single lower reading is rejected. If at least three consistent readings over 15 minutes show a lower value, the app accepts it without booking negative or duplicate consumption.
 

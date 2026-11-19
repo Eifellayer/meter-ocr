@@ -15,7 +15,7 @@ from PIL import Image, ImageChops, ImageStat
 from checks import OCR_PROFILES, compare_sample, crop_register, meter_prefix, read_with_retries
 from consumption import accumulate_consumption
 from layout import (crop_coordinates, digit_box_settings, find_digit_row, find_neighbour_digit_rows,
-                    dark_register_cells, find_dark_register, find_raw_digit_rows, normalize_digit_boxes,
+                    dark_register_cells, find_dark_register, find_dark_strip, find_glyph_register, find_raw_digit_rows, normalize_digit_boxes,
                     rotated_width, same_digit_region, scale_digit_boxes, turn_crop)
 
 from meter_learning import propose_digit_boxes
@@ -182,6 +182,35 @@ def neighbour_layout(frame, angle, detected, whole_digits, fraction_digits):
     return Layout(outer, angle, whole_width, tuple(map(tuple, normalized)), method="neighbours")
 
 
+def glyph_register_layout(frame, whole_digits, fraction_digits):
+    """Propose the meter window from a row of bright digits, levelled by the measured tilt."""
+    count = whole_digits + fraction_digits
+    found = find_glyph_register(frame, count, with_tilt=True)
+    if found is None:
+        return None
+    angle = max(-12, min(12, round(-found[1])))
+    if angle:
+        found = find_glyph_register(turn_crop(frame, angle, expand=False), count, with_tilt=True)
+        if found is None:
+            return None
+    window = found[0]
+    l, t, r, b = window
+    turned = turn_crop(frame, angle, expand=False) if angle else frame
+    strip = turned.crop(window)
+    fitted = dark_register_cells(strip, count)
+    if fitted:
+        cells = scale_digit_boxes(fitted, strip.size)
+        split = (cells[whole_digits - 1][2] + cells[whole_digits][0]) // 2 if fraction_digits else r - l
+    else:
+        edges = [round((r - l) * i / count) for i in range(count + 1)]
+        cells = [(a, 0, z, b - t) for a, z in zip(edges, edges[1:])]
+        split = edges[whole_digits]
+    proposal = neighbour_layout(frame, angle, (window, split, cells), whole_digits, fraction_digits)
+    if proposal is None:
+        return None
+    return replace(proposal, method="register_window")
+
+
 def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False, on_regions=None, *, upright=False):
     """Try a few geometry candidates per image, rotating the search across images."""
     emitted = set()
@@ -227,11 +256,14 @@ def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False
                 ranked.append((score, angle, detected, box))
         ranked.sort(key=lambda item: (-item[0], abs(item[1]), item[3][1], item[3][0]))
         whole, fraction = rules["integer_digits"], rules["fraction_digits"]
+        glyph_window = glyph_register_layout(frame, whole, fraction)
+        if glyph_window is not None and unique(glyph_window):
+            yield glyph_window
         windows = []
         for angle in angles:
             if abs(angle) > 12:
                 continue
-            window = find_dark_register(turn_crop(frame, angle, expand=False), whole + fraction)
+            window = find_dark_strip(turn_crop(frame, angle, expand=False), whole + fraction)
             if window and (not ranked or window[2] - window[0] > 1.25 * (ranked[0][3][2] - ranked[0][3][0])):
                 l, t, r, b = window
                 edges = [round((r - l) * i / (whole + fraction)) for i in range(whole + fraction + 1)]

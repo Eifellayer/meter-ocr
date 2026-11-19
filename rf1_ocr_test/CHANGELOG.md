@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.25
+
+- Zählwerk mit ESPHome-Kameras finden: Die Selbsteinrichtung sucht das Zählwerkfenster jetzt zuerst über die hellen Ziffern selbst (lokaler Kontrast) statt nur über ein dunkles Fenster. Ein Lichtreflex auf einer Ziffer, der rote Nachkommabereich, ein Strichcode oder die Seriennummer darunter stören nicht mehr. Die Schräglage der Ziffernreihe wird gemessen und das Bild vor dem Lesen gerade gedreht.
+- Ziffernrahmen im gefundenen Fenster werden auch bei dunklem, ungleichmäßig beleuchtetem Bild an die Ziffern angepasst.
+- Fire and Forget: Nach einem App-Update startet die Selbsteinrichtung einmal von selbst neu, wenn noch kein bestätigter Rahmen vorliegt. Eine laufende Automatik bleibt unberührt.
+
 ## 0.1.24
 
 - Blitz der Kamera standardmäßig an: Bei ESPHome- und Home-Assistant-Kameras sucht die App selbst das Licht, das zum selben Gerät gehört (z. B. die Blitz-LED des ESP), und schaltet es für jede Aufnahme ein. Neuer Schalter „Blitz der Kamera verwenden“ (Standard an). Ein eingetragenes externes Licht hat Vorrang.

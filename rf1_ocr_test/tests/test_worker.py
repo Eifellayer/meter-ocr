@@ -901,6 +901,7 @@ class StateTests(TestCase):
         )}
         files["OPTIONS"].write_text("{}")
         self.enterContext(patch.multiple(run, **files, Event=StopOnWait))
+        self.enterContext(patch.object(run.debug_log, "DEBUG_LOG", folder / "debug.jsonl"))
         self.enterContext(patch.dict(os.environ, {"SUPERVISOR_TOKEN": "stub"}))
         status = []
 

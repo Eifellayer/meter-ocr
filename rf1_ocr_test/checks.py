@@ -7,6 +7,7 @@ import hashlib
 import json
 from itertools import product
 import re
+from statistics import median
 import subprocess
 import time
 
@@ -316,9 +317,43 @@ def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace
     return value, confirmed, len(readings)
 
 
+def plausible_integer_digits(previous_litres, previous_time, now, max_flow_lph, integer_digits):
+    """Digits each whole-number position can still show, given the last confirmed reading.
+
+    The meter cannot run backwards and not faster than the configured maximum flow. Returns
+    one set of allowed digits per whole-number position, or None when nothing useful follows.
+    """
+    if (type(previous_litres) is not int or type(previous_time) not in (int, float)
+            or type(max_flow_lph) not in (int, float) or max_flow_lph <= 0):
+        return None
+    hours = max(0.0, now - previous_time) / 3600 + .1
+    low = previous_litres // 1000
+    high = (previous_litres + round(max_flow_lph * hours)) // 1000
+    if high - low > 9 or high >= 10 ** integer_digits:
+        return None
+    values = [str(value).zfill(integer_digits) for value in range(low, high + 1)]
+    return [set(value[position] for value in values) for position in range(integer_digits)]
+
+
+def mask_implausible(readings, allowed, integer_digits):
+    """Blank whole-number digits that the last confirmed reading rules out (e.g. 8 read as 6)."""
+    if not allowed:
+        return list(readings)
+    masked = []
+    for value in readings:
+        chars = list(str(value))
+        for position in range(min(integer_digits, len(chars))):
+            if chars[position].isdigit() and chars[position] not in allowed[position]:
+                chars[position] = "?"
+        masked.append("".join(chars))
+    return masked
+
+
 def resolve_ocr_readings(readings, decimals, integer_digits, *, standalone=False,
-                         standalone_composition=False, compose=True):
+                         standalone_composition=False, compose=True, allowed=None):
     # Keep stable complete reads, then compose only strict-majority digits.
+    if allowed:
+        readings = mask_implausible(readings, allowed, integer_digits)
     majority = len(readings) // 2 + 1
     minimum_votes = max(2, majority) if standalone else majority
     prefix_length = integer_digits + (decimals + 1 if decimals else 0)
@@ -344,6 +379,9 @@ def resolve_ocr_readings(readings, decimals, integer_digits, *, standalone=False
                         if position < len(value) and value[position] in "0123456789")
         digit, count = votes.most_common(1)[0] if votes else ("", 0)
         if count >= majority:
+            combined[position] = digit
+        elif allowed and position < integer_digits and count >= 2 and len(votes) == 1:
+            # The impossible readings were blanked; the remaining ones agree.
             combined[position] = digit
     for position in range(integer_digits):
         if position in combined:
@@ -844,6 +882,43 @@ def resume_optional_eighth_digit(history, rules, source, now, begin):
         return False
     history["eighth_digit_retry_at"] = now + EIGHTH_DIGIT_RETRY_SECONDS
     return True
+
+
+# Fine tilt of the digit row, measured on every check and applied once it is consistent.
+SKEW_SAMPLES = 7
+SKEW_MIN_CHANGE = 0.3
+SKEW_MAX_SPREAD = 1.0
+SKEW_LIMIT = 2.0
+
+
+def skew_offset(state):
+    offset = state.get("offset", 0.0) if isinstance(state, dict) else 0.0
+    if type(offset) not in (int, float) or offset != offset or abs(offset) > SKEW_LIMIT:
+        return 0.0
+    return float(offset)
+
+
+def note_skew(state, measured):
+    """Collect one tilt measurement; adopt the median once several agree.
+
+    Single images vary by up to about ±0.7° (a turning roller moves its digit), so the offset
+    only moves when the median of the last measurements is clearly off level and they agree.
+    """
+    state = dict(state) if isinstance(state, dict) else {}
+    offset = skew_offset(state)
+    samples = [value for value in state.get("samples", []) if type(value) in (int, float)][-SKEW_SAMPLES:]
+    if type(measured) in (int, float) and abs(measured) <= 4:
+        samples = (samples + [round(float(measured), 2)])[-SKEW_SAMPLES:]
+    if len(samples) >= SKEW_SAMPLES:
+        middle = median(samples)
+        ordered = sorted(samples)
+        quarter = len(ordered) // 4
+        spread = ordered[-1 - quarter] - ordered[quarter]  # interquartile range
+        if abs(middle) >= SKEW_MIN_CHANGE and spread <= SKEW_MAX_SPREAD:
+            offset = max(-SKEW_LIMIT, min(SKEW_LIMIT, round(offset + middle, 1)))
+            samples = []
+    state.update(offset=offset, samples=samples)
+    return state
 
 
 def relocate_last_digit_due(history, rules, now):

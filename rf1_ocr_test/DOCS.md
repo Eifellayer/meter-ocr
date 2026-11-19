@@ -4,7 +4,7 @@
 
 ## Deutsch
 
-**Version 0.1.6.** Die App liest deinen Zähler lokal aus dem Kamerabild. Sie ist keine geeichte Messung.
+**Version 0.1.7.** Die App liest deinen Zähler lokal aus dem Kamerabild. Sie ist keine geeichte Messung.
 
 ### Einrichtung
 
@@ -31,6 +31,8 @@ Praktisch getestet ist bisher nur ein Gaszähler; Wasserzähler sind ungetestet.
 ### Plausibilität
 
 - Jede Prüfung wird mit einem zweiten Bild bestätigt.
+- Der letzte bestätigte Stand dient als Lesehilfe: Vorkommastellen, die danach unmöglich sind (z. B. eine 8, die als 6 gelesen wird), zählen nicht.
+- Die Bilddrehung lässt sich in 0,1°-Schritten einstellen. Bei manuellem Ausschnitt misst die App die Schräglage der Ziffernreihe bei jeder Prüfung und gleicht sie aus, sobald mehrere Messungen übereinstimmen (höchstens ±2°).
 - Bleiben nach den OCR-Versuchen bis zu drei Ziffern unklar, verschiebt die App nur deren Rahmen leicht und liest sie neu (höchstens 10 zusätzliche Einzelziffer-Lesungen).
 - Sprünge über dem maximalen Durchfluss (Standard 6 m³/h, nach Qmax des Zählers einstellen) werden verworfen.
 - Ein einzelner niedrigerer Wert wird verworfen. Zeigen mindestens drei Ablesungen über 15 Minuten stimmig einen niedrigeren Stand, übernimmt die App ihn, ohne negativen oder doppelten Verbrauch zu buchen.
@@ -41,6 +43,7 @@ Praktisch getestet ist bisher nur ein Gaszähler; Wasserzähler sind ungetestet.
 | --- | --- |
 | `sensor.rf1_ocr_zaehlerstand` | erkannter Zählerstand |
 | `sensor.rf1_verbrauch_gesamt` | Gesamtverbrauch für das Energie-Dashboard (als Gas auswählen) |
+| `sensor.rf1_verbrauch_gesamt_kwh` | Gesamtverbrauch in kWh, wenn Zustandszahl und Brennwert oder der Umrechnungsfaktor eingetragen sind |
 | `sensor.rf1_pruefstatus` | Ergebnis der letzten Prüfung |
 | `sensor.rf1_kontrollbild` | letztes Kontrollbild |
 
@@ -48,7 +51,7 @@ Nach einem App-Update oder Neustart lädt die geöffnete Weboberfläche selbst n
 
 ## English
 
-**Version 0.1.6.** The app reads your meter locally from a camera image. It is not a certified measurement.
+**Version 0.1.7.** The app reads your meter locally from a camera image. It is not a certified measurement.
 
 ### Setup
 
@@ -75,6 +78,8 @@ So far only one gas meter has been tested in practice; water meters are untested
 ### Plausibility
 
 - Every check is confirmed with a second image.
+- The last confirmed reading helps reading: whole-number digits that are impossible after it (e.g. an 8 read as 6) do not count.
+- Image rotation can be set in 0.1° steps. With a manual crop the app measures the tilt of the digit row on every check and corrects it once several measurements agree (at most ±2°).
 - If up to three digits stay unclear after the OCR attempts, the app nudges only their frames and reads them again (at most 10 extra single-digit reads).
 - Jumps above the maximum flow (default 6 m³/h, set it to the meter's Qmax) are rejected.
 - A single lower reading is rejected. If at least three consistent readings over 15 minutes show a lower value, the app accepts it without booking negative or duplicate consumption.
@@ -85,6 +90,7 @@ So far only one gas meter has been tested in practice; water meters are untested
 | --- | --- |
 | `sensor.rf1_ocr_zaehlerstand` | recognised meter reading |
 | `sensor.rf1_verbrauch_gesamt` | total consumption for the Energy dashboard (select as gas) |
+| `sensor.rf1_verbrauch_gesamt_kwh` | total consumption in kWh once gas state factor and calorific value, or the conversion factor, are set |
 | `sensor.rf1_pruefstatus` | result of the last check |
 | `sensor.rf1_kontrollbild` | latest control image |
 

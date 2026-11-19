@@ -2344,6 +2344,8 @@ function refreshCalibrationImages(preview) {{
 let calibrationWasActive = false;
 let lastDigitSearching = false;
 let lastDigitProgress = null;
+let frameRelocating = false;
+let frameRelocatedAt = null;
 let comparedDecimals = null;
 let configuredDecimals = null;
 let lastDigitSearchAt = null;
@@ -2366,6 +2368,8 @@ function refreshCalibration(status) {{
   const active = status.state === 'waiting' || status.state === 'testing';
   const background = status.background === true;
   lastDigitSearching = background && active;
+  frameRelocating = lastDigitSearching && status.purpose === 'relocate';
+  frameRelocatedAt = status.purpose === 'relocate' && String(status.state).startsWith('saved') ? status.relocated_at || null : null;
   lastDigitProgress = lastDigitSearching && status.duration > 0
     ? {{elapsed: Math.max(0, status.duration - status.seconds), duration: status.duration, seconds: status.seconds}} : null;
   const setupReading = String(status.preview?.reading || status.candidates?.[0]?.reading || '');
@@ -3021,7 +3025,14 @@ function syncHero() {{
   const [wholeDigits, fractionDigits = ''] = reading.split('.');
   const position = wholeDigits.length + fractionDigits.length;
   let noteText = '', noteState = '';
-  if (/[0-9?]/.test(reading) && lastDigitSearching) {{
+  if (/[0-9?]/.test(reading) && frameRelocating) {{
+    const minutesLeft = lastDigitProgress ? Math.max(1, Math.ceil(lastDigitProgress.seconds / 60)) : 0;
+    noteText = lang === 'en'
+      ? 'The frame of the last digit sat beside its roller and is being searched again in the background. Until then the app checks with one decimal place less.'
+      : 'Der Rahmen der letzten Stelle saß neben der Rolle und wird gerade im Hintergrund neu gesucht. Bis dahin prüft die App mit einer Nachkommastelle weniger.';
+    if (minutesLeft) noteText += lang === 'en' ? ` At most ${{minutesLeft}} min left.` : ` Noch höchstens ${{minutesLeft}} min.`;
+    noteState = 'searching';
+  }} else if (/[0-9?]/.test(reading) && lastDigitSearching) {{
     const minutesLeft = lastDigitProgress ? Math.max(1, Math.ceil(lastDigitProgress.seconds / 60)) : 0;
     const maxMinutes = lastDigitProgress ? Math.round(lastDigitProgress.duration / 60) : 0;
     if (/[0-9]$/.test(fractionDigits)) {{
@@ -3051,6 +3062,12 @@ function syncHero() {{
       ? `The ${{position}}th digit is not compared (setting: ${{comparedDecimals}} decimal places).`
       : `Die ${{position}}. Ziffer wird nicht verglichen (eingestellt: ${{comparedDecimals}} Nachkommastellen).`;
     noteState = 'skipped';
+  }}
+  if (!noteText && frameRelocatedAt && Date.now() - frameRelocatedAt * 1000 < 2 * 3600 * 1000) {{
+    const at = new Date(frameRelocatedAt * 1000).toLocaleTimeString(lang === 'en' ? 'en-GB' : 'de-DE', {{hour: '2-digit', minute: '2-digit'}});
+    noteText = lang === 'en' ? `The frame of the last digit was set again automatically at ${{at}}.`
+      : `Der Rahmen der letzten Stelle wurde um ${{at}} Uhr automatisch neu gesetzt.`;
+    noteState = 'optimizing';
   }}
   if (partialEighthDigit && configuredDecimals === 3 && lastDigitSearching) {{
     noteText = (lang === 'en' ? 'Configured: 3 decimal places, currently 2 verified. '

@@ -173,3 +173,20 @@ class LiftedDigitTests(TestCase):
         ImageDraw.Draw(lifted).rectangle(boxes[3], fill=(20, 20, 20))
         ImageDraw.Draw(lifted).text((boxes[3][0] + 5, 12), "8", font=FONT, fill=(220, 220, 220))
         self.assertLess(abs(digit_row_tilt(lifted, boxes, skip={3})), .2)
+
+
+class SetupTiltSeedTest(TestCase):
+    def test_setup_tilt_keeps_fine_angle_and_seeds_the_rest(self):
+        from checks import setup_tilt
+        self.assertEqual((-0.5, -1.0), setup_tilt([-1.4, -1.5, -1.6], 0.0))
+        self.assertEqual((0.3, 0.0), setup_tilt([0.3, 0.2, 0.4], 0.0))
+        self.assertEqual((0.1, 0.0), setup_tilt([-1.5], 0.1))
+        self.assertEqual((0.5, 1.5), setup_tilt([2.0, 2.0, 9.0], 0.0))
+
+    def test_seed_applies_only_to_its_geometry(self):
+        from checks import initial_skew_state
+        key = ["10,20,300,80", 200, 0, -0.5]
+        seed = {"key": list(key), "offset": -1.0}
+        self.assertEqual(-1.0, initial_skew_state(key, seed)["offset"])
+        self.assertEqual(0.0, initial_skew_state(["10,20,300,81", 200, 0, -0.5], seed)["offset"])
+        self.assertEqual(0.0, initial_skew_state(key, None)["offset"])

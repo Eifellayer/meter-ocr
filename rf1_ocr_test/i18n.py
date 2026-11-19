@@ -86,6 +86,7 @@ EN_UI = {
         "A fresh image is scheduled around the expected roller change.",
     "Roadmap auf GitHub": "Roadmap on GitHub",
     "Automatik wartet auf die Einrichtung. Du kannst sie automatisch oder manuell abschließen.": "Automatic checks are waiting for setup. You can finish setup automatically or manually.",
+    "Die Einrichtung hat noch keinen sicheren Rahmen gefunden. Die App startet sie in wenigen Minuten automatisch neu.": "Setup has not found a reliable frame yet. The app restarts it automatically in a few minutes.",
     "Automatik wartet auf Einrichtung": "Automatic checks are waiting for setup",
     "Selbsteinrichtung wird vorbereitet …": "Preparing automatic setup …",
     "Einrichtung fortsetzen": "Continue setup",

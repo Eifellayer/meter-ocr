@@ -4,7 +4,7 @@
 
 ## Deutsch
 
-**Version 0.1.21.** Die App liest deinen Zähler lokal aus dem Kamerabild. Sie ist keine geeichte Messung.
+**Version 0.1.22.** Die App liest deinen Zähler lokal aus dem Kamerabild. Sie ist keine geeichte Messung.
 
 ### Einrichtung
 
@@ -60,8 +60,10 @@ esp32_camera:
   power_down_pin: GPIO32
   resolution: 800x600
   jpeg_quality: 10
-  max_framerate: 1 fps
-  idle_framerate: 0.1 fps
+  max_framerate: 2 fps
+  idle_framerate: 1 fps
+  vertical_flip: false
+  horizontal_mirror: true
 
 output:
   - platform: ledc
@@ -71,10 +73,14 @@ output:
 
 light:
   - platform: monochromatic
+    id: blitz
     output: blitz_ausgang
     name: Blitz
     restore_mode: ALWAYS_OFF
     default_transition_length: 0s
+    on_turn_on:
+      - delay: 30s
+      - light.turn_off: blitz
 ```
 
 ### Home Assistant
@@ -91,7 +97,7 @@ Nach einem App-Update oder Neustart lädt die geöffnete Weboberfläche selbst n
 
 ## English
 
-**Version 0.1.21.** The app reads your meter locally from a camera image. It is not a certified measurement.
+**Version 0.1.22.** The app reads your meter locally from a camera image. It is not a certified measurement.
 
 ### Setup
 
@@ -147,8 +153,10 @@ esp32_camera:
   power_down_pin: GPIO32
   resolution: 800x600
   jpeg_quality: 10
-  max_framerate: 1 fps
-  idle_framerate: 0.1 fps
+  max_framerate: 2 fps
+  idle_framerate: 1 fps
+  vertical_flip: false
+  horizontal_mirror: true
 
 output:
   - platform: ledc
@@ -158,10 +166,14 @@ output:
 
 light:
   - platform: monochromatic
+    id: blitz
     output: blitz_ausgang
     name: Blitz
     restore_mode: ALWAYS_OFF
     default_transition_length: 0s
+    on_turn_on:
+      - delay: 30s
+      - light.turn_off: blitz
 ```
 
 ### Home Assistant

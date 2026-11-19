@@ -417,10 +417,32 @@ def lit_picture(light, take, token, *, fetch, post, delay=LIGHT_DELAY, sleep=tim
         return take()
     finally:
         if switched:
-            try:
-                post(f"{base}/services/light/turn_off", token, {"entity_id": light})
-            except OSError as error:
-                print(f"Licht für die Aufnahme konnte nicht ausgeschaltet werden: {type(error).__name__}")
+            switch_light_off(light, token, fetch=fetch, post=post, sleep=sleep)
+
+
+LIGHT_OFF_ATTEMPTS = 4
+
+
+def switch_light_off(light, token, *, fetch, post, sleep=time.sleep):
+    """Switch the capture light off and make sure it stays off.
+
+    A busy camera ESP may miss or delay a command, so the state is read back and the
+    command repeated a few times instead of leaving the LED on.
+    """
+    base = "http://supervisor/core/api"
+    for attempt in range(LIGHT_OFF_ATTEMPTS):
+        try:
+            post(f"{base}/services/light/turn_off", token, {"entity_id": light})
+        except OSError as error:
+            print(f"Licht für die Aufnahme konnte nicht ausgeschaltet werden: {type(error).__name__}")
+        sleep(1 + attempt)
+        try:
+            if json.loads(fetch(f"{base}/states/{light}", token, timeout=4)).get("state") == "off":
+                return True
+        except (OSError, ValueError, TypeError, AttributeError):
+            continue
+    print("Licht für die Aufnahme meldet nach mehreren Versuchen nicht „aus“.")
+    return False
 
 
 def capture_camera(camera, reference, token, zone, timeout=8, *, fetch=None, light="", post=None):

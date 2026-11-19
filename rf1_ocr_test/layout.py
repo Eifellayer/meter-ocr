@@ -68,7 +68,7 @@ def turn_crop(image, rotation, *, expand=True):
     return rgb.rotate(-angle, resample=Image.Resampling.BICUBIC, expand=expand, fillcolor=background)
 
 
-RAW_ROW_UNCLEAR = "Ziffernreihe nicht eindeutig gefunden. Bitte den Bildausschnitt im Test einstellen."
+RAW_ROW_UNCLEAR = "Ziffernreihe nicht eindeutig gefunden. Stelle den Bildausschnitt im Test passend ein."
 MANUAL_ROW_UNCLEAR = "Ziffern schwer lesbar. Prüfe Bilddrehung, Kamerawinkel, Fokus und Beleuchtung."
 # Only a few digits unclear: the camera is usually fine, so do not send people to adjust it.
 PARTLY_UNCLEAR = "Einzelne Ziffern waren nicht eindeutig lesbar. Die App versucht es automatisch weiter."

@@ -31,13 +31,13 @@ EN_UI = {
     "Automatische Prüfung jetzt starten": "Run automatic check now",
     "Eine Nachkommastelle blieb wiederholt unklar. Du kannst den Vergleich auf weniger Stellen begrenzen.":
         "A decimal digit was repeatedly unclear. You can compare fewer digits.",
-    "Zwei Profile stimmen überein, Prüfung akzeptiert den Kandidaten":
+    "Zwei Leseprofile stimmen überein – Kandidat übernommen":
         "Two profiles agree and the candidate passes the OCR check",
-    "Zwei Profile stimmen überein, Vergleich offen": "Two profiles agree, comparison unresolved",
-    "Die bisherigen OCR-Versuche reichen nicht aus. Ein frisches Kamerabild folgt in Kürze.": "The OCR attempts were inconclusive. A fresh camera image will follow shortly.",
+    "Zwei Leseprofile stimmen überein, Vergleich steht noch aus": "Two profiles agree, comparison unresolved",
+    "Die OCR-Versuche auf diesem Bild reichen nicht aus. Ein frisches Kamerabild folgt gleich.": "The OCR attempts were inconclusive. A fresh camera image will follow shortly.",
     "Beste Kandidaten der Rahmen-Nachprüfung": "Best crop recheck candidates",
-    "Zwei Profile stimmen überein": "Two OCR profiles agree",
-    "Profile lesen unterschiedlich": "Profiles disagree",
+    "Zwei Leseprofile stimmen überein": "Two OCR profiles agree",
+    "Leseprofile liefern unterschiedliche Ziffern": "Profiles disagree",
     "Ziffer blieb offen": "Digit remained unclear",
     "Ziffernposition ": "Digit position ",
     "Rahmen im Ausschnitt (px) ": "Crop coordinates (px) ",
@@ -51,7 +51,7 @@ EN_UI = {
     "Zusätzliche Zähler": "Additional meters",
     "Zähler speichern": "Save meters",
     "Zähler gespeichert.": "Meters saved.",
-    "Bitte Sensor-IDs und Prüfintervalle überprüfen.": "Check the sensor IDs and intervals.",
+    "Prüfe die Sensor-IDs und Prüfintervalle.": "Check the sensor IDs and intervals.",
     "Verbrauch je Stunde, letzte 24 Stunden": "Hourly usage, last 24 hours",
     "Verbrauch je Stunde": "Hourly usage",
     "Zählerstand lokal aus dem Kamerabild": "Meter reading, locally from the camera image",
@@ -79,7 +79,7 @@ EN_UI = {
     "Alle Ziffern erkannt.": "All digits read.",
     "Mindestens eine Ziffer blieb offen.": "At least one digit remained unclear.",
     "Aus einem Beispiel-Referenzwert geschätzt: ": "Estimated from the demo reference: ",
-    "Die Demo konnte nicht geladen werden. Bitte erneut versuchen.": "Could not load the demo. Try again.",
+    "Die Demo konnte nicht geladen werden. Versuche es noch einmal.": "Could not load the demo. Try again.",
     "Automatik-Nachprüfung: Die App prüft die fehlende Ziffer mit leicht verschobenem Rahmen.":
         "Automatic recheck: reading the missing digit with a slightly shifted box.",
     "Frische Aufnahme für den erwarteten Rollenwechsel eingeplant.":
@@ -133,7 +133,7 @@ EN_UI = {
     ">Heute</dt>": ">Today</dt>",
     "Die Statistik füllt sich mit bestätigten Ablesungen.": "The history grows as readings are confirmed.",
     "Verlauf nach Stunde und Tag": "Hourly and daily history",
-    "An Zeitgrenzen wird der Verbrauch zwischen zwei Ablesungen geschätzt. Lücken bleiben offen.":
+    "Liegt eine Stunden- oder Tagesgrenze zwischen zwei Ablesungen, verteilt die App den Verbrauch anteilig. Zeiträume ohne Ablesung bleiben leer.":
         "Usage at period boundaries is estimated between two readings. Gaps are left blank.",
     "Letzte 24 Stunden": "Last 24 hours",
     "Letzte 7 Tage": "Last 7 days",
@@ -142,16 +142,16 @@ EN_UI = {
     "Die Ziffernerkennung beginnt, sobald das Bild bereitsteht.": "Digit recognition starts when the image is ready.",
     "Zuletzt gelesen (noch unbestätigt): ": "Latest reading (unconfirmed): ",
     "Bisher keine Ziffer gelesen.": "No digits read yet.",
-    "Die App sucht einen passenden Rahmen und Winkel. Nach drei bestätigten Aufnahmen übernimmt die Automatik die Gegenprüfung. Ziel sind fünf Minuten. Die Suche endet spätestens nach 20 Minuten.": "The app looks for a suitable crop and angle. After three confirmed images, the regular reader takes over. The target is five minutes and the limit is 20 minutes.",
+    "Die App sucht einen passenden Rahmen und Winkel. Nach drei bestätigten Aufnahmen übernimmt die Automatik die Gegenprüfung. Das dauert meist rund fünf Minuten, höchstens 20 Minuten.": "The app looks for a suitable crop and angle. After three confirmed images, the regular reader takes over. The target is five minutes and the limit is 20 minutes.",
     "Startet nach dem Speichern. Nach drei bestätigten Aufnahmen übernimmt die Automatik die Gegenprüfung.": "Starts after saving. After three confirmed images, the regular reader takes over.",
-    "Selbsteinrichtung nach 20 Minuten beendet. Keine Einstellung sicher bestätigt.": "Automatic setup ended after 20 minutes without confirming a reliable crop.",
+    "Selbsteinrichtung nach 20 Minuten beendet, ohne dass ein Rahmen sicher bestätigt wurde.": "Automatic setup ended after 20 minutes without confirming a reliable crop.",
     "Nachprüfung: Dieselben Ziffern waren wiederholt unklar.": "Rechecking because the same digits were repeatedly unclear.",
     ">Kandidaten</summary>": ">Candidates</summary>",
     "button.textContent = 'Stelle '": "button.textContent = 'Position '",
 
     "Letzte Rolle auf diesem Bild gelesen. Sie ist noch nicht unabhängig bestätigt.":
         "Last wheel read on this image. Independent confirmation is still pending.",
-    "Letzte Rolle dreht weiter. Warte auf eine eindeutige Ziffer.":
+    "Die letzte Rolle dreht sich noch. Die App wartet auf eine eindeutige Ziffer.":
         "The last wheel is turning. Waiting for a clear digit.",
     "Ziffernrahmen korrigieren": "Adjust digit boxes",
     "Wähle eine Ziffer. Ziehe ihren Rahmen oder passe ihn mit den Tasten darunter an.": "Select a digit. Drag its box or use the buttons below.",
@@ -168,7 +168,7 @@ EN_UI = {
     "Diesen Rahmen zurücksetzen": "Reset this box",
     "Ziffernrahmen speichern": "Save digit boxes",
     "Ziffernrahmen gespeichert.": "Digit boxes saved.",
-    "Kein passendes Kamerabild verfügbar. Warte auf eine reguläre Prüfung.": "No matching camera image is available. Wait for a regular check.",
+    "Kein passendes Kamerabild vorhanden. Es kommt mit der nächsten regulären Prüfung.": "No matching camera image is available. Wait for a regular check.",
     "Die ausgewählte Ziffer wird gesucht …": "Searching for the selected digit …",
     "Bild oder Ausschnitt hat sich geändert. Öffne den Editor erneut.": "The image or crop has changed. Reopen the editor.",
     "Vorgeschlagener Rahmen. Gelesene Ziffer: ": "Suggested box. Digit read: ",
@@ -201,7 +201,7 @@ EN_UI = {
     "Die App sucht frühestens nach zwei Stunden anhaltender Erkennungsprobleme einen besseren Rahmen. Probleme nur an der letzten Rolle zählen dabei nicht mit. Der bisherige Rahmen gilt bis zur erfolgreichen Gegenprobe.":
         "The app looks for a better crop after at least two hours of persistent recognition problems. Problems with the last digit alone do not count. The current crop stays in use until a replacement passes verification.",
     "Die App beobachtet, ob die Erkennungsprobleme anhalten.": "The app is checking whether the recognition problems persist.",
-    "Die Ziffernerkennung ist seit mindestens zwei Stunden gestört. Bitte Bildausschnitt prüfen.": "Recognition has been impaired for at least two hours. Check the image crop.",
+    "Die Ziffern werden seit mindestens zwei Stunden nicht sicher erkannt. Prüfe Bildausschnitt, Fokus und Beleuchtung.": "Digits have not been read reliably for at least two hours. Check the crop, focus and lighting.",
     "Gesicherten Ausschnitt wiederherstellen": "Restore the backed-up crop",
     "Gesicherter Ausschnitt wiederhergestellt.": "The backed-up crop has been restored.",
     "Automatische Neukalibrierung ist ausgeschaltet.": "Automatic recalibration is disabled.",
@@ -232,15 +232,15 @@ EN_UI = {
     "Einzelziffernsuche. Offene Stellen von links: ": "Individual digit search. Uncertain positions from the left: ",
     "Ziffernfeld lesbar. Die App wartet auf einen höheren Zählerstand oder einen abgelesenen Startwert.": "The digit row is readable. The app is waiting for a higher reading or a starting reading you enter.",
     "Ziffernfeld bestätigt. Die App prüft mit dem nächsten neuen Bild weiter.": "Digit row confirmed on this image. The app will check again with the next new image.",
-    "Ziffernfeld nicht gefunden. Grenze das Ziffernfeld im Kamerabild ein.": "Digit row not found. Mark the digit row in the camera image.",
+    "Ziffernfeld nicht gefunden. Markiere den ungefähren Bereich im Kamerabild.": "Digit row not found. Mark the digit row in the camera image.",
     "Kein gültiger Vergleichswert für dieses Bild. Die App wartet auf eine neue Messung.": "No valid reference for this image. The app is waiting for a new measurement.",
     "Der gelesene Bereich passt nicht zum Vergleichswert. Prüfe den Vergleichswert und markiere das Ziffernfeld.": "The area read does not match the reference. Check the reference and mark the digit row.",
     "Ziffernfeld auswählen ": "Select digit row ",
-    "Die Ziffernreihe scheint gegenüber der Referenz um eine Stelle verschoben.": "The digit row appears shifted by one position relative to the reference.",
+    "Die gelesene Ziffernreihe ist gegenüber dem Vergleichswert vermutlich um eine Stelle verschoben.": "The digit row appears shifted by one position relative to the reference.",
     "Kein neues Kamerabild erhalten. Prüfe die Bildquelle.": "No new camera image received. Check the image source.",
-    "Grobkalibrierung: Suche nach der Ziffernreihe …": "Coarse calibration: Looking for the digit row …",
+    "Grobsuche: Die App sucht die Ziffernreihe …": "Coarse calibration: Looking for the digit row …",
     "Feinkalibrierung: Rahmen und Drehung werden am vorhandenen Bild geprüft …": "Fine calibration: Testing digit boxes and rotation on the current image …",
-    "Noch kein Ziffernbereich gefunden. Warte auf ein neues Bild …": "No digit region found yet. Waiting for a new image …",
+    "Noch kein Ziffernbereich gefunden. Die App prüft gleich das nächste Bild …": "No digit region found yet. Waiting for a new image …",
     "In diesem Bild wurde kein Ziffernbereich gefunden.": "No digit region was found in this image.",
     "Der Ausschnitt ließ sich nicht auswerten.": "This crop could not be processed.",
     "Mindestens eine benötigte Ziffer blieb unklar.": "At least one required digit remained unclear.",
@@ -251,7 +251,7 @@ EN_UI = {
     "Der Rahmen ist lesbar. Die App wartet auf einen plausiblen Zähleranstieg.": "The crop is readable. Waiting for a plausible meter increase.",
     "Ziffern bis zur zweiten Nachkommastelle gelesen. Der Rahmen gilt vorläufig, weil noch kein Vergleichswert vorliegt.":
         "Digits read through the second decimal. The crop counts provisionally. A reference reading is missing.",
-    "Bis zur zweiten Nachkommastelle bestätigt. Die dritte Stelle bleibt offen.":
+    "Bis zur zweiten Nachkommastelle bestätigt. Die dritte Nachkommastelle ist noch offen.":
         "Confirmed through the second decimal. The third decimal remains open.",
     "Dieser Rahmen wurde auf dem aktuellen Bild bestätigt.": "This crop was confirmed on the current image.",
     "Die abschließende Gegenprobe war erfolgreich.": "The final cross-check succeeded.",
@@ -300,14 +300,14 @@ EN_UI = {
     "Fallback-Wert gespeichert.": "Fallback reading saved.",
     "Gefundenen Rahmen im Test prüfen": "Review the suggested crop in a manual test",
     " · Rahmenversuche: ": " · Crop attempts: ",
-    "Warte auf einen neuen Messzyklus vom ESP …": "Waiting for a new ESP measurement cycle …",
+    "Die App wartet auf den nächsten Messzyklus des ESP …": "Waiting for a new ESP measurement cycle …",
     "Verstrichene Zeit der Selbsteinrichtung": "Elapsed automatic setup time",
     "Selbsteinrichtung startet, sobald die laufende Prüfung beendet ist …":
         "Automatic setup will start once the current check finishes …",
     "Kamerabild wird abgerufen …": "Fetching a camera image …",
-    "Suche nach der Ziffernreihe …": "Looking for the digit row …",
-    "Prüfe Rahmen ": "Checking frame ",
-    " mit Drehung ": " at a rotation of ",
+    "Die App sucht die Ziffernreihe …": "Looking for the digit row …",
+    "'Rahmen ' + status.variant + ' wird mit Drehung ' + status.rotation + '° geprüft …'":
+        "'Checking frame ' + status.variant + ' at a rotation of ' + status.rotation + '° …'",
     "Selbsteinrichtung für Ausschnitt und Drehung": "Automatic setup for crop and rotation",
     "Die App tastet sich mit unterschiedlichen Bildern an einen passenden Rahmen und Winkel heran. Nach drei bestätigten Ablesungen prüft sie den gefundenen Rahmen mit einem weiteren Bild und übernimmt ihn dann. Nach 15 Minuten endet der Versuch automatisch.":
         "The app searches for a suitable crop and rotation using different images. After three confirmed readings, it checks the result on one more image before saving. The search automatically ends after 15 minutes.",
@@ -319,7 +319,7 @@ EN_UI = {
     "Höchstens so viele unterschiedliche Bilder": "Maximum number of distinct images",
     "Selbsteinrichtung starten": "Start automatic setup",
     "Selbsteinrichtung stoppen": "Stop automatic setup",
-    "Warte auf ein neues Kamerabild …": "Waiting for a new camera image …",
+    "Nächstes Kamerabild wird angefordert …": "Requesting the next camera image …",
     "Ausschnitt und Drehung werden geprüft …": "Checking crop and rotation …",
     "Selbsteinrichtung prüft Bildausschnitt und Drehung.": "Automatic setup is checking the crop and rotation.",
     "Erfolgreich eingerichtet. Ausschnitt und Drehung sind übernommen.": "Setup successful. Crop and rotation saved.",
@@ -370,7 +370,7 @@ EN_UI = {
     LAST_DIGIT_NOTICE: "Only the third decimal digit is unclear or differs.",
     "Dritte Nachkommastelle intensiv suchen": "Run intensive search for the third decimal digit",
     "Dritte Nachkommastelle manuell markieren": "Mark the third decimal digit manually",
-    "Einrichtung abgeschlossen: Sieben Ziffern bestätigt. Die dritte Nachkommastelle wird zusätzlich intensiv geprüft.":
+    "Einrichtung abgeschlossen: Sieben Ziffern sind bestätigt. Die dritte Nachkommastelle prüft die App zusätzlich im Hintergrund.":
         "Setup complete: Seven digits confirmed. The third decimal is being checked additionally.",
     "Eine der ersten sieben Ziffern dreht sich gerade. Der gefundene Rahmen bleibt erhalten; ein frisches Bild wird geprüft.":
         "One of the first seven digits is moving. The crop is retained while a fresh image is checked.",
@@ -386,11 +386,11 @@ EN_UI = {
         "Third decimal digit confirmed. The digit frames have been saved.",
     "Dritte Nachkommastelle bleibt unbestätigt. Du kannst später erneut suchen oder sie manuell markieren.":
         "The third decimal digit remains unconfirmed. Search again later or mark it manually.",
-    "Ausschnitt gespeichert. Suche jetzt gezielt nach der dritten Nachkommastelle …":
+    "Ausschnitt gespeichert. Die App sucht jetzt gezielt die dritte Nachkommastelle …":
         "Crop saved. Now searching specifically for the third decimal digit …",
     "Derselbe Rahmen wird mit dem nächsten neuen Bild weiter geprüft.":
         "Continuing to check the same crop on the next new image.",
-    "Der Ausschnitt ist deutlich weniger scharf oder kontrastreich als zuvor. Warte auf ein besseres Bild.":
+    "Der Ausschnitt ist deutlich weniger scharf oder kontrastreich als zuvor. Die App wartet auf ein besseres Bild.":
         "The crop has noticeably less detail or contrast than before. Waiting for a better image.",
     "Gegenprobe wartet auf ein besseres Bild. Der bestätigte Rahmen bleibt ausgewählt.":
         "Waiting for a better image for verification. The confirmed crop remains selected.",
@@ -407,9 +407,9 @@ EN_UI = {
     "Treffer gesammelt. Die App wartet auf ein frisches Bild für die Gegenprobe.":
         "Matches collected. Waiting for a fresh image for verification.",
     " · Beste Kandidaten: ": " · Best candidates: ",
-    "Teste die vermutete Position der letzten Rolle auf diesem Bild …":
+    "Die vermutete Position der letzten Rolle wird auf diesem Bild getestet …":
         "Testing the estimated position of the last roller on this image …",
-    " Vorschlag für die letzte Rolle gefunden. Warte auf Bestätigung mit einem neuen Bild.":
+    " Vorschlag für die letzte Rolle gefunden. Die Bestätigung folgt mit einem neuen Bild.":
         " Candidate for the last roller found. Waiting for confirmation on a new image.",
     " Für die Rahmenwahl werden die ersten zwei Nachkommastellen verglichen.":
         " Frame selection compares the first two decimal places.",
@@ -452,20 +452,20 @@ EN_UI = {
     "Letzte Rolle gefunden. Die App wartet auf ein frisches Bild zur Gegenprobe …":
         "Last roller found. Waiting for a fresh verification image …",
     "Zähler erfolgreich eingerichtet": "Meter setup complete",
-    "Die automatische Erkennung wird in den ersten 20 Minuten durch weitere Kontrollmessungen stabilisiert. Einzelne Messwerte können in dieser Zeit noch ungenau sein.":
-        "Additional checks stabilize automatic recognition during the first 20 minutes. Individual readings may still be inaccurate during this time.",
+    "In den ersten 20 Minuten optimiert die App Rahmen und Winkel mit zusätzlichen Kontrollmessungen. Einzelne Werte können in dieser Zeit noch abweichen.":
+        "During the first 20 minutes the app optimises frames and angle with additional checks. Individual readings may still deviate during this time.",
     "Diagnose der Selbsteinrichtung": "Setup diagnostics",
     LAST_DIGIT_PASS: "The first two decimal places match. The third is not yet confirmed in this check.",
     SEVENTH_DIGIT_PASS: (
-        "The first six digits match the valid reference (without rounding). "
-        "The seventh digit cannot be read reliably: This check is only partially "
-        "verified to one decimal place. Consumption and configured precision "
-        "remain unchanged. Waiting for a higher meter reading; the check "
-        "interval is temporarily set to 30 minutes."
+        "The first six digits match the reference without rounding. "
+        "The seventh digit cannot be read reliably yet, so this check is only "
+        "confirmed to the first decimal place. Consumption and configured precision "
+        "remain unchanged. Until the reading rises further, the app checks "
+        "every 30 minutes."
     ),
     SEVENTH_DIGIT_WAIT_NOTICE: (
-        "Waiting for a higher meter reading. The next automatic check is "
-        "scheduled in 30 minutes because the seventh digit is unclear."
+        "The seventh digit is unclear. The app waits for the reading to rise "
+        "and checks again in 30 minutes."
     ),
     "Für den Verbrauch verwendet die App den plausiblen Vergleichswert.": "The app uses the plausible reference reading to calculate consumption.",
     "Ablesung und Vergleichswert weichen ab": "Image reading and reference differ",
@@ -486,7 +486,7 @@ EN_UI = {
     "App-Daten zurücksetzen": "Reset app data",
     "Du kannst die Einrichtung vollständig zurücksetzen oder die bestätigten Zählerstands- und Verbrauchsstatistiken behalten. Home-Assistant-App-Konfiguration und Entitäten bleiben in beiden Fällen bestehen.":
         "You can reset all setup data or keep verified meter reading and consumption statistics. Home Assistant app configuration and entities remain in both cases.",
-    "Factory Reset – Statistik behalten": "Factory Reset – Keep Statistics",
+    "Werkseinstellungen – Statistik behalten": "Factory Reset – Keep Statistics",
     "Gespeicherte Bildquelle, OCR- und Benachrichtigungseinstellungen, Prüfhistorie, Verbrauchsstatistik und Testbilder werden zurückgesetzt. Home-Assistant-App-Konfiguration und Entitätsnamen bleiben erhalten.":
         "Saved image source, OCR and notification settings, check history, consumption statistics and test images will be reset. Home Assistant app configuration and entity IDs remain.",
     "Bildquelle, OCR- und Benachrichtigungseinstellungen, Prüfhistorie und Testbilder werden zurückgesetzt. Bestätigte Zählerstands- und Verbrauchsstatistiken sowie der kumulierte Verbrauch bleiben erhalten. Anschließend ist eine neue Einrichtung erforderlich.":
@@ -501,13 +501,13 @@ EN_UI = {
         "Saved image source, OCR and notification settings, check history, and test images will be reset. Home Assistant app configuration and entity IDs will be kept.",
     "Abbrechen": "Cancel",
     "Jetzt zurücksetzen": "Reset now",
-    "Werkreset angefordert. Eine laufende Prüfung kann den Reset verzögern. Bitte warte, bis sich die Einrichtung öffnet.":
+    "Zurücksetzen angefordert. Eine laufende Prüfung kann das kurz verzögern. Danach öffnet sich die Einrichtung von selbst.":
         "Factory reset requested. A check in progress may delay the reset. Please wait for setup to open.",
     "Werkseinstellungen wiederhergestellt. Die Einrichtung öffnet sich erneut.":
         "Factory settings restored. Setup will open again.",
-    "Werkreset läuft noch. Die Einrichtung öffnet sich, sobald er fertig ist.":
+    "Das Zurücksetzen läuft noch. Die Einrichtung öffnet sich, sobald es fertig ist.":
         "The reset is still running. Setup will open when it finishes.",
-    "Werkreset konnte nicht vollständig ausgeführt werden.":
+    "Das Zurücksetzen wurde nicht vollständig ausgeführt.":
         "The reset could not be completed.",
     "Die Einrichtung konnte nicht übersprungen werden.": "Setup could not be skipped.",
     "Übersicht": "Overview",
@@ -544,13 +544,13 @@ EN_UI = {
     "Wiederholte Fehlablesung? Ein kürzeres Prüfintervall kann helfen, wenn sich der Zähler nach einer Weile wieder klarer ablesen lässt.": "Repeated reading errors? A shorter check interval can help if the meter becomes easier to read after it turns.",
     "Prüfintervall ändern": "Change check interval",
     "ⓘ Warum das Prüfintervall ändern?": "ⓘ Why change the check interval?",
-    "Nach einem fehlgeschlagenen automatischen Test folgen bis zu zwei weitere Prüfungen im Abstand von fünf Minuten. Sind alle drei erfolglos, wartet die App eine Stunde und prüft dann erneut. Nach Erfolg gilt wieder dein eingestelltes Intervall. Ein kürzeres Intervall kann helfen, wenn sich der Zähler beim Weiterdrehen vorübergehend schlecht lesen lässt.":
-        "After a failed automatic check, up to two more checks follow at five-minute intervals. If all three fail, the app waits one hour before trying again. After a successful check, your selected interval applies again. A shorter interval can help when the meter is temporarily hard to read as it turns.",
-    "Nach einer fehlgeschlagenen automatischen Prüfung folgen bis zu zwei weitere Bildprüfungen im Abstand von fünf Minuten. Bleiben alle drei Prüfungen erfolglos, wartet AI Meter Reader eine Stunde auf einen höheren Zählerstand oder ein neues Bild und versucht es dann erneut. Beleuchtung, Abstand und Fokus prüfen.": "After a failed automatic check, up to two more image checks follow at five-minute intervals. If all three fail, AI Meter Reader waits one hour for a higher reading or a new image, then tries again. Check lighting, distance, and focus.",
+    "Nach einem fehlgeschlagenen automatischen Test folgen bis zu zwei weitere Prüfungen im Abstand von fünf Minuten. Sind alle drei erfolglos, pausiert die App für die eingestellte Zeit (Standard: 30 Minuten) und prüft dann erneut. Nach Erfolg gilt wieder dein eingestelltes Intervall. Ein kürzeres Intervall kann helfen, wenn sich der Zähler beim Weiterdrehen vorübergehend schlecht lesen lässt.":
+        "After a failed automatic check, up to two more checks follow at five-minute intervals. If all three fail, the app pauses for the configured time (default: 30 minutes) before trying again. After a successful check, your selected interval applies again. A shorter interval can help when the meter is temporarily hard to read as it turns.",
+    "Nach einer fehlgeschlagenen automatischen Prüfung folgen bis zu zwei weitere Bildprüfungen im Abstand von fünf Minuten. Bleiben alle drei Prüfungen erfolglos, pausiert AI Meter Reader für die eingestellte Zeit (Standard: 30 Minuten) und versucht es dann erneut. Prüfe Beleuchtung, Abstand und Fokus.": "After a failed automatic check, up to two more image checks follow at five-minute intervals. If all three fail, AI Meter Reader pauses for the configured time (default: 30 minutes), then tries again. Check lighting, distance, and focus.",
     "Wartet auf die nächste automatische Prüfung.": "Waiting for the next automatic check.",
     "App läuft. Wartet auf die nächste automatische Prüfung.": "App is running and waiting for the next automatic check.",
     "Automatik:": "Automatic checks:",
-    "Einrichtung erforderlich. Bitte Bildquelle festlegen.": "Setup required. Choose an image source.",
+    "Einrichtung erforderlich: Lege zuerst die Bildquelle fest.": "Setup required. Choose an image source.",
     "Automatik pausiert. Manuelle Tests bleiben verfügbar.": "Automatic checks are paused. Manual tests are still available.",
     "Automatik pausiert": "Automatic checks paused",
     "Es werden keine automatischen Prüfungen gestartet. Manuelle Tests bleiben verfügbar.": "No automatic checks will start. Manual tests remain available.",
@@ -566,18 +566,18 @@ EN_UI = {
     "Aufbereitetes ESP-Bild nicht nutzbar. Es konnte kein frisches Rohbild geladen werden.": "The processed ESP image is unusable and a fresh raw image could not be loaded.",
     "Rohbild gelesen. Das aufbereitete ESP-Bild war nicht nutzbar – prüfe in AI on the Edge die Bildausrichtung und die Referenzmarken.": "Raw image read. The processed ESP image was unusable – check image alignment and reference markers in AI on the Edge.",
     "Kamera erreichbar. Frisches Bild empfangen.": "Camera reachable. Fresh image received.",
-    "ESP erreichbar, aber Bild ist älter als 15 Minuten oder hat einen ungültigen Zeitstempel.": "ESP reachable, but the image is older than 15 minutes or has an invalid timestamp.",
+    "ESP erreichbar, aber das Bild ist älter als 15 Minuten oder hat einen ungültigen Zeitstempel.": "ESP reachable, but the image is older than 15 minutes or has an invalid timestamp.",
     "Kamera erreichbar, aber das Bild hat einen ungültigen Zeitstempel.": "Camera reachable, but the image has an invalid timestamp.",
     "ESP erreichbar. Seit der letzten Prüfung kam kein neues Bild; das vorhandene Bild ist noch nicht veraltet.": "ESP reachable. No new image since the last check; the current image is not stale yet.",
     "Home-Assistant-Kamera erreichbar; dieses Bild wurde bereits geprüft.": "Home Assistant camera reachable; this image was already checked.",
-    "Home-Assistant-Kamera nicht erreichbar oder Bild unlesbar. Kamera und Zugriff prüfen.": "Home Assistant camera unavailable or image unreadable. Check the camera and access.",
-    "ESP nicht erreichbar oder Antwort unvollständig. Adresse und Verbindung prüfen.": "ESP unavailable or response incomplete. Check its address and connection.",
+    "Home-Assistant-Kamera nicht erreichbar oder Bild unlesbar. Prüfe Kamera und Zugriff.": "Home Assistant camera unavailable or image unreadable. Check the camera and access.",
+    "ESP nicht erreichbar oder Antwort unvollständig. Prüfe Adresse und Verbindung.": "ESP unavailable or response incomplete. Check its address and connection.",
     "Kamerabild wird aufgenommen.": "Capturing a fresh camera image.",
     "Einstellungen gespeichert. Prüfung startet gleich.": "Settings saved. The check is about to start.",
     "Automatische Prüfung startet …": "Starting the automatic check …",
-    "Warte auf ein Kamerabild …": "Waiting for a camera image …",
-    "Warte auf Bild und Messwerte vom ESP …": "Waiting for the image and reading from the ESP …",
-    "Warte auf ein aktuelles Bild vom ESP …": "Waiting for a new image from the ESP …",
+    "Kamerabild wird angefordert …": "Waiting for a camera image …",
+    "Die App wartet auf Bild und Messwerte vom ESP …": "Waiting for the image and reading from the ESP …",
+    "Die App wartet auf ein aktuelles Bild vom ESP …": "Waiting for a new image from the ESP …",
     "Intensivtest: Die App prüft das Bild leicht gedreht.": "Recovery check: testing a slightly rotated image.",
     "Noch kein aktuelles Zählerbild": "No current meter image yet",
     "Fortschritt der automatischen Prüfung": "Automatic check progress",
@@ -587,17 +587,17 @@ EN_UI = {
     "Automatische Prüfung wird abgeschlossen.": "Finishing the automatic check.",
     "Letzte Prüfung beendet. Nächster Versuch nach kurzer Wartezeit.": "Last check finished. The next attempt follows after a short wait.",
     "Letzte Prüfung beendet. Wartet auf das eingestellte Prüfintervall.": "Last check finished. Waiting for the selected check interval.",
-    "Nach einer fehlgeschlagenen automatischen Prüfung folgen bis zu zwei weitere Bildprüfungen im Abstand von fünf Minuten. Bleiben alle drei Prüfungen erfolglos, wartet die App eine Stunde auf einen höheren Zählerstand oder ein neues Bild. Beleuchtung, Abstand und Fokus prüfen.": "After a failed automatic check, up to two more image checks follow at five-minute intervals. If all three fail, the app waits one hour for a higher reading or a new image. Check lighting, distance, and focus.",
-    "Nach drei fehlgeschlagenen automatischen Prüfungen mit unterschiedlichen Bildabrufen wartet die App eine Stunde und versucht es dann erneut. Nach einem erfolgreichen Abgleich gilt wieder dein eingestelltes Prüfintervall. Bei geänderter Vergleichsgenauigkeit beginnt die Trefferzählung neu.": "After three failed automatic checks using different image captures, the app waits one hour and tries again. After a successful match, the selected interval applies again. Changing comparison precision resets the match count.",
-    "Die automatische Erkennung versucht, den Ziffernrahmen zu finden. Bei einer unsicheren Ablesung folgen bis zu zehn zusätzliche Bildauswertungen; die App setzt einzelne Ziffern nur bei einer strikten Mehrheit zusammen. Nach drei fehlgeschlagenen automatischen Prüfungen mit unterschiedlichen Bildabrufen wartet sie eine Stunde auf ein neues Bild oder einen höheren Zählerstand. Prüfe bei wiederholten Fehlern auch Beleuchtung, Abstand und Fokus. Beim Livebild kann AI Meter Reader bis zu 10 frische Standbilder innerhalb von höchstens 20 Sekunden prüfen.": "Automatic detection tries to find the digit area. If a reading is uncertain, up to ten extra image analyses follow; digits are combined only when a strict majority agrees. After three failed automatic checks using different image captures, the app waits one hour for a higher reading or a new image. If errors continue, check lighting, distance, and focus. For live images, AI Meter Reader can try up to 10 fresh snapshots within 20 seconds.",
+    "Nach einer fehlgeschlagenen automatischen Prüfung folgen bis zu zwei weitere Bildprüfungen im Abstand von fünf Minuten. Bleiben alle drei Prüfungen erfolglos, pausiert die App für die eingestellte Zeit (Standard: 30 Minuten). Prüfe Beleuchtung, Abstand und Fokus.": "After a failed automatic check, up to two more image checks follow at five-minute intervals. If all three fail, the app pauses for the configured time (default: 30 minutes). Check lighting, distance, and focus.",
+    "Nach drei fehlgeschlagenen automatischen Prüfungen mit unterschiedlichen Bildabrufen pausiert die App für die eingestellte Zeit (Standard: 30 Minuten) und versucht es dann erneut. Nach einem erfolgreichen Abgleich gilt wieder dein eingestelltes Prüfintervall. Bei geänderter Vergleichsgenauigkeit beginnt die Trefferzählung neu.": "After three failed automatic checks using different image captures, the app pauses for the configured time (default: 30 minutes) and tries again. After a successful match, the selected interval applies again. Changing comparison precision resets the match count.",
+    "Die automatische Erkennung versucht, den Ziffernrahmen zu finden. Bei einer unsicheren Ablesung folgen bis zu zehn zusätzliche Bildauswertungen; die App setzt einzelne Ziffern nur bei einer strikten Mehrheit zusammen. Nach drei fehlgeschlagenen automatischen Prüfungen mit unterschiedlichen Bildabrufen pausiert sie für die eingestellte Zeit (Standard: 30 Minuten). Prüfe bei wiederholten Fehlern auch Beleuchtung, Abstand und Fokus. Beim Livebild kann AI Meter Reader bis zu 10 frische Standbilder innerhalb von höchstens 20 Sekunden prüfen.": "Automatic detection tries to find the digit area. If a reading is uncertain, up to ten extra image analyses follow; digits are combined only when a strict majority agrees. After three failed automatic checks using different image captures, the app pauses for the configured time (default: 30 minutes). If errors continue, check lighting, distance, and focus. For live images, AI Meter Reader can try up to 10 fresh snapshots within 20 seconds.",
     "SLFork liefert Bild und Messwert. Die Livebild-Quelle ruft bei jeder Prüfung ein aktuelles Standbild deiner Home-Assistant-Kamera ab; ein Video wird nicht dauerhaft ausgewertet. Du kannst dazu einen Zählerstandssensor – etwa von AI on the Edge – als Vergleich eintragen. Ohne Referenzsensor liest AI Meter Reader selbst und prüft die Werte auf Plausibilität.": "SLFork supplies the image and reading. The live image source takes a fresh snapshot from your Home Assistant camera for each check; video is not continuously processed. You can add a meter reading sensor, such as AI on the Edge, for comparison. Without a reference sensor, AI Meter Reader reads the image itself and checks plausibility.",
     "Er ist ein Startwert, solange noch keine sichere automatische Ablesung gespeichert ist. AI Meter Reader prüft die erste Ablesung gegen den Zeitabstand und den maximalen Durchfluss. Danach wird der letzte bestätigte Stand als Referenz genutzt. Ohne Fallback beginnt die Plausibilitätsprüfung mit der ersten sicheren Ablesung.": "This is a starting value until a reliable automatic reading is saved. AI Meter Reader checks the first reading against elapsed time and maximum flow. After that, it uses the latest confirmed reading as its reference. Without a fallback, plausibility checks begin with the first reliable reading.",
     "Letzter bestätigter Abgleich": "Last confirmed match",
     "Einstellungen": "Settings",
     "Automatische Prüfung": "Automatic checks",
     "Prüfintervall (Minuten)": "Check interval (minutes)",
-    "Nach einer fehlgeschlagenen automatischen Prüfung folgen bis zu zwei weitere Bildprüfungen im Abstand von fünf Minuten. Bleiben alle drei Prüfungen erfolglos, wartet AI Meter Reader eine Stunde auf einen höheren Zählerstand oder ein neues Bild und versucht es dann erneut. Beleuchtung, Abstand und Fokus prüfen.":
-        "After a failed automatic check, up to two more image checks follow at five-minute intervals. If all three fail, AI Meter Reader waits one hour for a higher reading or a new image, then tries again. Check lighting, distance, and focus.",
+    "Nach einer fehlgeschlagenen automatischen Prüfung folgen bis zu zwei weitere Bildprüfungen im Abstand von fünf Minuten. Bleiben alle drei Prüfungen erfolglos, pausiert AI Meter Reader für die eingestellte Zeit (Standard: 30 Minuten) und versucht es dann erneut. Prüfe Beleuchtung, Abstand und Fokus.":
+        "After a failed automatic check, up to two more image checks follow at five-minute intervals. If all three fail, AI Meter Reader pauses for the configured time (default: 30 minutes), then tries again. Check lighting, distance, and focus.",
     "Max. OCR-Versuche": "Max. OCR attempts",
     "Übereinstimmung für die Intensivprüfung (%)": "Agreement for the intensive check (%)",
     "Ab diesem Wert wechselt die Selbsteinrichtung in die Intensivprüfung. Eine einzelne vermutete Ziffernposition kann sie auch früher gezielt prüfen.":
@@ -836,7 +836,7 @@ EN_UI = {
     "Lass den Test zuerst das aktuelle Kamerabild laden. Lies den Stand am Bild ab und trage ihn hier ein, wenn du diesen einzelnen OCR-Test damit vergleichen möchtest. Der Wert wird nicht dauerhaft als automatische Referenz gespeichert.":
         "First let the test load the current camera image. Read the meter value from the image and enter it here to compare this one OCR test. The value is not saved as a permanent automatic reference.",
     "Aktuelles Bild zum Ablesen": "Current image to read",
-    "Kein Bild vorhanden. Bitte Bildquelle und Verbindung prüfen und den manuellen Test erneut starten.":
+    "Kein Bild vorhanden. Prüfe Bildquelle und Verbindung und starte den manuellen Test erneut.":
         "No image available. Check the image source and connection, then run the manual test again.",
     "Ziffernrollen": "Number rollers",
     "Digitales Zifferndisplay": "Digital numeric display",
@@ -875,7 +875,7 @@ EN_DETAILS = {
     "Zählerstand steigt schneller als der eingestellte Durchfluss erlaubt.":
         "Reading increased faster than the configured maximum flow.",
     "Messzeitpunkt liegt vor der letzten gültigen Messung.": "The reading is older than the last accepted measurement.",
-    "Der gelesene Stand liegt unter dem letzten OCR-Stand. Bitte das Kamerabild prüfen.":
+    "Der gelesene Stand liegt unter dem letzten OCR-Stand. Prüfe das Kamerabild.":
         "Reading lower than the previous OCR value. Check the image.",
     "Bild oder Messwert fehlt. Verbindung prüfen.": "Image or reading unavailable. Check the connection.",
     "Bild zu alt oder schon geprüft.": "This image is too old or has already been checked.",
@@ -888,17 +888,17 @@ EN_DETAILS = {
         "The meter image or reference data is unavailable. Check the ESP or camera connection.",
     "Das Bild ist zu alt oder wurde schon ausgewertet.":
         "This image is too old or has already been checked.",
-    "Zählerstand nicht sicher erkannt. Bitte die unklaren Stellen im Kamerabild prüfen.":
+    "Zählerstand nicht sicher erkannt. Prüfe die unklaren Stellen im Kamerabild.":
         "Meter reading uncertain. Please check the unclear digits in the camera image.",
-    "Zählerstand nicht lesbar. Mindestens eine benötigte Ziffer konnte nicht erkannt werden. Bitte das Kamerabild prüfen.":
+    "Zählerstand nicht lesbar. Mindestens eine benötigte Ziffer konnte nicht erkannt werden. Prüfe das Kamerabild.":
         "Meter reading unreadable. At least one required digit was not recognized. Check the camera image.",
-    "Der ESP meldet ein Problem mit der Zählerablesung. Bitte den Wert direkt am ESP prüfen.":
+    "Der ESP meldet ein Problem mit der Zählerablesung. Prüfe den Wert direkt am ESP.":
         "The ESP reported a problem reading the meter. Please check the reading on the ESP.",
-    "Die Messung am ESP wurde abgebrochen. Bitte den ESP prüfen und die nächste Aufnahme abwarten.":
+    "Die Messung am ESP wurde abgebrochen. Prüfe den ESP; die nächste Aufnahme folgt automatisch.":
         "The ESP's measurement was interrupted. Check the ESP and wait for the next image.",
     "Kein gültiger Vergleichswert verfügbar. Bitte den Referenzsensor prüfen oder eine neue Messung abwarten.":
         "No valid reference reading is available. Check the reference sensor or wait for a new reading.",
-    "Der ESP liefert widersprüchliche Zählerwerte. Bitte den angezeigten Stand am ESP prüfen.":
+    "Der ESP liefert widersprüchliche Zählerwerte. Prüfe den angezeigten Stand am ESP.":
         "The ESP reports conflicting meter values. Check the reading displayed by the ESP.",
     "Der Bildausschnitt konnte nicht ausgewertet werden. Bitte die Ausschnitt-Koordinaten und die Breite der Vorkommastellen prüfen.":
         "The selected image region could not be analyzed. Check the crop coordinates and whole-digit width.",

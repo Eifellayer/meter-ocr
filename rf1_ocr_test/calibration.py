@@ -609,6 +609,8 @@ class Calibration:
     agreement_threshold: int = DEFAULT_INTENSIVE_AGREEMENT
     confirmed_quality: list = field(default_factory=list)
     fine_evidence: tuple | None = None
+    # Image fetch statistics for the debug log, reset after each logged image.
+    image_stats: dict = field(default_factory=dict)
     image_hints: list | None = None
     full_hits: int = 0
     stress_weak_slots: list = field(default_factory=list)

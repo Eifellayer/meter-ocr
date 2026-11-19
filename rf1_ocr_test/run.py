@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import re
+from statistics import median
 import subprocess
 from queue import Empty, Queue
 from tempfile import NamedTemporaryFile
@@ -1201,6 +1202,9 @@ def main():
     settings_lock = RLock()
     calibration = None
     calibration_configuration = None
+    # Tilt of each candidate layout, measured on the setup images: the coarse search finds the
+    # digits in whole degrees, this gives the remaining fine angle to save with the layout.
+    calibration_tilts = {}
     calibration_next = 0.0
     calibration_worker = None
     calibration_preview = {}
@@ -1289,6 +1293,9 @@ def main():
     def calibration_configuration_now():
         return get_auto_rules(), get_source()
 
+    def calibration_tilt_key(layout):
+        return (tuple(layout.box), layout.rotation, layout.width, tuple(map(tuple, layout.digit_boxes)))
+
     def save_calibration_layout(attempt, layout, *, provisional=False, verified=False, reflected=False):
         rules = get_auto_rules()
         reference = rules.get("calibration_reference") if attempt.intensive else None
@@ -1318,7 +1325,13 @@ def main():
         pending_source = setup_source_id(source) if provisional else rules.get("setup_pending_source")
         pending_started = finished - elapsed if provisional else rules.get("setup_pending_started")
         pending_metrics = metrics if provisional else rules.get("setup_pending_metrics")
-        save_auto_rules({**rules, **layout.settings(), "crop_revision": revision,
+        tilts = calibration_tilts.get(calibration_tilt_key(layout), [])
+        fine = rules.get("rotation_fine", 0.0) if layout.settings().get("rotation") == rules.get("rotation") else 0.0
+        if len(tilts) >= 2:
+            # Fine angle within ±0.5°; anything beyond is left to the routine tilt correction.
+            fine = max(-0.5, min(0.5, round(median(tilts), 1)))
+        save_auto_rules({**rules, **layout.settings(), "rotation_fine": valid_fine_rotation(fine),
+                         "crop_revision": revision,
                          "setup_input_source": setup_source_id(source),
                          "calibration_reference": reference, "stationary_partial_scope": partial_scope,
                          "setup_completed": completed, "setup_success": success,
@@ -1716,6 +1729,16 @@ def main():
                                 readings.clear()
                                 previous_layout = layout
                                 report_crop(layout, register, None)
+                                if layout.digit_boxes and register[2]:
+                                    try:
+                                        tilt = digit_row_tilt(register[0], register[2])
+                                    except (OSError, ValueError, ZeroDivisionError):
+                                        tilt = None
+                                    if tilt is not None and abs(tilt) <= 4:
+                                        key = calibration_tilt_key(layout)
+                                        calibration_tilts[key] = (calibration_tilts.get(key, []) + [tilt])[-9:]
+                                        if len(calibration_tilts) > 40:
+                                            calibration_tilts.pop(next(iter(calibration_tilts)))
                             reading = recognize(layout, profile, register)
                             readings.append(reading)
                             report_crop(layout, register, reading)

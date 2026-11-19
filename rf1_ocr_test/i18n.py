@@ -869,6 +869,7 @@ EN_DETAILS = {
         "The last two compared rollers were unclear, probably turning. This check was therefore confirmed with two decimal places less. The next check compares all digits again.",
     "Rollen drehten sich gerade": "Rollers were turning",
     "Licht für die Aufnahme (optional)": "Light for the picture (optional)",
+    "leer = ohne Licht, z. B. light.kamera_blitz": "empty = no light, e.g. light.camera_flash",
     "Wird für jede Aufnahme kurz eingeschaltet, wie der Blitz bei AI on the Edge.": "Switched on briefly for every picture, like the flash in AI on the Edge.",
     "Wird für jede Aufnahme kurz eingeschaltet, wie der Blitz bei AI on the Edge: Licht an, 1,5 Sekunden warten, Bild holen, Licht aus.": "Switched on briefly for every picture, like the flash in AI on the Edge: light on, wait 1.5 seconds, take the picture, light off.",
     FALLBACK_NOTICE: "The ESP is using a fallback reading.",

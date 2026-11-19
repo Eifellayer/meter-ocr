@@ -997,7 +997,7 @@ name: Zählerstand (OCR)</code></pre>
 </div>
 <label id="wizard-source-camera">Home-Assistant-Kamera<input name="camera" value="{source_camera}" maxlength="80" placeholder="camera.gaszaehler"></label>
 <label id="wizard-source-reference">Vergleichssensor (optional)<input name="reference" value="{source_reference}" maxlength="80" placeholder="sensor.gaszaehler"></label>
-<label id="wizard-source-light" title="Wird für jede Aufnahme kurz eingeschaltet, wie der Blitz bei AI on the Edge.">Licht für die Aufnahme (optional)<input name="light" value="{source_light}" maxlength="80" placeholder="light.esp_gaszaehler_blitz"></label>
+<label id="wizard-source-light" title="Wird für jede Aufnahme kurz eingeschaltet, wie der Blitz bei AI on the Edge.">Licht für die Aufnahme (optional)<input name="light" value="{source_light}" maxlength="80" placeholder="leer = ohne Licht, z. B. light.kamera_blitz"></label>
 <div class="setup-help">
 <label>Zählerstand kurz selbst ablesen (optional)<input name="fallback_value" value="{fallback_value}" inputmode="decimal" maxlength="16" placeholder="z. B. 12345,67"></label>
 <p class="settings-note">Der Stand hilft der App beim Einrichten. Zum Überspringen leer lassen und auf „Weiter“ klicken.</p>
@@ -1139,7 +1139,7 @@ name: Zählerstand (OCR)</code></pre>
 <label id="source-reference" title="Optionaler Sensor mit aktuellem Zählerstand in Kubikmetern.">Vergleichssensor (optional)
 <input name="reference" value="{source_reference}" placeholder="sensor.gaszaehler" maxlength="80"></label>
 <label id="source-light" title="Wird für jede Aufnahme kurz eingeschaltet, wie der Blitz bei AI on the Edge: Licht an, 1,5 Sekunden warten, Bild holen, Licht aus.">Licht für die Aufnahme (optional)
-<input name="light" value="{source_light}" placeholder="light.esp_gaszaehler_blitz" maxlength="80"></label>
+<input name="light" value="{source_light}" placeholder="leer = ohne Licht, z. B. light.kamera_blitz" maxlength="80"></label>
 <button type="submit">Speichern</button>
 </form>
 <details class="help"><summary title="Erklärung zu den verfügbaren Modi">ⓘ Welcher Modus passt?</summary>

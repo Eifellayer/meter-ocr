@@ -51,7 +51,7 @@ from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, LOWER_PENDING, LOWER_R
                          CALORIFIC_RANGE, CONVERSION_RANGE, STATE_FACTOR_RANGE, ImplausibleReading, energy_kwh, track_lower_series,
                          valid_energy_factor,
                          accumulate_consumption, fallback_detail, format_cubic_metres, record_consumption_sample)
-from checks import (FRAME_OFF_NOTICE, FRAME_OFF_STREAK, FRAME_OFF_WAIT_NOTICE, MOVING_DIGIT_NOTICE,
+from checks import (setup_tilt, initial_skew_state, FRAME_OFF_NOTICE, FRAME_OFF_STREAK, FRAME_OFF_WAIT_NOTICE, MOVING_DIGIT_NOTICE,
                     REDUCED_PRECISION_NOTICE, only_last_compared_unclear)
 import debug_log
 from layout import (MANUAL_ROW_UNCLEAR, PARTLY_UNCLEAR, RAW_ROW_UNCLEAR, digit_row_tilt, fine_rotation as valid_fine_rotation, crop_coordinates, find_digit_row,
@@ -101,6 +101,17 @@ MAX_LEARNED_ROTATION = 18
 FRESH_OCR_NOTICE = "Der Zählerstand konnte nicht bestätigt werden. Ein frisches Kamerabild folgt in Kürze."
 SINGLE_DIGIT_RECHECK = "Automatik-Nachprüfung: Die App prüft die fehlende Ziffer mit leicht verschobenem Rahmen."
 INTENSIVE_ROTATION_STATUS = "Intensivtest: Die App prüft das Bild leicht gedreht."
+
+
+def learnable_shift(enabled, key, rotation, boxes, size, prefix):
+    """Candidate for the local learning from frames that rescued a check, or None."""
+    if not enabled or prefix is None or not boxes:
+        return None
+    try:
+        relative = digit_box_settings([list(box) for box in normalize_digit_boxes(boxes, size)], len(boxes))
+    except ValueError:
+        return None
+    return key, [rotation, [list(box) for box in relative]], prefix
 
 
 def setup_round_log(attempt, round_log, started, now):
@@ -902,6 +913,12 @@ def check_reminder(reminder, history, now, review_after=REVIEW_AFTER):
 
 
 SETUP_WAIT_NOTICE = "Automatik wartet auf die Einrichtung. Du kannst sie automatisch oder manuell abschließen."
+SETUP_RETRY_NOTICE = ("Die Einrichtung hat noch keinen sicheren Rahmen gefunden. "
+                      "Die App startet sie in wenigen Minuten automatisch neu.")
+# A user-started setup that ended without result is restarted, so the app does not wait forever.
+SETUP_RETRY_STATES = ("timeout", "image_timeout", "failed")
+SETUP_RETRY_SECONDS = 300
+SETUP_RETRY_LIMIT = 3
 
 
 def automatic_inputs_ready(rules, source, history, *, legacy_crop=False):
@@ -1087,6 +1104,7 @@ def main():
                           "setup_pending_metrics": saved_rules.get("setup_pending_metrics"),
                           "setup_reflection": saved_rules.get("setup_reflection"),
                           "stationary_partial_scope": saved_rules.get("stationary_partial_scope"),
+                          "skew_seed": saved_rules.get("skew_seed") if isinstance(saved_rules.get("skew_seed"), dict) else None,
                           "intensive_agreement": intensive_agreement,
                           "fine_alignment_enabled": saved_rules.get("fine_alignment_enabled") is True,
                           "self_repair_enabled": saved_rules.get("self_repair_enabled") is True,
@@ -1263,7 +1281,8 @@ def main():
 
     def get_automatic_activity():
         if not get_auto_paused() and not ready_for_automatic(get_auto_rules(), get_source()[0]):
-            return {"state": "setup_wait", "detail": SETUP_WAIT_NOTICE}
+            return {"state": "setup_wait",
+                    "detail": SETUP_RETRY_NOTICE if setup_retry["job"] is not None else SETUP_WAIT_NOTICE}
         if not get_auto_paused() and automatic_request is not handled_automatic_request:
             detail = ("Automatische Prüfung angefordert." if automatic_request[0] else
                       "Einstellungen gespeichert. Prüfung startet gleich.")
@@ -1278,6 +1297,7 @@ def main():
     calibration_tilts = {}
     calibration_next = 0.0
     calibration_worker = None
+    setup_retry = {"job": None, "at": 0.0, "count": 0}
     calibration_preview = {}
     calibration_images = {}
     calibration_preview_version = 0
@@ -1398,12 +1418,14 @@ def main():
         pending_metrics = metrics if provisional else rules.get("setup_pending_metrics")
         tilts = calibration_tilts.get(calibration_tilt_key(layout), [])
         fine = rules.get("rotation_fine", 0.0) if layout.settings().get("rotation") == rules.get("rotation") else 0.0
-        if len(tilts) >= 2:
-            # Fine angle within ±0.5°; anything beyond is left to the routine tilt correction.
-            fine = max(-0.5, min(0.5, round(median(tilts), 1)))
+        # Fine angle within ±0.5°; the rest of the measured tilt seeds the routine correction.
+        fine, seed = setup_tilt(tilts, fine)
+        saved_geometry = layout.settings()
+        skew_seed = {"key": [saved_geometry["crop"], saved_geometry["width"], saved_geometry["rotation"],
+                             valid_fine_rotation(fine)], "offset": seed}
         relocated = {"last_frame_relocated_at": time.time()} if attempt.purpose == "relocate" and not provisional else {}
         save_auto_rules({**rules, **layout.settings(), **relocated, "rotation_fine": valid_fine_rotation(fine),
-                         "crop_revision": revision,
+                         "crop_revision": revision, "skew_seed": skew_seed,
                          "setup_input_source": setup_source_id(source),
                          "calibration_reference": reference, "stationary_partial_scope": partial_scope,
                          "setup_completed": completed, "setup_success": success,
@@ -2208,9 +2230,26 @@ def main():
             wake_worker.wait(timeout=15)
             continue
         if not manual and not ready_for_automatic(active_rules, active_source):
-            set_activity("setup_wait", SETUP_WAIT_NOTICE)
+            job = calibration
+            if (job is not None and job.simplified and not job.automatic and not job.background
+                    and not job.intensive and job.state in SETUP_RETRY_STATES
+                    and setup_retry["count"] < SETUP_RETRY_LIMIT):
+                if setup_retry["job"] is not job:
+                    setup_retry.update(job=job, at=time.monotonic() + SETUP_RETRY_SECONDS)
+                if time.monotonic() >= setup_retry["at"]:
+                    setup_retry.update(job=None, count=setup_retry["count"] + 1)
+                    try:
+                        control_calibration("setup", job.limit)
+                    except (OSError, ValueError):
+                        print("Selbsteinrichtung konnte nicht automatisch neu gestartet werden.")
+                    continue
+                set_activity("setup_wait", SETUP_RETRY_NOTICE)
+            else:
+                setup_retry["job"] = None
+                set_activity("setup_wait", SETUP_WAIT_NOTICE)
             wake_worker.wait(timeout=2)
             continue
+        setup_retry.update(job=None, count=0)
         if remaining > 0 and not startup and not manual and not source_changed and not run_automatic_now:
             set_activity("waiting", SEVENTH_DIGIT_WAIT_NOTICE if history.get("seventh_digit_wait") else
                          FRESH_OCR_NOTICE if history.get("fresh_ocr_retry_at") else
@@ -2271,6 +2310,7 @@ def main():
         fine_update = None
         fine_rotation = None
         local_trial = None
+        shifted_trial = None
         restoring_local = False
         recover_geometry = False
         geometry_warning = False
@@ -2478,7 +2518,8 @@ def main():
                                             valid_fine_rotation(crop_rules.get("rotation_fine", 0))]
                                 skew_state = updated.get("skew")
                                 if not isinstance(skew_state, dict) or skew_state.get("key") != skew_key:
-                                    skew_state = {"key": skew_key, "offset": 0.0, "samples": []}
+                                    # New geometry: start from the tilt the setup measured.
+                                    skew_state = initial_skew_state(skew_key, crop_rules.get("skew_seed"))
                                 view_rotation += skew_offset(skew_state)
 
                         def prepare_register(original, current_overlay):
@@ -2717,6 +2758,11 @@ def main():
                                     ocr_confirmed, ocr_readings = True, [ocr, ocr]
                                     ocr_method = "shifted"
                                     read_state.update(whole_boxes=whole, fraction_boxes=fraction)
+                                    shifted_trial = learnable_shift(
+                                        local_enabled and bool(custom_boxes) and read_state["captured"] is not None,
+                                        geometry_check_key(active_rules, source_key), rotation + rotation_adjustment,
+                                        [*whole, *fraction], read_state["register"].size,
+                                        meter_prefix(ocr, comparison_decimals, integer_digits))
                                     regular_status = compare_sample(
                                         sample, ocr, comparison_decimals, integer_digits=integer_digits,
                                         exact_prefix=exact_partial,
@@ -2763,6 +2809,11 @@ def main():
                                         ocr, ocr_confirmed, ocr_readings = values[0], True, values
                                         ocr_method = "row_shifted"
                                         read_state.update(whole_boxes=moved_whole, fraction_boxes=moved_fraction)
+                                        shifted_trial = learnable_shift(
+                                            local_enabled and read_state["captured"] is not None,
+                                            geometry_check_key(active_rules, source_key), rotation + rotation_adjustment,
+                                            moved, register_now.size,
+                                            meter_prefix(ocr, comparison_decimals, integer_digits))
                                         regular_status = compare_sample(
                                             sample, ocr, comparison_decimals, integer_digits=integer_digits,
                                             exact_prefix=exact_partial,
@@ -3315,6 +3366,10 @@ def main():
                                 fine_rotation = local_backup["rotation"]
                                 fine_update = local_backup["digit_boxes"]
                                 restoring_local = True
+                    if local_trial is None and shifted_trial is not None:
+                        # A frame shift that rescued this check is learned under the same rules as the
+                        # local fine alignment: three fresh images, two meter readings, rollback on errors.
+                        local_trial = shifted_trial
                     if (not optimization_paused and not raw_fallback and local_trial is not None and verified
                             and fine_update is None):
                         trial_key, geometry, prefix = local_trial

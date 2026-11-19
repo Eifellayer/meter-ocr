@@ -31,3 +31,22 @@ class SetupLogTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LearnableShiftTest(unittest.TestCase):
+    def test_rescuing_frames_become_a_learning_candidate_in_thousandths(self):
+        from run import learnable_shift
+        boxes = [(10 + index * 50, 5, 50 + index * 50, 55) for index in range(8)]
+        key, geometry, prefix = learnable_shift(True, ["k"], -1, boxes, (420, 60), 10482)
+        self.assertEqual(["k"], key)
+        self.assertEqual(-1, geometry[0])
+        self.assertEqual([24, 83, 119, 917], geometry[1][0])
+        self.assertTrue(all(isinstance(box, list) for box in geometry[1]))
+        self.assertEqual(10482, prefix)
+
+    def test_no_candidate_when_disabled_or_invalid(self):
+        from run import learnable_shift
+        boxes = [(10 + index * 50, 5, 50 + index * 50, 55) for index in range(8)]
+        self.assertIsNone(learnable_shift(False, ["k"], 0, boxes, (420, 60), 1))
+        self.assertIsNone(learnable_shift(True, ["k"], 0, boxes, (420, 60), None))
+        self.assertIsNone(learnable_shift(True, ["k"], 0, list(reversed(boxes)), (420, 60), 1))

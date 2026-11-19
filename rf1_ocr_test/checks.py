@@ -917,6 +917,26 @@ def skew_offset(state):
     return float(offset)
 
 
+def setup_tilt(tilts, fine):
+    """Split the tilt measured during setup into the saved fine angle and a start offset.
+
+    The fine angle stays within ±0.5°; the rest seeds the routine tilt correction so the
+    first automatic checks already use the measured angle.
+    """
+    values = [value for value in tilts if type(value) in (int, float) and abs(value) <= 4]
+    if len(values) < 2:
+        return fine, 0.0
+    measured = round(median(values), 1)
+    kept = max(-0.5, min(0.5, measured))
+    return kept, max(-SKEW_LIMIT, min(SKEW_LIMIT, round(measured - kept, 1)))
+
+
+def initial_skew_state(key, seed):
+    """Tilt state for a new geometry; start from the setup's measurement when it matches."""
+    start = skew_offset(seed) if isinstance(seed, dict) and seed.get("key") == key else 0.0
+    return {"key": key, "offset": start, "samples": []}
+
+
 def note_skew(state, measured):
     """Collect one tilt measurement; adopt the median once several agree.
 

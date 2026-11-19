@@ -3063,24 +3063,20 @@ function syncHero() {{
     noteText = lang === 'en'
       ? 'The frame of the last digit sat beside its roller and is being searched again in the background. Until then the app checks with one decimal place less.'
       : 'Der Rahmen der letzten Stelle saß neben der Rolle und wird gerade im Hintergrund neu gesucht. Bis dahin prüft die App mit einer Nachkommastelle weniger.';
-    if (minutesLeft) noteText += lang === 'en' ? ` At most ${{minutesLeft}} min left.` : ` Noch höchstens ${{minutesLeft}} min.`;
+    if (minutesLeft) noteText += lang === 'en' ? ` At most ${{minutesLeft}} min left.` : ` Das dauert noch höchstens ${{minutesLeft}} min.`;
     noteState = 'searching';
   }} else if (/[0-9?]/.test(reading) && lastDigitSearching) {{
     const minutesLeft = lastDigitProgress ? Math.max(1, Math.ceil(lastDigitProgress.seconds / 60)) : 0;
-    const maxMinutes = lastDigitProgress ? Math.round(lastDigitProgress.duration / 60) : 0;
+    const left = minutesLeft ? (lang === 'en' ? ` (at most ${{minutesLeft}} min)` : ` (noch höchstens ${{minutesLeft}} min)`) : '';
     if (/[0-9]$/.test(fractionDigits)) {{
-      const left = minutesLeft ? (lang === 'en' ? ` (at most ${{minutesLeft}} min)` : ` (noch höchstens ${{minutesLeft}} min)`) : '';
       noteText = lang === 'en' ? `Optimising${{left}}: all digits are read, the app is improving frames and angle.`
         : `Optimierung läuft${{left}}: Alle Ziffern sind gelesen, die App verbessert noch Rahmen und Winkel.`;
       noteState = 'optimizing';
     }} else {{
-      noteText = lang === 'en' ? `The ${{position}}th digit is being searched in the background.`
-        : `Die ${{position}}. Ziffer wird im Hintergrund gesucht.`;
+      noteText = lang === 'en' ? `The ${{position}}th digit is being searched in the background${{left}}.`
+        : `Die ${{position}}. Ziffer wird im Hintergrund gesucht${{left}}.`;
       noteState = 'searching';
     }}
-    if (minutesLeft && noteState !== 'optimizing') noteText += lang === 'en'
-      ? ` At most ${{minutesLeft}} of ${{maxMinutes}} min left.`
-      : ` Noch höchstens ${{minutesLeft}} von ${{maxMinutes}} min.`;
   }} else if (comparedDecimals !== null && configuredDecimals !== null && comparedDecimals < configuredDecimals) {{
     const at = lastDigitSearchAt && lastDigitSearchAt * 1000 > Date.now()
       ? new Date(lastDigitSearchAt * 1000).toLocaleTimeString(lang === 'en' ? 'en-GB' : 'de-DE', {{hour: '2-digit', minute: '2-digit'}})

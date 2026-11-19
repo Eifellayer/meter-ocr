@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.18
+
+- Winkel nach der Einrichtung: Misst die Einrichtung eine Schräglage über ±0,5°, behält sie wie bisher höchstens ±0,5° als Feinwinkel und gibt den Rest als Startwert an die laufende Schräglagenkorrektur. Die ersten automatischen Prüfungen arbeiten so sofort mit dem gemessenen Winkel, statt sich über viele Prüfungen heranzutasten (Beobachtung: −0,5° gespeichert, −1,5° gemessen, die 8 wurde als 6 gelesen).
+- Nachprüfung lernt mit: Rettet ein leicht verschobener Rahmen eine Prüfung, wird diese Verschiebung als Kandidat an die lokale Feinausrichtung übergeben. Gespeichert wird sie wie dort erst nach drei frischen Bildern mit zwei verschiedenen Zählerständen; bei Fehlprüfungen nimmt die App sie zurück.
+- Einrichtung ohne Ergebnis: Endet eine selbst gestartete Einrichtung ergebnislos, startet die App sie nach 5 Minuten automatisch neu (höchstens dreimal), statt dauerhaft auf „wartet auf Einrichtung“ zu stehen.
+- Hinweis bei der Suche nach der 8. Ziffer: „(noch höchstens 4 min)“ statt „Noch höchstens 4 von 4 min“.
+
 ## 0.1.17
 
 - Debug-Protokoll für die Selbsteinrichtung: Je ausgewertetem Bild ein Eintrag `setup_image` mit Anzahl der Bildanforderungen, verworfenen Doppelbildern, Abruffehlern, Abruf- und Auswertedauer, Bestätigungen und Lesestand; am Ende ein Eintrag `setup_end` mit Ergebnis und Dauer. Damit lässt sich klären, warum die Einrichtung manchmal nur alle paar Minuten ein neues Bild zählt.

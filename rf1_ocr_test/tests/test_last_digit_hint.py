@@ -38,7 +38,7 @@ class LastDigitHintTests(IngressFixture):
         english = self.request("/", accept="en")[0]
         self.assertIn('id="hero-digit-note"', german)
         self.assertIn("Ziffer wird nicht verglichen (eingestellt:", german)
-        self.assertIn("Ziffer wird im Hintergrund gesucht.", german)
+        self.assertIn("Ziffer wird im Hintergrund gesucht${left}.", german)
         self.assertIn("Nach dem Speichern sucht die App sie im Hintergrund weiter.", german)
         self.assertEqual(2, german.count('class="calibration-last-digit-note settings-note"'))
         self.assertIn("digit is not compared (setting:", english)
@@ -82,7 +82,7 @@ class LastDigitHintTests(IngressFixture):
             page.goto(self.base + "/")
             note = page.locator("#hero-digit-note")
             page.wait_for_function("document.querySelector('#hero-digit-note').dataset.state === 'searching'")
-            self.assertEqual("Die 8. Ziffer wird im Hintergrund gesucht. Noch höchstens 9 von 20 min.", note.inner_text())
+            self.assertEqual("Die 8. Ziffer wird im Hintergrund gesucht (noch höchstens 9 min).", note.inner_text())
             self.assertTrue(page.locator("#hero-search-progress").is_visible())
             self.assertEqual(660, page.locator("#hero-search-progress").evaluate("bar => bar.value"))
             self.assertIn("searching", page.locator("#meter-odometer .roller.fraction").last.get_attribute("class"))

@@ -620,7 +620,7 @@ def roll_center(image, boxes):
     return x
 
 
-def digit_row_tilt(image, boxes):
+def digit_row_tilt(image, boxes, skip=()):
     """Remaining tilt of a digit row in degrees (app convention, as for ``rotation``), or None.
 
     Each box contributes the centre of its strongest contrast (the digit, light or dark), and a
@@ -629,9 +629,9 @@ def digit_row_tilt(image, boxes):
     """
     gray = image.convert("L")
     points = []
-    for left, top, right, bottom in boxes:
+    for index, (left, top, right, bottom) in enumerate(boxes):
         height = bottom - top
-        if right - left < 4 or height < 6:
+        if index in skip or right - left < 4 or height < 6:
             continue
         # Measure inside the frame only. Just outside it lie the bright edges of the counter
         # window, which are not parallel to the digits and gave readings like 16°.

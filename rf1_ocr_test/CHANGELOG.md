@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.15
+
+- **Schräglage pendelt sich dauerhaft ein:** Der gelernte Ausgleich bleibt erhalten, wenn die App einzelne Rahmen (z. B. die letzte Stelle) neu setzt; bisher begann er dann wieder bei null. Er korrigiert jetzt in kleineren Schritten (70 % der gemessenen Abweichung, ab 0,2°) und läuft dauerhaft weiter mit.
+- **Mehr Messpunkte:** Gemessen wird über alle Ziffern bis zur vorletzten (bisher nur die Vorkommastellen). Ziffern, deren rechter Nachbar gerade 8 oder 9 zeigt, lässt die Messung aus – der Übertrag hebt sie schon leicht an.
+
 ## 0.1.14
 
 - **Schneller wieder prüfen:** Nach einer Fehlprüfung prüft die App nach 2 statt 5 Minuten erneut, wenn der Rechner gerade Luft hat (Prozessorlast). Die Pause nach drei Fehlprüfungen ist jetzt einstellbar (Einstellungen → „Pause nach drei Fehlprüfungen“), Standard 30 statt 60 Minuten.

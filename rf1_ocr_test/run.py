@@ -2411,9 +2411,10 @@ def main():
                         if crop_rules["crop_mode"] == "manual" and not detect_raw:
                             view_rotation = rotation + valid_fine_rotation(crop_rules.get("rotation_fine", 0))
                             if not manual and custom_boxes:
+                                # Not tied to the frame revision: re-placing a single frame (e.g. the
+                                # last digit) keeps the learned tilt instead of starting from zero.
                                 skew_key = [crop_rules["crop"], manual_width, rotation,
-                                            valid_fine_rotation(crop_rules.get("rotation_fine", 0)),
-                                            active_rules["crop_revision"]]
+                                            valid_fine_rotation(crop_rules.get("rotation_fine", 0))]
                                 skew_state = updated.get("skew")
                                 if not isinstance(skew_state, dict) or skew_state.get("key") != skew_key:
                                     skew_state = {"key": skew_key, "offset": 0.0, "samples": []}
@@ -2440,7 +2441,15 @@ def main():
                             tilt_skip = "learned_rotation"
                         else:
                             try:
-                                tilt_measured = digit_row_tilt(register, whole_boxes)
+                                # All digits except the turning last roller. A digit whose right
+                                # neighbour shows 8 or 9 is already lifted by the carry, so it is left out.
+                                tilt_boxes = [*whole_boxes, *fraction_boxes][:max(0, integer_digits + fraction_digits - 1)]
+                                counter_now = (source_history.get("consumption") or {}).get("reading_litres")
+                                shown = (str(counter_now).zfill(integer_digits + 3)[:integer_digits + fraction_digits]
+                                         if type(counter_now) is int else "")
+                                lifted = {index for index in range(len(tilt_boxes))
+                                          if index + 1 < len(shown) and shown[index + 1] in "89"}
+                                tilt_measured = digit_row_tilt(register, tilt_boxes, skip=lifted)
                                 tilt_skip = None if tilt_measured is not None else f"unmeasured:{len(whole_boxes)}"
                                 updated["skew"] = note_skew(skew_state, tilt_measured)
                             except (OSError, ValueError, ZeroDivisionError) as error:

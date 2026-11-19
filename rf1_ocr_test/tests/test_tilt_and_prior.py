@@ -46,7 +46,7 @@ class TiltTests(TestCase):
             state = note_skew(state, -1.4)
         self.assertEqual(0.0, skew_offset(state))
         state = note_skew(state, -1.6)
-        self.assertEqual(-1.4, skew_offset(state))
+        self.assertEqual(-1.0, skew_offset(state))  # 70 % of the median, then it keeps settling
         self.assertEqual([], state["samples"])
 
     def test_scattered_or_small_measurements_change_nothing(self):
@@ -56,7 +56,7 @@ class TiltTests(TestCase):
         self.assertEqual(0.0, skew_offset(state))
         state = {}
         for _ in range(SKEW_SAMPLES):
-            state = note_skew(state, .2)
+            state = note_skew(state, .1)
         self.assertEqual(0.0, skew_offset(state))
 
     def test_rotation_input_accepts_tenths_of_a_degree(self):
@@ -163,3 +163,13 @@ class RetryTimingTests(TestCase):
             history = {"failure_attempts": 2}
             schedule_next_check(history, "ocr_unclear", 1000, 10)
             self.assertEqual(1000 + checks.FAILURE_COOLDOWN_INTERVAL, history["next_check_at"])
+
+
+class LiftedDigitTests(TestCase):
+    def test_skipped_boxes_do_not_tip_the_line(self):
+        image, boxes = row("10489")
+        lifted = image.copy()
+        # Lift the 8 (its right neighbour is a 9) by redrawing it higher.
+        ImageDraw.Draw(lifted).rectangle(boxes[3], fill=(20, 20, 20))
+        ImageDraw.Draw(lifted).text((boxes[3][0] + 5, 12), "8", font=FONT, fill=(220, 220, 220))
+        self.assertLess(abs(digit_row_tilt(lifted, boxes, skip={3})), .2)

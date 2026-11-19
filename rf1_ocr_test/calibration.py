@@ -106,6 +106,43 @@ class Layout:
                 "rotation": self.rotation, "width": self.width, "digit_boxes": list(self.digit_boxes)}
 
 
+DETECTED_METHODS = ("neighbours", "register_window")
+
+
+def similar_layout(layout, other):
+    """Same digits found again, give or take a few pixels or one degree.
+
+    Each setup image is searched afresh, so the frames of the same digit row differ slightly
+    from image to image. Counting those as different geometries kept resetting the
+    confirmations (1/3, 2/3, 1/3 …) although the app had found the right digits every time.
+    """
+    if layout is None or other is None:
+        return False
+    if layout == other:
+        return True
+    # Only fresh detections jitter. Deliberately refined frames (fine search, verified boxes)
+    # must count as new, so their hits are not credited to a different box.
+    if layout.method not in DETECTED_METHODS or other.method not in DETECTED_METHODS:
+        return False
+    if abs(layout.rotation - other.rotation) > 1 or len(layout.digit_boxes) != len(other.digit_boxes):
+        return False
+    width = max(1, layout.box[2] - layout.box[0])
+    height = max(1, layout.box[3] - layout.box[1])
+    if any(abs(a - b) > max(4, width * .04) for a, b in zip(layout.box[0::2], other.box[0::2])):
+        return False
+    if any(abs(a - b) > max(4, height * .15) for a, b in zip(layout.box[1::2], other.box[1::2])):
+        return False
+    if abs(layout.width - other.width) > max(4, width * .04):
+        return False
+    for first, second in zip(layout.digit_boxes, other.digit_boxes):
+        # Digit boxes are stored in 0–1000 crop coordinates.
+        if any(abs(a - b) > 30 for a, b in zip(first[0::2], second[0::2])):
+            return False
+        if any(abs(a - b) > 120 for a, b in zip(first[1::2], second[1::2])):
+            return False
+    return True
+
+
 def unrotate_box(box, size, angle):
     """Convert a box in a center-rotated image to bounds in the original."""
     if angle == 0:
@@ -1196,7 +1233,7 @@ class Calibration:
                 sample, compare_sample(sample, value, precision, integer_digits=digits)[0]) is None
                 for value in readings)
             l, t, r, b = layout.box
-            return (reference_match, self.confirmations > 0 and layout == self.candidate,
+            return (reference_match, self.confirmations > 0 and similar_layout(layout, self.candidate),
                     (r - l) * (b - t), layout.method == "register_window", agreement)
 
         def reliable(score):
@@ -1510,7 +1547,10 @@ class Calibration:
                     if on_selected is not None:
                         on_selected(layout, readings)
                 rejection = "implausible"
-                same = layout == self.candidate
+                same = similar_layout(layout, self.candidate)
+                if same and layout != self.candidate:
+                    # Keep the first frame of this digit row; the small differences are noise.
+                    layout = self.candidate
                 anchor = self.counter if same or recovered_slot else baseline or {}
                 counter = accumulate_consumption(anchor, "calibration", stamp, readings[0], precision,
                                                 flow, digits)

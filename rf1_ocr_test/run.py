@@ -1023,6 +1023,32 @@ SETUP_RETRY_SECONDS = 300
 SETUP_RETRY_LIMIT = 3
 
 
+def app_build():
+    """Identify the installed app version; changes with every update."""
+    version = os.environ.get("BUILD_VERSION", "").strip()
+    if version:
+        return version
+    try:
+        return hashlib.sha256(Path(__file__).read_bytes()).hexdigest()[:16]
+    except OSError:
+        return ""
+
+
+def setup_autostart_due(history, build, job, attempted):
+    """Restart an unfinished setup once per installed version, without user interaction.
+
+    Only after a setup was started before; choosing a source alone does not start one.
+    """
+    return job is None and bool(build) and history.get("setup_autostart_build") != build and attempted()
+
+
+def setup_attempted_before():
+    try:
+        return '"kind": "setup_' in debug_log.read_text(debug_log.MAX_ENTRIES)
+    except (OSError, ValueError):
+        return False
+
+
 def automatic_inputs_ready(rules, source, history, *, legacy_crop=False):
     if not source["selected"]:
         return False
@@ -1400,6 +1426,8 @@ def main():
     calibration_next = 0.0
     calibration_worker = None
     setup_retry = {"job": None, "at": 0.0, "count": 0}
+    # Checked once after each start of the app: restart an unfinished setup after an update.
+    setup_autostart = {"pending": True, "build": app_build()}
     calibration_preview = {}
     calibration_images = {}
     calibration_preview_version = 0
@@ -2334,6 +2362,20 @@ def main():
             continue
         if not manual and not ready_for_automatic(active_rules, active_source):
             job = calibration
+            build = setup_autostart["build"] if setup_autostart["pending"] else ""
+            setup_autostart["pending"] = False
+            if setup_autostart_due(history, build, job, setup_attempted_before):
+                # After an update the setup restarts on its own (Fire and Forget), once per version.
+                history["setup_autostart_build"] = build
+                setup_retry.update(job=None, count=0)
+                try:
+                    atomic_write(HISTORY, json.dumps(history).encode("utf-8"), 0o600)
+                    if control_calibration("setup", DEFAULT_LIMIT):
+                        print("Neue App-Version: Selbsteinrichtung startet automatisch neu.")
+                        debug_log.record(kind="setup_autostart", build=build)
+                        continue
+                except (OSError, ValueError):
+                    print("Selbsteinrichtung konnte nach dem Update nicht automatisch starten.")
             if (job is not None and job.simplified and not job.automatic and not job.background
                     and not job.intensive and job.state in SETUP_RETRY_STATES
                     and setup_retry["count"] < SETUP_RETRY_LIMIT):
@@ -2353,6 +2395,7 @@ def main():
             wake_worker.wait(timeout=2)
             continue
         setup_retry.update(job=None, count=0)
+        setup_autostart["pending"] = False
         if remaining > 0 and not startup and not manual and not source_changed and not run_automatic_now:
             set_activity("waiting", SEVENTH_DIGIT_WAIT_NOTICE if history.get("seventh_digit_wait") else
                          FRESH_OCR_NOTICE if history.get("fresh_ocr_retry_at") else

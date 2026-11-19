@@ -193,7 +193,129 @@ def find_raw_digit_row(frame, whole_digits, fraction_digits):
     return rows[0][0]
 
 
+def bright_glyphs(gray, stroke):
+    """White top-hat: glyph strokes brighter than their local surroundings, independent of uneven light."""
+    from PIL import ImageChops, ImageFilter
+
+    size = max(3, stroke | 1)
+    opened = gray.filter(ImageFilter.MinFilter(size)).filter(ImageFilter.MaxFilter(size))
+    return ImageOps.autocontrast(ImageChops.subtract(gray, opened), cutoff=1)
+
+
+def find_glyph_register(frame, count, with_tilt=False):
+    """Locate a row of bright, evenly spaced roller digits by local contrast.
+
+    Works on dim, uneven camera images (e.g. ESPHome cameras with a flash LED) where the
+    window itself is not darker everywhere than its surroundings: a reflection, a red
+    fraction field or a barcode below the window do not interrupt the glyph row.
+    """
+    if count < 3:
+        return None
+    gray = frame.convert("L")
+    gray.thumbnail((400, 300), Image.Resampling.BILINEAR)
+    width, height = gray.size
+    found = []
+    for stroke in (7, 11):
+        glyphs = bright_glyphs(gray, stroke)
+        for threshold in (80, 120):
+            for box in digit_components(glyphs, threshold, True):
+                tall = box[3] - box[1]
+                if not height / 20 <= tall <= height / 3 or box[2] - box[0] > tall:
+                    continue
+                center = ((box[0] + box[2]) / 2, (box[1] + box[3]) / 2)
+                twin = next((i for i, old in enumerate(found)
+                             if abs((old[0] + old[2]) / 2 - center[0]) <= tall * .2
+                             and abs((old[1] + old[3]) / 2 - center[1]) <= tall * .3), None)
+                if twin is None:
+                    found.append(box)
+                elif tall > found[twin][3] - found[twin][1]:
+                    found[twin] = box
+    boxes = sorted(found, key=lambda box: (box[0] + box[2]) / 2)
+
+    def darkness(cell):
+        l, t, r, b = cell
+        if l < 0 or r > width or t < 0 or b > height or r <= l or b <= t:
+            return 256
+        return ImageStat.Stat(gray.crop((l, t, r, b))).median[0]
+
+    best = None
+    for index, seed in enumerate(boxes):
+        tall = seed[3] - seed[1]
+        chain = [seed]
+        slots = [0]
+        pitch = None
+        for box in boxes[index + 1:]:
+            last = chain[-1]
+            distance = (box[0] + box[2]) / 2 - (last[0] + last[2]) / 2
+            size = box[3] - box[1]
+            if not .55 * tall <= size <= 1.6 * tall:
+                continue
+            if abs((box[1] + box[3]) / 2 - (last[1] + last[3]) / 2) > .45 * tall:
+                continue
+            if pitch is None:
+                if not .9 * tall <= distance <= 2.2 * tall:
+                    continue
+                step = 1
+            else:
+                step = round(distance / pitch)
+                if step not in (1, 2, 3) or abs(distance - step * pitch) > .22 * pitch:
+                    continue
+            if slots[-1] + step >= count:
+                break
+            chain.append(box)
+            slots.append(slots[-1] + step)
+            centers = [(b[0] + b[2]) / 2 for b in chain]
+            pitch = (centers[-1] - centers[0]) / slots[-1]
+        if pitch is None or len(chain) < max(3, count - 2) or slots[-1] < count - 2:
+            continue
+        missing = count - 1 - slots[-1]
+        first = (chain[0][0] + chain[0][2]) / 2
+        last = (chain[-1][0] + chain[-1][2]) / 2
+        # A slot missing at an end (glare, half-turned roller): extend towards the darker side.
+        for _ in range(missing):
+            left_cell = (round(first - 1.5 * pitch), chain[0][1], round(first - .5 * pitch), chain[0][3])
+            right_cell = (round(last + .5 * pitch), chain[-1][1], round(last + 1.5 * pitch), chain[-1][3])
+            if darkness(left_cell) < darkness(right_cell):
+                first -= pitch
+            else:
+                last += pitch
+        top = min(box[1] for box in chain)
+        bottom = max(box[3] for box in chain)
+        glyph = median(box[3] - box[1] for box in chain)
+        margin = .35 * glyph
+        bounds = (first - .5 * pitch, top - margin, last + .5 * pitch, bottom + margin)
+        if bounds[0] < 0 or bounds[2] > width or bounds[1] < 0 or bounds[3] > height:
+            continue
+        # Bright digits sit in a dark window: reject bright gaps between dark print on a light label.
+        contrasts = []
+        for box in chain:
+            x = (box[0] + box[2]) / 2
+            y = (box[1] + box[3]) / 2
+            cell = (round(x - .35 * pitch), round(y - .5 * glyph), round(x + .35 * pitch), round(y + .5 * glyph))
+            above = (cell[0], round(y - 1.3 * glyph), cell[2], round(y - .9 * glyph))
+            below = (cell[0], round(y + .9 * glyph), cell[2], round(y + 1.3 * glyph))
+            contrasts.append(min(darkness(above), darkness(below)) - darkness(cell))
+        if median(contrasts) < 10:
+            continue
+        score = sum(box[3] - box[1] for box in chain) * (1 - .15 * (count - len(chain)))
+        if best is None or score > best[0]:
+            points = [((b[0] + b[2]) / 2, (b[1] + b[3]) / 2) for b in chain]
+            slopes = [(y2 - y1) / (x2 - x1) for i, (x1, y1) in enumerate(points)
+                      for x2, y2 in points[i + 1:] if x2 > x1]
+            best = score, bounds, degrees(atan(median(slopes))) if slopes else 0.0
+    if best is None:
+        return None
+    box = tuple(round(value * scale) for value, scale in zip(
+        best[1], (frame.width / width, frame.height / height) * 2))
+    return (box, round(best[2], 1)) if with_tilt else box
+
+
 def find_dark_register(frame, count):
+    """Find the meter window: first as a row of bright digits, then as a wide dark strip."""
+    return find_glyph_register(frame, count) or find_dark_strip(frame, count)
+
+
+def find_dark_strip(frame, count):
     """Find a wide, contrasting dark window even when individual glyphs are incomplete."""
     from PIL import ImageFilter
 
@@ -257,8 +379,11 @@ def dark_register_cells(register, count):
         return ()
     estimate = w / count
     best = None
-    for channel in ("G", "B", "L"):
-        gray = ImageOps.autocontrast(image.convert("L") if channel == "L" else image.getchannel(channel), cutoff=2)
+    for channel in ("G", "B", "L", "T"):
+        if channel == "T":
+            gray = bright_glyphs(image.convert("L"), round(h * .15))
+        else:
+            gray = ImageOps.autocontrast(image.convert("L") if channel == "L" else image.getchannel(channel), cutoff=2)
         for threshold in (105, 120, 140):
             glyphs = [box for box in digit_components(gray, threshold, True)
                       if w * .025 <= (box[0] + box[2]) / 2 <= w * .975

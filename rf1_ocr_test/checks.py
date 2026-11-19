@@ -898,7 +898,7 @@ SETUP_CHECK_INTERVAL_MINUTES = 5
 def without_light(value):
     """The capture light does not change which camera is read, so it is not part of its identity."""
     if isinstance(value, dict):
-        return {key: item for key, item in value.items() if key != "light"}
+        return {key: item for key, item in value.items() if key not in ("light", "camera_light")}
     if isinstance(value, list):
         return [without_light(item) for item in value]
     return value

@@ -46,7 +46,11 @@ def source_rules(values):
     light = str(values.get("light") or "").strip() if mode not in ESP_ADDRESS_MODES else ""
     if light and not LIGHT.fullmatch(light):
         raise ValueError("Ungültige Licht-Entität")
-    return dict(mode=mode, url=url, camera=camera, reference=reference, light=light)
+    camera_light = values.get("camera_light", True)
+    if isinstance(camera_light, str):
+        camera_light = camera_light in ("1", "true", "on")
+    return dict(mode=mode, url=url, camera=camera, reference=reference, light=light,
+                camera_light=bool(camera_light) if mode not in ESP_ADDRESS_MODES else True)
 
 
 def source_check_key(source):

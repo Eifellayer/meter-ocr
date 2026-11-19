@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.24
+
+- Blitz der Kamera standardmäßig an: Bei ESPHome- und Home-Assistant-Kameras sucht die App selbst das Licht, das zum selben Gerät gehört (z. B. die Blitz-LED des ESP), und schaltet es für jede Aufnahme ein. Neuer Schalter „Blitz der Kamera verwenden“ (Standard an). Ein eingetragenes externes Licht hat Vorrang.
+
 ## 0.1.23
 
 - „Licht für die Aufnahme“: Der Beispieltext im leeren Feld sah wie ein eingetragener Wert aus („light.esp_gaszaehler_blitz“). Jetzt steht dort „leer = ohne Licht, z. B. light.kamera_blitz“.

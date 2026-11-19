@@ -8,6 +8,7 @@ from email.parser import BytesHeaderParser
 from functools import partial
 import hashlib
 import io
+from itertools import chain
 import json
 import os
 from pathlib import Path
@@ -54,7 +55,7 @@ from checks import (FRAME_OFF_NOTICE, FRAME_OFF_STREAK, FRAME_OFF_WAIT_NOTICE, M
                     REDUCED_PRECISION_NOTICE, only_last_compared_unclear)
 import debug_log
 from layout import (MANUAL_ROW_UNCLEAR, PARTLY_UNCLEAR, RAW_ROW_UNCLEAR, digit_row_tilt, fine_rotation as valid_fine_rotation, crop_coordinates, find_digit_row,
-                    digit_box_settings, find_raw_digit_row, normalize_digit_boxes, roll_center, rotated_width, scale_digit_boxes, turn_crop)
+                    digit_box_settings, find_raw_digit_row, normalize_digit_boxes, glyph_clipped, roll_center, rotated_width, scale_digit_boxes, turn_crop)
 from meter_learning import (GEOMETRY_REPAIR_LIMIT, GEOMETRY_REPAIR_SECONDS, alignment_rollback, observe_flow,
                             observe_geometry_failures, local_geometry_trials, note_local_issue, note_local_improvement,
                             plan_reflection_recheck, REFLECTION_RECHECK_NOTICE, suggested_interval)
@@ -434,7 +435,9 @@ def single_digit_frames(boxes, index, size, *, last_roller=False):
         margin = max(1, (bottom - top) // 14)
         yield left, top, right, bottom - margin
         yield left, top + margin, right, bottom
-    axes = (1, 0) if last_roller else (0,)
+    # The last roller only turns; moving its frame sideways shows half a digit (a cut-off 9
+    # reads as 4). It is centred on the roller beforehand and only moved up and down here.
+    axes = (1,) if last_roller else (0,)
     for angle, shifted in local_geometry_trials(normalized, [index], axes=axes):
         if angle:
             break
@@ -467,12 +470,27 @@ def recover_single_digit(layout, pattern, current, whole_digits, fraction_digits
         last_roller = fraction_digits > 0 and index == len(boxes) - 1
         final = number == len(positions) - 1
         found = False
-        for box in single_digit_frames(boxes, index, register.size, last_roller=last_roller):
+        search = boxes
+        if last_roller:
+            centre = roll_center(register, boxes)
+            left, top, right, bottom = boxes[index]
+            if centre is not None and abs(centre - (left + right) / 2) > (right - left) / 8:
+                dx = round(centre - (left + right) / 2)
+                dx = max(-left, min(dx, register.width - right))
+                search = [*boxes[:index], (left + dx, top, right + dx, bottom), *boxes[index + 1:]]
+        frames = single_digit_frames(search, index, register.size, last_roller=last_roller)
+        if search is not boxes:
+            frames = chain([search[index]], frames)
+        for box in frames:
             if attempted + 2 > available or stop():
                 return None, attempted
             if box in seen or box[2] - box[0] < 8 or box[3] - box[1] < 12:
                 continue
             seen.add(box)
+            if glyph_clipped(register, box):
+                # Part of a digit only: never read it, it would look like another digit.
+                report(attempted, box, "unclear", position=position)
+                continue
             report(attempted, position=position)
             first = read(box, OCR_PROFILES[0])
             attempted += 1
@@ -1800,6 +1818,9 @@ def main():
                                             deadline=deadline)
 
                                     digit_box = register[3][-1]
+                                    if trial != layout and glyph_clipped(register[0], digit_box):
+                                        # A moved frame that cuts the digit would read another digit.
+                                        return "?"
                                     digit = read_digit(register[0], digit_box, recognize_digit)
                                     if trial == layout and earlier_frames:
                                         views = [turn_crop(crop_register(earlier, trial.box), trial.rotation)
@@ -2633,6 +2654,9 @@ def main():
                             required = integer_digits + comparison_decimals
                             rows = [str(value).replace(".", "").replace(",", "")[:required] for value in ocr_readings]
                             weak = uncertain_slots(rows, required) if len(rows) >= 2 else []
+                            if comparison_decimals == 3:
+                                # Never move the last roller sideways (half digits); it has its own search.
+                                weak = [slot for slot in weak if slot != required - 1]
                             if (regular_status not in ("difference", "ocr_unclear") or not 1 <= len(weak) <= 2
                                     or required - len(weak) < 3
                                     or comparison_decimals == 3 and weak == [required - 1]):

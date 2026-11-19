@@ -659,3 +659,25 @@ def digit_row_tilt(image, boxes):
     slope = median(slopes)
     # Positive ``rotation`` turns the picture clockwise; a row falling to the right needs the opposite.
     return -degrees(atan(slope))
+
+
+def glyph_clipped(image, box):
+    """Is a digit cut off at the left or right edge of its frame?
+
+    A frame pushed sideways shows only part of the digit (half a 9 reads as 4). The strokes
+    then run into the frame edge: the outermost columns carry as much detail as the busiest
+    column inside. A centred digit leaves a quieter margin on both sides.
+    """
+    left, top, right, bottom = (round(value) for value in box)
+    gray = image.convert("L")
+    left, right = max(0, left), min(gray.width, right)
+    top, bottom = max(0, top), min(gray.height, bottom)
+    width = right - left
+    if width < 8 or bottom - top < 6:
+        return False
+    profile = _column_activity(gray, left, right, top, bottom)
+    busiest = max(profile)
+    if busiest < 12:
+        return False
+    edge = max(1, width // 12)
+    return max(profile[:edge]) > busiest * .75 or max(profile[-edge:]) > busiest * .75

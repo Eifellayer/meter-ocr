@@ -1518,7 +1518,7 @@ class TwoMissingDigitsTests(TestCase):
 
         def read(box, _profile):
             for index, original in enumerate(boxes):
-                if box != original and abs(box[0] - original[0]) < 20 and box[1] == original[1]:
+                if box != original and abs(box[0] - original[0]) < 20:
                     return answers.get(index, "?")
             return "?"
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.10
+
+- **Fehler behoben – Teiltreffer an der letzten Stelle:** Das Nachschieben fehlender Ziffern (0.1.5) konnte den Rahmen der letzten Rolle neben der Rolle lassen; eine angeschnittene 9 wurde als 4 gelesen und übernommen. Jetzt wird die letzte Rolle vor dem Nachschieben auf die Rollenmitte gesetzt (wie die Suche aus 0.1.4) und nur noch nach oben und unten verschoben.
+- **Angeschnittene Ziffern werden nicht mehr gelesen:** Läuft eine Ziffer in einem verschobenen Rahmen an den linken oder rechten Rand, verwirft die App diese Lesung – beim Nachschieben, bei der Suche nach der 8. Ziffer und bei deren Neusuche.
+- Die langfristige Feinjustierung der Rahmen verschiebt die letzte Rolle nicht mehr seitlich.
+
 ## 0.1.9
 
 - **Selbsteinrichtung zählt stabiler hoch:** Findet die Einrichtung dieselbe Ziffernreihe auf dem nächsten Bild wieder, nur ein paar Pixel oder ein Grad anders, zählt das jetzt als Bestätigung. Bisher galt das als neuer Rahmen, und die Zählung sprang auf 1/3 zurück. Absichtlich nachjustierte Rahmen zählen weiterhin neu.

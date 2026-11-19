@@ -868,6 +868,9 @@ EN_DETAILS = {
      "wurde deshalb mit zwei Nachkommastellen weniger bestätigt. Die nächste Prüfung vergleicht wieder alle Stellen."):
         "The last two compared rollers were unclear, probably turning. This check was therefore confirmed with two decimal places less. The next check compares all digits again.",
     "Rollen drehten sich gerade": "Rollers were turning",
+    "Licht für die Aufnahme (optional)": "Light for the picture (optional)",
+    "Wird für jede Aufnahme kurz eingeschaltet, wie der Blitz bei AI on the Edge.": "Switched on briefly for every picture, like the flash in AI on the Edge.",
+    "Wird für jede Aufnahme kurz eingeschaltet, wie der Blitz bei AI on the Edge: Licht an, 1,5 Sekunden warten, Bild holen, Licht aus.": "Switched on briefly for every picture, like the flash in AI on the Edge: light on, wait 1.5 seconds, take the picture, light off.",
     FALLBACK_NOTICE: "The ESP is using a fallback reading.",
     "OCR-Zuwachs plausibel. Warte auf den Abgleich.": "OCR increase looks plausible. Waiting for a match.",
     "Für die Plausibilitätsprüfung fehlt ein gültiger Messzeitpunkt.":

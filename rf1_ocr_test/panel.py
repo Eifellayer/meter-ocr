@@ -997,6 +997,7 @@ name: Zählerstand (OCR)</code></pre>
 </div>
 <label id="wizard-source-camera">Home-Assistant-Kamera<input name="camera" value="{source_camera}" maxlength="80" placeholder="camera.gaszaehler"></label>
 <label id="wizard-source-reference">Vergleichssensor (optional)<input name="reference" value="{source_reference}" maxlength="80" placeholder="sensor.gaszaehler"></label>
+<label id="wizard-source-light" title="Wird für jede Aufnahme kurz eingeschaltet, wie der Blitz bei AI on the Edge.">Licht für die Aufnahme (optional)<input name="light" value="{source_light}" maxlength="80" placeholder="light.esp_gaszaehler_blitz"></label>
 <div class="setup-help">
 <label>Zählerstand kurz selbst ablesen (optional)<input name="fallback_value" value="{fallback_value}" inputmode="decimal" maxlength="16" placeholder="z. B. 12345,67"></label>
 <p class="settings-note">Der Stand hilft der App beim Einrichten. Zum Überspringen leer lassen und auf „Weiter“ klicken.</p>
@@ -1137,6 +1138,8 @@ name: Zählerstand (OCR)</code></pre>
 <input name="camera" value="{source_camera}" placeholder="camera.gaszaehler" maxlength="80"></label>
 <label id="source-reference" title="Optionaler Sensor mit aktuellem Zählerstand in Kubikmetern.">Vergleichssensor (optional)
 <input name="reference" value="{source_reference}" placeholder="sensor.gaszaehler" maxlength="80"></label>
+<label id="source-light" title="Wird für jede Aufnahme kurz eingeschaltet, wie der Blitz bei AI on the Edge: Licht an, 1,5 Sekunden warten, Bild holen, Licht aus.">Licht für die Aufnahme (optional)
+<input name="light" value="{source_light}" placeholder="light.esp_gaszaehler_blitz" maxlength="80"></label>
 <button type="submit">Speichern</button>
 </form>
 <details class="help"><summary title="Erklärung zu den verfügbaren Modi">ⓘ Welcher Modus passt?</summary>
@@ -1695,6 +1698,7 @@ function showWizardSource() {{
   url.querySelector('input').required = !url.hidden;
   camera.querySelector('input').required = !camera.hidden;
   document.querySelector('#wizard-source-reference').hidden = mode !== 'camera';
+  document.querySelector('#wizard-source-light').hidden = mode !== 'esphome' && mode !== 'camera';
   const attemptChoice = setupForm.querySelector('[name="attempts"]');
   if (mode === 'camera' && previousWizardSource !== 'camera' && attemptChoice.value === '5') {{
     attemptChoice.value = '10';
@@ -2161,7 +2165,8 @@ function showSourceFields() {{
   const mode = sourceMode.value;
   document.querySelector('#esp-camera-only').hidden = mode !== 'slfork';
   for (const [selector, show] of [['#source-url', mode === 'slfork'],
-      ['#source-camera', mode === 'esphome' || mode === 'camera'], ['#source-reference', mode === 'camera']]) {{
+      ['#source-camera', mode === 'esphome' || mode === 'camera'], ['#source-reference', mode === 'camera'],
+      ['#source-light', mode === 'esphome' || mode === 'camera']]) {{
     const field = document.querySelector(selector);
     field.hidden = !show;
     field.querySelector('input').disabled = !show;
@@ -4339,6 +4344,7 @@ def start_panel(
                 source_options=select_options(source_choices, source_option if source_selected else ""),
                 source_url=html.escape(source["url"]), source_camera=html.escape(source["camera"]),
                 source_reference=html.escape(source["reference"]),
+                source_light=html.escape(source.get("light", "")),
                 source_saved_notice=auto_saved_notice if saved == "source" else "",
                 notifications_enabled="checked" if delivery["enabled"] else "",
                 notification_review=delivery["review_minutes"], notification_delay=delivery["delivery_hours"],
@@ -4636,7 +4642,7 @@ def start_panel(
             if path == "/einrichtungsbild":
                 try:
                     source = source_rules({"mode": selected_source_mode(), "url": field("url"),
-                                           "camera": field("camera"), "reference": ""})
+                                           "camera": field("camera"), "reference": "", "light": field("light")})
                 except ValueError:
                     problem(400, "Bitte zuerst eine Bildquelle auswählen.", "Select a camera source first.")
                     return
@@ -4691,7 +4697,7 @@ def start_panel(
                 try:
                     source_values = source_rules({
                         "mode": selected_source_mode(), "url": field("url"),
-                        "camera": field("camera"), "reference": field("reference"),
+                        "camera": field("camera"), "reference": field("reference"), "light": field("light"),
                     })
                     old_rules = read_auto_rules()
                     integer_digits = int(field("integer_digits"))
@@ -4829,6 +4835,7 @@ def start_panel(
                         values = source_rules({
                             "mode": selected_source_mode(),
                             **{key: field(key, current[key]) for key in ("url", "camera", "reference")},
+                            "light": field("light", current.get("light", "")),
                         })
                         save_source(values)
                     if wake_worker is not None:

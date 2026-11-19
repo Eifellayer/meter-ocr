@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.21
+
+- Blitzlicht für Home-Assistant- und ESPHome-Kameras: Neues Feld „Licht für die Aufnahme“ bei der Bildquelle (Assistent und Einstellungen). Die App schaltet das Licht wie AI on the Edge für jede Aufnahme kurz ein, wartet 1,5 Sekunden, holt das Bild und schaltet es wieder aus – auch wenn der Abruf fehlschlägt. Ein Licht, das vorher schon an war, bleibt an.
+- Anleitung: ESPHome-Konfiguration für die ESP32-CAM mit Blitz-LED als Licht-Entität.
+
 ## 0.1.20
 
 - Laufendes Gas: Sind die Vorkommastellen und die erste Nachkommastelle sicher und nur die letzten zwei verglichenen Stellen unklar (z. B. „10482.8??“), bestätigt die App diese Prüfung mit zwei Nachkommastellen weniger, statt sie scheitern zu lassen. Gebucht wird nur bis zur bestätigten Stelle. Scheitert die Prüfung trotzdem, zählt sie wie bei einer drehenden letzten Rolle nicht für die Pause.

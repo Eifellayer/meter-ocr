@@ -31,7 +31,7 @@ from app_channel import APP_NAME, CHECK_ENTITY, LABEL_SUFFIX, NAMESPACE
 from checks import (
     DEFAULT_INTERVAL_MINUTES, FRESH_SAMPLE_AGE, RETRY_INTERVAL, REVIEW_AFTER, OCR_PROFILES,
     STANDALONE_PENDING, STANDALONE_PENDING_NOTICE, STANDALONE_REJECTED_NOTICE, STANDALONE_VERIFIED_NOTICE,
-    STANDALONE_CACHED_CAPTURE_DELAY, MAX_OCR_ATTEMPTS, SHIFTED_DIGIT_POSITIONS, plausible_integer_digits, note_skew, skew_offset, SHIFTED_DIGIT_READS, missing_digit_pattern, single_missing_digit, disputed_digit_pattern, resolve_ocr_readings,
+    STANDALONE_CACHED_CAPTURE_DELAY, MAX_OCR_ATTEMPTS, DEFAULT_FAILURE_PAUSE_MINUTES, MAX_FAILURE_PAUSE_MINUTES, MIN_FAILURE_PAUSE_MINUTES, SHIFTED_DIGIT_POSITIONS, ROW_SHIFT_READS, ROW_SHIFT_TRIALS, plausible_integer_digits, note_skew, skew_offset, SHIFTED_DIGIT_READS, missing_digit_pattern, single_missing_digit, disputed_digit_pattern, resolve_ocr_readings,
     compare_sample, crop_register, lighting_ocr_profiles, read_register, read_with_retries, record_sample,
     anchored_leading_digits, within_anchor_bounds,
     automatic_interval_minutes, defer_duplicate_cycle,
@@ -1016,6 +1016,11 @@ def main():
                           "crop_revision": (str(saved_rules.get("crop_revision", ""))[:30]
                                             if crop_mode == "manual" else ""),
                           "max_flow_lph": max_flow, "interval_minutes": interval_minutes,
+                          "failure_pause_minutes": (saved_rules.get("failure_pause_minutes")
+                                                    if type(saved_rules.get("failure_pause_minutes")) is int
+                                                    and MIN_FAILURE_PAUSE_MINUTES <= saved_rules["failure_pause_minutes"]
+                                                    <= MAX_FAILURE_PAUSE_MINUTES
+                                                    else DEFAULT_FAILURE_PAUSE_MINUTES),
                           "gas_state_factor": valid_energy_factor(saved_rules.get("gas_state_factor"),
                                                                   STATE_FACTOR_RANGE),
                           "calorific_value": valid_energy_factor(saved_rules.get("calorific_value"),
@@ -2068,6 +2073,7 @@ def main():
         if adaptive:
             interval_minutes = suggested_interval(interval_minutes, history.get("adaptive_flow", {}), source_key, now.month)
         interval_minutes = stabilization_interval(interval_minutes, stabilizing_until, now.timestamp())
+        history["failure_pause_minutes"] = active_rules.get("failure_pause_minutes", DEFAULT_FAILURE_PAUSE_MINUTES)
         if not run_automatic_now and reschedule_next_check(history, interval_minutes):
             try:
                 atomic_write(HISTORY, json.dumps(history).encode("utf-8"), 0o600)
@@ -2645,6 +2651,54 @@ def main():
                                         sample, ocr, comparison_decimals, integer_digits=integer_digits,
                                         exact_prefix=exact_partial,
                                     )[0]
+                            if not ocr_confirmed and custom_boxes and not stop_ocr():
+                                # Still unclear: move the whole row of frames a little (the camera
+                                # image shifts slightly between captures) and read again. Accept only
+                                # two agreeing profiles, no cut-off digits and a plausible value.
+                                register_now, width_now, whole_now, fraction_now = layout
+                                boxes_now = [*whole_now, *fraction_now]
+                                if boxes_now:
+                                    box_width = boxes_now[0][2] - boxes_now[0][0]
+                                    box_height = boxes_now[0][3] - boxes_now[0][1]
+                                    shifts = [(0, -max(1, box_height // 8)), (0, max(1, box_height // 8)),
+                                              (-max(1, box_width // 10), 0), (max(1, box_width // 10), 0)]
+                                    for dx, dy in shifts[:ROW_SHIFT_TRIALS]:
+                                        if ocr_attempts + 2 > budget + ROW_SHIFT_READS or stop_ocr():
+                                            break
+                                        moved = [(left + dx, top + dy, right + dx, bottom + dy)
+                                                 for left, top, right, bottom in boxes_now]
+                                        if any(box[0] < 0 or box[1] < 0 or box[2] > register_now.width
+                                               or box[3] > register_now.height for box in moved):
+                                            continue
+                                        # The last roller is allowed to be cut (it turns); the others not.
+                                        if any(glyph_clipped(register_now, box) for box in moved[:-1]):
+                                            continue
+                                        moved_whole, moved_fraction = moved[:len(whole_now)], moved[len(whole_now):]
+                                        try:
+                                            values = [read_visible_digits(
+                                                register_now, width_now, moved_whole, moved_fraction,
+                                                options["helle_ziffern"], active_rules["polarity"], profile=profile,
+                                                whole_digits=integer_digits, fraction_digits=fraction_digits,
+                                                prefer_boxes=True, deadline=digit_deadline,
+                                            ) for profile in OCR_PROFILES[:2]]
+                                        except (OSError, subprocess.SubprocessError):
+                                            continue
+                                        ocr_attempts += 2
+                                        if (values[0] != values[1]
+                                                or meter_prefix(values[0], comparison_decimals, integer_digits) is None
+                                                or compare_sample(sample, values[0], comparison_decimals,
+                                                                  integer_digits=integer_digits,
+                                                                  exact_prefix=exact_partial)[0] not in ("match", "ocr_only")):
+                                            continue
+                                        ocr, ocr_confirmed, ocr_readings = values[0], True, values
+                                        ocr_method = "row_shifted"
+                                        read_state.update(whole_boxes=moved_whole, fraction_boxes=moved_fraction)
+                                        regular_status = compare_sample(
+                                            sample, ocr, comparison_decimals, integer_digits=integer_digits,
+                                            exact_prefix=exact_partial,
+                                        )[0]
+                                        break
+                                ocr_limit = max(ocr_limit, ocr_attempts)
                         if digit_probe_enabled and not ocr_confirmed:
                             # A moving meter can show different digits on separate photographs.
                             ocr_readings = same_frame
@@ -3307,6 +3361,7 @@ def main():
         else:
             updated.pop("reflection_retry_at", None)
             updated.pop("fresh_ocr_retry_at", None)
+            updated["failure_pause_minutes"] = active_rules.get("failure_pause_minutes", DEFAULT_FAILURE_PAUSE_MINUTES)
             schedule_next_check(updated, outcome, now.timestamp(), interval_minutes)
             if (on_demand and not source_changed and outcome in SUCCESSFUL_CHECKS
                     and not updated.get("seventh_digit_wait")

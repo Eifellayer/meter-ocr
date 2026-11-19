@@ -13,6 +13,9 @@ from layout import MANUAL_ROW_UNCLEAR, PARTLY_UNCLEAR, RAW_ROW_UNCLEAR
 
 
 EN_UI = {
+    "Pause nach drei Fehlprüfungen (Minuten)": "Pause after three failed checks (minutes)",
+    "Danach prüft die App wieder normal. Bleibt nur die letzte Rolle unklar, pausiert sie nicht.":
+        "Afterwards the app checks normally again. If only the last roller is unclear, it does not pause.",
     "Verbrauch auch in kWh (optional)": "Consumption in kWh too (optional)",
     "Verbrauch auch in kWh": "Consumption in kWh too",
     "Zustandszahl": "Gas state factor (Z)",

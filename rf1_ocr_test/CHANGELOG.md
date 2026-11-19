@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.14
+
+- **Schneller wieder prüfen:** Nach einer Fehlprüfung prüft die App nach 2 statt 5 Minuten erneut, wenn der Rechner gerade Luft hat (Prozessorlast). Die Pause nach drei Fehlprüfungen ist jetzt einstellbar (Einstellungen → „Pause nach drei Fehlprüfungen“), Standard 30 statt 60 Minuten.
+- **Keine Pause und kein „Bitte prüfen“, wenn nur die letzte Rolle unklar ist:** Dann war alles andere gelesen; die App schaut einfach bald wieder hin. Auch „Rahmen der letzten Stelle sitzt daneben“ ist kein gelber Warnhinweis mehr, weil die App das selbst behebt.
+- **Ganze Rahmenreihe leicht verschieben:** Bleibt eine Prüfung unklar, versucht die App bis zu drei Mal, alle Rahmen gemeinsam ein Stück nach oben, unten oder zur Seite zu setzen. Übernommen wird ein Wert nur, wenn zwei Leseverfahren übereinstimmen, keine Ziffer angeschnitten ist und der Wert plausibel ist.
+- **Hinweise führen zur Einstellung:** Ein Klick auf den Hinweis „… Fehlprüfungen … Nächster Versuch gegen …“ öffnet direkt die passende Einstellung.
+
 ## 0.1.13
 
 - Meldung nach erfolgreicher Einrichtung: „Die Automatik läuft. In den nächsten 20 Minuten stimmt die App die Rahmen noch im Hintergrund fein ab.“ statt „… prüft sie häufiger“.

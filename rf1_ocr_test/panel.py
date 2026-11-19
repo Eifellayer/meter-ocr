@@ -33,7 +33,8 @@ from checks import (DEFAULT_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, WARNING_DETA
                     STANDALONE_VERIFIED_NOTICE, last_check_at, recommended_comparison_decimals, reschedule_next_check,
                     setup_deadlines, setup_source_id, stabilization_interval, stationary_partial_active, valid_interval_minutes)
 QUIET_FAILURES = 3
-from checks import FRAME_OFF_NOTICE, FRAME_OFF_WAIT_NOTICE, MOVING_DIGIT_NOTICE
+from checks import (DEFAULT_FAILURE_PAUSE_MINUTES, MAX_FAILURE_PAUSE_MINUTES, MIN_FAILURE_PAUSE_MINUTES,
+                    FRAME_OFF_NOTICE, FRAME_OFF_WAIT_NOTICE, MOVING_DIGIT_NOTICE)
 from consumption import (DEFAULT_FLOW_LPH, EXCESSIVE_INCREASE, LOWER_PENDING, LOWER_READING,
                          CALORIFIC_RANGE, CONVERSION_RANGE, STATE_FACTOR_RANGE, consumption_statistics, format_cubic_metres,
                          parse_energy_factor, parse_flow_limit)
@@ -132,6 +133,9 @@ header{{display:flex;align-items:baseline;justify-content:space-between;gap:.5re
 .automatic-interval-hint[hidden]{{display:none}}
 .failure-recovery{{margin:.5rem 0;padding:.65rem .75rem;border:1px solid #b58b38;border-radius:.65rem;background:light-dark(#fff8df,#3b311d);color:light-dark(#704c08,#ffdf8a);font-size:.9rem}}
 .failure-recovery[hidden]{{display:none}}
+.setting-link{{cursor:pointer}}
+.setting-link::after{{content:" ›";opacity:.7}}
+.setting-highlight{{outline:3px solid var(--accent, #2ec4a6);outline-offset:2px}}
 .reflection-suggestion{{margin:.65rem 0;color:var(--muted);font-size:.92rem}}
 .reflection-actions{{display:flex;align-items:center;gap:.65rem;flex-wrap:wrap}}
 .reflection-actions form{{display:inline}}
@@ -719,7 +723,7 @@ header{{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.6rem}}
 <div><dt>Letzter bestätigter Abgleich</dt><dd id="automatic-last-match" class="stamp" data-epoch="{last_match}">–</dd></div>
 <div><dt>Nächste Prüfung</dt><dd id="countdown">–</dd></div></dl>
 <p class="failure-recovery" id="geometry-repair-warning" {geometry_warning_hidden}>{geometry_warning_text}</p>
-<p class="failure-recovery" id="automatic-recovery" data-state="retrying" {recovery_hidden}>{recovery_notice}</p>
+<p class="failure-recovery setting-link" id="automatic-recovery" data-state="retrying" data-setting="failure_pause_minutes" role="link" tabindex="0" title="Zur Einstellung" {recovery_hidden}>{recovery_notice}</p>
 <p class="failure-recovery" id="reflection-live" hidden>
 <strong>Vorläufig ergänzt</strong> <span id="reflection-live-reading"></span>
 <small>Gelb markierte Ziffern sind berechnet. Der Wert dient der Orientierung.</small>
@@ -1159,6 +1163,9 @@ name: Zählerstand (OCR)</code></pre>
 <label title="Nach einer unklaren Ablesung folgt ein zusätzlicher Versuch nach fünf Minuten. Schlägt auch der fehl, gilt wieder dieses Intervall.">Prüfintervall (Minuten)
 <input name="interval_minutes" type="number" min="1" max="{max_interval_minutes}" value="{interval_minutes}" required>
 <small {slfork_interval_hidden}>Bei AI on the Edge / SLFork liegen reguläre Prüfungen mindestens fünf Minuten auseinander.</small></label>
+<label>Pause nach drei Fehlprüfungen (Minuten)
+<input name="failure_pause_minutes" type="number" min="5" max="240" value="{failure_pause_minutes}" required>
+<small>Danach prüft die App wieder normal. Bleibt nur die letzte Rolle unklar, pausiert sie nicht.</small></label>
 <label>Max. OCR-Versuche
 <select name="attempts">{auto_attempt_options}</select></label>
 <label>Übereinstimmung für die Intensivprüfung (%)
@@ -1360,6 +1367,24 @@ function activateTab(name, updateUrl = true) {{
     else url.searchParams.delete('ui');
     history.replaceState(null, '', url.pathname + (url.searchParams.size ? '?' + url.searchParams : ''));
   }}
+}}
+function openSetting(name) {{
+  // Settings mentioned in a notice: one click leads straight to the field.
+  activateTab('settings');
+  const input = document.querySelector(`#view-settings [name="${{name}}"]`);
+  if (!input) return;
+  const details = input.closest('details');
+  if (details) details.open = true;
+  input.scrollIntoView({{block: 'center', behavior: 'smooth'}});
+  input.focus({{preventScroll: true}});
+  input.classList.add('setting-highlight');
+  setTimeout(() => input.classList.remove('setting-highlight'), 2500);
+}}
+for (const link of document.querySelectorAll('[data-setting]')) {{
+  link.addEventListener('click', () => openSetting(link.dataset.setting));
+  link.addEventListener('keydown', event => {{
+    if (event.key === 'Enter' || event.key === ' ') {{ event.preventDefault(); openSetting(link.dataset.setting); }}
+  }});
 }}
 tabs.forEach((tab, index) => {{
   tab.addEventListener('click', () => activateTab(tab.id.replace('tab-', '')));
@@ -3440,6 +3465,13 @@ def wizard_energy_factors(field, old_rules):
     return values
 
 
+def parse_failure_pause(text):
+    value = int(str(text).strip())
+    if not MIN_FAILURE_PAUSE_MINUTES <= value <= MAX_FAILURE_PAUSE_MINUTES:
+        raise ValueError("Ungültige Pause nach Fehlprüfungen")
+    return value
+
+
 def format_factor(value, language="de"):
     if type(value) not in (int, float):
         return ""
@@ -3796,6 +3828,8 @@ def start_panel(
             elif history.get("check_detail") == MOVING_DIGIT_NOTICE:
                 heading = "Rolle drehte sich gerade"
                 detail = history["check_detail"] if language == "de" else english_result(history["check_detail"], status)
+                # Everything but the turning last roller was read: no reason for "Bitte prüfen".
+                tone, icon = "notice", ""
             elif history.get("check_detail") in (LOWER_PENDING, LOWER_READING, EXCESSIVE_INCREASE):
                 heading = "Ablesung passt nicht zum letzten Stand"
                 detail = history["check_detail"] if language == "de" else english_result(history["check_detail"], status)
@@ -3812,8 +3846,9 @@ def start_panel(
             heading = "Rahmen der letzten Stelle sitzt daneben"
             detail = (history["check_detail"] if language == "de"
                       else english_result(history["check_detail"], status))
-            if tone == "ok":
-                tone = "neutral"
+            # The app handles this itself; no reason for "Bitte prüfen".
+            if tone in ("ok", "warning", "notice"):
+                tone, icon = ("neutral", icon) if tone == "ok" else ("notice", "")
         if language == "en":
             heading = EN_UI[heading]
         adjustment = history.get("ocr_rotation_adjustment", 0)
@@ -4346,6 +4381,7 @@ def start_panel(
                 max_interval_minutes=MAX_INTERVAL_MINUTES,
                 slfork_interval_hidden="" if source["mode"] == "slfork" else "hidden",
                 interval_minutes=auto_rules.get("interval_minutes", DEFAULT_INTERVAL_MINUTES),
+                failure_pause_minutes=auto_rules.get("failure_pause_minutes", DEFAULT_FAILURE_PAUSE_MINUTES),
                 auto_rotation_value=editable_rotation(auto_rules),
                 auto_saved_notice=auto_saved_notice if saved in ("1", "crop", "crop-reset") else "",
                 manual_reference=html.escape(str(settings.get("manual_reference", auto_rules["fallback_value"])),
@@ -4723,6 +4759,9 @@ def start_panel(
                                                         if field("reflection_option_present") == "1"
                                                         else old_rules.get("reflection_estimate_enabled", False)),
                         "interval_minutes": interval_minutes, "integer_digits": integer_digits,
+                        "failure_pause_minutes": parse_failure_pause(field("failure_pause_minutes",
+                                                                           str(old_rules.get("failure_pause_minutes",
+                                                                                             DEFAULT_FAILURE_PAUSE_MINUTES)))),
                         "fraction_digits": fraction_digits, "meter_display": meter_display,
                         "fallback_value": fallback_value, "fallback_time": fallback_time,
                     }

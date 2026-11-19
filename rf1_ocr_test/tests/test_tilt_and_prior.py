@@ -138,3 +138,28 @@ class WizardEnergyTests(TestCase):
         self.assertIsNone(values["gas_state_factor"])
         kept = wizard_energy_factors(lambda name, default="": default, {"calorific_value": 11.2})
         self.assertEqual(11.2, kept["calorific_value"])
+
+
+class RetryTimingTests(TestCase):
+    def test_quick_retry_when_idle_and_no_pause_for_a_turning_last_roller(self):
+        import checks
+        from unittest.mock import patch
+        from checks import MOVING_DIGIT_NOTICE, schedule_next_check
+        with patch.object(checks, "system_idle", return_value=True):
+            history = {}
+            schedule_next_check(history, "ocr_unclear", 1000, 10)
+            self.assertEqual(1000 + checks.QUICK_RETRY_INTERVAL, history["next_check_at"])
+            history = {"failure_attempts": 2}
+            schedule_next_check(history, "ocr_unclear", 1000, 10)
+            self.assertEqual(1000 + checks.FAILURE_COOLDOWN_INTERVAL, history["next_check_at"])
+            history = {"failure_attempts": 2, "failure_pause_minutes": 45}
+            schedule_next_check(history, "ocr_unclear", 1000, 10)
+            self.assertEqual(1000 + 45 * 60, history["next_check_at"])
+            history = {"failure_attempts": 2, "check_detail": MOVING_DIGIT_NOTICE}
+            schedule_next_check(history, "ocr_unclear", 1000, 10)
+            self.assertEqual(2, history["failure_attempts"])
+            self.assertNotIn("retry_suppressed", history)
+        with patch.object(checks, "system_idle", return_value=False):
+            history = {"failure_attempts": 2}
+            schedule_next_check(history, "ocr_unclear", 1000, 10)
+            self.assertEqual(1000 + checks.FAILURE_COOLDOWN_INTERVAL, history["next_check_at"])

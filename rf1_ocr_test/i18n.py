@@ -279,8 +279,8 @@ EN_UI = {
     "Selbsteinrichtung": "Automatic setup",
     "ⓘ Automatik im Hintergrund verbessern": "ⓘ Improve automatic checks in the background",
     "Ziffernrahmen langfristig feinjustieren": "Fine-tune digit boxes over time",
-    "Prüfintervall bei erwarteten Rollenwechseln verkürzen (SLFork)":
-        "Check sooner when a digit is expected to roll over (SLFork)",
+    "Prüfintervall an den Verbrauch anpassen (früher prüfen, wenn eine Rolle bald umspringt)":
+        "Adapt the check interval to consumption (check sooner when a roller is about to change)",
     "Vorläufig ergänzt": "Provisionally reconstructed",
     "Gelb markierte Ziffern sind berechnet. Der Wert dient der Orientierung.":
         "Yellow digits are calculated. The reading is for guidance.",
@@ -861,6 +861,13 @@ EN_DETAILS = {
     ("Nur die letzte verglichene Stelle war unklar – vermutlich drehte sich die Rolle gerade. "
      "Die nächste Prüfung folgt automatisch."):
         "Only the last compared digit was unclear – the roller was probably turning. The next check follows automatically.",
+    ("Nur die letzten zwei verglichenen Stellen waren unklar – vermutlich drehten sich die Rollen gerade. "
+     "Die nächste Prüfung folgt automatisch."):
+        "Only the last two compared digits were unclear – the rollers were probably turning. The next check follows automatically.",
+    ("Die letzten zwei verglichenen Rollen waren unklar, vermutlich drehten sie sich gerade. Diese Prüfung "
+     "wurde deshalb mit zwei Nachkommastellen weniger bestätigt. Die nächste Prüfung vergleicht wieder alle Stellen."):
+        "The last two compared rollers were unclear, probably turning. This check was therefore confirmed with two decimal places less. The next check compares all digits again.",
+    "Rollen drehten sich gerade": "Rollers were turning",
     FALLBACK_NOTICE: "The ESP is using a fallback reading.",
     "OCR-Zuwachs plausibel. Warte auf den Abgleich.": "OCR increase looks plausible. Waiting for a match.",
     "Für die Plausibilitätsprüfung fehlt ein gültiger Messzeitpunkt.":

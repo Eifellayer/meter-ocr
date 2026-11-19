@@ -65,3 +65,20 @@ class WorthIntensiveTest(unittest.TestCase):
         items = [((0,), "a", []), ((0,), "b", [])]
         shortlist = {"a": (50, 1.0, 80), "b": (0, 0.2, 80)}
         self.assertEqual(items, worth_intensive(items, shortlist, 50, 80))
+
+
+class TrailingDecimalsTest(unittest.TestCase):
+    def test_one_or_two_turning_rollers(self):
+        from checks import unclear_trailing_decimals
+        self.assertEqual(2, unclear_trailing_decimals("10482.8??", 3))
+        self.assertEqual(2, unclear_trailing_decimals("10483.0??", 3))
+        self.assertEqual(1, unclear_trailing_decimals("10482.81?", 3))
+        self.assertEqual(1, unclear_trailing_decimals("10482.8?", 2))
+
+    def test_no_coarser_check_without_a_safe_first_decimal(self):
+        from checks import unclear_trailing_decimals
+        self.assertEqual(0, unclear_trailing_decimals("10482.??", 2))
+        self.assertEqual(0, unclear_trailing_decimals("10482.???", 3))
+        self.assertEqual(0, unclear_trailing_decimals("?0482.8??", 3))
+        self.assertEqual(0, unclear_trailing_decimals("10482.?1?", 3))
+        self.assertEqual(0, unclear_trailing_decimals("10482.812", 3))

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.20
+
+- Laufendes Gas: Sind die Vorkommastellen und die erste Nachkommastelle sicher und nur die letzten zwei verglichenen Stellen unklar (z. B. „10482.8??“), bestätigt die App diese Prüfung mit zwei Nachkommastellen weniger, statt sie scheitern zu lassen. Gebucht wird nur bis zur bestätigten Stelle. Scheitert die Prüfung trotzdem, zählt sie wie bei einer drehenden letzten Rolle nicht für die Pause.
+- Adaptives Prüfintervall für alle Bildquellen: Die App lernt den Durchfluss jetzt auch aus Ständen, die mit einem zweiten Bild bestätigt wurden, und prüft früher, wenn eine Rolle bald umspringt. Bisher nur bei AI on the Edge / SLFork. Neue Installationen und Werksresets haben es eingeschaltet; bestehende Einstellungen bleiben.
+
 ## 0.1.19
 
 - Einrichtung schneller und ohne Unsinn: Liest ein Kandidat das Zählwerk schon gut (mindestens die eingestellte Übereinstimmung, z. B. 88 %), prüft die App Kandidaten ohne Erkennung (0 %) oder mit mehr als 40 Prozentpunkten Abstand nicht mehr intensiv nach, etwa um 90° gedrehtes Kleingedrucktes oder die Seriennummer.

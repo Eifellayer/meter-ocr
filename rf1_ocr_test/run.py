@@ -51,8 +51,8 @@ from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, LOWER_PENDING, LOWER_R
                          CALORIFIC_RANGE, CONVERSION_RANGE, STATE_FACTOR_RANGE, ImplausibleReading, energy_kwh, track_lower_series,
                          valid_energy_factor,
                          accumulate_consumption, fallback_detail, format_cubic_metres, record_consumption_sample)
-from checks import (setup_tilt, initial_skew_state, FRAME_OFF_NOTICE, FRAME_OFF_STREAK, FRAME_OFF_WAIT_NOTICE, MOVING_DIGIT_NOTICE,
-                    REDUCED_PRECISION_NOTICE, only_last_compared_unclear)
+from checks import (unclear_trailing_decimals, setup_tilt, initial_skew_state, FRAME_OFF_NOTICE, FRAME_OFF_STREAK, FRAME_OFF_WAIT_NOTICE, MOVING_DIGIT_NOTICE,
+                    REDUCED_PRECISION_NOTICE, REDUCED_PRECISION2_NOTICE, MOVING_DIGITS_NOTICE, only_last_compared_unclear)
 import debug_log
 from layout import (MANUAL_ROW_UNCLEAR, PARTLY_UNCLEAR, RAW_ROW_UNCLEAR, digit_row_tilt, fine_rotation as valid_fine_rotation, crop_coordinates, find_digit_row,
                     digit_box_settings, find_raw_digit_row, normalize_digit_boxes, glyph_clipped, roll_center, rotated_width, scale_digit_boxes, turn_crop)
@@ -1004,7 +1004,7 @@ def main():
 
     auto_rules = {"decimals": default_decimals, "attempts": default_attempts, "polarity": "auto",
                   "intensive_agreement": DEFAULT_INTENSIVE_AGREEMENT,
-                  "precision_mode": default_decimals == 3, "fine_alignment_enabled": False, "adaptive_interval_enabled": False, "self_repair_enabled": False,
+                  "precision_mode": default_decimals == 3, "fine_alignment_enabled": False, "adaptive_interval_enabled": True, "self_repair_enabled": False,
                   "reflection_estimate_enabled": False, "reflection_suggestion_hidden": False,
                   "reflection_confirmed_id": "",
                   "crop_mode": "auto", "crop": options["ausschnitt"],
@@ -2152,7 +2152,7 @@ def main():
         now = datetime.now(zone)
         stabilizing_until, optimization_until = setup_deadlines(active_rules, active_source)
         optimization_paused = now.timestamp() < optimization_until
-        adaptive = mode == "slfork" and active_rules["adaptive_interval_enabled"]
+        adaptive = active_rules["adaptive_interval_enabled"]
         if adaptive:
             interval_minutes = suggested_interval(interval_minutes, history.get("adaptive_flow", {}), source_key, now.month)
         interval_minutes = stabilization_interval(interval_minutes, stabilizing_until, now.timestamp())
@@ -2983,21 +2983,24 @@ def main():
                         reading_status, _ = compare_sample(sample, ocr, decimals, ocr_confirmed=ocr_confirmed,
                                                            integer_digits=integer_digits, exact_prefix=stationary_partial)
                         reduced_precision = False
-                        if (reading_status == "ocr_unclear" and decimals > 0 and not ocr_error
-                                and only_last_compared_unclear(ocr, decimals, integer_digits)):
-                            # Only the last compared roller is unreadable (typically turning):
-                            # accept this one check one decimal coarser instead of failing.
-                            # The truncated value is a safe lower bound for booking.
+                        reduced_by = 0
+                        drop = (unclear_trailing_decimals(ocr, decimals, integer_digits)
+                                if reading_status == "ocr_unclear" and decimals > 0 and not ocr_error else 0)
+                        if drop:
+                            # The last one or two compared rollers are unreadable (typically turning
+                            # while gas flows): accept this one check that much coarser instead of
+                            # failing. The truncated value is a safe lower bound for booking.
                             coarse, coarse_confirmed = resolve_ocr_readings(
-                                ocr_readings or [ocr, ocr], decimals - 1, integer_digits,
+                                ocr_readings or [ocr, ocr], decimals - drop, integer_digits,
                                 standalone=require_consensus, standalone_composition=True,
                             )
-                            coarse_status, _ = compare_sample(sample, ocr, decimals - 1, ocr_confirmed=coarse_confirmed,
+                            coarse_status, _ = compare_sample(sample, ocr, decimals - drop, ocr_confirmed=coarse_confirmed,
                                                               integer_digits=integer_digits, exact_prefix=True)
                             if coarse_confirmed and coarse_status in ("match", "ocr_only"):
-                                print(f"Letzte verglichene Stelle unklar ({ocr}), prüfe diesmal mit "
-                                      f"{decimals - 1} Nachkommastelle(n)")
-                                decimals -= 1
+                                print(f"Hintere {drop} Stelle(n) unklar ({ocr}), prüfe diesmal mit "
+                                      f"{decimals - drop} Nachkommastelle(n)")
+                                decimals -= drop
+                                reduced_by = drop
                                 reading_status, ocr_confirmed, reduced_precision = coarse_status, True, True
                         accept_reference = (
                             decimals == 3 and reading_status in ("difference", "ocr_unclear")
@@ -3237,18 +3240,24 @@ def main():
                         updated["check_detail"] = LOWER_RECOVERED
                     if (locals().get("reduced_precision") and outcome in SUCCESSFUL_CHECKS
                             and not validation_detail and not lower_recovered):
-                        updated["check_detail"] = REDUCED_PRECISION_NOTICE
+                        updated["check_detail"] = (REDUCED_PRECISION2_NOTICE if locals().get("reduced_by") == 2
+                                                   else REDUCED_PRECISION_NOTICE)
                     updated["ocr_readings"] = ocr_readings if outcome == "ocr_unclear" else []
                     if outcome == "ocr_unclear" and updated["check_detail"] != LAST_DIGIT_NOTICE:
                         if not validation_detail and not ocr_error and only_last_compared_unclear(
                                 ocr, comparison_decimals if "comparison_decimals" in locals() else decimals,
                                 integer_digits):
                             unclear_detail = MOVING_DIGIT_NOTICE
+                        elif (not validation_detail and not ocr_error and unclear_trailing_decimals(
+                                ocr, comparison_decimals if "comparison_decimals" in locals() else decimals,
+                                integer_digits) == 2):
+                            unclear_detail = MOVING_DIGITS_NOTICE
                         updated["check_detail"] = (validation_detail or ocr_error or unclear_detail
                                                    or explain_uncertain_positions(ocr_readings, decimals, integer_digits))
                     elif validation_detail:
                         updated["check_detail"] = validation_detail
-                    if ((locals().get("reduced_precision") and outcome in SUCCESSFUL_CHECKS)
+                    if ((locals().get("reduced_precision") and locals().get("reduced_by") == 1
+                            and outcome in SUCCESSFUL_CHECKS)
                             or updated.get("check_detail") == MOVING_DIGIT_NOTICE):
                         streak = updated.get("last_position_unclear_streak", 0)
                         streak = (streak if type(streak) is int else 0) + 1
@@ -3345,10 +3354,14 @@ def main():
                             if get_auto_rules() == active_rules and get_source()[0] == active_source:
                                 remember_known_good_layout(active_rules, active_source,
                                                            geometry_layout(active_rules, active_rules))
-                    if adaptive and not optimization_paused and outcome == "match" and not raw_fallback:
+                    if (adaptive and not optimization_paused and outcome in ("match", "ocr_only") and not raw_fallback
+                            and not locals().get("reduced_precision") and decimals == fraction_digits):
+                        # Learn the flow from the ESP value or, for camera sources, from the reading
+                        # confirmed with a second image. Coarser partial checks are not used.
                         flow = updated.setdefault("adaptive_flow", {})
-                        reference_value = sample["actual_value"]
-                        if compare_sample(sample, reference_value, fraction_digits, integer_digits=integer_digits)[0] == "match":
+                        reference_value = sample.get("actual_value") if outcome == "match" else ocr
+                        if (reference_value is not None and compare_sample(
+                                sample, reference_value, fraction_digits, integer_digits=integer_digits)[0] in ("match", "ocr_only")):
                             observe_flow(flow, source_key, image_time, reference_value, fraction_digits,
                                          integer_digits, now.month, active_rules["max_flow_lph"])
                         interval_minutes = suggested_interval(

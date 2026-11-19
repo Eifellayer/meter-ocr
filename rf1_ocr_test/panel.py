@@ -34,7 +34,7 @@ from checks import (DEFAULT_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, WARNING_DETA
                     setup_deadlines, setup_source_id, stabilization_interval, stationary_partial_active, valid_interval_minutes)
 QUIET_FAILURES = 3
 from checks import (DEFAULT_FAILURE_PAUSE_MINUTES, MAX_FAILURE_PAUSE_MINUTES, MIN_FAILURE_PAUSE_MINUTES,
-                    FRAME_OFF_NOTICE, FRAME_OFF_WAIT_NOTICE, MOVING_DIGIT_NOTICE)
+                    FRAME_OFF_NOTICE, FRAME_OFF_WAIT_NOTICE, MOVING_DIGIT_NOTICE, MOVING_NOTICES)
 from consumption import (DEFAULT_FLOW_LPH, EXCESSIVE_INCREASE, LOWER_PENDING, LOWER_READING,
                          CALORIFIC_RANGE, CONVERSION_RANGE, STATE_FACTOR_RANGE, consumption_statistics, format_cubic_metres,
                          parse_energy_factor, parse_flow_limit)
@@ -1189,7 +1189,7 @@ name: Zählerstand (OCR)</code></pre>
 <label class="check-option"><input type="checkbox" name="fine_alignment_enabled" value="1" {fine_alignment_checked}> Ziffernrahmen langfristig feinjustieren</label>
 <label class="check-option"><input type="checkbox" name="self_repair_enabled" value="1" {self_repair_checked}> Selbstreparatur bei wiederholten Fehlmessungen</label>
 <p>Die App sucht frühestens nach zwei Stunden anhaltender Erkennungsprobleme einen besseren Rahmen. Probleme nur an der letzten Rolle zählen dabei nicht mit. Der bisherige Rahmen gilt bis zur erfolgreichen Gegenprobe.</p>
-<label class="check-option"><input type="checkbox" name="adaptive_interval_enabled" value="1" {adaptive_interval_checked}> Prüfintervall bei erwarteten Rollenwechseln verkürzen (SLFork)</label>
+<label class="check-option"><input type="checkbox" name="adaptive_interval_enabled" value="1" {adaptive_interval_checked}> Prüfintervall an den Verbrauch anpassen (früher prüfen, wenn eine Rolle bald umspringt)</label>
 </details>
 <div class="reflection-settings setup-help" id="reflection-settings">
 <label class="check-option"><input type="checkbox" name="reflection_estimate_enabled" value="1" {reflection_enabled_checked}> Verdeckte Ziffern ergänzen</label>
@@ -3822,8 +3822,8 @@ def start_panel(
                           english_result(history["check_detail"], status))
             elif history.get("check_detail") in (RAW_ROW_UNCLEAR, MANUAL_ROW_UNCLEAR, PARTLY_UNCLEAR):
                 detail = history["check_detail"] if language == "de" else EN_UI[history["check_detail"]]
-            elif history.get("check_detail") == MOVING_DIGIT_NOTICE:
-                heading = "Rolle drehte sich gerade"
+            elif history.get("check_detail") in MOVING_NOTICES:
+                heading = "Rolle drehte sich gerade" if history.get("check_detail") == MOVING_DIGIT_NOTICE else "Rollen drehten sich gerade"
                 detail = history["check_detail"] if language == "de" else english_result(history["check_detail"], status)
                 # Everything but the turning last roller was read: no reason for "Bitte prüfen".
                 tone, icon = "notice", ""

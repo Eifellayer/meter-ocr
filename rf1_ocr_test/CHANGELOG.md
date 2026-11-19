@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.8
+
+- **Feinwinkel schon in der Selbsteinrichtung:** Die grobe Suche findet die Ziffern weiterhin in ganzen Grad. Für jeden gefundenen Rahmen misst die Einrichtung auf den Einrichtungsbildern zusätzlich die Schräglage der Ziffernreihe und speichert den Mittelwert als Feinwinkel (bis ±0,5°) gleich mit. Was darüber hinausgeht, gleichen die normalen Prüfungen aus.
+
 ## 0.1.7
 
 - **Bilddrehung in 0,1°-Schritten:** z. B. −1,5° statt nur −1° oder −2°.

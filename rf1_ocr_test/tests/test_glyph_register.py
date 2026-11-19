@@ -81,3 +81,15 @@ class SetupAutostartTests(TestCase):
         self.assertFalse(run.setup_autostart_due({}, "0.1.25", object(), lambda: True))
         self.assertFalse(run.setup_autostart_due({}, "", None, lambda: True))
         self.assertFalse(run.setup_autostart_due({}, "0.1.25", None, lambda: False))
+
+
+class SetupRetryTests(TestCase):
+    def test_quick_retries_then_hourly_without_limit(self):
+        self.assertEqual(run.SETUP_RETRY_SECONDS, run.setup_retry_delay(0))
+        self.assertEqual(run.SETUP_RETRY_SECONDS, run.setup_retry_delay(run.SETUP_RETRY_LIMIT - 1))
+        self.assertEqual(3600, run.setup_retry_delay(run.SETUP_RETRY_LIMIT))
+        self.assertEqual(3600, run.setup_retry_delay(50))
+
+    def test_long_retry_notice_is_translated(self):
+        import i18n
+        self.assertIn(run.SETUP_RETRY_LONG_NOTICE, i18n.EN_UI)

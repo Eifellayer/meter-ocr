@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.26
+
+- Fire and Forget: Findet die Selbsteinrichtung nach drei schnellen Wiederholungen noch keinen sicheren Rahmen, versucht die App es danach stündlich von selbst erneut, statt stehen zu bleiben. Wird die Kamera später scharfgestellt oder die Spiegelung des Blitzes beseitigt, richtet sich die App ohne Antippen ein. Der Hinweis nennt die häufigsten Ursachen (unscharfes Bild, Spiegelung auf den Ziffern).
+
 ## 0.1.25
 
 - Zählwerk mit ESPHome-Kameras finden: Die Selbsteinrichtung sucht das Zählwerkfenster jetzt zuerst über die hellen Ziffern selbst (lokaler Kontrast) statt nur über ein dunkles Fenster. Ein Lichtreflex auf einer Ziffer, der rote Nachkommabereich, ein Strichcode oder die Seriennummer darunter stören nicht mehr. Die Schräglage der Ziffernreihe wird gemessen und das Bild vor dem Lesen gerade gedreht.

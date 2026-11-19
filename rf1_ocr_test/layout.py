@@ -633,22 +633,35 @@ def digit_row_tilt(image, boxes):
         height = bottom - top
         if right - left < 4 or height < 6:
             continue
-        top, bottom = max(0, round(top - height * .2)), min(gray.height, round(bottom + height * .2))
+        # Measure inside the frame only. Just outside it lie the bright edges of the counter
+        # window, which are not parallel to the digits and gave readings like 16°.
+        margin = max(1, round(height * .06))
+        top, bottom = max(0, round(top + margin)), min(gray.height, round(bottom - margin))
+        if bottom - top < 4:
+            continue
         cell = gray.crop((max(0, left), top, min(gray.width, right), bottom))
         if cell.width < 2 or cell.height < 2:
             continue
         centre = median(cell.getdata())
         width = cell.width
-        rows = [0.0] * cell.height
+        lit = [0] * cell.height
         for index, value in enumerate(cell.getdata()):
-            rows[index // width] += (value - centre) ** 2
-        strongest = max(rows)
-        if strongest <= 0:
+            lit[index // width] += abs(value - centre) > 30
+        # Digit rows are partly lit; rows lit across most of the frame are a window edge.
+        inked = [row for row, count in enumerate(lit) if width * .08 <= count <= width * .65]
+        # The digit is one block of rows; fragments of a slanted window edge are separate.
+        runs, run = [], []
+        for row in inked:
+            if run and row - run[-1] > 2:
+                runs.append(run)
+                run = []
+            run.append(row)
+        if run:
+            runs.append(run)
+        block = max(runs, key=lambda rows: rows[-1] - rows[0], default=[])
+        if not block or block[-1] - block[0] < max(3, cell.height // 4):
             continue
-        # Middle between the digit's top and bottom edge: unlike the centre of mass it does not
-        # depend on the digit's shape (a 7 is top-heavy, a 4 is not).
-        inked = [row for row, value in enumerate(rows) if value >= strongest * .25]
-        points.append(((left + right) / 2, top + (inked[0] + inked[-1]) / 2))
+        points.append(((left + right) / 2, top + (block[0] + block[-1]) / 2))
     if len(points) < 3:
         return None
     # Median of all pairwise slopes (Theil–Sen): one turning roller cannot tip the line.

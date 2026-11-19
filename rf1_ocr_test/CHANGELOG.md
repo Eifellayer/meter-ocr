@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.12
+
+- **Schräglagenmessung korrigiert:** Sie misst nur noch innerhalb der Ziffernrahmen und erkennt helle Fensterkanten (Zeilen, die fast über den ganzen Rahmen leuchten) als solche. Vorher geriet die beleuchtete Kante des Zählwerkfensters mit in die Messung und ergab Werte wie 16°, die verworfen wurden – der Ausgleich blieb dadurch wirkungslos.
+
 ## 0.1.11
 
 - **Neusuche des Rahmens wird angezeigt:** Sitzt der Rahmen der letzten Stelle neben der Rolle und sucht die App ihn im Hintergrund neu, steht das jetzt unter dem Zählerstand („… wird gerade im Hintergrund neu gesucht“, mit Restzeit). Danach steht dort zwei Stunden lang, wann der Rahmen automatisch neu gesetzt wurde.

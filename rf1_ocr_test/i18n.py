@@ -633,6 +633,9 @@ EN_UI = {
     "Die letzten Prüfungen mit allen OCR-Durchläufen, Entscheidung und Verbrauchsstand. Ohne Bilder und Zugangsdaten. Hilfreich für Fehlermeldungen.":
         "The latest checks with all OCR runs, decision and consumption state. No images or credentials. Useful for bug reports.",
     '>Protokoll herunterladen<': '>Download log<',
+    '>Fehler melden<': '>Report a problem<',
+    'Öffnet auf GitHub ein vorausgefülltes Fehlerformular mit App-Version, Art der Bildquelle und Fehlquote. Es wird nichts automatisch gesendet; hänge das heruntergeladene Protokoll selbst an.':
+        'Opens a prefilled bug report on GitHub with the app version, the kind of image source and the failure rate. Nothing is sent automatically; attach the downloaded log yourself.',
     '<li data-step="0" data-state="current">Bildquelle</li><li data-step="1">Anzeige</li><li data-step="2">Ausschnitt</li><li data-step="3">Hinweise</li>':
         '<li data-step="0" data-state="current">Source</li><li data-step="1">Display</li><li data-step="2">Crop</li><li data-step="3">Alerts</li>',
     'aria-label="Schritte"': 'aria-label="Steps"',

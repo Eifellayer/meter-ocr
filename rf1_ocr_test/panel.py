@@ -21,6 +21,7 @@ from urllib.parse import parse_qs, urlsplit
 from PIL import Image
 
 from app_channel import APP_NAME, NAMESPACE
+import bug_report
 import debug_log
 
 INSTANCE_ID = token_urlsafe(8)
@@ -799,7 +800,9 @@ name: Zählerstand (OCR)</code></pre>
 <details id="debug-log">
 <summary>Debug-Protokoll</summary>
 <p class="settings-note">Die letzten Prüfungen mit allen OCR-Durchläufen, Entscheidung und Verbrauchsstand. Ohne Bilder und Zugangsdaten. Hilfreich für Fehlermeldungen.</p>
-<p><a class="button-link" id="debug-log-download" href="debug-protokoll" download="ai-meter-reader-debug.jsonl">Protokoll herunterladen</a></p>
+<p><a class="button-link" id="debug-log-download" href="debug-protokoll" download="ai-meter-reader-debug.jsonl">Protokoll herunterladen</a>
+<a class="button-link" id="report-bug" href="fehler-melden" target="_blank" rel="noopener noreferrer">Fehler melden</a></p>
+<p class="settings-note" id="report-bug-note">Öffnet auf GitHub ein vorausgefülltes Fehlerformular mit App-Version, Art der Bildquelle und Fehlquote. Es wird nichts automatisch gesendet; hänge das heruntergeladene Protokoll selbst an.</p>
 <pre id="debug-log-text" class="debug-log-text">–</pre>
 </details>
 <div class="manual-test-area" id="manual-test-area" {manual_area_hidden}>
@@ -4047,6 +4050,23 @@ def start_panel(
                 except ValueError:
                     limit = 600
                 self.reply(debug_log.read_text(limit).encode("utf-8"), "text/plain; charset=utf-8")
+                return
+            if path == "/fehler-melden":
+                rules = read_auto_rules()
+                source = get_source()[0] if get_source else {}
+                experiments = rules.get("experiments", {}) if rules.get("experiments_enabled") else {}
+                target = bug_report.issue_url(
+                    os.environ.get("BUILD_VERSION", "") or "unbekannt", source.get("mode", ""),
+                    rules.get("integer_digits", 5), rules.get("fraction_digits", 3),
+                    [name for name, active in experiments.items() if active], debug_log.read_text(),
+                    language=language,
+                )
+                self.send_response(303)
+                self.send_header("Location", target)
+                self.send_header("Content-Length", "0")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Referrer-Policy", "no-referrer")
+                self.end_headers()
                 return
             if path == "/anzeigefehler":
                 message = re.sub(r"[^\w .,:;()'/<>=-]", "?", query.get("m", [""])[0])[:300]

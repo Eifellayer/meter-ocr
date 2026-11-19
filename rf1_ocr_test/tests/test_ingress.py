@@ -158,6 +158,16 @@ class IngressFixture(TestCase):
 
 
 class IngressTests(IngressFixture):
+    def test_report_problem_opens_a_prefilled_github_issue_without_the_camera_entity(self):
+        with self.assertRaises(HTTPError) as caught:
+            self.request("/fehler-melden")
+        self.assertEqual(303, caught.exception.code)
+        target = caught.exception.headers.get("Location")
+        self.assertTrue(target.startswith("https://github.com/Eifellayer/meter-ocr/issues/new?"))
+        self.assertNotIn("camera.", target)
+        page, _ = self.request("/", accept="en")
+        self.assertIn(">Report a problem<", page)
+
     def test_demo_post_is_separate_from_the_main_meter(self):
         values = {"csrf": self.csrf, "lang": "de", "reflection": "0"}
         before = dict(self.rules)

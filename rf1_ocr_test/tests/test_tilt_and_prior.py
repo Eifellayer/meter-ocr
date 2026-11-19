@@ -109,3 +109,21 @@ class SetupConfirmationTests(TestCase):
         shifted_digit = Layout((50, 40, 560, 130), -1, 300, (*boxes[:-1], (900, 100, 1000, 900)), method="neighbours")
         self.assertFalse(similar_layout(first, shifted_digit))
         self.assertFalse(similar_layout(first, None))
+
+
+class PartialDigitTests(TestCase):
+    def test_a_frame_that_cuts_a_digit_is_recognised(self):
+        from PIL import ImageFilter
+        from layout import glyph_clipped
+        for char in "0235679":
+            image = Image.new("RGB", (200, 90), (20, 20, 20))
+            ImageDraw.Draw(image).text((70, 15), char, font=FONT, fill=(220, 220, 220))
+            image = image.filter(ImageFilter.GaussianBlur(1))
+            self.assertFalse(glyph_clipped(image, (60, 8, 112, 82)), char)
+            self.assertTrue(glyph_clipped(image, (78, 8, 130, 82)), char)
+
+    def test_last_roller_frames_only_move_vertically(self):
+        import run
+        boxes = [(index * 50, 5, index * 50 + 40, 55) for index in range(8)]
+        for box in run.single_digit_frames(boxes, 7, (400, 60), last_roller=True):
+            self.assertEqual((boxes[7][0], boxes[7][2]), (box[0], box[2]))

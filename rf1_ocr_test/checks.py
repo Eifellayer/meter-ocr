@@ -904,7 +904,8 @@ def resume_optional_eighth_digit(history, rules, source, now, begin):
 
 # Fine tilt of the digit row, measured on every check and applied once it is consistent.
 SKEW_SAMPLES = 7
-SKEW_MIN_CHANGE = 0.3
+SKEW_MIN_CHANGE = 0.2
+SKEW_STEP = 0.7
 SKEW_MAX_SPREAD = 1.0
 SKEW_LIMIT = 2.0
 
@@ -933,8 +934,9 @@ def note_skew(state, measured):
         quarter = len(ordered) // 4
         spread = ordered[-1 - quarter] - ordered[quarter]  # interquartile range
         if abs(middle) >= SKEW_MIN_CHANGE and spread <= SKEW_MAX_SPREAD:
-            offset = max(-SKEW_LIMIT, min(SKEW_LIMIT, round(offset + middle, 1)))
-            samples = []
+            # Move most of the way, not all of it: the tilt keeps settling instead of overshooting.
+            offset = max(-SKEW_LIMIT, min(SKEW_LIMIT, round(offset + middle * SKEW_STEP, 1)))
+            samples = []  # older measurements were taken before this correction
     state.update(offset=offset, samples=samples)
     return state
 

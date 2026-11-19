@@ -29,7 +29,7 @@ from app_channel import APP_NAME, CHECK_ENTITY, LABEL_SUFFIX, NAMESPACE
 from checks import (
     DEFAULT_INTERVAL_MINUTES, FRESH_SAMPLE_AGE, RETRY_INTERVAL, REVIEW_AFTER, OCR_PROFILES,
     STANDALONE_PENDING, STANDALONE_PENDING_NOTICE, STANDALONE_REJECTED_NOTICE, STANDALONE_VERIFIED_NOTICE,
-    STANDALONE_CACHED_CAPTURE_DELAY, MAX_OCR_ATTEMPTS, SHIFTED_DIGIT_POSITIONS, SHIFTED_DIGIT_READS, missing_digit_pattern, single_missing_digit, disputed_digit_pattern, resolve_ocr_readings,
+    STANDALONE_CACHED_CAPTURE_DELAY, MAX_OCR_ATTEMPTS, SHIFTED_DIGIT_POSITIONS, plausible_integer_digits, note_skew, skew_offset, SHIFTED_DIGIT_READS, missing_digit_pattern, single_missing_digit, disputed_digit_pattern, resolve_ocr_readings,
     compare_sample, crop_register, lighting_ocr_profiles, read_register, read_with_retries, record_sample,
     anchored_leading_digits, within_anchor_bounds,
     automatic_interval_minutes, defer_duplicate_cycle,
@@ -51,7 +51,7 @@ from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, LOWER_PENDING, LOWER_R
 from checks import (FRAME_OFF_NOTICE, FRAME_OFF_STREAK, FRAME_OFF_WAIT_NOTICE, MOVING_DIGIT_NOTICE,
                     REDUCED_PRECISION_NOTICE, only_last_compared_unclear)
 import debug_log
-from layout import (MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, find_digit_row,
+from layout import (MANUAL_ROW_UNCLEAR, PARTLY_UNCLEAR, RAW_ROW_UNCLEAR, digit_row_tilt, fine_rotation as valid_fine_rotation, crop_coordinates, find_digit_row,
                     digit_box_settings, find_raw_digit_row, normalize_digit_boxes, roll_center, rotated_width, scale_digit_boxes, turn_crop)
 from meter_learning import (GEOMETRY_REPAIR_LIMIT, GEOMETRY_REPAIR_SECONDS, alignment_rollback, observe_flow,
                             observe_geometry_failures, local_geometry_trials, note_local_issue, note_local_improvement,
@@ -969,6 +969,8 @@ def main():
             auto_rules = {"decimals": saved_rules["decimals"],
                           "attempts": saved_rules["attempts"], "polarity": polarity,
                           "crop_mode": crop_mode, "crop": crop_text, "width": width, "rotation": rotation,
+                          "rotation_fine": (valid_fine_rotation(saved_rules.get("rotation_fine", 0))
+                                            if crop_mode == "manual" else 0.0),
                           "digit_boxes": digit_boxes if crop_mode == "manual" else [],
                           "crop_revision": (str(saved_rules.get("crop_revision", ""))[:30]
                                             if crop_mode == "manual" else ""),
@@ -1050,7 +1052,9 @@ def main():
         interval_minutes = values.get("interval_minutes", auto_rules["interval_minutes"])
         if not valid_interval_minutes(interval_minutes):
             raise ValueError("Ungültiges Prüfintervall")
-        updated_rules = {**auto_rules, **values, "rotation": rotation, "max_flow_lph": max_flow,
+        updated_rules = {**auto_rules, **values, "rotation": rotation,
+                         "rotation_fine": valid_fine_rotation(values.get("rotation_fine", auto_rules.get("rotation_fine", 0))),
+                         "max_flow_lph": max_flow,
                          "interval_minutes": interval_minutes, "integer_digits": integer_digits,
                          "fraction_digits": fraction_digits, "meter_display": meter_display,
                          "precision_mode": precision_mode, "fine_alignment_enabled": fine_alignment,
@@ -2312,21 +2316,41 @@ def main():
                             if type(rotation_adjustment) is not int or abs(rotation_adjustment) > MAX_LEARNED_ROTATION:
                                 rotation_adjustment = 0
                         base_adjustment = rotation_adjustment
+                        # Whole degrees stay in ``rotation`` (saved geometry); the image itself is turned
+                        # by the set 0.1° remainder plus the tilt the app measured over recent checks.
+                        skew_key = None
+                        skew_state = {}
+                        view_rotation = rotation
+                        if crop_rules["crop_mode"] == "manual" and not detect_raw:
+                            view_rotation = rotation + valid_fine_rotation(crop_rules.get("rotation_fine", 0))
+                            if not manual and custom_boxes:
+                                skew_key = [crop_rules["crop"], manual_width, rotation,
+                                            valid_fine_rotation(crop_rules.get("rotation_fine", 0)),
+                                            active_rules["crop_revision"]]
+                                skew_state = updated.get("skew")
+                                if not isinstance(skew_state, dict) or skew_state.get("key") != skew_key:
+                                    skew_state = {"key": skew_key, "offset": 0.0, "samples": []}
+                                view_rotation += skew_offset(skew_state)
 
                         def prepare_register(original, current_overlay):
                             if base_adjustment:
                                 return select_tilted_register(
-                                    original, manual_crop, manual_width, rotation, base_adjustment,
+                                    original, manual_crop, manual_width, view_rotation, base_adjustment,
                                     integer_digits, fraction_digits, detect_raw,
                                 )
                             return select_register(
-                                original, current_overlay, manual_crop, manual_width, rotation,
+                                original, current_overlay, manual_crop, manual_width, view_rotation,
                                 integer_digits, fraction_digits, detect_raw=detect_raw, digit_boxes=custom_boxes,
                             )
 
                         register, integer_width, whole_boxes, fraction_boxes, source = prepare_register(
                             frame, selected_overlay
                         )
+                        if skew_key is not None and not base_adjustment:
+                            try:
+                                updated["skew"] = note_skew(skew_state, digit_row_tilt(register, whole_boxes))
+                            except (OSError, ValueError, ZeroDivisionError):
+                                pass
                         read_state = {"register": register, "integer_width": integer_width,
                                       "whole_boxes": whole_boxes, "fraction_boxes": fraction_boxes,
                                       "source": source, "picture": picture, "captured": captured,
@@ -2477,7 +2501,7 @@ def main():
                                         position = pattern.index("?")
                                     candidate = {
                                         "position": position + (position < integer_digits), "box": box,
-                                        "angle": rotation + base_adjustment, "evidence": evidence,
+                                        "angle": view_rotation + base_adjustment, "evidence": evidence,
                                     }
                                     rank = {"accepted": 3, "agreement": 2, "disagreement": 1, "unclear": 0}
                                     ocr_candidates.append(candidate)
@@ -2536,9 +2560,16 @@ def main():
                         if digit_probe_enabled and not ocr_confirmed:
                             # A moving meter can show different digits on separate photographs.
                             ocr_readings = same_frame
+                            counter = source_history.get("consumption")
+                            counter = counter if isinstance(counter, dict) else {}
+                            # The last confirmed reading rules out impossible whole digits (an 8 read as 6).
+                            allowed = plausible_integer_digits(
+                                counter.get("anchor_litres"), counter.get("anchor_time"), time.time(),
+                                active_rules["max_flow_lph"], integer_digits,
+                            )
                             ocr, ocr_confirmed = resolve_ocr_readings(
                                 ocr_readings, comparison_decimals, integer_digits, standalone=require_consensus,
-                                standalone_composition=True,
+                                standalone_composition=True, allowed=allowed,
                             )
                             if ocr_confirmed and ocr not in ocr_readings:
                                 ocr_method = "composed"
@@ -2565,7 +2596,7 @@ def main():
                                     for adjustment, trial_boxes in variants:
                                         if stop_ocr() or ocr_attempts + 2 > ocr_limit:
                                             break
-                                        angle = rotation + base_adjustment + adjustment
+                                        angle = view_rotation + base_adjustment + adjustment
                                         if not -180 <= angle <= 180:
                                             continue
                                         if adjustment:
@@ -2612,7 +2643,7 @@ def main():
                                         continue
                                     try:
                                         tilted = select_tilted_register(
-                                            original, manual_crop, manual_width, rotation, adjustment,
+                                            original, manual_crop, manual_width, view_rotation, adjustment,
                                             integer_digits, fraction_digits, detect_raw,
                                         )
                                     except ValueError:
@@ -2823,6 +2854,9 @@ def main():
                         print(f"Automatische OCR-Vorschau konnte nicht erstellt werden: {error}")
                 if source == "manual":
                     unclear_detail = RAW_ROW_UNCLEAR if detect_raw else MANUAL_ROW_UNCLEAR
+                    shown = str(ocr or "").replace(".", "")[:integer_digits + max(0, decimals)]
+                    if not detect_raw and shown and shown.count("?") <= 3 and sum(ch.isdigit() for ch in shown) >= 4:
+                        unclear_detail = PARTLY_UNCLEAR
                 else:
                     unclear_detail = None
                 if manual:
@@ -3257,6 +3291,9 @@ def main():
                 compared_decimals=local.get("comparison_decimals"), reference=data.get("actual_value"),
                 consumption=updated.get("consumption"), failures=updated.get("failure_attempts"),
                 lower_series=len(updated.get("lower_series") or []) or None,
+                tilt={"offset": skew_offset(updated.get("skew")),
+                      "last": (updated.get("skew") or {}).get("samples", [None])[-1:] or None,
+                      "angle": local.get("view_rotation")} if updated.get("skew") else None,
             )
         try:
             publish_check(history, now, token, review_after)

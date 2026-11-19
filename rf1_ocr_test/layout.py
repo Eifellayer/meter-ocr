@@ -1,7 +1,7 @@
 """Validate crop settings and locate meter digits in camera images and SLFork overlays."""
 
 from itertools import pairwise
-from math import ceil, cos, floor, radians, sin
+from math import atan, ceil, cos, degrees, floor, radians, sin
 import re
 from statistics import median
 
@@ -23,6 +23,22 @@ def rotated_width(width, height, rotation):
     turn = radians(angle)
     span = width * abs(round(cos(turn), 15)) + height * abs(round(sin(turn), 15))
     return ceil((width + span) / 2) - floor((width - span) / 2)
+
+
+def fine_rotation(value):
+    """Validated fractional part of the image rotation (whole degrees stay in ``rotation``)."""
+    if type(value) not in (int, float) or value != value or not -0.5 <= value <= 0.5:
+        return 0.0
+    return round(float(value), 1)
+
+
+def split_rotation(text):
+    """Parse a rotation such as "-1.5" or "-1,5" into whole degrees and a 0.1° remainder."""
+    value = round(float(str(text).strip().replace(",", ".")), 1)
+    if not -180 <= value <= 180:
+        raise ValueError("Ungültige Bilddrehung")
+    whole = int(round(value))
+    return whole, round(value - whole, 1)
 
 
 def crop_coordinates(text, whole_width, rotation=0):
@@ -54,6 +70,8 @@ def turn_crop(image, rotation, *, expand=True):
 
 RAW_ROW_UNCLEAR = "Ziffernreihe nicht eindeutig gefunden. Bitte den Bildausschnitt im Test einstellen."
 MANUAL_ROW_UNCLEAR = "Ziffern schwer lesbar. Prüfe Bilddrehung, Kamerawinkel, Fokus und Beleuchtung."
+# Only a few digits unclear: the camera is usually fine, so do not send people to adjust it.
+PARTLY_UNCLEAR = "Einzelne Ziffern waren nicht eindeutig lesbar. Die App versucht es automatisch weiter."
 
 
 def digit_components(image, threshold, light_digits):
@@ -600,3 +618,44 @@ def roll_center(image, boxes):
     if score < .4 * reference or score < 1.2 * min(sums):
         return None
     return x
+
+
+def digit_row_tilt(image, boxes):
+    """Remaining tilt of a digit row in degrees (app convention, as for ``rotation``), or None.
+
+    Each box contributes the centre of its strongest contrast (the digit, light or dark), and a
+    straight line is fitted through those centres. Single images are noisy (a turning roller
+    shifts its centre), so callers average several measurements before acting on them.
+    """
+    gray = image.convert("L")
+    points = []
+    for left, top, right, bottom in boxes:
+        height = bottom - top
+        if right - left < 4 or height < 6:
+            continue
+        top, bottom = max(0, round(top - height * .2)), min(gray.height, round(bottom + height * .2))
+        cell = gray.crop((max(0, left), top, min(gray.width, right), bottom))
+        if cell.width < 2 or cell.height < 2:
+            continue
+        centre = median(cell.getdata())
+        width = cell.width
+        rows = [0.0] * cell.height
+        for index, value in enumerate(cell.getdata()):
+            rows[index // width] += (value - centre) ** 2
+        strongest = max(rows)
+        if strongest <= 0:
+            continue
+        # Middle between the digit's top and bottom edge: unlike the centre of mass it does not
+        # depend on the digit's shape (a 7 is top-heavy, a 4 is not).
+        inked = [row for row, value in enumerate(rows) if value >= strongest * .25]
+        points.append(((left + right) / 2, top + (inked[0] + inked[-1]) / 2))
+    if len(points) < 3:
+        return None
+    # Median of all pairwise slopes (Theil–Sen): one turning roller cannot tip the line.
+    slopes = [(y2 - y1) / (x2 - x1) for index, (x1, y1) in enumerate(points)
+              for x2, y2 in points[index + 1:] if x2 != x1]
+    if not slopes:
+        return None
+    slope = median(slopes)
+    # Positive ``rotation`` turns the picture clockwise; a row falling to the right needs the opposite.
+    return -degrees(atan(slope))

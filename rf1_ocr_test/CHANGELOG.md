@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.7
+
+- **Bilddrehung in 0,1°-Schritten:** z. B. −1,5° statt nur −1° oder −2°.
+- **Schräglage automatisch ausgleichen:** Bei manuellem Ausschnitt misst die App bei jeder Prüfung, wie schief die Ziffernreihe liegt (Linie durch die Ziffernmitten, robust gegen eine drehende Rolle). Stimmen sieben Messungen überein und weichen sie um mindestens 0,3° ab, dreht sie das Bild fein nach (höchstens ±2°). Steht im Debug-Protokoll unter `tilt`.
+- **Letzter Stand als Lesehilfe:** Vorkommastellen, die nach dem letzten bestätigten Stand und dem maximalen Durchfluss unmöglich sind, zählen nicht mehr mit. Beispiel 19.11.: `10478.65?` statt `1047?.65?`, weil die 8 manchmal als 6 gelesen wurde.
+- **Ehrlicherer Fehlertext:** Sind nur einzelne Ziffern unklar, heißt es „Einzelne Ziffern waren nicht eindeutig lesbar. Die App versucht es automatisch weiter.“ statt des Rats, Kamera, Fokus und Licht zu prüfen.
+
 ## 0.1.6
 
 - Nachschieben fehlender Ziffern jetzt für bis zu **drei** unklare Stellen (z. B. `1047?.?4?`). Kamera und Winkel ändern sich zwischen zwei Prüfungen praktisch nie; meist sitzen dann nur einzelne Rahmen leicht daneben. Weiterhin höchstens 10 zusätzliche Einzelziffer-Lesungen, und die übrigen Ziffern müssen sicher gelesen sein.

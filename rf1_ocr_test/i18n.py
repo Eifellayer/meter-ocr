@@ -9,7 +9,7 @@ import re
 from checks import (FALLBACK_NOTICE, LAST_DIGIT_NOTICE, LAST_DIGIT_PASS,
                     SEVENTH_DIGIT_PASS, SEVENTH_DIGIT_WAIT_NOTICE, STANDALONE_PENDING_NOTICE,
                     STANDALONE_REJECTED_NOTICE, STANDALONE_VERIFIED_NOTICE, uncertain_positions)
-from layout import MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR
+from layout import MANUAL_ROW_UNCLEAR, PARTLY_UNCLEAR, RAW_ROW_UNCLEAR
 
 
 EN_UI = {
@@ -182,6 +182,7 @@ EN_UI = {
     "Vorschlag bei wiederholt unlesbarer Ziffer ausblenden": "Hide the suggestion for a repeatedly unreadable digit",
     RAW_ROW_UNCLEAR: "Could not find a clear digit row. Set the crop in the manual test.",
     MANUAL_ROW_UNCLEAR: "The digits are hard to read. Check the image rotation, camera angle, focus and lighting.",
+    PARTLY_UNCLEAR: "Some digits could not be read clearly. The app keeps trying automatically.",
     "Selbstreparatur bei wiederholten Fehlmessungen": "Self-repair after repeated failed readings",
     "Die App sucht frühestens nach zwei Stunden anhaltender Erkennungsprobleme einen besseren Rahmen. Probleme nur an der letzten Rolle zählen dabei nicht mit. Der bisherige Rahmen gilt bis zur erfolgreichen Gegenprobe.":
         "The app looks for a better crop after at least two hours of persistent recognition problems. Problems with the last digit alone do not count. The current crop stays in use until a replacement passes verification.",
@@ -933,7 +934,7 @@ def english_result(detail, status=None, decimals=0, readings=None):
     if not isinstance(detail, str):
         return "No result available."
     if detail in (LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, SEVENTH_DIGIT_PASS,
-                  RAW_ROW_UNCLEAR, MANUAL_ROW_UNCLEAR,
+                  RAW_ROW_UNCLEAR, MANUAL_ROW_UNCLEAR, PARTLY_UNCLEAR,
                   STANDALONE_PENDING_NOTICE, STANDALONE_VERIFIED_NOTICE):
         return EN_UI[detail]
     if detail.startswith(STANDALONE_REJECTED_NOTICE):

@@ -39,7 +39,7 @@ from consumption import (DEFAULT_FLOW_LPH, EXCESSIVE_INCREASE, LOWER_PENDING, LO
 from demo import run_demo
 from i18n import EN_UI, english_progress, english_result, translate_page
 from language import MODES, SUPPORTED, USER_ID, browser_locale, profile_script
-from layout import MANUAL_ROW_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, digit_box_settings, scale_digit_boxes, turn_crop
+from layout import MANUAL_ROW_UNCLEAR, PARTLY_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, fine_rotation, split_rotation, digit_box_settings, scale_digit_boxes, turn_crop
 from meter_learning import suggest_single_digit_box
 from notification_settings import notification_rules
 from source_settings import source_check_key, source_rules
@@ -869,7 +869,7 @@ name: Zählerstand (OCR)</code></pre>
 <label>Manueller Ausschnitt (links, oben, rechts, unten)
 <input name="crop" type="text" value="{crop_value}" maxlength="30" placeholder="52,56,564,132"></label>
 <label>Bilddrehung (°)
-<input name="rotation" type="number" min="-180" max="180" step="1" value="{rotation_value}"></label>
+<input name="rotation" type="number" min="-180" max="180" step="0.1" value="{rotation_value}"></label>
 <label>Breite der Vorkommastellen
 <input name="width" type="number" min="1" max="9999" value="{width_value}"></label>
 <p class="settings-note">Wähle den Ausschnitt im Originalbild. Positive Winkel drehen nach rechts, negative nach links. Die Vorkommabreite gilt nach der Drehung.</p>
@@ -1057,7 +1057,7 @@ name: Zählerstand (OCR)</code></pre>
 <div class="crop-draw-image" hidden><img alt="Kamerabild zum Zeichnen des Ziffernrahmens" draggable="false"><span class="crop-draw-outline" hidden></span></div>
 <p class="settings-note" role="status"></p>
 <div class="crop-fields" id="wizard-crop-fields">
-<label>3. Bilddrehung bei Bedarf (°)<input name="rotation" type="number" min="-180" max="180" step="1" value="{auto_rotation_value}"></label>
+<label>3. Bilddrehung bei Bedarf (°)<input name="rotation" type="number" min="-180" max="180" step="0.1" value="{auto_rotation_value}"></label>
 <input type="hidden" name="digit_boxes" value="{wizard_digit_boxes}">
 <details class="setup-help"><summary>Koordinaten und Breite bearbeiten</summary>
 <label>Bildbereich (links, oben, rechts, unten)<input name="crop" value="{auto_crop_value}" maxlength="30" placeholder="52,56,564,132"></label>
@@ -1192,7 +1192,7 @@ name: Zählerstand (OCR)</code></pre>
 <label>Bildbereich (links, oben, rechts, unten)
 <input name="crop" type="text" value="{auto_crop_value}" maxlength="30" placeholder="52,56,564,132"></label>
 <label>Bilddrehung (°)
-<input name="rotation" type="number" min="-180" max="180" step="1" value="{auto_rotation_value}"></label>
+<input name="rotation" type="number" min="-180" max="180" step="0.1" value="{auto_rotation_value}"></label>
 <label>Breite der Vorkommastellen
 <input name="width" type="number" min="1" max="9999" value="{auto_width_value}"></label>
 <p class="settings-note">Wähle den Ausschnitt im Originalbild. Die Vorkommabreite gilt nach der Drehung.</p>
@@ -3393,7 +3393,9 @@ def editable_rotation(values):
     angle = values.get("rotation", 0)
     if type(angle) is not int:
         return 0
-    return -90 if angle == 270 else angle if -180 <= angle <= 180 else 0
+    angle = -90 if angle == 270 else angle if -180 <= angle <= 180 else 0
+    fine = fine_rotation(values.get("rotation_fine", 0))
+    return f"{angle + fine:.1f}".rstrip("0").rstrip(".") if fine else angle
 POLARITIES = {"auto": "Automatisch", "light": "Hell", "dark": "Dunkel"}
 DECIMALS = {"0": "Volle Kubikmeter", "1": "1 Nachkommastelle", "2": "2 Nachkommastellen", "3": "3 Nachkommastellen"}
 ATTEMPTS = {str(value): str(value) for value in range(1, 11)}
@@ -3731,7 +3733,7 @@ def start_panel(
                 heading = "Aufnahmen stimmen nicht plausibel überein"
                 detail = (history["check_detail"] if language == "de" else
                           english_result(history["check_detail"], status))
-            elif history.get("check_detail") in (RAW_ROW_UNCLEAR, MANUAL_ROW_UNCLEAR):
+            elif history.get("check_detail") in (RAW_ROW_UNCLEAR, MANUAL_ROW_UNCLEAR, PARTLY_UNCLEAR):
                 detail = history["check_detail"] if language == "de" else EN_UI[history["check_detail"]]
             elif history.get("check_detail") == MOVING_DIGIT_NOTICE:
                 heading = "Rolle drehte sich gerade"
@@ -4619,10 +4621,11 @@ def start_panel(
                             or meter_display not in ("rollers", "digital", "mixed")):
                         raise ValueError("Prüfe Ziffernzahl, Vergleichsgenauigkeit und Prüfintervall.")
                     crop, width, rotation = old_rules["crop"], old_rules["width"], old_rules.get("rotation", 0)
+                    rotation_fine = fine_rotation(old_rules.get("rotation_fine", 0))
                     if not learn_crop:
                         crop = field("crop", crop)
                         width = int(field("width", str(width)))
-                        rotation = int(field("rotation", str(rotation)))
+                        rotation, rotation_fine = split_rotation(field("rotation", str(rotation)))
                         crop_coordinates(crop, width, rotation)
                     if not learn_crop and crop_mode == "manual" and field("confirm_manual_crop") != "1":
                         raise ValueError("Confirm the manually selected crop")
@@ -4641,7 +4644,7 @@ def start_panel(
                     rules_values = {
                         **old_rules, "decimals": decimals, "attempts": attempts,
                         "polarity": polarity, "crop_mode": crop_mode, "crop": crop,
-                        "width": width, "rotation": rotation,
+                        "width": width, "rotation": rotation, "rotation_fine": rotation_fine,
                         "digit_boxes": old_rules["digit_boxes"] if (
                             crop_mode == old_rules["crop_mode"] and crop == old_rules["crop"]
                             and rotation == old_rules.get("rotation", 0) and width == old_rules["width"]
@@ -4930,13 +4933,14 @@ def start_panel(
                         crop = old_rules["crop"]
                         width = old_rules["width"]
                         rotation = old_rules.get("rotation", 0)
+                        rotation_fine = fine_rotation(old_rules.get("rotation_fine", 0))
                         boxes = []
                         if crop_mode[0] == "manual":
                             crop = field("crop", crop)
                             boxes = digit_box_settings(json.loads(field("digit_boxes", "[]")),
                                                       old_rules["integer_digits"] + old_rules["fraction_digits"])
                             width = int(field("width", str(width)))
-                            rotation = int(field("rotation", str(rotation)))
+                            rotation, rotation_fine = split_rotation(field("rotation", str(rotation)))
                             crop_coordinates(crop, width, rotation)
                         max_flow = parse_flow_limit(field(
                             "max_flow", format_cubic_metres(old_rules.get("max_flow_lph", DEFAULT_FLOW_LPH))
@@ -4966,7 +4970,7 @@ def start_panel(
                                          "adaptive_interval_enabled": field("adaptive_interval_enabled") == "1",
                                          "reflection_suggestion_hidden": field("reflection_suggestion_hidden") == "1",
                                          "polarity": polarity[0], "crop_mode": crop_mode[0],
-                                         "crop": crop, "width": width, "rotation": rotation, "digit_boxes": boxes,
+                                         "crop": crop, "width": width, "rotation": rotation, "rotation_fine": rotation_fine, "digit_boxes": boxes,
                                          "max_flow_lph": max_flow, "interval_minutes": interval_minutes,
                                          "setup_input_source": (setup_source_id(get_source()[0]) if crop_mode[0] == "manual"
                                                                 else old_rules.get("setup_input_source"))})
@@ -4998,17 +5002,19 @@ def start_panel(
             crop_value = default_crop
             width_value = default_width
             rotation = 0
+            rotation_fine = 0.0
             boxes = []
             crop_revision = auto_rules.get("crop_revision", "")
             if crop_revision and field("crop_revision") != crop_revision:
                 crop_mode = [auto_rules["crop_mode"]]
                 crop_value, width_value, rotation = auto_rules["crop"], auto_rules["width"], auto_rules["rotation"]
+                rotation_fine = fine_rotation(auto_rules.get("rotation_fine", 0))
                 boxes = auto_rules["digit_boxes"]
             elif crop_mode[0] == "manual":
                 try:
                     crop_value = field("crop", default_crop)
                     width_value = int(field("width", str(default_width)))
-                    rotation = int(field("rotation", "0"))
+                    rotation, rotation_fine = split_rotation(field("rotation", "0"))
                     boxes = digit_box_settings(json.loads(field("digit_boxes", "[]")),
                                               auto_rules["integer_digits"] + auto_rules["fraction_digits"])
                     boundaries = crop_coordinates(crop_value, width_value, rotation)
@@ -5018,7 +5024,8 @@ def start_panel(
                     return
             settings = {"polarity": polarity[0], "decimals": int(decimals[0]),
                         "attempts": int(attempts[0]), "crop_mode": crop_mode[0],
-                        "crop": crop_value, "width": width_value, "rotation": rotation, "digit_boxes": boxes}
+                        "crop": crop_value, "width": width_value, "rotation": rotation,
+                        "rotation_fine": rotation_fine, "digit_boxes": boxes}
             if crop_revision:
                 settings["crop_revision"] = crop_revision
             manual_reference = field("manual_reference").strip()

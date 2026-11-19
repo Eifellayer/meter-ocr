@@ -608,7 +608,7 @@ header{{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.6rem}}
 <span class="setup-success-icon" aria-hidden="true">✓</span>
 <div><strong>Zähler erfolgreich eingerichtet</strong>
 <p id="setup-duration" {setup_duration_hidden}>{setup_duration}</p>
-<p>Die Automatik prüft als Nächstes den gespeicherten Rahmen. In den ersten 20 Minuten prüft sie häufiger.</p></div>
+<p>Die Automatik läuft. In den nächsten 20 Minuten stimmt die App die Rahmen noch im Hintergrund fein ab.</p></div>
 </div>
 <div class="activity-status" data-state="{automatic_activity_state}" data-routine-ok="{automatic_routine_ok}">
 <p role="status" aria-live="polite"><strong>Automatik:</strong> <span id="automatic-activity">{automatic_activity}</span></p>
@@ -1012,7 +1012,7 @@ name: Zählerstand (OCR)</code></pre>
 <label>Verglichen wird bis<select name="decimals">{wizard_decimal_options}</select></label>
 <div class="settings-note setup-help" data-precision-options {precision_hidden}>
 <p>Der Präzisionsmodus ist experimentell. Der Wert selbst ist genau, aber die schnell laufende letzte Rolle wird oft nicht sicher erkannt. Dann prüft die App vorübergehend mit zwei Nachkommastellen.</p>
-<p {wizard_initial_hidden}>Die dritte Nachkommastelle ist bei Rollen oft schwer zu erkennen. „Automatische Selbsteinrichtung“ bestätigt bei der Ersteinrichtung die ersten zwei Stellen. Die dritte bleibt unbestätigt und kann später intensiv gesucht oder im Kamerabild manuell markiert werden.</p>
+<p {wizard_initial_hidden}>Die Selbsteinrichtung bestätigt zuerst die ersten zwei Nachkommastellen. Die dritte sucht die App danach automatisch im Hintergrund und justiert die Rahmen mit der Zeit selbst nach. Du musst dafür nichts tun.</p>
 <label class="check-option"><input type="checkbox" name="precision_mode" value="1" {precision_checked}> Präzisionsmodus: auch die dritte Nachkommastelle vergleichen</label>
 </div>
 <p class="settings-note setup-help">Die Vergleichsgenauigkeit darf kleiner sein als die angezeigte Stellenzahl. Kleine Zeiger werden nicht automatisch gelesen; bei Rollen und Zeigern bitte nur die Ziffernrollen einstellen.</p>
@@ -1054,6 +1054,14 @@ name: Zählerstand (OCR)</code></pre>
 <label>Prüfintervall (Minuten)<input type="number" name="interval_minutes" min="5" max="1440" value="{interval_minutes}" required></label>
 <details class="setup-help"><summary>ⓘ Warum das Prüfintervall ändern?</summary><p>Nach einem fehlgeschlagenen automatischen Test folgen bis zu zwei weitere Prüfungen im Abstand von fünf Minuten. Sind alle drei erfolglos, wartet die App eine Stunde und prüft dann erneut. Nach Erfolg gilt wieder dein eingestelltes Intervall. Ein kürzeres Intervall kann helfen, wenn sich der Zähler beim Weiterdrehen vorübergehend schlecht lesen lässt.</p></details>
 <label>Maximaler Durchfluss (m³/h)<input name="max_flow" type="text" inputmode="decimal" maxlength="10" value="{max_flow}" required></label>
+<details class="setup-help"><summary>Verbrauch auch in kWh (optional)</summary>
+<div class="energy-factors">
+<label>Zustandszahl<input name="gas_state_factor" type="text" inputmode="decimal" maxlength="7" placeholder="z. B. 0,9636" value="{gas_state_factor}"></label>
+<label>Brennwert (kWh/m³)<input name="calorific_value" type="text" inputmode="decimal" maxlength="7" placeholder="z. B. 11,25" value="{calorific_value}"></label>
+<label>oder Umrechnungsfaktor<input name="kwh_conversion_factor" type="text" inputmode="decimal" maxlength="7" placeholder="z. B. 10,84" value="{kwh_conversion_factor}"></label>
+</div>
+<p>Die Werte stehen auf der Gasabrechnung oder beim Netzbetreiber. Entweder Zustandszahl und Brennwert eintragen oder nur den fertigen Umrechnungsfaktor (er hat Vorrang). Dann gibt es zusätzlich <code>sensor.rf1_verbrauch_gesamt_kwh</code> für das Energie-Dashboard. Leer lassen schaltet es ab.</p>
+</details>
 <div class="setup-help" id="wizard-manual-draw" hidden>
 <p>1. Lade ein Bild deiner Kamera oder wähle ein Testbild derselben Kamera.</p>
 <div class="crop-actions">
@@ -3422,6 +3430,16 @@ refreshAutomatic();
 </script></html>"""
 
 
+def wizard_energy_factors(field, old_rules):
+    """kWh factors from the setup wizard; fields the form did not send keep their saved value."""
+    values = {}
+    for key, limits in (("gas_state_factor", STATE_FACTOR_RANGE), ("calorific_value", CALORIFIC_RANGE),
+                        ("kwh_conversion_factor", CONVERSION_RANGE)):
+        text = field(key, None)
+        values[key] = old_rules.get(key) if text is None else parse_energy_factor(text, limits)
+    return values
+
+
 def format_factor(value, language="de"):
     if type(value) not in (int, float):
         return ""
@@ -5018,6 +5036,7 @@ def start_panel(
                                          "polarity": polarity[0], "crop_mode": crop_mode[0],
                                          "crop": crop, "width": width, "rotation": rotation, "rotation_fine": rotation_fine, "digit_boxes": boxes,
                                          "max_flow_lph": max_flow, "interval_minutes": interval_minutes,
+                                         **wizard_energy_factors(field, old_rules),
                                          "setup_input_source": (setup_source_id(get_source()[0]) if crop_mode[0] == "manual"
                                                                 else old_rules.get("setup_input_source"))})
                 except ValueError:

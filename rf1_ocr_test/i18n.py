@@ -13,6 +13,7 @@ from layout import MANUAL_ROW_UNCLEAR, PARTLY_UNCLEAR, RAW_ROW_UNCLEAR
 
 
 EN_UI = {
+    "Verbrauch auch in kWh (optional)": "Consumption in kWh too (optional)",
     "Verbrauch auch in kWh": "Consumption in kWh too",
     "Zustandszahl": "Gas state factor (Z)",
     "Brennwert (kWh/m³)": "Calorific value (kWh/m³)",
@@ -119,8 +120,8 @@ EN_UI = {
     "Ziffernzeile gefunden · ": "Digit row found · ",
     "Schwelle ": "Threshold ",
     " Ohne Vergleichswert braucht die App einen plausiblen Anstieg oder einen Startwert.": " Without a reference, the app needs a plausible increase or a starting reading.",
-    "Die Automatik prüft als Nächstes den gespeicherten Rahmen. In den ersten 20 Minuten prüft sie häufiger.":
-        "The automatic check will verify the saved crop next. Checks run more often in the first 20 minutes.",
+    "Die Automatik läuft. In den nächsten 20 Minuten stimmt die App die Rahmen noch im Hintergrund fein ab.":
+        "Automatic checks are running. For the next 20 minutes the app keeps fine-tuning the frames in the background.",
     "Werkzeuge zur Erkennung": "Meter reading tools",
     "Werkzeuge": "Tools",
     "Prüfdetails": "Check details",
@@ -376,8 +377,8 @@ EN_UI = {
         "Third decimal still unconfirmed. Automatic checks continue with seven confirmed digits.",
     "Die Einrichtung bestätigt zuerst sieben Ziffern. Die dritte Nachkommastelle kann anschließend separat geprüft werden.":
         "Setup confirms seven digits first. The third decimal can then be checked separately.",
-    "Die dritte Nachkommastelle ist bei Rollen oft schwer zu erkennen. „Automatische Selbsteinrichtung“ bestätigt bei der Ersteinrichtung die ersten zwei Stellen. Die dritte bleibt unbestätigt und kann später intensiv gesucht oder im Kamerabild manuell markiert werden.":
-        "The third decimal digit on a roller can be hard to read. During initial setup, Learn crop and rotation confirms the first two decimal digits. The third remains unconfirmed. You can run an intensive search or mark it manually on the camera image later.",
+    "Die Selbsteinrichtung bestätigt zuerst die ersten zwei Nachkommastellen. Die dritte sucht die App danach automatisch im Hintergrund und justiert die Rahmen mit der Zeit selbst nach. Du musst dafür nichts tun.":
+        "Automatic setup first confirms the first two decimal digits. The app then searches for the third automatically in the background and fine-tunes the frames over time. You do not need to do anything.",
     "Dritte Nachkommastelle bestätigt. Die Ziffernrahmen sind übernommen.":
         "Third decimal digit confirmed. The digit frames have been saved.",
     "Dritte Nachkommastelle bleibt unbestätigt. Du kannst später erneut suchen oder sie manuell markieren.":

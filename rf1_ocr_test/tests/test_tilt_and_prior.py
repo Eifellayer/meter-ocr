@@ -127,3 +127,14 @@ class PartialDigitTests(TestCase):
         boxes = [(index * 50, 5, index * 50 + 40, 55) for index in range(8)]
         for box in run.single_digit_frames(boxes, 7, (400, 60), last_roller=True):
             self.assertEqual((boxes[7][0], boxes[7][2]), (box[0], box[2]))
+
+
+class WizardEnergyTests(TestCase):
+    def test_wizard_keeps_or_parses_factors(self):
+        from panel import wizard_energy_factors
+        form = {"kwh_conversion_factor": "10,84", "gas_state_factor": "", "calorific_value": ""}
+        values = wizard_energy_factors(lambda name, default="": form.get(name, default), {})
+        self.assertEqual(10.84, values["kwh_conversion_factor"])
+        self.assertIsNone(values["gas_state_factor"])
+        kept = wizard_energy_factors(lambda name, default="": default, {"calorific_value": 11.2})
+        self.assertEqual(11.2, kept["calorific_value"])

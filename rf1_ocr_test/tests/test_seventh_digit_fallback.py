@@ -98,7 +98,7 @@ class SeventhRollerTests(unittest.TestCase):
 
     def test_english_status_and_wait_notice_are_localized(self):
         self.assertIn("six digits", english_result(SEVENTH_DIGIT_PASS, "match_with_warning", 2))
-        self.assertIn("higher meter reading", english_activity("waiting", SEVENTH_DIGIT_WAIT_NOTICE))
+        self.assertIn("reading to rise", english_activity("waiting", SEVENTH_DIGIT_WAIT_NOTICE))
 
     def test_duplicate_picture_does_not_short_circuit_thirty_minute_wait(self):
         now = datetime.now(timezone.utc)

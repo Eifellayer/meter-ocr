@@ -103,6 +103,51 @@ SINGLE_DIGIT_RECHECK = "Automatik-Nachprüfung: Die App prüft die fehlende Ziff
 INTENSIVE_ROTATION_STATUS = "Intensivtest: Die App prüft das Bild leicht gedreht."
 
 
+def setup_round_log(attempt, round_log, started, now):
+    """Count one setup capture round; return a debug entry once a new image was evaluated."""
+    stats = attempt.image_stats
+    stats["requests"] = stats.get("requests", 0) + 1
+    fetch_seconds = round_log.get("fetch_seconds")
+    if fetch_seconds is not None:
+        stats["fetch_seconds"] = stats.get("fetch_seconds", 0.0) + fetch_seconds
+    if round_log.get("error"):
+        errors = stats.setdefault("errors", {})
+        errors[round_log["error"]] = errors.get(round_log["error"], 0) + 1
+    accepted = round_log.get("accepted_at")
+    if accepted is None:
+        if round_log.get("captured") and not round_log.get("error"):
+            # The camera answered, but the picture was identical or not newer.
+            stats["discarded"] = stats.get("discarded", 0) + 1
+        return []
+    entry = {
+        "kind": "setup_image",
+        "purpose": attempt.purpose or ("background" if attempt.background else "setup"),
+        "requests": stats.get("requests", 0),
+        "discarded": stats.get("discarded", 0),
+        "errors": stats.get("errors") or None,
+        "fetch_s": round(stats.get("fetch_seconds", 0.0), 1),
+        "eval_s": round(now - accepted, 1),
+        "round_s": round(now - started, 1),
+        "images": len(attempt.seen),
+        "confirmations": attempt.confirmations,
+        "attempts": attempt.attempts,
+    }
+    attempt.image_stats = {}
+    return [entry]
+
+
+def setup_end_log(attempt, now):
+    return {"kind": "setup_end", "state": attempt.state, "images": len(attempt.seen),
+            "confirmations": attempt.confirmations, "attempts": attempt.attempts,
+            "minutes": round((now - attempt.started) / 60, 1),
+            "purpose": attempt.purpose or ("background" if attempt.background else "setup")}
+
+
+def write_setup_log(entries):
+    for entry in entries:
+        debug_log.record(**entry)
+
+
 def failed_angle_requires_fresh_image(trials, outcome):
     """Retry on a fresh image if tested angle variants still give an uncertain or wrong reading."""
     return trials > 0 and outcome in ("ocr_unclear", "difference")
@@ -1203,7 +1248,7 @@ def main():
 
     activity = {"state": "paused" if auto_paused["value"] else "waiting",
                 "detail": ("Automatik pausiert. Manuelle Tests bleiben verfügbar." if auto_paused["value"] else
-                           "Einrichtung erforderlich. Bitte Bildquelle festlegen." if setup_pending else
+                           "Einrichtung erforderlich: Lege zuerst die Bildquelle fest." if setup_pending else
                            "App läuft. Wartet auf die nächste automatische Prüfung.")}
 
     def set_activity(state, detail, *, completed=None, total=None, reading=None, candidates=None):
@@ -1563,6 +1608,8 @@ def main():
         provisional = False
         reflected = False
         stream_pictures = []
+        round_started = time.monotonic()
+        round_log = {"fetch_seconds": None, "accepted_at": None, "error": None, "captured": False}
         try:
             if attempt.intensive and not attempt.stream_unavailable:
                 stream_url = None
@@ -1588,7 +1635,9 @@ def main():
                 result = capture_edge_camera(base, zone, fetch=fetch)
             elif camera:
                 result = capture_camera(camera, reference, token, zone, fetch=fetch)
+            round_log["fetch_seconds"] = time.monotonic() - round_started
             if result is not None and not stopped():
+                round_log["captured"] = True
                 picture, drawn, sample = result
                 captured = sample_epoch(sample, zone, datetime.now(zone))
                 if captured is not None:
@@ -1655,6 +1704,7 @@ def main():
                         def on_image():
                             nonlocal frame_ready, deadline
                             now = time.monotonic()
+                            round_log["accepted_at"] = now
                             deadline = now + attempt.remaining(now)
                             attempt.last_image_at = attempt.searching_since = now
                             with settings_lock:
@@ -1918,9 +1968,15 @@ def main():
                         if attempt.reference_reading is not None and attempt.counter.get("timestamp") == captured:
                             attempt.reference_image_id = hashlib.sha256(picture).hexdigest()
         except (OSError, ValueError, TypeError, Image.DecompressionBombError) as error:
+            round_log["error"] = type(error).__name__
             print(f"Selbsteinrichtung konnte die Aufnahme nicht prüfen: {type(error).__name__}")
+        setup_entries = []
         with settings_lock:
             now = time.monotonic()
+            setup_entries = setup_round_log(attempt, round_log, round_started, now)
+            for entry in setup_entries:
+                entry["reason"] = calibration_preview.get("reason")
+                entry["reading"] = calibration_preview.get("reading")
             if attempt.searching_since is not None:
                 attempt.spent += now - attempt.searching_since
                 attempt.searching_since = None
@@ -1959,6 +2015,8 @@ def main():
                         calibration_configuration = calibration_configuration_now()
                         calibration_next = now + LAST_DIGIT_CAPTURE_INTERVAL
                         wake_worker.set()
+                        setup_entries.append(setup_end_log(attempt, now))
+                        write_setup_log(setup_entries)
                         return True
                 except (OSError, ValueError):
                     attempt.state = "save_failed"
@@ -1967,11 +2025,14 @@ def main():
             else:
                 attempt.state = "waiting"
                 attempt.stage = "verify_wait" if attempt.verification_pending else "waiting"
+            if attempt.state not in ("waiting", "testing"):
+                setup_entries.append(setup_end_log(attempt, now))
             calibration = attempt
             capture_interval = LAST_DIGIT_CAPTURE_INTERVAL if attempt.intensive else (
                 PERFECT_CONFIRMATION_INTERVAL if attempt.full_hits else CAPTURE_INTERVAL)
             calibration_next = now + capture_interval
             wake_worker.set()
+        write_setup_log(setup_entries)
         return True
 
     extra_meters = ExperimentalMeters(
@@ -2267,8 +2328,8 @@ def main():
                 })
             else:
                 if not manual:
-                    set_activity("working", "Warte auf ein Kamerabild …" if camera or esp_camera_only else
-                                 "Warte auf Bild und Messwerte vom ESP …")
+                    set_activity("working", "Kamerabild wird angefordert …" if camera or esp_camera_only else
+                                 "Die App wartet auf Bild und Messwerte vom ESP …")
                 if camera:
                     result = capture_camera(
                         camera, reference, token, zone,
@@ -2281,7 +2342,7 @@ def main():
             if mode == "slfork" and result is None and not slfork_cycle_failed(diagnostics):
                 print("Noch kein ausgerichtetes SLFork-Bild verfügbar. Neuer Versuch in 10 Sekunden.")
                 if not manual:
-                    set_activity("working", "Warte auf ein aktuelles Bild vom ESP …")
+                    set_activity("working", "Die App wartet auf ein aktuelles Bild vom ESP …")
                 time.sleep(10)
                 result = capture(base, diagnostics)
             if mode == "slfork" and not manual_upload and (
@@ -2326,7 +2387,7 @@ def main():
                     updated["source_connection_status"] = "stale"
                     if captured is None:
                         updated["source_connection_detail"] = (
-                            "ESP erreichbar, aber Bild ist älter als 15 Minuten oder hat einen ungültigen Zeitstempel."
+                            "ESP erreichbar, aber das Bild ist älter als 15 Minuten oder hat einen ungültigen Zeitstempel."
                             if not camera else "Kamera erreichbar, aber das Bild hat einen ungültigen Zeitstempel."
                         )
                     else:
@@ -3297,8 +3358,8 @@ def main():
                 updated["source_connection_status"] = "error"
                 updated["source_connection_detail"] = (
                     SLFORK_RAW_FAILED if raw_fallback else
-                    "Home-Assistant-Kamera nicht erreichbar oder Bild unlesbar. Kamera und Zugriff prüfen."
-                    if camera else "ESP nicht erreichbar oder Antwort unvollständig. Adresse und Verbindung prüfen."
+                    "Home-Assistant-Kamera nicht erreichbar oder Bild unlesbar. Prüfe Kamera und Zugriff."
+                    if camera else "ESP nicht erreichbar oder Antwort unvollständig. Prüfe Adresse und Verbindung."
                 )
                 outcome = "capture_unavailable"
 
@@ -3428,7 +3489,7 @@ def main():
                         print("Feinjustierung konnte nicht gespeichert werden.")
         set_activity("waiting", FRESH_OCR_NOTICE if updated.get("fresh_ocr_retry_at") else
                      REFLECTION_RECHECK_NOTICE if updated.get("reflection_retry_at") else
-                     "Warte auf einen neuen Messzyklus vom ESP …" if duplicate_cycle else
+                     "Die App wartet auf den nächsten Messzyklus des ESP …" if duplicate_cycle else
                      STANDALONE_PENDING_NOTICE if outcome == STANDALONE_PENDING else
                      "Letzte Prüfung beendet. Nächster Versuch nach kurzer Wartezeit."
                      if not updated.get("retry_suppressed") and outcome not in SUCCESSFUL_CHECKS else
@@ -3475,10 +3536,10 @@ def main():
                     except (OSError, ValueError) as error:
                         print(f"Automatische Nachjustierung nicht gestartet: {type(error).__name__}")
         if geometry_warning and reminder.enabled:
-            message = ("Nach zwei Stunden mit anhaltenden Fehlmessungen sucht die App einmal nach einem besseren Ziffernrahmen. "
-                       "Die bisherigen Einstellungen sind gesichert. Das Ergebnis steht in der App."
-                       if repair_started else "Die Ziffernerkennung ist seit mindestens zwei Stunden gestört. "
-                                              "Bitte prüfe den Bildausschnitt in der App.")
+            message = ("Seit zwei Stunden schlagen die Prüfungen fehl. Die App sucht deshalb einmal selbst nach einem besseren Ziffernrahmen. "
+                       "Die bisherigen Einstellungen sind gesichert. Das Ergebnis siehst du in der App."
+                       if repair_started else "Die Ziffern werden seit mindestens zwei Stunden nicht sicher erkannt. "
+                                              "Prüfe in der App Bildausschnitt, Fokus und Beleuchtung.")
             try:
                 reminder.call_service("persistent_notification.create", {
                     "notification_id": f"{NAMESPACE}_geometry_repair",

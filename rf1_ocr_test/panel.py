@@ -769,7 +769,7 @@ header{{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.6rem}}
 <p id="consumption-empty" class="settings-note">Die Statistik füllt sich mit bestätigten Ablesungen.</p>
 <details id="consumption-details" hidden>
 <summary>Verlauf nach Stunde und Tag</summary>
-<p class="settings-note">An Zeitgrenzen wird der Verbrauch zwischen zwei Ablesungen geschätzt. Lücken bleiben offen.</p>
+<p class="settings-note">Liegt eine Stunden- oder Tagesgrenze zwischen zwei Ablesungen, verteilt die App den Verbrauch anteilig. Zeiträume ohne Ablesung bleiben leer.</p>
 <div class="consumption-history">
 <div><strong>Letzte 24 Stunden</strong><ol id="consumption-hours"></ol></div>
 <div><strong>Letzte 7 Tage</strong><ol id="consumption-days"></ol></div>
@@ -909,7 +909,7 @@ name: Zählerstand (OCR)</code></pre>
 {reset_notice}
 <section class="panel calibration-card" id="calibration-settings" aria-labelledby="calibration-title" {calibration_hidden}>
 <h2 id="calibration-title" tabindex="-1">Selbsteinrichtung für Ausschnitt und Drehung</h2>
-<p>Die App sucht einen passenden Rahmen und Winkel. Nach drei bestätigten Aufnahmen übernimmt die Automatik die Gegenprüfung. Ziel sind fünf Minuten. Die Suche endet spätestens nach 20 Minuten.</p>
+<p>Die App sucht einen passenden Rahmen und Winkel. Nach drei bestätigten Aufnahmen übernimmt die Automatik die Gegenprüfung. Das dauert meist rund fünf Minuten, höchstens 20 Minuten.</p>
 <p>Ohne externen Vergleichswert hilft ein von Hand abgelesener Startwert. Ohne Startwert wartet die App zusätzlich auf einen plausiblen Zähleranstieg.</p>
 {calibration_saved_notice}
 <dl class="setup-phase" hidden><div><dt>Aktueller Schritt</dt><dd class="setup-current-step"></dd></div>
@@ -1056,7 +1056,7 @@ name: Zählerstand (OCR)</code></pre>
 <label>OCR-Versuche pro Bild<select name="attempts">{auto_attempt_options}</select></label>
 <label>Ziffernfarbe<select name="polarity">{auto_polarity_options}</select></label>
 <label>Prüfintervall (Minuten)<input type="number" name="interval_minutes" min="5" max="1440" value="{interval_minutes}" required></label>
-<details class="setup-help"><summary>ⓘ Warum das Prüfintervall ändern?</summary><p>Nach einem fehlgeschlagenen automatischen Test folgen bis zu zwei weitere Prüfungen im Abstand von fünf Minuten. Sind alle drei erfolglos, wartet die App eine Stunde und prüft dann erneut. Nach Erfolg gilt wieder dein eingestelltes Intervall. Ein kürzeres Intervall kann helfen, wenn sich der Zähler beim Weiterdrehen vorübergehend schlecht lesen lässt.</p></details>
+<details class="setup-help"><summary>ⓘ Warum das Prüfintervall ändern?</summary><p>Nach einem fehlgeschlagenen automatischen Test folgen bis zu zwei weitere Prüfungen im Abstand von fünf Minuten. Sind alle drei erfolglos, pausiert die App für die eingestellte Zeit (Standard: 30 Minuten) und prüft dann erneut. Nach Erfolg gilt wieder dein eingestelltes Intervall. Ein kürzeres Intervall kann helfen, wenn sich der Zähler beim Weiterdrehen vorübergehend schlecht lesen lässt.</p></details>
 <label>Maximaler Durchfluss (m³/h)<input name="max_flow" type="text" inputmode="decimal" maxlength="10" value="{max_flow}" required></label>
 <details class="setup-help"><summary>Verbrauch auch in kWh (optional)</summary>
 <div class="energy-factors">
@@ -1091,7 +1091,7 @@ name: Zählerstand (OCR)</code></pre>
 <p id="wizard-crop-confirmation">4. Prüfe die Vorschau und bestätige den Rahmen.</p>
 <label class="check-option"><input name="confirm_manual_crop" type="checkbox" value="1" required disabled> Dieser Rahmen umfasst die Ziffernreihe</label>
 </div>
-<details class="setup-help"><summary>ⓘ Bild einrichten</summary><p>Die automatische Erkennung versucht, den Ziffernrahmen zu finden. Bei einer unsicheren Ablesung folgen bis zu zehn zusätzliche Bildauswertungen; die App setzt einzelne Ziffern nur bei einer strikten Mehrheit zusammen. Nach drei fehlgeschlagenen automatischen Prüfungen mit unterschiedlichen Bildabrufen wartet sie eine Stunde auf ein neues Bild oder einen höheren Zählerstand. Prüfe bei wiederholten Fehlern auch Beleuchtung, Abstand und Fokus. Beim Livebild kann AI Meter Reader bis zu 10 frische Standbilder innerhalb von höchstens 20 Sekunden prüfen.</p></details>
+<details class="setup-help"><summary>ⓘ Bild einrichten</summary><p>Die automatische Erkennung versucht, den Ziffernrahmen zu finden. Bei einer unsicheren Ablesung folgen bis zu zehn zusätzliche Bildauswertungen; die App setzt einzelne Ziffern nur bei einer strikten Mehrheit zusammen. Nach drei fehlgeschlagenen automatischen Prüfungen mit unterschiedlichen Bildabrufen pausiert sie für die eingestellte Zeit (Standard: 30 Minuten). Prüfe bei wiederholten Fehlern auch Beleuchtung, Abstand und Fokus. Beim Livebild kann AI Meter Reader bis zu 10 frische Standbilder innerhalb von höchstens 20 Sekunden prüfen.</p></details>
 <div class="setup-controls"><button type="button" class="setup-back">Zurück</button><span class="setup-count"></span><button type="button" class="setup-next">Weiter</button></div>
 </fieldset>
 <fieldset class="setup-step" data-step="3"><legend>4. Hinweise und speichern</legend>
@@ -1288,7 +1288,7 @@ Bei anhaltenden Problemen benachrichtigen
 <summary><strong>App-Daten zurücksetzen</strong></summary>
 <div class="manual-content">
 <p class="settings-note">Du kannst die Einrichtung vollständig zurücksetzen oder die bestätigten Zählerstands- und Verbrauchsstatistiken behalten. Home-Assistant-App-Konfiguration und Entitäten bleiben in beiden Fällen bestehen.</p>
-<button type="button" id="open-reset-keep">Factory Reset – Statistik behalten</button>
+<button type="button" id="open-reset-keep">Werkseinstellungen – Statistik behalten</button>
 <button type="button" id="open-reset">Auf Werkseinstellungen zurücksetzen</button>
 </div></details>
 </div>
@@ -1331,7 +1331,7 @@ Bei anhaltenden Problemen benachrichtigen
 <button type="button" id="cancel-reset">Abbrechen</button>
 <button type="submit">Jetzt zurücksetzen</button>
 </form>
-<p id="reset-progress" class="settings-note" role="status" hidden>Werkreset angefordert. Eine laufende Prüfung kann den Reset verzögern. Bitte warte, bis sich die Einrichtung öffnet.</p>
+<p id="reset-progress" class="settings-note" role="status" hidden>Zurücksetzen angefordert. Eine laufende Prüfung kann das kurz verzögern. Danach öffnet sich die Einrichtung von selbst.</p>
 </dialog>
 </div>
 </main>
@@ -1483,7 +1483,7 @@ async function checkDemo(reflection) {{
     demoStatus.textContent = '';
     demoResults.hidden = false;
   }} catch (_) {{
-    demoStatus.textContent = 'Die Demo konnte nicht geladen werden. Bitte erneut versuchen.';
+    demoStatus.textContent = 'Die Demo konnte nicht geladen werden. Versuche es noch einmal.';
   }} finally {{
     buttons.forEach(button => button.disabled = false);
   }}
@@ -2313,20 +2313,20 @@ function refreshCalibrationImages(preview) {{
     unreadable: 'Der Ausschnitt ließ sich nicht auswerten.',
     unclear: 'Mindestens eine benötigte Ziffer blieb unklar.',
     penultimate_unclear: 'Die letzte Rolle war lesbar. Die vorletzte blieb trotz gezielter Prüfung offen.',
-    soft_image: 'Der Ausschnitt ist deutlich weniger scharf oder kontrastreich als zuvor. Warte auf ein besseres Bild.',
+    soft_image: 'Der Ausschnitt ist deutlich weniger scharf oder kontrastreich als zuvor. Die App wartet auf ein besseres Bild.',
     collecting: 'Grobsuche läuft. Die besten Zwischenkandidaten werden gespeichert.',
     disagree: 'Die OCR-Versuche lieferten unterschiedliche Ziffern.',
     reference_unavailable: 'Kein gültiger Vergleichswert zu diesem Bild.',
     reference_mismatch: 'Der gelesene Stand weicht vom Vergleichswert ab.',
-    position_error: 'Die Ziffernreihe scheint gegenüber der Referenz um eine Stelle verschoben.',
+    position_error: 'Die gelesene Ziffernreihe ist gegenüber dem Vergleichswert vermutlich um eine Stelle verschoben.',
     implausible: 'Der Stand passt zeitlich nicht zur letzten sicheren Ablesung.',
     await_movement: 'Der Rahmen ist lesbar. Die App wartet auf einen plausiblen Zähleranstieg.',
     accepted: 'Dieser Rahmen wurde auf dem aktuellen Bild bestätigt.',
-    roll_transition: 'Letzte Rolle dreht weiter. Warte auf eine eindeutige Ziffer.',
+    roll_transition: 'Die letzte Rolle dreht sich noch. Die App wartet auf eine eindeutige Ziffer.',
     optional_last_slot: 'Letzte Rolle auf diesem Bild gelesen. Sie ist noch nicht unabhängig bestätigt.',
     reflected_geometry: 'Die sichtbaren Ziffern stützen den markierten Rahmen. Die verdeckten Stellen bleiben offen.',
     accepted_geometry: 'Ziffern bis zur zweiten Nachkommastelle gelesen. Der Rahmen gilt vorläufig, weil noch kein Vergleichswert vorliegt.',
-    accepted_partial: 'Bis zur zweiten Nachkommastelle bestätigt. Die dritte Stelle bleibt offen.',
+    accepted_partial: 'Bis zur zweiten Nachkommastelle bestätigt. Die dritte Nachkommastelle ist noch offen.',
     verified: 'Die abschließende Gegenprobe war erfolgreich.',
   }};
   for (const section of document.querySelectorAll('.calibration-photo-panel')) {{
@@ -2431,10 +2431,10 @@ function refreshCalibration(status) {{
   const progress = document.querySelector('#calibration-progress');
   label.hidden = false;
   const messages = {{
-    waiting: 'Warte auf ein neues Kamerabild …',
+    waiting: 'Nächstes Kamerabild wird angefordert …',
     testing: 'Ausschnitt und Drehung werden geprüft …',
     saved: status.simplified ?
-      'Einrichtung abgeschlossen: Sieben Ziffern bestätigt. Die dritte Nachkommastelle wird zusätzlich intensiv geprüft.' :
+      'Einrichtung abgeschlossen: Sieben Ziffern sind bestätigt. Die dritte Nachkommastelle prüft die App zusätzlich im Hintergrund.' :
       status.intensive ? 'Dritte Nachkommastelle bestätigt. Die Ziffernrahmen sind übernommen.' :
       'Erfolgreich eingerichtet. Ausschnitt und Drehung sind übernommen.',
     saved_reflection: 'Ausschnitt mit markierter Spiegelung vorläufig gespeichert. Die verdeckten Ziffern bleiben offen.',
@@ -2443,20 +2443,20 @@ function refreshCalibration(status) {{
     failed: 'Selbsteinrichtung fehlgeschlagen. Prüfe Bildausschnitt, Kamerawinkel und Beleuchtung.',
     image_timeout: 'Kein neues Kamerabild erhalten. Prüfe die Bildquelle.',
     timeout: status.automatic ? 'Nachjustierung nach vier Minuten beendet. Der bisherige Rahmen bleibt gültig.' :
-      'Selbsteinrichtung nach 20 Minuten beendet. Keine Einstellung sicher bestätigt.',
+      'Selbsteinrichtung nach 20 Minuten beendet, ohne dass ein Rahmen sicher bestätigt wurde.',
     cancelled: 'Selbsteinrichtung gestoppt.',
     save_failed: 'Ausschnitt und Drehung konnten nicht gespeichert werden.',
   }};
   const clock = Math.floor(status.seconds / 60) + ':' + String(status.seconds % 60).padStart(2, '0');
   const stages = {{
     queued: status.followup ?
-      'Ausschnitt gespeichert. Suche jetzt gezielt nach der dritten Nachkommastelle …' :
+      'Ausschnitt gespeichert. Die App sucht jetzt gezielt die dritte Nachkommastelle …' :
       status.known_good_available ? 'Die App prüft zuerst den zuletzt bestätigten Rahmen.' :
       'Selbsteinrichtung wird vorbereitet …',
     capture: 'Kamerabild wird abgerufen …',
-    search: 'Grobkalibrierung: Suche nach der Ziffernreihe …',
+    search: 'Grobsuche: Die App sucht die Ziffernreihe …',
     shortlist: 'Intensivprüfung für Kandidat ' + status.variant + ' …',
-    digit_probe: 'Teste die vermutete Position der letzten Rolle auf diesem Bild …',
+    digit_probe: 'Die vermutete Position der letzten Rolle wird auf diesem Bild getestet …',
     angle: 'Drehung wird geprüft. Der Winkel steht am Vorschaubild.',
     last_digit: 'Nur die letzte Rolle im gespeicherten Ausschnitt wird geprüft …',
     refine: status.preview?.weak_positions?.length ?
@@ -2467,7 +2467,7 @@ function refreshCalibration(status) {{
     verify: 'Gefundenen Rahmen mit der normalen Prüfung gegenprüfen …',
     ocr: status.preview?.crop && status.preview.angle !== status.rotation ?
       'Nächster Rahmen wird geprüft …' :
-      'Prüfe Rahmen ' + status.variant + ' mit Drehung ' + status.rotation + '° …',
+      'Rahmen ' + status.variant + ' wird mit Drehung ' + status.rotation + '° geprüft …',
   }};
   const steps = status.intensive ? ['Kamerabild laden', 'Letzte Rolle prüfen', 'Ergebnis gegenprüfen'] :
     ['Kamerabild laden', 'Ziffernreihe finden', 'Rahmen und Drehung prüfen', 'Rahmen bestätigen'];
@@ -2496,7 +2496,7 @@ function refreshCalibration(status) {{
   let message = active && stages[status.stage] ? stages[status.stage] : messages[status.state] || '';
   if (status.state === 'waiting' && status.stage !== 'queued') {{
     if (reason === 'roll_transition') {{
-      message = 'Letzte Rolle dreht weiter. Warte auf eine eindeutige Ziffer.' +
+      message = 'Die letzte Rolle dreht sich noch. Die App wartet auf eine eindeutige Ziffer.' +
         (status.preview?.wheel_transition ? ' ' + status.preview.wheel_transition.join(' → ') : '');
     }} else if (reason === 'soft_image') {{
       message = 'Gegenprobe wartet auf ein besseres Bild. Der bestätigte Rahmen bleibt ausgewählt.';
@@ -2522,8 +2522,8 @@ function refreshCalibration(status) {{
       message = 'Ziffernfeld bestätigt. Die App prüft mit dem nächsten neuen Bild weiter.';
     }} else if (reason === 'no_region') {{
       message = status.tested >= 2 ?
-        'Ziffernfeld nicht gefunden. Grenze das Ziffernfeld im Kamerabild ein.' :
-        'Noch kein Ziffernbereich gefunden. Warte auf ein neues Bild …';
+        'Ziffernfeld nicht gefunden. Markiere den ungefähren Bereich im Kamerabild.' :
+        'Noch kein Ziffernbereich gefunden. Die App prüft gleich das nächste Bild …';
     }}
   }}
   if (active && ['shortlist', 'refine', 'waiting'].includes(status.stage) && status.row_found) {{
@@ -2548,7 +2548,7 @@ function refreshCalibration(status) {{
       'Dritte Nachkommastelle bleibt unbestätigt. Du kannst später erneut suchen oder sie manuell markieren.';
   }}
   if (active && status.preview?.last_digit_hint) {{
-    message += ' Vorschlag für die letzte Rolle gefunden. Warte auf Bestätigung mit einem neuen Bild.';
+    message += ' Vorschlag für die letzte Rolle gefunden. Die Bestätigung folgt mit einem neuen Bild.';
   }}
   if (active && !status.intensive && !status.simplified && (status.awaiting_start_value || reason === 'await_movement')) {{
     message += ' Ohne Vergleichswert braucht die App einen plausiblen Anstieg oder einen Startwert.';
@@ -2709,7 +2709,7 @@ async function openDigitCorrection(last = false) {{
     correctionStatus.textContent = '';
     correctionPosition.focus();
   }} catch {{
-    correctionStatus.textContent = 'Kein passendes Kamerabild verfügbar. Warte auf eine reguläre Prüfung.';
+    correctionStatus.textContent = 'Kein passendes Kamerabild vorhanden. Es kommt mit der nächsten regulären Prüfung.';
   }} finally {{
     correctionBusy = false;
     updateCorrectionControls();
@@ -2788,9 +2788,9 @@ correctionSearch.addEventListener('click', () => submitDigitCorrection('search')
 correctionSave.addEventListener('click', () => submitDigitCorrection('save'));
 function renderOcrCandidates(list, candidates) {{
   const evidence = {{
-    accepted: 'Zwei Profile stimmen überein, Prüfung akzeptiert den Kandidaten',
-    agreement: 'Zwei Profile stimmen überein, Vergleich offen',
-    disagreement: 'Profile lesen unterschiedlich',
+    accepted: 'Zwei Leseprofile stimmen überein – Kandidat übernommen',
+    agreement: 'Zwei Leseprofile stimmen überein, Vergleich steht noch aus',
+    disagreement: 'Leseprofile liefern unterschiedliche Ziffern',
     unclear: 'Ziffer blieb offen',
   }};
   const key = JSON.stringify(candidates || []);
@@ -3260,7 +3260,7 @@ extraForm.addEventListener('submit', async event => {{
     extraStatus.textContent = 'Zähler gespeichert.';
     await refreshExperimental();
   }} catch (_) {{
-    extraStatus.textContent = 'Bitte Sensor-IDs und Prüfintervalle überprüfen.';
+    extraStatus.textContent = 'Prüfe die Sensor-IDs und Prüfintervalle.';
   }}
 }});
 function showStale(kind) {{
@@ -3713,7 +3713,7 @@ def start_panel(
     def geometry_warning(history, auto_rules, language):
         recovery = history.get("geometry_recovery", {})
         if recovery.get("scheduled_at") and recovery.get("first_failure_at"):
-            message = "Die Ziffernerkennung ist seit mindestens zwei Stunden gestört. Bitte Bildausschnitt prüfen."
+            message = "Die Ziffern werden seit mindestens zwei Stunden nicht sicher erkannt. Prüfe Bildausschnitt, Fokus und Beleuchtung."
             return EN_UI[message] if language == "en" else message
         failures = recovery.get("failures", 0)
         if not failures:
@@ -3815,9 +3815,9 @@ def start_panel(
                 show_attempts = status == "ocr_unclear"
             elif status in ("stale_sample", "capture_unavailable") and not history.get("last_epoch"):
                 heading = "Noch kein aktuelles Zählerbild"
-                detail = ("Waiting for a current meter image. The app will retry automatically."
+                detail = ("The app retries automatically as soon as the image source delivers a new image."
                           if language == "en" else
-                          "Warte auf ein aktuelles Zählerbild. Die App versucht es automatisch erneut.")
+                          "Die App versucht es automatisch erneut, sobald die Bildquelle ein neues Bild liefert.")
             else:
                 detail = ""
             if str(history.get("check_detail", "")).startswith(STANDALONE_REJECTED_NOTICE):
@@ -3890,11 +3890,11 @@ def start_panel(
             clock = (datetime.fromtimestamp(next_at, statistics_zone).strftime("%H:%M")
                      if type(next_at) in (int, float) and next_at > 0 else "")
             recovery_notice = (
-                f"{failure_attempts} automatic checks failed. Waiting for a higher meter reading or a new image."
+                f"{failure_attempts} automatic checks failed. The app pauses briefly and then tries again."
                 + (f" Next attempt at about {clock}." if clock else "")
                 if language == "en" else
-                f"{failure_attempts} automatische Prüfungen fehlgeschlagen. Es wird auf einen höheren Zählerstand "
-                "oder ein neues Bild gewartet." + (f" Nächster Versuch gegen {clock} Uhr." if clock else "")
+                f"{failure_attempts} automatische Prüfungen fehlgeschlagen. Die App pausiert kurz "
+                "und versucht es dann erneut." + (f" Nächster Versuch gegen {clock} Uhr." if clock else "")
             )
         elif failure_attempts:
             recovery_notice = (
@@ -4171,8 +4171,8 @@ def start_panel(
             reset_message = {
                 "done": ("Werkseinstellungen wiederhergestellt. Verbrauchsstatistik und Gesamtverbrauch sind erhalten. Die Einrichtung öffnet sich erneut."
                          if keep_reset_statistics else "Werkseinstellungen wiederhergestellt. Die Einrichtung öffnet sich erneut."),
-                "pending": "Werkreset läuft noch. Die Einrichtung öffnet sich, sobald er fertig ist.",
-                "failed": "Werkreset konnte nicht vollständig ausgeführt werden.",
+                "pending": "Das Zurücksetzen läuft noch. Die Einrichtung öffnet sich, sobald es fertig ist.",
+                "failed": "Das Zurücksetzen wurde nicht vollständig ausgeführt.",
             }.get(reset_state, "")
             if language == "en" and reset_message:
                 reset_message = EN_UI[reset_message]
@@ -4215,7 +4215,7 @@ def start_panel(
                 '<details class="source-image" id="test-source-preview" {test_source_visible}>'
                 '<summary>Originalbild zum Ablesen</summary>'
                 f'<img id="test-source-image" src="testbild.jpg?v={test_source_version}" alt="Aktuelles Kamerabild für den manuellen Test">'
-                '<p class="legend" id="test-source-empty" hidden>Kein Bild vorhanden. Bitte Bildquelle und Verbindung prüfen und den manuellen Test erneut starten.</p>'
+                '<p class="legend" id="test-source-empty" hidden>Kein Bild vorhanden. Prüfe Bildquelle und Verbindung und starte den manuellen Test erneut.</p>'
                 '</details>'
             )
             page = translate_page(PAGE) if language == "en" else PAGE

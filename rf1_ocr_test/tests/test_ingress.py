@@ -293,7 +293,7 @@ class IngressTests(IngressFixture):
         self.assertEqual("Die App beobachtet, ob die Erkennungsprobleme anhalten.", status["geometry_warning"])
         self.history.write_text(json.dumps({"geometry_recovery": {"failures": 3, "first_failure_at": 100, "scheduled_at": 7300}}))
         status = json.loads(self.request("/automatic")[0])
-        self.assertIn("seit mindestens zwei Stunden gestört", status["geometry_warning"])
+        self.assertIn("seit mindestens zwei Stunden nicht sicher erkannt", status["geometry_warning"])
 
     def test_one_digit_search_proposes_and_save_updates_only_boxes(self):
         self.source_selected = True
@@ -393,7 +393,7 @@ class IngressTests(IngressFixture):
         self.assertTrue(json.loads(self.request("/status")[0])["preview"])
 
         self.assertEqual((303, "./?reset=pending&ui=settings"), self.submit("/werkreset"))
-        self.assertIn("Werkreset läuft noch.", self.request("/?reset=pending&ui=settings")[0])
+        self.assertIn("Das Zurücksetzen läuft noch.", self.request("/?reset=pending&ui=settings")[0])
         self.reset_manual_progress()
         self.reset_state = "done"
         self.update(job["request_id"], "done", "Veraltetes Ergebnis", preview=True)
@@ -547,7 +547,7 @@ class IngressTests(IngressFixture):
         }))
         status = json.loads(self.request("/automatic")[0])
         self.assertIn("3 automatische Prüfungen fehlgeschlagen", status["recovery_notice"])
-        self.assertIn("höheren Zählerstand", status["recovery_notice"])
+        self.assertIn("pausiert kurz", status["recovery_notice"])
         self.assertNotIn("einer Stunde", status["recovery_notice"])
         self.assertTrue(status["retry_suppressed"])
 
@@ -1213,7 +1213,7 @@ class BrowserTests(IngressFixture):
             self.assertTrue(self.rules["reflection_estimate_enabled"])
             self.assertEqual("12345,67", self.rules["fallback_value"])
             self.calibration.update(state="testing", stage="ocr", rotation=-6, variant=2, seconds=880)
-            page.locator("#calibration-overview-state").filter(has_text="Prüfe Rahmen 2 mit Drehung -6°").wait_for()
+            page.locator("#calibration-overview-state").filter(has_text="Rahmen 2 wird mit Drehung -6° geprüft").wait_for()
             page.locator("#calibration-overview .setup-current-step").filter(has_text="Ziffernreihe finden").wait_for()
             page.locator("#calibration-overview .setup-next-step").filter(has_text="Rahmen und Drehung prüfen").wait_for()
             self.assertEqual("20", page.locator("#calibration-overview-progress").get_attribute("value"))
@@ -1250,7 +1250,7 @@ class BrowserTests(IngressFixture):
                                     awaiting_start_value=False, preview={"frame": 15, "reason": "no_region"})
             page.locator("#calibration-overview-state").filter(has_text="Noch kein Ziffernbereich gefunden").wait_for()
             self.calibration["tested"] = 73
-            page.locator("#calibration-overview-state").filter(has_text="Grenze das Ziffernfeld im Kamerabild ein").wait_for()
+            page.locator("#calibration-overview-state").filter(has_text="Markiere den ungefähren Bereich im Kamerabild").wait_for()
             self.assertNotIn("Rahmen getestet", overview.inner_text())
             page.locator("#calibration-state").filter(
                 has_text="Bilder geprüft: 73 · Rahmen getestet: 0").wait_for(state="attached")
@@ -1343,7 +1343,7 @@ class BrowserTests(IngressFixture):
         from playwright.sync_api import sync_playwright
 
         self.setup_pending = False
-        self.activity = {"state": "working", "detail": "Warte auf Bild und Messwerte vom ESP …"}
+        self.activity = {"state": "working", "detail": "Die App wartet auf Bild und Messwerte vom ESP …"}
         current = self.root / "current.jpg"
         Image.new("RGB", (240, 60), "white").save(current, "JPEG")
         with sync_playwright() as playwright:

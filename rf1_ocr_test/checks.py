@@ -275,7 +275,7 @@ def explain_uncertain_positions(readings, decimals, integer_digits=5):
     """Explain differences at digit positions relevant to this comparison."""
     positions = uncertain_positions(readings, decimals, integer_digits)
     if positions is None:
-        return "Keine Ziffern lesbar. Ausschnitt und Licht prüfen."
+        return "Keine Ziffern lesbar. Prüfe Ausschnitt und Licht."
     if not positions:
         return "OCR unsicher. Bild prüfen."
     groups = []
@@ -420,24 +420,24 @@ def compare_sample(data, ocr, decimals, *, ocr_confirmed=True, integer_digits=5,
     if data.get("reference_is_fallback"):
         return "slfork_unclear", FALLBACK_NOTICE
     if not ocr_confirmed:
-        return "ocr_unclear", "Zählerstand nicht sicher erkannt. Bitte die unklaren Stellen im Kamerabild prüfen."
+        return "ocr_unclear", "Zählerstand nicht sicher erkannt. Prüfe die unklaren Stellen im Kamerabild."
     prefix_reader = meter_prefix if exact_prefix else rounded_meter_prefix
     value = prefix_reader(ocr, decimals, integer_digits)
     if value is None:
-        return "ocr_unclear", "Zählerstand nicht lesbar. Mindestens eine benötigte Ziffer konnte nicht erkannt werden. Bitte das Kamerabild prüfen."
+        return "ocr_unclear", "Zählerstand nicht lesbar. Mindestens eine benötigte Ziffer konnte nicht erkannt werden. Prüfe das Kamerabild."
     if data.get("reference_required") is False:
         return "ocr_only", "Zählerstand gelesen, aber ohne Referenzwert nicht bestätigt. Vergleichseinstellung: " + comparison_scope(decimals) + "."
     source_status = data.get("slfork_value_status") or ""
     if re.match(r"^[EW][0-9]+(?:\s|$)", str(source_status)):
-        return "slfork_unclear", "Der ESP meldet ein Problem mit der Zählerablesung. Bitte den Wert direkt am ESP prüfen."
+        return "slfork_unclear", "Der ESP meldet ein Problem mit der Zählerablesung. Prüfe den Wert direkt am ESP."
     if data.get("slfork_process_error") in (-1, -2, "-1", "-2"):
-        return "slfork_unclear", "Die Messung am ESP wurde abgebrochen. Bitte den ESP prüfen und die nächste Aufnahme abwarten."
+        return "slfork_unclear", "Die Messung am ESP wurde abgebrochen. Prüfe den ESP; die nächste Aufnahme folgt automatisch."
     raw = prefix_reader(data["raw_value"], decimals, integer_digits)
     actual = prefix_reader(data["actual_value"], decimals, integer_digits)
     if raw is None or actual is None:
         return "slfork_unclear", "Referenzwert fehlt oder ist ungültig."
     if raw != actual:
-        return "slfork_unclear", "Der ESP liefert widersprüchliche Zählerwerte. Bitte den angezeigten Stand am ESP prüfen."
+        return "slfork_unclear", "Der ESP liefert widersprüchliche Zählerwerte. Prüfe den angezeigten Stand am ESP."
     if value != actual:
         if decimals == 0:
             return "difference", "Abweichung: Die vollen Kubikmeter stimmen nicht überein. Bitte das Zählerbild prüfen."
@@ -485,15 +485,15 @@ LAST_DIGIT_PASS = "Die ersten zwei Nachkommastellen stimmen überein. Die dritte
 LAST_DIGIT_RETRIES = 3
 SEVENTH_DIGIT_WAIT_SECONDS = 30 * 60
 SEVENTH_DIGIT_WAIT_NOTICE = (
-    "Warte auf einen höheren Zählerstand. Die nächste automatische Prüfung erfolgt "
-    "wegen der unklaren siebten Ziffer in 30 Minuten."
+    "Die siebte Ziffer ist unklar. Die App wartet, bis der Zählerstand weiter steigt, "
+    "und prüft in 30 Minuten erneut."
 )
 SEVENTH_DIGIT_PASS = (
-    "Die ersten sechs Ziffern stimmen mit der gültigen Referenz überein (ohne Rundung). "
-    "Die siebte Ziffer ist noch nicht sicher lesbar: Für diesen Durchlauf nur "
-    "eine Nachkommastelle teilbestätigt. Der Verbrauch und die eingestellte "
-    "Genauigkeit bleiben unverändert. Die App wartet auf einen höheren "
-    "Zählerstand; deshalb wird das Prüfintervall vorübergehend auf 30 Minuten gesetzt."
+    "Die ersten sechs Ziffern stimmen ungerundet mit dem Vergleichswert überein. "
+    "Die siebte Ziffer ist noch nicht sicher lesbar, deshalb ist diese Prüfung nur "
+    "bis zur ersten Nachkommastelle bestätigt. Verbrauch und eingestellte Genauigkeit "
+    "bleiben unverändert. Bis der Zählerstand weiter steigt, prüft die App "
+    "vorübergehend alle 30 Minuten."
 )
 SUCCESSFUL_CHECKS = ("match", "match_with_warning", "ocr_only")
 STANDALONE_PENDING = "standalone_pending"

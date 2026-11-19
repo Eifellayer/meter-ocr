@@ -32,7 +32,7 @@ class AppIdentityTests(unittest.TestCase):
     def test_release_metadata_preserves_stable_app_identity(self):
         config = yaml.safe_load((APP / "config.yaml").read_text(encoding="utf-8"))
         repository = yaml.safe_load((APP.parent / "repository.yaml").read_text(encoding="utf-8"))
-        self.assertEqual("0.1.16", config["version"])
+        self.assertEqual("0.1.17", config["version"])
         self.assertEqual("rf1_ocr_test", config["slug"])
         self.assertEqual("AI Meter Reader", config["name"])
         self.assertNotIn("stage", config)
@@ -66,7 +66,7 @@ class DocumentationTests(unittest.TestCase):
                 self.assertLess(len(page), 4000)
                 self.assertIn(title, page)
                 self.assertIn("](rf1_ocr_test/DOCS.md)", page)
-                self.assertIn("Version 0.1.16", page)
+                self.assertIn("Version 0.1.17", page)
                 self.assertIn("supervisor_add_addon_repository", page)
                 self.assertIn("repository_url=https%3A%2F%2Fgithub.com%2FEifellayer%2Fmeter-ocr", page)
                 self.assertIn("](docs/HISTORY.md)", page)
@@ -79,10 +79,10 @@ class DocumentationTests(unittest.TestCase):
             self.assertIn(text, de)
         for text in ("10 minutes by default", "5 minutes", "30 minutes by default", "ESP as camera only"):
             self.assertIn(text, en)
-        self.assertIn("Version 0.1.16", app_docs)
+        self.assertIn("Version 0.1.17", app_docs)
         self.assertIn("sensor.rf1_verbrauch_gesamt", app_docs)
         changelog = (APP / "CHANGELOG.md").read_text(encoding="utf-8")
-        self.assertIn("## 0.1.16", changelog)
+        self.assertIn("## 0.1.17", changelog)
         self.assertIn("## 0.1.0", changelog)
         self.assertNotIn("## 0.6", changelog)
 
@@ -331,7 +331,7 @@ class PanelTests(unittest.TestCase):
         self.assertNotIn("Decimal digits", english_uncertain_positions(
             ["12345.???", "12945.???"], 0))
         self.assertIn("ESP", english_result(
-            "Der ESP meldet ein Problem mit der Zählerablesung. Bitte den Wert direkt am ESP prüfen.",
+            "Der ESP meldet ein Problem mit der Zählerablesung. Prüfe den Wert direkt am ESP.",
             "slfork_unclear", 0))
 
     def test_overlay_green_for_read_digit_red_for_unknown(self):

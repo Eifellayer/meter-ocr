@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.17
+
+- Debug-Protokoll für die Selbsteinrichtung: Je ausgewertetem Bild ein Eintrag `setup_image` mit Anzahl der Bildanforderungen, verworfenen Doppelbildern, Abruffehlern, Abruf- und Auswertedauer, Bestätigungen und Lesestand; am Ende ein Eintrag `setup_end` mit Ergebnis und Dauer. Damit lässt sich klären, warum die Einrichtung manchmal nur alle paar Minuten ein neues Bild zählt.
+- Texte überarbeitet (DE und EN): Statusmeldungen beschreiben, was die App tut, statt wie eine Aufforderung zu klingen („Nächstes Kamerabild wird angefordert …“ statt „Warte auf ein neues Kamerabild …“). Hinweise wie „Bitte … prüfen“ sind direkte Handlungshinweise („Prüfe …“).
+- Veraltete Angabe korrigiert: Nach drei Fehlprüfungen pausiert die App für die eingestellte Zeit (Standard 30 Minuten), nicht mehr eine Stunde.
+- Klarere Meldungen zur siebten Ziffer, zur gestörten Erkennung nach zwei Stunden, zum Zurücksetzen, zur Stundenverteilung im Verbrauch und zu Leseprofilen.
+
 ## 0.1.16
 
 - Texte nach der Einrichtung: „In den nächsten 20 Minuten optimiert die App im Hintergrund noch Rahmen und Winkel.“ und „Optimierung läuft (noch höchstens X min): Alle Ziffern sind gelesen, die App verbessert noch Rahmen und Winkel.“ Die doppelte Minutenangabe entfällt; der Hinweis zu 2 von 3 Nachkommastellen steht jetzt am Ende.

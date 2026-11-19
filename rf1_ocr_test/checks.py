@@ -459,7 +459,7 @@ def compare_sample(data, ocr, decimals, *, ocr_confirmed=True, integer_digits=5,
 
 LAST_DIGIT_NOTICE = "Nur die dritte Nachkommastelle ist unklar oder weicht ab."
 REDUCED_PRECISION_NOTICE = ("Die letzte verglichene Rolle war unklar, vermutlich drehte sie sich gerade. Diese Prüfung wurde deshalb mit einer "
-                            "Nachkommastelle weniger bestätigt; der Rest folgt bei der nächsten Prüfung.")
+                            "Nachkommastelle weniger bestätigt. Die nächste Prüfung vergleicht wieder alle Stellen.")
 MOVING_DIGIT_NOTICE = ("Nur die letzte verglichene Stelle war unklar – vermutlich drehte sich die Rolle gerade. "
                        "Die nächste Prüfung folgt automatisch.")
 
@@ -481,7 +481,7 @@ def only_last_compared_unclear(ocr, decimals, integer_digits=5):
     shown = text[:compared]
     return (len(shown) == compared and shown[-1] == "?"
             and "?" not in shown[:-1] and shown[:integer_digits].isdigit())
-LAST_DIGIT_PASS = "Die ersten zwei Nachkommastellen stimmen überein. Die dritte Stelle bleibt unbestätigt."
+LAST_DIGIT_PASS = "Die ersten zwei Nachkommastellen stimmen überein. Die dritte ist bei dieser Prüfung noch nicht bestätigt."
 LAST_DIGIT_RETRIES = 3
 SEVENTH_DIGIT_WAIT_SECONDS = 30 * 60
 SEVENTH_DIGIT_WAIT_NOTICE = (
@@ -497,7 +497,7 @@ SEVENTH_DIGIT_PASS = (
 )
 SUCCESSFUL_CHECKS = ("match", "match_with_warning", "ocr_only")
 STANDALONE_PENDING = "standalone_pending"
-STANDALONE_PENDING_NOTICE = "Erstes Bild gelesen. Warte auf die zweite Aufnahme zur Gegenprüfung."
+STANDALONE_PENDING_NOTICE = "Erstes Bild gelesen. Die App wartet auf eine zweite Aufnahme zur Gegenprüfung."
 STANDALONE_VERIFIED_NOTICE = "Zählerstand mit einer zweiten Aufnahme gegengeprüft."
 STANDALONE_REJECTED_NOTICE = "Die zweite Aufnahme passt nicht zum ersten Zählerstand."
 REFLECTION_SUGGEST_AFTER = 3

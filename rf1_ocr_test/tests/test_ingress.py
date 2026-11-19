@@ -467,7 +467,7 @@ class IngressTests(IngressFixture):
         self.rules.update(decimals=3, precision_mode=True)
         self.history.write_text(json.dumps({
             "check_status": "match_with_warning", "comparison_decimals": 3, "precision_mode": True,
-            "check_detail": "Die ersten zwei Nachkommastellen stimmen überein. Die dritte Stelle bleibt unbestätigt.",
+            "check_detail": "Die ersten zwei Nachkommastellen stimmen überein. Die dritte ist bei dieser Prüfung noch nicht bestätigt.",
         }))
         status = json.loads(self.request("/automatic")[0])
         self.assertEqual(("notice", "Prüfung bestanden mit Hinweis"), (status["tone"], status["heading"]))
@@ -496,7 +496,7 @@ class IngressTests(IngressFixture):
         self.assertIn("8th digit", english["heading"])
         page, _ = self.request("/")
         self.assertIn("partialEighthDigit", page)
-        self.assertIn("Eingestellt: 3 Nachkommastellen", page)
+        self.assertIn("2 von 3 Nachkommastellen verglichen", page)
         self.rules["precision_mode"] = True
         strict = json.loads(self.request("/automatic")[0])
         # 0.1.2: precision mode only means "compare three decimals"; partial mode still applies.
@@ -1076,7 +1076,7 @@ class BrowserTests(IngressFixture):
                                     preview={"frame": 15, "crop": 15, "reading": "?"})
             page.locator("#calibration-overview.background-only").wait_for(state="visible")
             page.locator("#calibration-overview-state").filter(
-                has_text="die App stimmt die dritte Nachkommastelle im Hintergrund noch fein ab").wait_for()
+                has_text="sucht die App noch die dritte Nachkommastelle").wait_for()
             self.assertEqual("true", page.locator("#tab-overview").get_attribute("aria-selected"))
             self.assertTrue(page.locator(".activity-status").is_visible())
             for selector in (".setup-phase", ".calibration-candidate-panel",

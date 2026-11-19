@@ -612,7 +612,7 @@ header{{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.6rem}}
 <span class="setup-success-icon" aria-hidden="true">✓</span>
 <div><strong>Zähler erfolgreich eingerichtet</strong>
 <p id="setup-duration" {setup_duration_hidden}>{setup_duration}</p>
-<p>Die Automatik läuft. In den nächsten 20 Minuten stimmt die App die Rahmen noch im Hintergrund fein ab.</p></div>
+<p>Die Automatik läuft. In den nächsten 20 Minuten optimiert die App im Hintergrund noch Rahmen und Winkel.</p></div>
 </div>
 <div class="activity-status" data-state="{automatic_activity_state}" data-routine-ok="{automatic_routine_ok}">
 <p role="status" aria-live="polite"><strong>Automatik:</strong> <span id="automatic-activity">{automatic_activity}</span></p>
@@ -2325,7 +2325,7 @@ function refreshCalibrationImages(preview) {{
     roll_transition: 'Letzte Rolle dreht weiter. Warte auf eine eindeutige Ziffer.',
     optional_last_slot: 'Letzte Rolle auf diesem Bild gelesen. Sie ist noch nicht unabhängig bestätigt.',
     reflected_geometry: 'Die sichtbaren Ziffern stützen den markierten Rahmen. Die verdeckten Stellen bleiben offen.',
-    accepted_geometry: 'Ziffern bis zur zweiten Nachkommastelle gelesen. Der Rahmen zählt vorläufig. Der Vergleichswert fehlt.',
+    accepted_geometry: 'Ziffern bis zur zweiten Nachkommastelle gelesen. Der Rahmen gilt vorläufig, weil noch kein Vergleichswert vorliegt.',
     accepted_partial: 'Bis zur zweiten Nachkommastelle bestätigt. Die dritte Stelle bleibt offen.',
     verified: 'Die abschließende Gegenprobe war erfolgreich.',
   }};
@@ -2432,7 +2432,7 @@ function refreshCalibration(status) {{
   label.hidden = false;
   const messages = {{
     waiting: 'Warte auf ein neues Kamerabild …',
-    testing: 'Prüfe Ausschnitt und Drehung …',
+    testing: 'Ausschnitt und Drehung werden geprüft …',
     saved: status.simplified ?
       'Einrichtung abgeschlossen: Sieben Ziffern bestätigt. Die dritte Nachkommastelle wird zusätzlich intensiv geprüft.' :
       status.intensive ? 'Dritte Nachkommastelle bestätigt. Die Ziffernrahmen sind übernommen.' :
@@ -2458,15 +2458,15 @@ function refreshCalibration(status) {{
     shortlist: 'Intensivprüfung für Kandidat ' + status.variant + ' …',
     digit_probe: 'Teste die vermutete Position der letzten Rolle auf diesem Bild …',
     angle: 'Drehung wird geprüft. Der Winkel steht am Vorschaubild.',
-    last_digit: 'Prüfe nur die letzte Rolle im gespeicherten Ausschnitt …',
+    last_digit: 'Nur die letzte Rolle im gespeicherten Ausschnitt wird geprüft …',
     refine: status.preview?.weak_positions?.length ?
       'Einzelziffernsuche. Offene Stellen von links: ' + status.preview.weak_positions.join(', ') + '.' :
-      'Feinkalibrierung: Prüfe Rahmen und Drehung am vorhandenen Bild …',
-    verify_wait: status.intensive ? 'Letzte Rolle gefunden. Warte auf ein frisches Bild zur Gegenprobe …' :
-      'Rahmen gefunden. Warte auf ein frisches Bild zur Gegenprüfung …',
+      'Feinkalibrierung: Rahmen und Drehung werden am vorhandenen Bild geprüft …',
+    verify_wait: status.intensive ? 'Letzte Rolle gefunden. Die App wartet auf ein frisches Bild zur Gegenprobe …' :
+      'Rahmen gefunden. Die App wartet auf ein frisches Bild zur Gegenprüfung …',
     verify: 'Gefundenen Rahmen mit der normalen Prüfung gegenprüfen …',
     ocr: status.preview?.crop && status.preview.angle !== status.rotation ?
-      'Prüfe den nächsten Rahmen …' :
+      'Nächster Rahmen wird geprüft …' :
       'Prüfe Rahmen ' + status.variant + ' mit Drehung ' + status.rotation + '° …',
   }};
   const steps = status.intensive ? ['Kamerabild laden', 'Letzte Rolle prüfen', 'Ergebnis gegenprüfen'] :
@@ -2504,20 +2504,20 @@ function refreshCalibration(status) {{
       message = 'Grobtests: ' + status.coarse_attempts + '/' + status.coarse_limit + '.';
     }} else if (status.stage === 'verify_wait' && reason === 'accepted') {{
       message = status.coarse_complete ?
-        'Drei Treffer mit 100 %: Grobprüfung beendet. Warte auf ein frisches Bild für die Gegenprobe.' :
-        'Treffer gesammelt. Warte auf ein frisches Bild für die Gegenprobe.';
+        'Drei Treffer mit 100 %: Grobprüfung beendet. Die App wartet auf ein frisches Bild für die Gegenprobe.' :
+        'Treffer gesammelt. Die App wartet auf ein frisches Bild für die Gegenprobe.';
     }} else if (reason === 'reference_unavailable') {{
       message = 'Grün bedeutet lesbar. Ein gültiger Vergleichswert für dieses Bild fehlt.';
     }} else if (reason === 'reference_mismatch') {{
       message = 'Grün bedeutet lesbar. Der abgelesene Stand passt noch nicht zum Vergleichswert.';
     }} else if (reason === 'await_clear_roller') {{
-      message = 'Eine der ersten sieben Ziffern dreht gerade. Der gefundene Rahmen bleibt erhalten; ein frisches Bild wird geprüft.';
+      message = 'Eine der ersten sieben Ziffern dreht sich gerade. Der gefundene Rahmen bleibt erhalten; ein frisches Bild wird geprüft.';
     }} else if (reason === 'await_movement') {{
       message = 'Ziffernfeld ist lesbar.';
     }} else if (reason === 'accepted' && status.candidate_agreement === 100) {{
       message = 'Rahmen mit 100 % Übereinstimmung gefunden. Die Intensivprüfung bleibt bei diesem Rahmen und wartet auf ein neues Bild.';
     }} else if (status.confirmations >= 2) {{
-      message = 'Prüfe denselben Rahmen mit dem nächsten neuen Bild weiter.';
+      message = 'Derselbe Rahmen wird mit dem nächsten neuen Bild weiter geprüft.';
     }} else if (status.confirmations > 0) {{
       message = 'Ziffernfeld bestätigt. Die App prüft mit dem nächsten neuen Bild weiter.';
     }} else if (reason === 'no_region') {{
@@ -2538,7 +2538,7 @@ function refreshCalibration(status) {{
     message = 'Der gelesene Bereich passt nicht zum Vergleichswert. Prüfe den Vergleichswert und markiere das Ziffernfeld.';
   }}
   if (background && active) {{
-    message = 'Optimierung läuft: Die Automatik arbeitet bereits; die App stimmt die dritte Nachkommastelle im Hintergrund noch fein ab.';
+    message = 'Optimierung läuft: Die Automatik ist aktiv. Im Hintergrund sucht die App noch die dritte Nachkommastelle und verbessert Rahmen und Winkel.';
   }}
   if (background && ['failed', 'timeout', 'image_timeout'].includes(status.state)) {{
     message = 'Dritte Nachkommastelle noch offen. Die Automatik läuft weiterhin mit sieben bestätigten Ziffern.';
@@ -2554,7 +2554,7 @@ function refreshCalibration(status) {{
     message += ' Ohne Vergleichswert braucht die App einen plausiblen Anstieg oder einen Startwert.';
   }}
   if (active && status.simplified) {{
-    message += ' Für den Rahmen zählen die ersten zwei Nachkommastellen.';
+    message += ' Für die Rahmenwahl werden die ersten zwei Nachkommastellen verglichen.';
   }}
   const confirmationLabel = status.followup ? ' · Feinprüfung der dritten Stelle: ' : ' · Bestätigungen: ';
   const detail = 'Bilder geprüft: ' + status.tested +
@@ -3069,15 +3069,16 @@ function syncHero() {{
     const minutesLeft = lastDigitProgress ? Math.max(1, Math.ceil(lastDigitProgress.seconds / 60)) : 0;
     const maxMinutes = lastDigitProgress ? Math.round(lastDigitProgress.duration / 60) : 0;
     if (/[0-9]$/.test(fractionDigits)) {{
-      noteText = lang === 'en' ? 'Optimisation running: all digits are read, the app is fine-tuning the frames.'
-        : 'Optimierung läuft: Alle Ziffern sind gelesen, die App stimmt die Rahmen noch fein ab.';
+      const left = minutesLeft ? (lang === 'en' ? ` (at most ${{minutesLeft}} min)` : ` (noch höchstens ${{minutesLeft}} min)`) : '';
+      noteText = lang === 'en' ? `Optimising${{left}}: all digits are read, the app is improving frames and angle.`
+        : `Optimierung läuft${{left}}: Alle Ziffern sind gelesen, die App verbessert noch Rahmen und Winkel.`;
       noteState = 'optimizing';
     }} else {{
       noteText = lang === 'en' ? `The ${{position}}th digit is being searched in the background.`
         : `Die ${{position}}. Ziffer wird im Hintergrund gesucht.`;
       noteState = 'searching';
     }}
-    if (minutesLeft) noteText += lang === 'en'
+    if (minutesLeft && noteState !== 'optimizing') noteText += lang === 'en'
       ? ` At most ${{minutesLeft}} of ${{maxMinutes}} min left.`
       : ` Noch höchstens ${{minutesLeft}} von ${{maxMinutes}} min.`;
   }} else if (comparedDecimals !== null && configuredDecimals !== null && comparedDecimals < configuredDecimals) {{
@@ -3103,8 +3104,8 @@ function syncHero() {{
     noteState = 'optimizing';
   }}
   if (partialEighthDigit && configuredDecimals === 3 && lastDigitSearching) {{
-    noteText = (lang === 'en' ? 'Configured: 3 decimal places, currently 2 verified. '
-      : 'Eingestellt: 3 Nachkommastellen, aktuell 2 geprüft. ') + noteText;
+    noteText += lang === 'en' ? ' Until then 2 of 3 decimal places are compared.'
+      : ' Bis dahin werden 2 von 3 Nachkommastellen verglichen.';
   }}
   if (note.textContent !== noteText) note.textContent = noteText;
   note.dataset.state = noteState;

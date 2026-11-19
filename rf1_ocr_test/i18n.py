@@ -123,8 +123,8 @@ EN_UI = {
     "Ziffernzeile gefunden · ": "Digit row found · ",
     "Schwelle ": "Threshold ",
     " Ohne Vergleichswert braucht die App einen plausiblen Anstieg oder einen Startwert.": " Without a reference, the app needs a plausible increase or a starting reading.",
-    "Die Automatik läuft. In den nächsten 20 Minuten stimmt die App die Rahmen noch im Hintergrund fein ab.":
-        "Automatic checks are running. For the next 20 minutes the app keeps fine-tuning the frames in the background.",
+    "Die Automatik läuft. In den nächsten 20 Minuten optimiert die App im Hintergrund noch Rahmen und Winkel.":
+        "Automatic checks are running. For the next 20 minutes the app keeps optimising frames and angle in the background.",
     "Werkzeuge zur Erkennung": "Meter reading tools",
     "Werkzeuge": "Tools",
     "Prüfdetails": "Check details",
@@ -227,7 +227,7 @@ EN_UI = {
     "Kein Kamerabild verfügbar. Prüfe die Bildquelle oder lies direkt am Zähler ab.": "No camera image available. Check the source or read the meter directly.",
     "Drehung prüfen: ": "Checking rotation: ",
     "Drehung wird geprüft. Der Winkel steht am Vorschaubild.": "Checking rotation. See the preview for its angle.",
-    "Prüfe den nächsten Rahmen …": "Checking the next crop …",
+    "Nächster Rahmen wird geprüft …": "Checking the next crop …",
     "Ziffernfeld manuell markieren": "Mark digit row manually",
     "Einzelziffernsuche. Offene Stellen von links: ": "Individual digit search. Uncertain positions from the left: ",
     "Ziffernfeld lesbar. Die App wartet auf einen höheren Zählerstand oder einen abgelesenen Startwert.": "The digit row is readable. The app is waiting for a higher reading or a starting reading you enter.",
@@ -239,7 +239,7 @@ EN_UI = {
     "Die Ziffernreihe scheint gegenüber der Referenz um eine Stelle verschoben.": "The digit row appears shifted by one position relative to the reference.",
     "Kein neues Kamerabild erhalten. Prüfe die Bildquelle.": "No new camera image received. Check the image source.",
     "Grobkalibrierung: Suche nach der Ziffernreihe …": "Coarse calibration: Looking for the digit row …",
-    "Feinkalibrierung: Prüfe Rahmen und Drehung am vorhandenen Bild …": "Fine calibration: Testing digit boxes and rotation on the current image …",
+    "Feinkalibrierung: Rahmen und Drehung werden am vorhandenen Bild geprüft …": "Fine calibration: Testing digit boxes and rotation on the current image …",
     "Noch kein Ziffernbereich gefunden. Warte auf ein neues Bild …": "No digit region found yet. Waiting for a new image …",
     "In diesem Bild wurde kein Ziffernbereich gefunden.": "No digit region was found in this image.",
     "Der Ausschnitt ließ sich nicht auswerten.": "This crop could not be processed.",
@@ -249,7 +249,7 @@ EN_UI = {
     "Der gelesene Stand weicht vom Vergleichswert ab.": "The OCR reading differs from the reference.",
     "Der Stand passt zeitlich nicht zur letzten sicheren Ablesung.": "The reading is implausible given the last confirmed reading and elapsed time.",
     "Der Rahmen ist lesbar. Die App wartet auf einen plausiblen Zähleranstieg.": "The crop is readable. Waiting for a plausible meter increase.",
-    "Ziffern bis zur zweiten Nachkommastelle gelesen. Der Rahmen zählt vorläufig. Der Vergleichswert fehlt.":
+    "Ziffern bis zur zweiten Nachkommastelle gelesen. Der Rahmen gilt vorläufig, weil noch kein Vergleichswert vorliegt.":
         "Digits read through the second decimal. The crop counts provisionally. A reference reading is missing.",
     "Bis zur zweiten Nachkommastelle bestätigt. Die dritte Stelle bleibt offen.":
         "Confirmed through the second decimal. The third decimal remains open.",
@@ -320,10 +320,10 @@ EN_UI = {
     "Selbsteinrichtung starten": "Start automatic setup",
     "Selbsteinrichtung stoppen": "Stop automatic setup",
     "Warte auf ein neues Kamerabild …": "Waiting for a new camera image …",
-    "Prüfe Ausschnitt und Drehung …": "Checking crop and rotation …",
+    "Ausschnitt und Drehung werden geprüft …": "Checking crop and rotation …",
     "Selbsteinrichtung prüft Bildausschnitt und Drehung.": "Automatic setup is checking the crop and rotation.",
     "Erfolgreich eingerichtet. Ausschnitt und Drehung sind übernommen.": "Setup successful. Crop and rotation saved.",
-    "Rahmen gefunden. Warte auf ein frisches Bild zur Gegenprüfung …": "Crop found. Waiting for a fresh image to cross-check …",
+    "Rahmen gefunden. Die App wartet auf ein frisches Bild zur Gegenprüfung …": "Crop found. Waiting for a fresh image to cross-check …",
     "Gefundenen Rahmen mit der normalen Prüfung gegenprüfen …": "Cross-checking the crop with the regular OCR check …",
     "Selbsteinrichtung fehlgeschlagen. Prüfe Bildausschnitt, Kamerawinkel und Beleuchtung.":
         "Automatic setup failed. Check the crop, camera angle and lighting.",
@@ -372,10 +372,10 @@ EN_UI = {
     "Dritte Nachkommastelle manuell markieren": "Mark the third decimal digit manually",
     "Einrichtung abgeschlossen: Sieben Ziffern bestätigt. Die dritte Nachkommastelle wird zusätzlich intensiv geprüft.":
         "Setup complete: Seven digits confirmed. The third decimal is being checked additionally.",
-    "Eine der ersten sieben Ziffern dreht gerade. Der gefundene Rahmen bleibt erhalten; ein frisches Bild wird geprüft.":
+    "Eine der ersten sieben Ziffern dreht sich gerade. Der gefundene Rahmen bleibt erhalten; ein frisches Bild wird geprüft.":
         "One of the first seven digits is moving. The crop is retained while a fresh image is checked.",
-    "Optimierung läuft: Die Automatik arbeitet bereits; die App stimmt die dritte Nachkommastelle im Hintergrund noch fein ab.":
-        "Optimisation running: automatic checks are already active; the app is fine-tuning the third decimal in the background.",
+    "Optimierung läuft: Die Automatik ist aktiv. Im Hintergrund sucht die App noch die dritte Nachkommastelle und verbessert Rahmen und Winkel.":
+        "Optimising: automatic checks are active. In the background the app is still locating the third decimal and improving frames and angle.",
     "Dritte Nachkommastelle noch offen. Die Automatik läuft weiterhin mit sieben bestätigten Ziffern.":
         "Third decimal still unconfirmed. Automatic checks continue with seven confirmed digits.",
     "Die Einrichtung bestätigt zuerst sieben Ziffern. Die dritte Nachkommastelle kann anschließend separat geprüft werden.":
@@ -388,7 +388,7 @@ EN_UI = {
         "The third decimal digit remains unconfirmed. Search again later or mark it manually.",
     "Ausschnitt gespeichert. Suche jetzt gezielt nach der dritten Nachkommastelle …":
         "Crop saved. Now searching specifically for the third decimal digit …",
-    "Prüfe denselben Rahmen mit dem nächsten neuen Bild weiter.":
+    "Derselbe Rahmen wird mit dem nächsten neuen Bild weiter geprüft.":
         "Continuing to check the same crop on the next new image.",
     "Der Ausschnitt ist deutlich weniger scharf oder kontrastreich als zuvor. Warte auf ein besseres Bild.":
         "The crop has noticeably less detail or contrast than before. Waiting for a better image.",
@@ -404,15 +404,15 @@ EN_UI = {
         "Green means readable. The reading does not match the reference yet.",
     "Ziffern sind lesbar. Ohne Vergleichswert wartet die App auf einen plausiblen Anstieg oder einen Startwert.":
         "The digits are readable. Without a reference, the app waits for a plausible increase or a starting reading.",
-    "Treffer gesammelt. Warte auf ein frisches Bild für die Gegenprobe.":
+    "Treffer gesammelt. Die App wartet auf ein frisches Bild für die Gegenprobe.":
         "Matches collected. Waiting for a fresh image for verification.",
     " · Beste Kandidaten: ": " · Best candidates: ",
     "Teste die vermutete Position der letzten Rolle auf diesem Bild …":
         "Testing the estimated position of the last roller on this image …",
     " Vorschlag für die letzte Rolle gefunden. Warte auf Bestätigung mit einem neuen Bild.":
         " Candidate for the last roller found. Waiting for confirmation on a new image.",
-    " Für den Rahmen zählen die ersten zwei Nachkommastellen.":
-        " The first two decimal digits count toward crop confirmation.",
+    " Für die Rahmenwahl werden die ersten zwei Nachkommastellen verglichen.":
+        " Frame selection compares the first two decimal places.",
     " · Feinprüfung der dritten Stelle: ": " · Third-digit verification: ",
     "Grün: gelesen. Gelb: OCR-Versuche weichen ab. Gelb mit ?: Stelle vermutet, Ziffer nicht lesbar. Rot: unklar.":
         "Green: read. Yellow: OCR attempts disagree. Yellow with ?: probable position, unreadable digit. Red: unclear.",
@@ -421,7 +421,7 @@ EN_UI = {
     "Ziffernfeld ist lesbar.": "The digit row is readable.",
     " Ohne Vergleichswert wartet die App auf einen plausiblen Anstieg oder einen Startwert.":
         " Without a reference, the app waits for a plausible increase or a starting reading.",
-    "Drei Treffer mit 100 %: Grobprüfung beendet. Warte auf ein frisches Bild für die Gegenprobe.":
+    "Drei Treffer mit 100 %: Grobprüfung beendet. Die App wartet auf ein frisches Bild für die Gegenprobe.":
         "Three matches at 100%: coarse search complete. Waiting for a fresh image for verification.",
     " · Schwankende Stellen im Intensivtest (von links): ": " · Unstable positions in the intensive check (from the left): ",
     "Bester Treffer der Feinprüfung · ": "Best fine-check result · ",
@@ -448,14 +448,14 @@ EN_UI = {
         "Crop saved provisionally. The automatic check uses the seven readable digits. The third decimal digit remains open for now.",
     "Letzte Rolle: ": "Last roller: ",
     "Letzte Rolle wird gelesen …": "Reading the last roller …",
-    "Prüfe nur die letzte Rolle im gespeicherten Ausschnitt …": "Checking only the last roller in the saved crop …",
-    "Letzte Rolle gefunden. Warte auf ein frisches Bild zur Gegenprobe …":
+    "Nur die letzte Rolle im gespeicherten Ausschnitt wird geprüft …": "Checking only the last roller in the saved crop …",
+    "Letzte Rolle gefunden. Die App wartet auf ein frisches Bild zur Gegenprobe …":
         "Last roller found. Waiting for a fresh verification image …",
     "Zähler erfolgreich eingerichtet": "Meter setup complete",
     "Die automatische Erkennung wird in den ersten 20 Minuten durch weitere Kontrollmessungen stabilisiert. Einzelne Messwerte können in dieser Zeit noch ungenau sein.":
         "Additional checks stabilize automatic recognition during the first 20 minutes. Individual readings may still be inaccurate during this time.",
     "Diagnose der Selbsteinrichtung": "Setup diagnostics",
-    LAST_DIGIT_PASS: "The first two decimal places match. The third digit remains unconfirmed.",
+    LAST_DIGIT_PASS: "The first two decimal places match. The third is not yet confirmed in this check.",
     SEVENTH_DIGIT_PASS: (
         "The first six digits match the valid reference (without rounding). "
         "The seventh digit cannot be read reliably: This check is only partially "
@@ -564,7 +564,7 @@ EN_UI = {
     "Aufbereitetes ESP-Bild fehlt oder ist zu alt. Die App prüft ein frisches Rohbild.": "The processed ESP image is missing or too old. Checking a fresh raw image.",
     "Aufbereitetes ESP-Bild nicht nutzbar. Rohbild ohne ESP-Referenz geprüft.": "The processed ESP image is unusable. A raw image was checked without an ESP reference.",
     "Aufbereitetes ESP-Bild nicht nutzbar. Es konnte kein frisches Rohbild geladen werden.": "The processed ESP image is unusable and a fresh raw image could not be loaded.",
-    "Rohbild gelesen. Mögliche Ursache: Bildausrichtung oder Referenzmarken in AI on the Edge.": "Raw image read. Possible cause: image alignment or reference markers in AI on the Edge.",
+    "Rohbild gelesen. Das aufbereitete ESP-Bild war nicht nutzbar – prüfe in AI on the Edge die Bildausrichtung und die Referenzmarken.": "Raw image read. The processed ESP image was unusable – check image alignment and reference markers in AI on the Edge.",
     "Kamera erreichbar. Frisches Bild empfangen.": "Camera reachable. Fresh image received.",
     "ESP erreichbar, aber Bild ist älter als 15 Minuten oder hat einen ungültigen Zeitstempel.": "ESP reachable, but the image is older than 15 minutes or has an invalid timestamp.",
     "Kamera erreichbar, aber das Bild hat einen ungültigen Zeitstempel.": "Camera reachable, but the image has an invalid timestamp.",
@@ -578,7 +578,7 @@ EN_UI = {
     "Warte auf ein Kamerabild …": "Waiting for a camera image …",
     "Warte auf Bild und Messwerte vom ESP …": "Waiting for the image and reading from the ESP …",
     "Warte auf ein aktuelles Bild vom ESP …": "Waiting for a new image from the ESP …",
-    "Intensivtest: Prüfe eine leicht gedrehte Aufnahme.": "Recovery check: testing a slightly rotated image.",
+    "Intensivtest: Die App prüft das Bild leicht gedreht.": "Recovery check: testing a slightly rotated image.",
     "Noch kein aktuelles Zählerbild": "No current meter image yet",
     "Fortschritt der automatischen Prüfung": "Automatic check progress",
     "Einstellungen werden gespeichert …": "Saving settings …",
@@ -855,8 +855,8 @@ EN_DETAILS = {
         "The last compared digit was unclear several times in a row. Its frame probably sits beside the roller. "
         "Until this is corrected, the app checks with one decimal place less.",
     ("Die letzte verglichene Rolle war unklar, vermutlich drehte sie sich gerade. Diese Prüfung wurde deshalb mit einer "
-     "Nachkommastelle weniger bestätigt; der Rest folgt bei der nächsten Prüfung."):
-        "The last compared roller was unclear, probably turning. This check was therefore confirmed with one decimal place less; the rest follows with the next check.",
+     "Nachkommastelle weniger bestätigt. Die nächste Prüfung vergleicht wieder alle Stellen."):
+        "The last compared roller was unclear, probably turning. This check was therefore confirmed with one decimal place less. The next check compares all digits again.",
     ("Nur die letzte verglichene Stelle war unklar – vermutlich drehte sich die Rolle gerade. "
      "Die nächste Prüfung folgt automatisch."):
         "Only the last compared digit was unclear – the roller was probably turning. The next check follows automatically.",
@@ -957,7 +957,7 @@ def english_result(detail, status=None, decimals=0, readings=None):
     if detail in EN_DETAILS:
         return EN_DETAILS[detail]
     for prefix in (
-        "Rohbild gelesen. Mögliche Ursache: Bildausrichtung oder Referenzmarken in AI on the Edge.",
+        "Rohbild gelesen. Das aufbereitete ESP-Bild war nicht nutzbar – prüfe in AI on the Edge die Bildausrichtung und die Referenzmarken.",
         "Aufbereitetes ESP-Bild nicht nutzbar. Es konnte kein frisches Rohbild geladen werden.",
     ):
         if detail == prefix:

@@ -13,6 +13,22 @@ from layout import MANUAL_ROW_UNCLEAR, PARTLY_UNCLEAR, RAW_ROW_UNCLEAR
 
 
 EN_UI = {
+    "Klappt es dauerhaft nicht? <a": "Still not working? <a",
+    "(öffnet ein vorausgefülltes Formular auf GitHub, ohne private Daten).": "(opens a prefilled form on GitHub, without private data).",
+    "ⓘ Experimentelle Funktionen": "ⓘ Experimental functions",
+    "> Experimentelle Funktionen testen<": "> Test experimental functions<",
+    "> Perspektivkorrektur (Kippung)<": "> Perspective correction (keystone)<",
+    "Die App liest jedes Bild zusätzlich mit den angehakten Experimenten, aber nur, wenn der Rechner gerade Leistung frei hat. Es zählt weiterhin nur das bewährte Ergebnis; beide stehen im Debug-Protokoll. Die meisten brauchen das nicht.":
+        "The app additionally reads each image with the ticked experiments, but only while the computer has spare capacity. Only the proven result counts; both are written to the debug log. Most users do not need this.",
+    "<strong>Ziffer verdeckt.</strong>": "<strong>Digit hidden.</strong>",
+    "Eine Stelle ist durch eine Spiegelung verdeckt.": "A digit is hidden by a reflection.",
+    "Trag einmal den aktuellen Zählerstand ein. Danach ergänzt die App die verdeckte Stelle selbst, solange nur ein Wert zum Verbrauch passt.":
+        "Enter the current meter reading once. After that the app fills in the hidden digit itself as long as only one value fits the consumption.",
+    ">Aktueller Zählerstand<input": ">Current meter reading<input",
+    'placeholder="z. B. 10486,16"': 'placeholder="e.g. 10486.16"',
+    ">Zählerstand übernehmen<": ">Use meter reading<",
+    "'Stelle ' + hiddenPrompt.positions.join(' und ') + ' ist durch eine Spiegelung verdeckt.'":
+        "'Digit ' + hiddenPrompt.positions.join(' and ') + ' is hidden by a reflection.'",
     "Pause nach drei Fehlprüfungen (Minuten)": "Pause after three failed checks (minutes)",
     "Danach prüft die App wieder normal. Bleibt nur die letzte Rolle unklar, pausiert sie nicht.":
         "Afterwards the app checks normally again. If only the last roller is unclear, it does not pause.",
@@ -634,6 +650,9 @@ EN_UI = {
     "Die letzten Prüfungen mit allen OCR-Durchläufen, Entscheidung und Verbrauchsstand. Ohne Bilder und Zugangsdaten. Hilfreich für Fehlermeldungen.":
         "The latest checks with all OCR runs, decision and consumption state. No images or credentials. Useful for bug reports.",
     '>Protokoll herunterladen<': '>Download log<',
+    '>Fehler melden<': '>Report a problem<',
+    'Öffnet auf GitHub ein vorausgefülltes Fehlerformular mit App-Version, Art der Bildquelle und Fehlquote. Es wird nichts automatisch gesendet; hänge das heruntergeladene Protokoll selbst an.':
+        'Opens a prefilled bug report on GitHub with the app version, the kind of image source and the failure rate. Nothing is sent automatically; attach the downloaded log yourself.',
     '<li data-step="0" data-state="current">Bildquelle</li><li data-step="1">Anzeige</li><li data-step="2">Ausschnitt</li><li data-step="3">Hinweise</li>':
         '<li data-step="0" data-state="current">Source</li><li data-step="1">Display</li><li data-step="2">Crop</li><li data-step="3">Alerts</li>',
     'aria-label="Schritte"': 'aria-label="Steps"',

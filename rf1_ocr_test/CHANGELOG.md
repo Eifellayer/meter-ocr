@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0
+
+- **Ziffernrahmen auf die Ziffer zentriert:** Die Einrichtung rückt jeden Rahmen seitlich auf die hellen Striche der Ziffer. Bisher konnte ein Lichtreflex den Rahmen so verschieben, dass eine 8 halb abgeschnitten war.
+- **Spiegelung selbst erkennen (Fire and Forget):** Überstrahlt der Blitz dauerhaft dieselbe Ziffer, schließt die Selbsteinrichtung mit den übrigen Ziffern ab und merkt sich die verdeckte Stelle wie eine markierte Spiegelung. Die Automatik ergänzt sie aus dem letzten bestätigten Stand, wenn nur ein Wert zum maximalen Durchfluss passt; sonst fragt die Übersicht einmal nach dem aktuellen Zählerstand.
+- **Experimentelle Funktionen im Schattenbetrieb:** Neuer Schalter (standardmäßig aus) mit Häkchen je Experiment. Erstes Experiment: Perspektivkorrektur (Kippung). Gelesen wird nur bei freier Rechenleistung, es zählt nur das bewährte Ergebnis; das Debug-Protokoll speichert beide (`experiment`). Endpunkt `/testbild-streifen` (nur mit Experimentiermodus) liefert den ausgeschnittenen Ziffernstreifen als Base64.
+- **Fehler melden:** Knopf unter Werkzeuge → Debug-Protokoll und Link im Hinweis bei wiederholten Fehlprüfungen; öffnet ein vorausgefülltes GitHub-Issue ohne private Daten. Issue-Vorlage im Repository.
+
 ## 0.1.26
 
 - Fire and Forget: Findet die Selbsteinrichtung nach drei schnellen Wiederholungen noch keinen sicheren Rahmen, versucht die App es danach stündlich von selbst erneut, statt stehen zu bleiben. Wird die Kamera später scharfgestellt oder die Spiegelung des Blitzes beseitigt, richtet sich die App ohne Antippen ein. Der Hinweis nennt die häufigsten Ursachen (unscharfes Bild, Spiegelung auf den Ziffern).

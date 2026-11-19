@@ -21,6 +21,7 @@ from urllib.parse import parse_qs, urlsplit
 from PIL import Image
 
 from app_channel import APP_NAME, NAMESPACE
+import bug_report
 import debug_log
 
 INSTANCE_ID = token_urlsafe(8)
@@ -724,10 +725,20 @@ header{{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.6rem}}
 <div><dt>Nächste Prüfung</dt><dd id="countdown">–</dd></div></dl>
 <p class="failure-recovery" id="geometry-repair-warning" {geometry_warning_hidden}>{geometry_warning_text}</p>
 <p class="failure-recovery setting-link" id="automatic-recovery" data-state="retrying" data-setting="failure_pause_minutes" role="link" tabindex="0" title="Zur Einstellung" {recovery_hidden}>{recovery_notice}</p>
+<p class="settings-note" id="report-bug-hint" {recovery_hidden}>Klappt es dauerhaft nicht? <a href="fehler-melden" target="_blank" rel="noopener noreferrer">Fehler melden</a> (öffnet ein vorausgefülltes Formular auf GitHub, ohne private Daten).</p>
 <p class="failure-recovery" id="reflection-live" hidden>
 <strong>Vorläufig ergänzt</strong> <span id="reflection-live-reading"></span>
 <small>Gelb markierte Ziffern sind berechnet. Der Wert dient der Orientierung.</small>
 </p>
+<div class="reflection-suggestion" id="hidden-digit-prompt" hidden>
+<p><strong>Ziffer verdeckt.</strong> <span id="hidden-digit-text">Eine Stelle ist durch eine Spiegelung verdeckt.</span> Trag einmal den aktuellen Zählerstand ein. Danach ergänzt die App die verdeckte Stelle selbst, solange nur ein Wert zum Verbrauch passt.</p>
+<form method="post" action="fallback" class="reflection-actions" id="hidden-digit-form">
+<input type="hidden" name="lang" value="{language}"><input type="hidden" name="mode" value="{language_mode}">
+<input type="hidden" name="csrf" value="{csrf}"><input type="hidden" name="return_to" value="overview">
+<input type="hidden" name="fallback_time" id="hidden-digit-time" value="">
+<label>Aktueller Zählerstand<input name="fallback_value" inputmode="decimal" maxlength="16" placeholder="z. B. 10486,16" required></label>
+<button type="submit">Zählerstand übernehmen</button>
+</form></div>
 <div id="reflection-estimate" class="reflection-estimate" {reflection_estimate_hidden}>
 <strong>Eindeutig ergänzter Zwischenstand</strong>
 <p><span id="reflection-value-left">{reflection_left}</span><mark id="reflection-value-digit" title="Berechnete Ziffer">{reflection_digit}</mark><span id="reflection-value-right">{reflection_right}</span>
@@ -799,7 +810,9 @@ name: Zählerstand (OCR)</code></pre>
 <details id="debug-log">
 <summary>Debug-Protokoll</summary>
 <p class="settings-note">Die letzten Prüfungen mit allen OCR-Durchläufen, Entscheidung und Verbrauchsstand. Ohne Bilder und Zugangsdaten. Hilfreich für Fehlermeldungen.</p>
-<p><a class="button-link" id="debug-log-download" href="debug-protokoll" download="ai-meter-reader-debug.jsonl">Protokoll herunterladen</a></p>
+<p><a class="button-link" id="debug-log-download" href="debug-protokoll" download="ai-meter-reader-debug.jsonl">Protokoll herunterladen</a>
+<a class="button-link" id="report-bug" href="fehler-melden" target="_blank" rel="noopener noreferrer">Fehler melden</a></p>
+<p class="settings-note" id="report-bug-note">Öffnet auf GitHub ein vorausgefülltes Fehlerformular mit App-Version, Art der Bildquelle und Fehlquote. Es wird nichts automatisch gesendet; hänge das heruntergeladene Protokoll selbst an.</p>
 <pre id="debug-log-text" class="debug-log-text">–</pre>
 </details>
 <div class="manual-test-area" id="manual-test-area" {manual_area_hidden}>
@@ -1195,6 +1208,12 @@ name: Zählerstand (OCR)</code></pre>
 <label class="check-option"><input type="checkbox" name="self_repair_enabled" value="1" {self_repair_checked}> Selbstreparatur bei wiederholten Fehlmessungen</label>
 <p>Die App sucht frühestens nach zwei Stunden anhaltender Erkennungsprobleme einen besseren Rahmen. Probleme nur an der letzten Rolle zählen dabei nicht mit. Der bisherige Rahmen gilt bis zur erfolgreichen Gegenprobe.</p>
 <label class="check-option"><input type="checkbox" name="adaptive_interval_enabled" value="1" {adaptive_interval_checked}> Prüfintervall an den Verbrauch anpassen (früher prüfen, wenn eine Rolle bald umspringt)</label>
+</details>
+<details class="help setup-help" id="experiments-settings">
+<summary>ⓘ Experimentelle Funktionen</summary>
+<label class="check-option"><input type="checkbox" name="experiments_enabled" value="1" {experiments_checked}> Experimentelle Funktionen testen</label>
+<label class="check-option experiment-option"><input type="checkbox" name="experiment_perspective" value="1" {experiment_perspective_checked}> Perspektivkorrektur (Kippung)</label>
+<p>Die App liest jedes Bild zusätzlich mit den angehakten Experimenten, aber nur, wenn der Rechner gerade Leistung frei hat. Es zählt weiterhin nur das bewährte Ergebnis; beide stehen im Debug-Protokoll. Die meisten brauchen das nicht.</p>
 </details>
 <div class="reflection-settings setup-help" id="reflection-settings">
 <label class="check-option"><input type="checkbox" name="reflection_estimate_enabled" value="1" {reflection_enabled_checked}> Verdeckte Ziffern ergänzen</label>
@@ -3403,8 +3422,15 @@ async function refreshAutomatic() {{
     geometryStatus.textContent = sample.geometry_warning;
     const recovery = document.querySelector('#automatic-recovery');
     recovery.hidden = !sample.failure_attempts;
+    document.querySelector('#report-bug-hint').hidden = !(sample.failure_attempts >= 3);
     recovery.dataset.state = sample.retry_suppressed ? 'waiting' : 'retrying';
     recovery.textContent = sample.recovery_notice;
+    const hiddenPrompt = sample.hidden_digit_prompt;
+    document.querySelector('#hidden-digit-prompt').hidden = !hiddenPrompt;
+    if (hiddenPrompt) {{
+      document.querySelector('#hidden-digit-text').textContent =
+        'Stelle ' + hiddenPrompt.positions.join(' und ') + ' ist durch eine Spiegelung verdeckt.';
+    }}
     const live = sample.reflection_live_estimate;
     document.querySelector('#reflection-live').hidden = !live;
     if (live) {{
@@ -3964,6 +3990,8 @@ def start_panel(
             "last_digit_search_at": (max(optimization_until, history.get("eighth_digit_retry_at") or 0)
                                      if decimals < auto_rules["decimals"] else None),
             "reflection_estimate": reflection_estimate,
+            "hidden_digit_prompt": (history.get("hidden_digit_prompt")
+                                    if auto_rules.get("reflection_estimate_enabled") else None),
             "reflection_live_estimate": (history.get("reflection_live_estimate")
                                         if auto_rules.get("reflection_estimate_enabled") else None),
             "reflection_suggestion": reflection_suggestion,
@@ -4047,6 +4075,31 @@ def start_panel(
                 except ValueError:
                     limit = 600
                 self.reply(debug_log.read_text(limit).encode("utf-8"), "text/plain; charset=utf-8")
+                return
+            if path == "/testbild-streifen":
+                # Only the cropped digit window, as Base64 text (the HA proxy mangles binary images).
+                strip = history_path.with_name("ocr-ziffernstreifen.png")
+                if not read_auto_rules().get("experiments_enabled") or not strip.exists():
+                    self.send_error(404)
+                    return
+                self.reply(base64.b64encode(strip.read_bytes()), "text/plain; charset=ascii")
+                return
+            if path == "/fehler-melden":
+                rules = read_auto_rules()
+                source = get_source()[0] if get_source else {}
+                experiments = rules.get("experiments", {}) if rules.get("experiments_enabled") else {}
+                target = bug_report.issue_url(
+                    os.environ.get("BUILD_VERSION", "") or "unbekannt", source.get("mode", ""),
+                    rules.get("integer_digits", 5), rules.get("fraction_digits", 3),
+                    [name for name, active in experiments.items() if active], debug_log.read_text(),
+                    language=language,
+                )
+                self.send_response(303)
+                self.send_header("Location", target)
+                self.send_header("Content-Length", "0")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Referrer-Policy", "no-referrer")
+                self.end_headers()
                 return
             if path == "/anzeigefehler":
                 message = re.sub(r"[^\w .,:;()'/<>=-]", "?", query.get("m", [""])[0])[:300]
@@ -4291,6 +4344,9 @@ def start_panel(
                 reflection_enabled_checked="checked" if auto_rules.get("reflection_estimate_enabled") else "",
                 fine_alignment_checked="checked" if auto_rules.get("fine_alignment_enabled") else "",
                 adaptive_interval_checked="checked" if auto_rules.get("adaptive_interval_enabled") else "",
+                experiments_checked="checked" if auto_rules.get("experiments_enabled") else "",
+                experiment_perspective_checked=("checked" if (auto_rules.get("experiments") or {}).get("perspective")
+                                                else ""),
                 reflection_hide_checked="checked" if auto_rules.get("reflection_suggestion_hidden") else "",
                 reflection_suggestion_hidden="" if summary["reflection_suggestion"] else "hidden",
                 reflection_estimate_hidden="" if estimate.get("confirmed") else "hidden",
@@ -4903,8 +4959,12 @@ def start_panel(
                 try:
                     with rules_lock:
                         rules = read_auto_rules()
+                        entered_time = field("fallback_time")
+                        if not entered_time and field("return_to") == "overview":
+                            # Reading entered on the overview: it was read just now.
+                            entered_time = datetime.now(statistics_zone).strftime("%Y-%m-%dT%H:%M")
                         value, stamp = fallback_options(
-                            field("fallback_value"), field("fallback_time"), rules["decimals"],
+                            field("fallback_value"), entered_time, rules["decimals"],
                             rules["integer_digits"], rules["fraction_digits"],
                         )
                         save_auto_rules({**rules, "fallback_value": value, "fallback_time": stamp,
@@ -4914,6 +4974,9 @@ def start_panel(
                     return
                 except OSError:
                     problem(503)
+                    return
+                if field("return_to") == "overview":
+                    self.redirect("?saved=fallback" + keep_mode)
                     return
                 self.redirect("?saved=fallback&ui=settings" + keep_mode + "#fallback-form")
                 return
@@ -5083,6 +5146,8 @@ def start_panel(
                                          "fine_alignment_enabled": field("fine_alignment_enabled") == "1",
                                          "self_repair_enabled": field("self_repair_enabled") == "1",
                                          "adaptive_interval_enabled": field("adaptive_interval_enabled") == "1",
+                                         "experiments_enabled": field("experiments_enabled") == "1",
+                                         "experiments": {"perspective": field("experiment_perspective") == "1"},
                                          "reflection_suggestion_hidden": field("reflection_suggestion_hidden") == "1",
                                          "polarity": polarity[0], "crop_mode": crop_mode[0],
                                          "crop": crop, "width": width, "rotation": rotation, "rotation_fine": rotation_fine, "digit_boxes": boxes,

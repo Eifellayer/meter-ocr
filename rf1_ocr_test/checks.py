@@ -462,6 +462,11 @@ REDUCED_PRECISION_NOTICE = ("Die letzte verglichene Rolle war unklar, vermutlich
                             "Nachkommastelle weniger bestätigt. Die nächste Prüfung vergleicht wieder alle Stellen.")
 MOVING_DIGIT_NOTICE = ("Nur die letzte verglichene Stelle war unklar – vermutlich drehte sich die Rolle gerade. "
                        "Die nächste Prüfung folgt automatisch.")
+MOVING_DIGITS_NOTICE = ("Nur die letzten zwei verglichenen Stellen waren unklar – vermutlich drehten sich die Rollen gerade. "
+                        "Die nächste Prüfung folgt automatisch.")
+REDUCED_PRECISION2_NOTICE = ("Die letzten zwei verglichenen Rollen waren unklar, vermutlich drehten sie sich gerade. Diese Prüfung "
+                             "wurde deshalb mit zwei Nachkommastellen weniger bestätigt. Die nächste Prüfung vergleicht wieder alle Stellen.")
+MOVING_NOTICES = (MOVING_DIGIT_NOTICE, MOVING_DIGITS_NOTICE)
 
 
 # The same last position unclear on several checks in a row is not a turning roller:
@@ -481,6 +486,25 @@ def only_last_compared_unclear(ocr, decimals, integer_digits=5):
     shown = text[:compared]
     return (len(shown) == compared and shown[-1] == "?"
             and "?" not in shown[:-1] and shown[:integer_digits].isdigit())
+def unclear_trailing_decimals(ocr, decimals, integer_digits=5):
+    """Number of trailing compared decimals (1 or 2) that are unreadable while the rest is certain.
+
+    Two trailing positions only count while at least the first decimal stays readable, so a
+    turning pair of rollers is confirmed one or two places coarser instead of failing.
+    """
+    text = str(ocr or "")
+    compared = integer_digits + (decimals + 1 if decimals else 0)
+    shown = text[:compared]
+    if len(shown) != compared or not shown[:integer_digits].isdigit():
+        return 0
+    for drop in (1, 2):
+        if drop > decimals or (drop == 2 and decimals - drop < 1):
+            break
+        if shown[-drop:] == "?" * drop and "?" not in shown[:-drop]:
+            return drop
+    return 0
+
+
 LAST_DIGIT_PASS = "Die ersten zwei Nachkommastellen stimmen überein. Die dritte ist bei dieser Prüfung noch nicht bestätigt."
 LAST_DIGIT_RETRIES = 3
 SEVENTH_DIGIT_WAIT_SECONDS = 30 * 60
@@ -1029,8 +1053,8 @@ def schedule_next_check(history, outcome, checked_at, interval_minutes=DEFAULT_I
         history.pop("failure_since", None)
         history.pop("failure_attempts", None)
         history.pop("retry_suppressed", None)
-    elif history.get("check_detail") == MOVING_DIGIT_NOTICE:
-        # Only the last compared roller was turning: everything else was read. That is no
+    elif history.get("check_detail") in MOVING_NOTICES:
+        # Only the last compared roller(s) were turning: everything else was read. That is no
         # reason for a warning or a long pause; simply look again soon.
         history.setdefault("failure_since", checked_at)
         history.pop("retry_suppressed", None)

@@ -1060,6 +1060,11 @@ def english_progress(message):
         start = re.fullmatch(r"OCR-Prüfung gestartet \(max\. (\d+) Versuche\)\.", message)
         if start:
             return f"OCR analysis started (max. {start[1]} attempts)."
+        plan = re.fullmatch(r"Automatik-Nachprüfung: (Winkel|Nachkommastellen) ([+−-]?\d+)(°| px senkrecht) "
+                            r"\((\d+) von (\d+), wird beim nächsten Bild fortgesetzt\)\.", message)
+        if plan:
+            trial = (f"angle {plan[2]}°" if plan[1] == "Winkel" else f"decimal digits {plan[2]} px vertically")
+            return f"Automatic recheck: {trial} ({plan[4]} of {plan[5]}, continues with the next image)."
         attempt = re.fullmatch(r"Versuch (\d+) von (\d+) (läuft|abgeschlossen)(?: …|\.)", message)
         if attempt:
             phase, end = ("in progress", " …") if attempt[3] == "läuft" else ("complete", ".")

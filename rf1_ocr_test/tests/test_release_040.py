@@ -283,3 +283,61 @@ class DigitLibraryTests(unittest.TestCase):
                                                  True, skip_last=True)
             self.assertEqual(6, learned)
             self.assertEqual({"0": 1, "1": 1, "3": 1, "4": 2, "9": 1}, digit_library.LIBRARY.samples())
+
+
+class RecheckWorkerTests(unittest.TestCase):
+    def test_recheck_tries_the_angle_first_and_continues_the_plan(self):
+        import json
+        import os
+        from datetime import datetime, timezone
+        from io import BytesIO
+        from tempfile import TemporaryDirectory
+        import run
+
+        class StopLoop(Exception):
+            pass
+
+        folder = Path(self.enterContext(TemporaryDirectory()))
+        paths = {key: folder / key for key in (
+            "OPTIONS", "HISTORY", "EFFECTIVE_OPTIONS", "SOURCE_SETTINGS", "AUTO_RULES", "NOTIFICATIONS",
+            "LANGUAGE_MODES", "AUTO_PAUSED", "DESTINATION", "GOOD_IMAGE", "AUTOMATIC_PREVIEW",
+        )}
+        source = {"mode": "esphome", "url": "", "camera": "camera.meter", "reference": ""}
+        boxes = [[index * 125, 50, index * 125 + 110, 950] for index in range(8)]
+        paths["OPTIONS"].write_text("{}")
+        paths["SOURCE_SETTINGS"].write_text(json.dumps(source))
+        paths["AUTO_RULES"].write_text(json.dumps({
+            "decimals": 2, "attempts": 5, "crop_mode": "manual", "crop": "0,0,500,100", "width": 300,
+            "rotation": -13, "digit_boxes": boxes,
+            "setup_completed": {"source": run.setup_source_id({**source, "selected": True}),
+                                "time": datetime.now(timezone.utc).timestamp()},
+        }))
+        self.enterContext(patch.multiple(run, **paths))
+        self.enterContext(patch.dict(os.environ, {"SUPERVISOR_TOKEN": "stub"}))
+        self.enterContext(patch.object(run, "start_panel", return_value=(None, None, None)))
+        image = Image.new("RGB", (500, 100), "white")
+        with BytesIO() as stream:
+            image.save(stream, "JPEG")
+            self.enterContext(patch.object(run, "get_bytes", return_value=stream.getvalue()))
+        angles = []
+        original_select = run.select_register
+
+        def select(frame, overlay, crop, width, rotation=0, *args, **kwargs):
+            angles.append(rotation)
+            return original_select(frame, overlay, crop, width, rotation, *args, **kwargs)
+
+        self.enterContext(patch.object(run, "select_register", side_effect=select))
+        reads = iter(["10465.9?", "10465.9?"] + ["10465.94"] * 10)
+        self.enterContext(patch.object(run, "read_visible_digits", side_effect=lambda *a, **k: next(reads)))
+        self.enterContext(patch.object(run, "read_register", return_value="?"))
+        self.enterContext(patch.object(run, "publish_state"))
+        self.enterContext(patch.object(run, "publish_consumption", side_effect=StopLoop))
+        with self.assertRaises(StopLoop):
+            run.main()
+        history = json.loads(paths["HISTORY"].read_text())
+        self.assertEqual("optimizer", history["ocr_method"])
+        self.assertEqual("10465.94", history["standalone_candidate"]["reading"])
+        # The first trial turned the picture by +1° around the saved −13°.
+        self.assertIn(-12, [round(angle) for angle in angles])
+        self.assertEqual(1, history["optimizer"]["cursor"])
+        self.assertEqual(1, history["optimizer"]["stats"]["a+1"]["images"])

@@ -2892,6 +2892,7 @@ def main():
         standalone_reference = None
         fine_update = None
         fine_rotation = None
+        optimizer_saved = False
         local_trial = None
         shifted_trial = None
         recovery_log = None
@@ -3348,7 +3349,6 @@ def main():
                                                                SHIFTED_DIGIT_POSITIONS))
                             optimizable = (bool(custom_boxes) and crop_rules["crop_mode"] == "manual" and not detect_raw
                                            and not base_adjustment and not raw_fallback
-                                           and active_rules["fine_alignment_enabled"]
                                            and read_state["picture"] is not None and len(same_frame) >= 2)
                             if optimizable and not stop_recovery():
                                 # (1) angle ±1°/±2°, (2) decimal frames up/down – resumed on the next picture.
@@ -4134,7 +4134,7 @@ def main():
                             automatic_interval_minutes(active_rules["interval_minutes"], mode), flow, source_key, now.month,
                         )
                     local_backup = updated.get("local_geometry_backup", {})
-                    if (not optimization_paused and active_rules["fine_alignment_enabled"]
+                    if (not optimization_paused and (active_rules["fine_alignment_enabled"] or local_backup.get("optimizer"))
                             and local_backup.get("revision") == active_rules["crop_revision"]
                             and local_backup.get("source") == source_key and not raw_fallback):
                         if verified and local_trial is None:
@@ -4145,17 +4145,20 @@ def main():
                                 fine_rotation = local_backup["rotation"]
                                 fine_update = local_backup["digit_boxes"]
                                 restoring_local = True
+                                if local_backup.get("optimizer"):
+                                    debug_log.record(kind="optimize_rollback", rotation=local_backup["rotation"],
+                                                     reason="zwei Fehlprüfungen nach der Übernahme")
                     optimizer_state = updated.get("optimizer")
                     winner = (optimizer.best_trial(optimizer_state) if isinstance(optimizer_state, dict)
                               and optimizer_state.get("key") == geometry_check_key(active_rules, source_key) else None)
                     if (winner and fine_update is None and not optimization_paused and not raw_fallback
-                            and active_rules["fine_alignment_enabled"] and active_rules.get("digit_boxes")
-                            and active_rules["crop_mode"] == "manual"):
+                            and active_rules.get("digit_boxes") and active_rules["crop_mode"] == "manual"):
                         geometry = optimizer.trial_geometry(
                             winner, active_rules["rotation"], active_rules["digit_boxes"],
                             optimizer_state.get("height") or 1000, integer_digits)
                         if geometry is not None:
                             fine_rotation, fine_update = geometry
+                            optimizer_saved = True
                             debug_log.record(kind="optimize_saved", trial=winner, reason=optimizer.describe(winner),
                                              stats=optimizer_state["stats"].get(winner),
                                              old={"rotation": active_rules["rotation"],
@@ -4333,6 +4336,7 @@ def main():
                             updated["local_geometry_backup"] = {
                                 "revision": revision, "source": source_key, "rotation": active_rules["rotation"],
                                 "digit_boxes": active_rules["digit_boxes"], "failures": 0,
+                                "optimizer": optimizer_saved,
                             }
                         if fine_rotation is not None:
                             atomic_write(HISTORY, json.dumps(updated).encode("utf-8"), 0o600)

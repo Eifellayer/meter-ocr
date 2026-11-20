@@ -119,6 +119,7 @@ EN_UI = {
     "Rahmen speichern und Automatik starten": "Save the crop and start automatic checks",
     "Geräte suchen": "Search devices",
     "Es wurden keine Geräte gefunden": "No devices found",
+    'aria-label="Neu suchen" title="Neu suchen"': 'aria-label="Search again" title="Search again"',
     "z. B. Gaszähler": "e.g. gas meter",
     "1. Lade ein Bild deiner Kamera oder wähle ein Testbild derselben Kamera.": "1. Load a camera image or choose a test image from the same camera.",
     "Kamerabild für Rahmen laden": "Load camera image for the crop",

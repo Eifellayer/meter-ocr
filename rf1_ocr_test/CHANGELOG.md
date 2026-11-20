@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.2.7
+
+- **Geräte neu suchen:** Im Einrichtungsassistenten steht neben „In Home Assistant gefunden“ ein kleiner Knopf ↻ („Neu suchen“). Antwortet Home Assistant gerade nicht (z. B. direkt nach einem Neustart) oder ist die Liste leer, sucht die App nach einigen Sekunden einmal selbst erneut und sagt, wenn Home Assistant nicht erreichbar ist.
 ## 0.2.6
 
 - **Versionsnummer unten auf jeder Seite:** Übersicht, Einstellungen, Werkzeuge und Einrichtung zeigen unten dezent „AI Meter Reader 0.2.6“ mit Link zu den Änderungen.

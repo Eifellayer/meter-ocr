@@ -1170,6 +1170,38 @@ class BrowserTests(IngressFixture):
             self.assertTrue(discovered.is_disabled())
             self.assertEqual(["Es wurden keine Geräte gefunden"], discovered.locator("option").all_text_contents())
             self.assertTrue(page.locator("#wizard-discovered-sources").is_visible())
+            page.locator("#wizard-discovery-status").filter(has_text="nicht erreichbar").wait_for()
+            page.unroute("**/bildquellen")
+            refresh = page.get_by_role("button", name="Neu suchen")
+            box = refresh.bounding_box()
+            self.assertGreaterEqual(min(box["width"], box["height"]), 44)
+            refresh.click()
+            discovered.locator("option").filter(has_text="AI on the Edge · Gasmeter").wait_for(state="attached")
+            self.assertTrue(discovered.is_enabled())
+            self.assertTrue(page.locator("#wizard-discovery-status").is_hidden())
+            browser.close()
+
+    def test_device_discovery_retries_once_by_itself(self):
+        from playwright.sync_api import sync_playwright
+
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(executable_path=os.getenv("RF1_CHROMIUM"))
+            page = browser.new_page(locale="de-DE")
+            page.set_default_timeout(9000)
+            calls = []
+
+            def answer(route):
+                calls.append(1)
+                if len(calls) == 1:
+                    route.fulfill(status=502, body="Bad gateway")
+                else:
+                    route.fulfill(status=200, content_type="application/json",
+                                  body='[{"mode": "esphome", "camera": "camera.gas", "label": "Gas"}]')
+            page.route("**/bildquellen", answer)
+            page.goto(self.base)
+            discovered = page.locator("#wizard-discovered-source")
+            discovered.locator("option").filter(has_text="Kamera · Gas").wait_for(state="attached")
+            self.assertEqual(2, len(calls))
             browser.close()
 
     def test_selecting_a_discovered_meter_prefills_the_wizard(self):

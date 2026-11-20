@@ -59,6 +59,8 @@ import experiments
 import glyph_match
 from layout import (MANUAL_ROW_UNCLEAR, PARTLY_UNCLEAR, RAW_ROW_UNCLEAR, digit_row_tilt, fine_rotation as valid_fine_rotation, crop_coordinates, find_digit_row,
                     digit_box_settings, find_raw_digit_row, normalize_digit_boxes, glyph_clipped, glare_slots, roll_center, rotated_width, scale_digit_boxes, turn_crop)
+import digit_library
+import optimizer
 from meter_learning import (GEOMETRY_REPAIR_LIMIT, GEOMETRY_REPAIR_SECONDS, alignment_rollback, observe_flow,
                             observe_geometry_failures, local_geometry_trials, note_local_issue, note_local_improvement,
                             plan_reflection_recheck, REFLECTION_RECHECK_NOTICE, suggested_interval)
@@ -103,6 +105,7 @@ DIGIT_RECOVERY_SECONDS = 25
 INTENSIVE_ROTATIONS = (-6, 6)
 MAX_LEARNED_ROTATION = 18
 FRESH_OCR_NOTICE = "Der Zählerstand konnte nicht bestätigt werden. Ein frisches Kamerabild folgt in Kürze."
+OPTIMIZER_STATUS = "Automatik-Nachprüfung: {trial} ({done} von {total}, wird beim nächsten Bild fortgesetzt)."
 SINGLE_DIGIT_RECHECK = "Automatik-Nachprüfung: Die App prüft die fehlende Ziffer mit leicht verschobenem Rahmen."
 INTENSIVE_ROTATION_STATUS = "Intensivtest: Die App prüft das Bild leicht gedreht."
 
@@ -951,8 +954,50 @@ def read_visible_digits(register, integer_width, whole_boxes, fraction_boxes, li
         fraction_cells = ["?" if whole_digits + index in glared
                           else glyph_match.combine(cell, glyph_scores(register, box, polarity, light_digits))
                           for index, (cell, box) in enumerate(zip(fraction_cells, fraction_boxes))]
+    if glyphs and "?" in whole + "".join(fraction_cells) and digit_library.LIBRARY.digits:
+        # 0.4.0: unclear cells compared with this meter's own learned digit shapes.
+        bright = bool(light_digits)
+        whole_cells = list(whole)
+        if len(whole_cells) == whole_digits and len(whole_boxes) == whole_digits:
+            for index, box in enumerate(whole_boxes):
+                if whole_cells[index] == "?" and index not in glared:
+                    learned = learned_digit(register, box, bright, polarity, light_digits)
+                    if learned:
+                        whole_cells[index] = learned
+            whole = "".join(whole_cells)
+        for index, box in enumerate(fraction_boxes[:fraction_digits]):
+            if index < len(fraction_cells) and fraction_cells[index] == "?" and whole_digits + index not in glared:
+                learned = learned_digit(register, box, bright, polarity, light_digits)
+                if learned:
+                    fraction_cells[index] = learned
     fraction = "".join(fraction_cells)
     return f"{whole}.{fraction.ljust(fraction_digits, '?')}" if fraction_digits else whole
+
+
+def learned_digit(register, box, bright, polarity, light_digits):
+    try:
+        cell = register.crop(box)
+        return digit_library.LIBRARY.fill(cell, bright, glyph_scores(register, box, polarity, light_digits))
+    except (OSError, ValueError, ZeroDivisionError):
+        return None
+
+
+def learn_confirmed_digits(register, boxes, readings, value, light_digits, *, skip_last=False):
+    """Teach the digit library from a confirmed check: cells all readings agree on."""
+    rows = [str(item).replace(".", "").replace(",", "") for item in readings]
+    target = str(value).replace(".", "").replace(",", "")
+    if not rows or len(boxes) < len(target) - (1 if skip_last else 0):
+        return 0
+    cells = []
+    for index, digit in enumerate(target):
+        if index >= len(boxes) or (skip_last and index == len(target) - 1):
+            break
+        if digit.isdigit() and all(len(row) > index and row[index] == digit for row in rows):
+            try:
+                cells.append((register.crop(boxes[index]), digit))
+            except (OSError, ValueError):
+                continue
+    return digit_library.LIBRARY.learn(cells, bool(light_digits)) if cells else 0
 
 
 def glyph_whole_range(history, rules, zone, captured):
@@ -1772,6 +1817,7 @@ def main():
     geometry_backup = HISTORY.with_name("geometry-backup.json")
     calibration_candidates_path = HISTORY.with_name("calibration-candidates.json")
     known_good_geometry_path = HISTORY.with_name("known-good-geometry.json")
+    digit_library.LIBRARY = digit_library.DigitLibrary(HISTORY.with_name("digit-library.json"))
 
     def automatic_check_available():
         source, _ = get_source()
@@ -2603,11 +2649,13 @@ def main():
                 HISTORY.with_name("manual-test-settings.json"), DESTINATION, GOOD_IMAGE,
                 TEST_IMAGE, TEST_SOURCE_IMAGE, AUTOMATIC_PREVIEW, AUTO_PAUSED, geometry_backup,
                 calibration_candidates_path, known_good_geometry_path,
+                HISTORY.with_name("digit-library.json"),
             )
             for path in paths:
                 if keep_statistics and path == HISTORY:
                     continue
                 path.unlink(missing_ok=True)
+            digit_library.LIBRARY.clear()
             # Left over from the removed "Experimentell · Mehrere Zähler" field (≤ 0.3.2).
             HISTORY.with_name("experimental-meters.json").unlink(missing_ok=True)
             history = retained_history
@@ -2629,6 +2677,8 @@ def main():
                 calibration_preview.clear()
                 calibration_images.clear()
             reset_result["value"] = "done"
+            # Support rounds need to see a deliberate reset (setups start without a known frame).
+            debug_log.record(kind="factory_reset", keep_statistics=keep_statistics)
         except (OSError, ValueError, TypeError) as error:
             print(f"Werkreset konnte nicht abgeschlossen werden: {type(error).__name__}")
             reset_result["value"] = "failed"
@@ -3255,7 +3305,12 @@ def main():
                             recovery_reads = ocr_attempts
                             # Own budget on the image already taken: the live capture window (fresh
                             # pictures for a moving meter) is usually used up by the regular reads.
-                            digit_deadline = recovery_started + DIGIT_RECOVERY_SECONDS
+                            # 0.4.0: planned from the measured seconds per read on this machine.
+                            optimizer_state = updated.setdefault("optimizer", {})
+                            if not isinstance(optimizer_state, dict):
+                                optimizer_state = updated["optimizer"] = {}
+                            recovery_seconds = max(DIGIT_RECOVERY_SECONDS, optimizer.recheck_seconds(optimizer_state))
+                            digit_deadline = recovery_started + recovery_seconds
 
                             def stop_recovery():
                                 return (not manual and get_auto_paused()) or time.monotonic() >= digit_deadline
@@ -3291,7 +3346,76 @@ def main():
                                                               SHIFTED_DIGIT_POSITIONS)
                                        or single_missing_digit(observed, same_frame, comparison_decimals, integer_digits,
                                                                SHIFTED_DIGIT_POSITIONS))
-                            if pattern:
+                            optimizable = (bool(custom_boxes) and crop_rules["crop_mode"] == "manual" and not detect_raw
+                                           and not base_adjustment and not raw_fallback
+                                           and active_rules["fine_alignment_enabled"]
+                                           and read_state["picture"] is not None and len(same_frame) >= 2)
+                            if optimizable and not stop_recovery():
+                                # (1) angle ±1°/±2°, (2) decimal frames up/down – resumed on the next picture.
+                                optimizer.plan(optimizer_state, geometry_check_key(active_rules, source_key))
+                                planned = optimizer.next_trials(optimizer_state, optimizer.trials_per_image(optimizer_state))
+                                required_slots = integer_digits + comparison_decimals
+                                base_rows = list(same_frame[:2])
+                                done = 0
+                                trial_log = []
+                                left, top, right, bottom = manual_crop
+                                try:
+                                    with Image.open(io.BytesIO(read_state["picture"])) as original:
+                                        for trial in planned:
+                                            if stop_recovery():
+                                                break
+                                            geometry = optimizer.trial_geometry(
+                                                trial, view_rotation, custom_boxes, layout[0].height, integer_digits)
+                                            done += 1
+                                            if geometry is None:
+                                                continue
+                                            angle, boxes = geometry
+                                            width = manual_width if angle == view_rotation else min(
+                                                manual_width, rotated_width(right - left, bottom - top, angle))
+                                            done_now, total = optimizer.progress(optimizer_state)
+                                            set_activity("working", OPTIMIZER_STATUS.format(
+                                                done=done_now + done, total=total, trial=optimizer.describe(trial)),
+                                                completed=ocr_attempts, total=budget, reading=observed)
+                                            try:
+                                                trial_register = select_register(
+                                                    original, None, manual_crop, width, angle,
+                                                    integer_digits, fraction_digits, digit_boxes=boxes,
+                                                )
+                                                values = [read_layout(trial_register[:4], profile)
+                                                          for profile in OCR_PROFILES[:2]]
+                                            except (OSError, ValueError, subprocess.SubprocessError):
+                                                continue
+                                            ocr_attempts += 2
+                                            trial_sure, base_sure, contradiction = optimizer.note_result(
+                                                optimizer_state, trial, values, base_rows, required_slots)
+                                            trial_log.append([trial, trial_sure, base_sure, contradiction])
+                                            optimizer_state["height"] = layout[0].height
+                                            prefix = meter_prefix(values[0], comparison_decimals, integer_digits)
+                                            if (not contradiction and prefix is not None
+                                                    and prefix == meter_prefix(values[1], comparison_decimals, integer_digits)
+                                                    and compare_sample(sample, values[0], comparison_decimals,
+                                                                       integer_digits=integer_digits,
+                                                                       exact_prefix=exact_partial)[0] in ("match", "ocr_only")):
+                                                ocr, ocr_confirmed, ocr_readings = values[0], True, values
+                                                ocr_method = "optimizer"
+                                                reg, width_now, whole_now, fraction_now, kind = trial_register
+                                                read_state.update(register=reg, integer_width=width_now,
+                                                                  whole_boxes=whole_now, fraction_boxes=fraction_now,
+                                                                  source=kind)
+                                                regular_status = compare_sample(
+                                                    sample, ocr, comparison_decimals, integer_digits=integer_digits,
+                                                    exact_prefix=exact_partial,
+                                                )[0]
+                                                break
+                                except (OSError, ValueError, Image.DecompressionBombError):
+                                    pass
+                                optimizer.advance(optimizer_state, done)
+                                done_now, total = optimizer.progress(optimizer_state)
+                                recovery_log["plan"] = {"trials": trial_log, "done": done_now, "total": total,
+                                                        "rounds": optimizer_state.get("rounds", 0),
+                                                        "resume": done_now > 0 and done_now < total}
+                                ocr_limit = max(ocr_limit, ocr_attempts)
+                            if pattern and not ocr_confirmed:
                                 register_for_digit = layout[0]
                                 polarity = active_rules["polarity"]
 
@@ -3382,10 +3506,13 @@ def main():
                                         )[0]
                                         break
                                 ocr_limit = max(ocr_limit, ocr_attempts)
+                            recovery_spent = time.monotonic() - recovery_started
+                            optimizer.note_read_time(optimizer_state, recovery_spent, ocr_attempts - recovery_reads)
                             recovery_log.update(
                                 pattern=pattern or None, reads=ocr_attempts - recovery_reads,
-                                seconds=round(time.monotonic() - recovery_started, 1),
-                                result=ocr_method if ocr_method in ("shifted", "row_shifted") else (
+                                seconds=round(recovery_spent, 1), budget=recovery_seconds,
+                                read_s=optimizer_state.get("read_s"),
+                                result=ocr_method if ocr_method in ("shifted", "row_shifted", "optimizer") else (
                                     "timeout" if time.monotonic() >= digit_deadline else "unclear"))
                         if digit_probe_enabled and not ocr_confirmed:
                             # A moving meter can show different digits on separate photographs.
@@ -3983,6 +4110,16 @@ def main():
                             if get_auto_rules() == active_rules and get_source()[0] == active_source:
                                 remember_known_good_layout(active_rules, active_source,
                                                            geometry_layout(active_rules, active_rules))
+                        try:
+                            # 0.4.0: learn this meter's digit shapes from cells both profiles agreed on.
+                            library_learned = learn_confirmed_digits(
+                                read_state["register"], [*read_state["whole_boxes"], *read_state["fraction_boxes"]],
+                                ocr_readings or [], ocr,
+                                options["helle_ziffern"] if active_rules["polarity"] == "auto"
+                                else active_rules["polarity"] == "light",
+                                skip_last=fraction_digits == 3)
+                        except (OSError, ValueError, KeyError, TypeError, NameError):
+                            library_learned = 0
                     if (adaptive and not optimization_paused and outcome in ("match", "ocr_only") and not raw_fallback
                             and not locals().get("reduced_precision") and decimals == fraction_digits):
                         # Learn the flow from the ESP value or, for camera sources, from the reading
@@ -4008,6 +4145,23 @@ def main():
                                 fine_rotation = local_backup["rotation"]
                                 fine_update = local_backup["digit_boxes"]
                                 restoring_local = True
+                    optimizer_state = updated.get("optimizer")
+                    winner = (optimizer.best_trial(optimizer_state) if isinstance(optimizer_state, dict)
+                              and optimizer_state.get("key") == geometry_check_key(active_rules, source_key) else None)
+                    if (winner and fine_update is None and not optimization_paused and not raw_fallback
+                            and active_rules["fine_alignment_enabled"] and active_rules.get("digit_boxes")
+                            and active_rules["crop_mode"] == "manual"):
+                        geometry = optimizer.trial_geometry(
+                            winner, active_rules["rotation"], active_rules["digit_boxes"],
+                            optimizer_state.get("height") or 1000, integer_digits)
+                        if geometry is not None:
+                            fine_rotation, fine_update = geometry
+                            debug_log.record(kind="optimize_saved", trial=winner, reason=optimizer.describe(winner),
+                                             stats=optimizer_state["stats"].get(winner),
+                                             old={"rotation": active_rules["rotation"],
+                                                  "digit_boxes": active_rules["digit_boxes"]},
+                                             new={"rotation": fine_rotation, "digit_boxes": fine_update})
+                            updated["optimizer"] = {"read_s": optimizer_state.get("read_s")}
                     if local_trial is None and shifted_trial is not None:
                         # A frame shift that rescued this check is learned under the same rules as the
                         # local fine alignment: three fresh images, two meter readings, rollback on errors.
@@ -4202,7 +4356,11 @@ def main():
                 [*(local.get("whole_boxes") or []), *(local.get("fraction_boxes") or [])], ocr,
                 options["helle_ziffern"] if active_rules["polarity"] == "auto" else active_rules["polarity"] == "light",
                 active_rules["polarity"] != "auto")
+            library_filled = digit_library.LIBRARY.take_filled()
             debug_log.record(
+                library={"filled": library_filled, "learned": local.get("library_learned", 0),
+                         "samples": digit_library.LIBRARY.samples()}
+                if (library_filled or local.get("library_learned")) else None,
                 experiment=experiment, recovery=local.get("recovery_log"),
                 kind="manual" if manual else "automatic", image=data.get("esp_timestamp"), crop=source,
                 ocr=ocr, readings=local.get("ocr_readings"), attempts=data.get("ocr_attempts"),

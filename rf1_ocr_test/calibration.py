@@ -10,7 +10,7 @@ from itertools import product
 from pathlib import Path
 from statistics import median
 
-from PIL import Image, ImageChops, ImageStat
+from PIL import Image, ImageChops, ImageFilter, ImageStat
 
 from checks import OCR_PROFILES, compare_sample, crop_register, meter_prefix, read_with_retries
 from consumption import accumulate_consumption
@@ -43,6 +43,12 @@ SHORTLIST_LIMIT = 5
 DEFAULT_INTENSIVE_AGREEMENT = 80
 MIN_VERIFICATION_QUALITY = .65
 FRAME_ATTEMPT_LIMIT = 30
+MAX_GROUPS = 12
+MAX_REJECTED = 8
+SMALL_LABEL_AREA = .35
+PREFILTER_TURN = 6
+# A first profile with fewer sure digits makes a candidate hopeless: skip the second read.
+HOPELESS_DIGITS = 3
 
 
 
@@ -170,6 +176,49 @@ def same_register(layout, other, overlap=.8, max_turn=2):
     return shared / (area(layout.box) + area(other.box) - shared) >= overlap
 
 
+SKEW_CONFIDENCE = 1.25
+
+
+def estimate_skew(frame, limit=SEARCH_ANGLE_LIMIT):
+    """Measured tilt of the dominant horizontal structure (register window, digit row), or None.
+
+    Cheap deskew without OCR (about 0.2 s): turn an edge image of a small copy in 1° steps and
+    keep the angle whose row profile is the sharpest. The result is the angle ``turn_crop``
+    needs to level the picture. The setup tries it (and ±1°, ±2°) first instead of waiting until
+    the coarse angle grid reaches e.g. −14° after many images (Stefan 20.11., 18:46).
+    """
+    try:
+        gray = frame.convert("L")
+        scale = 360 / max(gray.size)
+        small = gray.resize((max(16, round(gray.width * scale)), max(16, round(gray.height * scale))),
+                            Image.Resampling.BILINEAR)
+        down = small.filter(ImageFilter.Kernel((3, 3), (-1, -2, -1, 0, 0, 0, 1, 2, 1), 1))
+        up = small.filter(ImageFilter.Kernel((3, 3), (1, 2, 1, 0, 0, 0, -1, -2, -1), 1))
+        edges = ImageChops.add(down, up)
+    except (OSError, ValueError, ZeroDivisionError):
+        return None
+    width, height = edges.size
+    box = (width // 5, height // 5, width - width // 5, height - height // 5)
+    scores = {}
+    for angle in range(-limit, limit + 1):
+        turned = turn_crop(edges, angle, expand=False).convert("L").crop(box)
+        rows = list(turned.resize((1, turned.height), Image.Resampling.BOX).tobytes())
+        mean = sum(rows) / len(rows)
+        scores[angle] = sum((value - mean) ** 2 for value in rows) / len(rows)
+    best = max(scores, key=lambda angle: (scores[angle], -abs(angle)))
+    typical = median(scores.values())
+    if not scores[best] or scores[best] < SKEW_CONFIDENCE * typical:
+        return None
+    return best
+
+
+def skew_angles(skew, limit=SEARCH_ANGLE_LIMIT):
+    """The measured tilt and its neighbours in 1° steps, most likely first."""
+    if skew is None:
+        return ()
+    return tuple(skew + step for step in (0, -1, 1, -2, 2) if abs(skew + step) <= limit)
+
+
 def unrotate_box(box, size, angle):
     """Convert a box in a center-rotated image to bounds in the original."""
     if angle == 0:
@@ -215,7 +264,7 @@ def glyph_register_layout(frame, whole_digits, fraction_digits):
     found = find_glyph_register(frame, count, with_tilt=True)
     if found is None:
         return None
-    angle = max(-12, min(12, round(-found[1])))
+    angle = max(-SEARCH_ANGLE_LIMIT, min(SEARCH_ANGLE_LIMIT, round(-found[1])))
     if angle:
         found = find_glyph_register(turn_crop(frame, angle, expand=False), count, with_tilt=True)
         if found is None:
@@ -238,7 +287,8 @@ def glyph_register_layout(frame, whole_digits, fraction_digits):
     return replace(proposal, method="register_window")
 
 
-def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False, on_regions=None, *, upright=False):
+def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False, on_regions=None, *, upright=False,
+            skew=None):
     """Try a few geometry candidates per image, rotating the search across images."""
     emitted = set()
 
@@ -274,6 +324,10 @@ def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False
     raw_limit = neighbour_limit - 1
     angles = (0,) if upright else (
         SMALL_ANGLES if offset == 0 else (0, ANGLES[first], ANGLES[(first + 1) % len(ANGLES)]))
+    if not upright and skew is not None:
+        # The measured tilt first: a −14° meter is found on the first image (0.4.0).
+        measured = skew_angles(skew)
+        angles = measured + tuple(angle for angle in angles if angle not in measured)
     if not upright and current is not None and abs(current.rotation) <= SEARCH_ANGLE_LIMIT:
         # Search around the angle that already read best, in 1° steps (e.g. −12° → −13°, −14°).
         center = round(current.rotation)
@@ -287,7 +341,8 @@ def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False
             for detected, score in find_raw_digit_rows(adjusted, rules["integer_digits"], rules["fraction_digits"]):
                 box = unrotate_box(detected[0], frame.size, angle)
                 ranked.append((score, angle, detected, box))
-        ranked.sort(key=lambda item: (-item[0], abs(item[1]), item[3][1], item[3][0]))
+        level = skew or 0
+        ranked.sort(key=lambda item: (-item[0], abs(item[1] - level), item[3][1], item[3][0]))
         whole, fraction = rules["integer_digits"], rules["fraction_digits"]
         glyph_window = glyph_register_layout(frame, whole, fraction)
         if glyph_window is not None and unique(glyph_window):
@@ -356,7 +411,7 @@ def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False
                 if unique(layout):
                     yield layout
     whole, fraction = rules["integer_digits"], rules["fraction_digits"]
-    for angle in (0,) if upright else (0, ANGLES[first]):
+    for angle in (0,) if upright else tuple(dict.fromkeys((*skew_angles(skew)[:1], 0, ANGLES[first]))):
         if len(emitted) >= neighbour_limit:
             break
         adjusted = turn_crop(frame, angle, expand=False)
@@ -591,8 +646,11 @@ def worth_intensive(items, shortlist, best, threshold):
     """
     if best < threshold:
         return items
+    # Below the confirmation threshold a frame is only a search aid once another frame reaches
+    # it (Stefan 20.11., 18:52: 70–75 % frames cost images and time without ever being saved).
+    floor_percent = max(best - INTENSIVE_GAP, threshold)
     kept = [item for item in items
-            if shortlist.get(item[1], (0,))[0] > 0 and shortlist.get(item[1], (0,))[0] >= best - INTENSIVE_GAP]
+            if shortlist.get(item[1], (0,))[0] > 0 and shortlist.get(item[1], (0,))[0] >= floor_percent]
     return kept or items
 
 
@@ -724,6 +782,116 @@ class Calibration:
     rejected_regions: list = field(default_factory=list)
     # Background searches only use pictures of automatic checks: last one already evaluated.
     automatic_seq: int = 0
+    # 0.4.0: frames of the same register (±2°, ≥ 80 % overlap) are one group: hits are counted
+    # per image for the group, the list shows one entry per group, the best frame is saved.
+    groups: list = field(default_factory=list)
+    rejected: list = field(default_factory=list)
+    skews: list = field(default_factory=list)
+    current_stamp: float = 0
+
+    def measured_skew(self, frame):
+        """Median of the tilt measured on the last images (None until one was measured)."""
+        skew = estimate_skew(frame)
+        if skew is not None:
+            self.skews = [*self.skews[-4:], skew]
+        return round(median(self.skews)) if self.skews else None
+
+    def group_of(self, layout):
+        for group in self.groups:
+            if layout in group["layouts"] or same_register(layout, group["rep"]):
+                return group
+        return None
+
+    def note_group(self, layout, readings, hit, digits):
+        """Collect a frame in its register group; one hit per image and group."""
+        if layout is None:
+            return None
+        group = self.group_of(layout)
+        if group is None:
+            group = {"rep": layout, "layouts": set(), "hits": set(), "quality": {}}
+            self.groups.append(group)
+            if len(self.groups) > MAX_GROUPS:
+                # Forget the oldest group without hits (never the one being confirmed).
+                for old in self.groups:
+                    if not old["hits"] and old is not group and self.candidate not in old["layouts"]:
+                        self.groups.remove(old)
+                        break
+                else:
+                    self.groups.pop(0)
+        group["layouts"].add(layout)
+        sure = digits - len(uncertain_slots(readings, digits)) if readings else 0
+        images = group["quality"].setdefault(layout, {})
+        images[self.current_stamp] = max(images.get(self.current_stamp, 0), sure)
+        if hit:
+            group["hits"].add(self.current_stamp)
+        return group
+
+    def best_of_group(self, layout):
+        """The frame of this register that read most digits surely over several images.
+
+        Stefan (20.11., 18:50): the setup saved the first confirmed −12° frame although −13°/−14°
+        read better. Only frames with at least two images count; ties keep the confirmed frame.
+        """
+        group = self.group_of(layout)
+        if group is None:
+            return layout
+        def quality(item):
+            values = list(group["quality"].get(item, {}).values())
+            return sum(values) / len(values) if len(values) >= 2 else None
+        own = quality(layout)
+        best = layout
+        for item in group["layouts"]:
+            score = quality(item)
+            if (score is not None and item.digit_boxes and len(item.digit_boxes) == len(layout.digit_boxes)
+                    and (own is None or score > own + .25) and (best is layout or score > quality(best))):
+                best = item
+        return best
+
+    def distinct_shortlist(self):
+        """One frame per register group, the best scoring first (no near-duplicate re-reads)."""
+        seen = []
+        for layout in self.shortlist:
+            group = self.group_of(layout)
+            if group is not None and any(group is other for other in seen):
+                continue
+            if group is not None:
+                seen.append(group)
+            yield layout
+
+    def note_rejection(self, layout, reason):
+        if any(same_digit_region(layout.box, entry["box"]) and entry["reason"] == reason for entry in self.rejected):
+            return
+        self.rejected = [*self.rejected[-(MAX_REJECTED - 1):],
+                         {"reason": reason, "box": list(layout.box), "rotation": layout.rotation}]
+
+    def size_reference(self):
+        if self.known_good_layout is not None:
+            return self.known_good_layout
+        if self.candidate is not None and self.confirmations:
+            return self.candidate
+        for group in self.groups:
+            if len(group["hits"]) >= 2:
+                return group["rep"]
+        return None
+
+    def prefilter(self, candidates):
+        """Common pre-filter for all candidate sources before any OCR (0.4.0).
+
+        With a known register size (bewährter Rahmen, confirmed candidate or a frame with two
+        hits), much smaller rows (serial number, small print ≈ half the digit height) and frames
+        turned far away from it are dropped with a reason for the candidate list.
+        """
+        reference = self.size_reference()
+        for layout in candidates:
+            if reference is not None and layout != reference:
+                area = lambda box: max(1, (box[2] - box[0]) * (box[3] - box[1]))
+                if area(layout.box) < SMALL_LABEL_AREA * area(reference.box):
+                    self.note_rejection(layout, "small_label")
+                    continue
+                if abs(layout.rotation - reference.rotation) > PREFILTER_TURN:
+                    self.note_rejection(layout, "quarter_turn" if abs(layout.rotation) >= 45 else "rotation")
+                    continue
+            yield layout
 
     def expired(self, now):
         return self.remaining(now) <= 0
@@ -909,15 +1077,41 @@ class Calibration:
                 "background": self.background, "purpose": self.purpose,
                 "coarse_attempts": self.coarse_attempts, "coarse_limit": COARSE_LIMIT,
                 "shortlist": [score[0] for score in self.shortlist.values() if len(score) == 3],
-                "candidates": [{"number": number, "percent": score[0],
-                                "reading": self.candidate_readings.get(layout, ""),
-                                "rotation": layout.rotation, "box": list(layout.box),
-                                "selected": layout == self.candidate}
-                               for number, (layout, score) in enumerate(
-                                   ((item, value) for item, value in self.shortlist.items() if len(value) == 3),
-                                   start=1)],
+                "candidates": self.candidate_rows(),
+                "rejected": list(self.rejected),
                 "candidate_agreement": selected_score[0] if len(selected_score) == 3 else None,
                 "seconds": max(0, ceil(self.remaining(now)))}
+
+    def candidate_rows(self):
+        """One row per register group: best frame, hits over all images, merged near-duplicates."""
+        rows, seen = [], []
+        for layout, score in self.shortlist.items():
+            if len(score) != 3:
+                continue
+            group = self.group_of(layout)
+            if group is not None and any(group is other for other in seen):
+                continue
+            if group is not None:
+                seen.append(group)
+            members = group["layouts"] if group is not None else {layout}
+            rows.append({"number": len(rows) + 1, "percent": score[0],
+                         "reading": self.candidate_readings.get(layout, ""),
+                         "rotation": layout.rotation, "box": list(layout.box),
+                         "selected": self.candidate in members if self.candidate is not None else False,
+                         "hits": len(group["hits"]) if group is not None else 0,
+                         "merged": max(0, len(members) - 1),
+                         "role": "confirm" if score[0] >= self.agreement_threshold else "hint"})
+        candidate = self.candidate
+        if candidate is not None and not any(row["selected"] for row in rows):
+            # The frame being confirmed is always listed, also when its score fell out of the list.
+            group = self.group_of(candidate)
+            rows.append({"number": len(rows) + 1, "percent": None,
+                         "reading": self.candidate_readings.get(candidate, ""),
+                         "rotation": candidate.rotation, "box": list(candidate.box), "selected": True,
+                         "hits": len(group["hits"]) if group is not None else self.confirmations,
+                         "merged": max(0, len(group["layouts"]) - 1) if group is not None else 0,
+                         "role": "confirm"})
+        return rows
 
     def refine(self, layout, readings, sample, rules, read, stop, on_attempt, tested, frame_ceiling):
         on_attempt = on_attempt or (lambda *_: None)
@@ -1263,10 +1457,24 @@ class Calibration:
         required_agreement = agreement_percent(readings, sample, precision, digits)
         readable_agreement = agreement_percent(readings, {"reference_required": False}, fraction, digits)
         percentage = min(required_agreement, readable_agreement)
+        prefixes = [meter_prefix(value, precision, digits) for value in readings[:2]]
+        self.note_group(layout, readings, prefixes[0] is not None and len(set(prefixes)) == 1, digits + fraction)
         if required_agreement:
             self.shortlist[layout] = (percentage, round(crop_quality(frame, layout), 2), required_agreement)
-            self.shortlist = dict(sorted(self.shortlist.items(), key=lambda pair: pair[1], reverse=True)
-                                  [:SHORTLIST_LIMIT])
+            ranked = sorted(self.shortlist.items(), key=lambda pair: pair[1], reverse=True)
+            # Keep every register group with hits in the list (Stefan 20.11., 18:48: a −13° frame with
+            # seven hits was pushed out by near-duplicates); near-duplicates only fill free places.
+            first, rest, seen = [], [], []
+            for item in ranked:
+                group = self.group_of(item[0])
+                if group is not None and not any(group is other for other in seen):
+                    seen.append(group)
+                    first.append(item)
+                else:
+                    rest.append(item)
+            first.sort(key=lambda item: (bool((self.group_of(item[0]) or {}).get("hits")), item[1]), reverse=True)
+            kept = (first + rest)[:SHORTLIST_LIMIT]
+            self.shortlist = dict(sorted(kept, key=lambda pair: pair[1], reverse=True))
             rows = [str(value).replace(",", ".") for value in readings]
             exemplar = max(rows, key=lambda value: sum(digit.isdigit() for digit in value))
             self.candidate_readings[layout] = exemplar if all(row == exemplar for row in rows) else "".join(
@@ -1294,6 +1502,7 @@ class Calibration:
             return None
         if on_image is not None:
             on_image()
+        self.current_stamp = stamp
         has_reference = sample.get("reference_required") is not False
         # Without an outside reference, read every displayed digit to check movement.
         precision = self.precision(rules, has_reference)
@@ -1337,15 +1546,17 @@ class Calibration:
         elif self.followup:
             candidates = (self.candidate or self.previous_layout,)
         elif self.rank_candidates and self.optimizing and self.shortlist:
-            candidates = tuple(self.shortlist)
+            candidates = tuple(self.distinct_shortlist())
         else:
             seed = self.candidate or (next(iter(self.shortlist), None) if collecting else self.previous_layout)
+            skew = None if self.region else self.measured_skew(frame)
 
             def detect(offset, current, report_regions=None):
                 return (guided_layouts(frame, overlay, rules, offset, current, self.region)
                         if self.region else layouts(
                             frame, overlay, rules, offset, current,
-                            prefer_configured=self.automatic or self.intensive, on_regions=report_regions))
+                            prefer_configured=self.automatic or self.intensive, on_regions=report_regions,
+                            skew=skew))
 
             def search_candidates():
                 known = self.known_good_layout
@@ -1355,8 +1566,14 @@ class Calibration:
                     a, b, c, d = known.box
                     if 0 <= a < c <= frame.width and 0 <= b < d <= frame.height:
                         yield known
-                yield from skip_small_labels(list(detect(len(self.seen) - 1, seed, on_regions)))
+                found = list(detect(len(self.seen) - 1, seed, on_regions))
+                kept = skip_small_labels(found)
+                for layout in found:
+                    if layout not in kept:
+                        self.note_rejection(layout, "small_label")
+                yield from self.prefilter(kept)
                 if (len(self.seen) == 1 and not self.automatic and not self.intensive
+                        and self.size_reference() is None
                         and not stop() and not any(reliable(score) for score, _, _ in coarse)
                         and (has_reference or not any(
                             meter_like(readings, max(4, digits + rules["fraction_digits"] - 3))
@@ -1409,7 +1626,13 @@ class Calibration:
                 readings = [read(layout, OCR_PROFILES[0])]
                 if stop():
                     return None
-                readings.append(read(layout, OCR_PROFILES[1]))
+                if (sum(char.isdigit() for char in str(readings[0])) < min(HOPELESS_DIGITS, digits)
+                        and layout not in (self.known_good_layout, self.candidate, self.previous_layout)):
+                    # Serial number, small print or empty area: a second profile cannot make it a
+                    # meter reading and costs several seconds on a slow machine (0.4.0).
+                    readings.append("".join("?" if char.isdigit() else char for char in str(readings[0])))
+                else:
+                    readings.append(read(layout, OCR_PROFILES[1]))
             except (OSError, ValueError, subprocess.SubprocessError):
                 on_decision("unreadable")
                 continue
@@ -1464,6 +1687,7 @@ class Calibration:
                          and reliable(coarse[best_index][0])
                          and coarse[best_index][1] not in self.angle_compared)
         if (coarse and self.rank_candidates and angle_read is not None
+                and meter_like(coarse[best_index][2], min(HOPELESS_DIGITS, digits))
                 and (zero_readable or (
                     not targeted and perfect is None and not self.confirmations
                     and not any(layout == self.known_good_layout and reliable(score)
@@ -1569,11 +1793,18 @@ class Calibration:
         else:
             coarse.sort(key=lambda item: item[0], reverse=True)
         refined = False
+        threshold = self.agreement_threshold
+        confirmable = self.rank_candidates and not (committed or preferred) and any(
+            self.shortlist.get(item[1], (0,))[0] >= threshold for item in coarse)
         for score, layout, readings in coarse:
             readings = additional_readings.get(layout, readings)
             if stop():
                 return None
             if self.region_rejected(layout):
+                continue
+            if (confirmable and layout != self.candidate and not reliable(score)
+                    and self.shortlist.get(layout, (0,))[0] < threshold):
+                # Only a search aid: its angle and place already steer the fine search.
                 continue
             if (not self.rank_candidates and not score[0] and not self.confirmations
                     and coarse[0][0][2] > 2.5 * score[2]):
@@ -1755,6 +1986,7 @@ class Calibration:
                 "reading_litres" in anchor and
                 counter["reading_litres"] > anchor["reading_litres"]))
             self.candidate, self.counter = layout, counter
+            self.note_group(layout, readings, True, digits + rules["fraction_digits"])
             self.unclear_frames = 0
             self.reference_reading = readings[0]
             self.focused = False
@@ -1769,7 +2001,7 @@ class Calibration:
             else:
                 on_decision("accepted")
             if self.confirmations >= MIN_IMAGES and (self.anchored or self.advanced):
-                return layout
+                return self.best_of_group(layout) if self.rank_candidates else layout
             # Preserve a reproducible candidate and test it on the next photograph.
             return None
         if not committed and not stop():

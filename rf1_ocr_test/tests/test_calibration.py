@@ -558,7 +558,10 @@ class CalibrationTests(TestCase):
         self.candidates.return_value = [OTHER_LAYOUT]
         self.job.examine(frame(11), None, sample, 111, RULES, read, lambda: False,
                          on_shortlist=lambda number, _: intensive.append(number))
-        self.assertEqual([1, 2, 3, 4, 5], intensive)
+        # 0.4.0: the five frames overlap (same register, ±1 px) and are read once as one group.
+        self.assertEqual([1], intensive)
+        self.assertEqual(1, len(self.job.status(111)["candidates"]))
+        self.assertEqual(4, self.job.status(111)["candidates"][0]["merged"])
         self.assertEqual(50, self.job.coarse_attempts)
 
     def test_matching_first_photo_ends_coarse_search_without_skipping_confirmations(self):

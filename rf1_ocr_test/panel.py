@@ -2641,7 +2641,7 @@ function renderSetupCandidates(list, candidates) {{
     const parts = [];
     if (candidate.number) parts.push((en ? 'Frame ' : 'Rahmen ') + candidate.number);
     if (candidate.rotation != null) parts.push(String(candidate.rotation).replace('-', '−') + '°');
-    parts.push(candidate.percent + ' %');
+    if (candidate.percent != null) parts.push(candidate.percent + ' %');
     parts.push(candidate.reading || '–');
     // 0.4.0 status fields; older status data has none of them.
     const hits = Number(candidate.hits);

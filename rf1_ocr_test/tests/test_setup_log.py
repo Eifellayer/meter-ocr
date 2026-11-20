@@ -58,7 +58,8 @@ class WorthIntensiveTest(unittest.TestCase):
         items = [((0,), "meter", []), ((0,), "label90", []), ((0,), "serial", []), ((0,), "close", [])]
         shortlist = {"meter": (88, 1.0, 80), "label90": (0, 0.2, 80), "serial": (12, 0.4, 80), "close": (62, 0.8, 80)}
         kept = [item[1] for item in worth_intensive(items, shortlist, 88, 80)]
-        self.assertEqual(["meter", "close"], kept)
+        # 0.4.0: below the threshold a frame is only a search aid once another frame reaches it.
+        self.assertEqual(["meter"], kept)
 
     def test_everything_stays_without_a_good_candidate(self):
         from calibration import worth_intensive

@@ -1351,6 +1351,31 @@ def setup_attempted_before():
         return False
 
 
+def last_setup_unfinished(text=None):
+    """True if the newest user/update setup ran out of time or failed and nothing read since.
+
+    Then a new version restarts the setup on its own after the update, even though an older
+    frame is still stored (Stefan 20.11.2026: setup timed out, automatic read only "?????.9??").
+    """
+    try:
+        lines = (debug_log.read_text(debug_log.MAX_ENTRIES) if text is None else text).splitlines()
+    except (OSError, ValueError):
+        return False
+    for line in reversed(lines):
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        kind = entry.get("kind")
+        if kind == "automatic" and entry.get("outcome") in SUCCESSFUL_CHECKS:
+            return False
+        if kind == "setup_start" and entry.get("trigger") in ("user", "update", "retry"):
+            return False
+        if kind == "setup_end" and entry.get("purpose") == "setup":
+            return entry.get("state") in ("timeout", "failed")
+    return False
+
+
 def automatic_inputs_ready(rules, source, history, *, legacy_crop=False):
     if not source["selected"]:
         return False
@@ -2730,6 +2755,20 @@ def main():
             wake_worker.wait(timeout=2)
             continue
         setup_retry.update(job=None, count=0)
+        if setup_autostart["pending"] and not manual:
+            setup_autostart["pending"] = False
+            build = setup_autostart["build"]
+            if setup_autostart_due(history, build, calibration, last_setup_unfinished):
+                # The last setup did not finish: a new version tries again on its own.
+                history["setup_autostart_build"] = build
+                try:
+                    atomic_write(HISTORY, json.dumps(history).encode("utf-8"), 0o600)
+                    if control_calibration("setup", DEFAULT_LIMIT, trigger="update"):
+                        print("Neue App-Version: unterbrochene Selbsteinrichtung startet automatisch neu.")
+                        debug_log.record(kind="setup_autostart", build=build, reason="unfinished")
+                        continue
+                except (OSError, ValueError):
+                    print("Selbsteinrichtung konnte nach dem Update nicht automatisch starten.")
         setup_autostart["pending"] = False
         if remaining > 0 and not startup and not manual and not source_changed and not run_automatic_now:
             set_activity("waiting", SEVENTH_DIGIT_WAIT_NOTICE if history.get("seventh_digit_wait") else

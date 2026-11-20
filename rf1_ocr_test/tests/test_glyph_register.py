@@ -82,6 +82,23 @@ class SetupAutostartTests(TestCase):
         self.assertFalse(run.setup_autostart_due({}, "", None, lambda: True))
         self.assertFalse(run.setup_autostart_due({}, "0.1.25", None, lambda: False))
 
+    def test_unfinished_setup_is_recognised_from_the_debug_log(self):
+        # Stefan 20.11.2026: setup timed out after 20 min, the automatic then read "?????.9??".
+        start = '{"kind": "setup_start", "trigger": "user"}'
+        timeout = '{"kind": "setup_end", "state": "timeout", "purpose": "setup"}'
+        unclear = '{"kind": "automatic", "outcome": "ocr_unclear"}'
+        log = lambda *lines: "\n".join(lines)
+        self.assertTrue(run.last_setup_unfinished(log(start, timeout, unclear, unclear)))
+        self.assertFalse(run.last_setup_unfinished(log(start, timeout, '{"kind": "automatic", "outcome": "ocr_only"}')))
+        self.assertFalse(run.last_setup_unfinished(
+            log(start, '{"kind": "setup_end", "state": "saved", "purpose": "setup"}', unclear)))
+        self.assertFalse(run.last_setup_unfinished(
+            log(start, '{"kind": "setup_end", "state": "cancelled", "purpose": "setup"}')))
+        # A background search that failed is no reason to redo the whole setup.
+        self.assertFalse(run.last_setup_unfinished('{"kind": "setup_end", "state": "failed", "purpose": "background"}'))
+        self.assertFalse(run.last_setup_unfinished(start))
+        self.assertFalse(run.last_setup_unfinished("kaputt"))
+
 
 class SetupRetryTests(TestCase):
     def test_quick_retries_then_hourly_without_limit(self):

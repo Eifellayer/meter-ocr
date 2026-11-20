@@ -19,6 +19,16 @@ EN_UI = {
     "Klappt es dauerhaft nicht? <a": "Still not working? <a",
     "(öffnet ein vorausgefülltes Formular auf GitHub, ohne private Daten).": "(opens a prefilled form on GitHub, without private data).",
     "ⓘ Experimentelle Funktionen": "ⓘ Experimental functions",
+    # 0.4.0: experiments in the setup wizard, last reading attempts, navigation
+    "Experimentelle Funktionen (Schattenbetrieb)": "Experimental functions (shadow mode)",
+    "Du kannst das jederzeit unter Einstellungen › Automatische Prüfung wieder ändern.":
+        "You can change this at any time under Settings › Automatic checks.",
+    ">Die letzten Leseversuche<": ">Latest reading attempts<",
+    "Ziffern je Versuch und Stelle aus der zuletzt beendeten Prüfung. Die Liste bleibt bis zur nächsten Prüfung stehen.":
+        "Digits per attempt and position from the last finished check. The list stays until the next check starts.",
+    'title="Einrichtungsassistent öffnen"': 'title="Open setup wizard"',
+    "Nach zwei Fehlprüfungen mit kurzem Abstand gilt wieder dein eingestelltes Prüfintervall. Bei geänderter Vergleichsgenauigkeit beginnt die Trefferzählung neu.":
+        "After two failed checks in quick succession, your configured check interval applies again. Changing the comparison precision restarts the match count.",
     "> Experimentelle Funktionen testen<": "> Test experimental functions<",
     "> Perspektivkorrektur (Kippung)<": "> Perspective correction (keystone)<",
     "Die App liest jedes Bild zusätzlich mit den angehakten Experimenten, aber nur, wenn der Rechner gerade Leistung frei hat. Es zählt weiterhin nur das bewährte Ergebnis; beide stehen im Debug-Protokoll. Die meisten brauchen das nicht.":
@@ -1050,6 +1060,11 @@ def english_progress(message):
         start = re.fullmatch(r"OCR-Prüfung gestartet \(max\. (\d+) Versuche\)\.", message)
         if start:
             return f"OCR analysis started (max. {start[1]} attempts)."
+        plan = re.fullmatch(r"Automatik-Nachprüfung: (Winkel|Nachkommastellen) ([+−-]?\d+)(°| px senkrecht) "
+                            r"\((\d+) von (\d+), wird beim nächsten Bild fortgesetzt\)\.", message)
+        if plan:
+            trial = (f"angle {plan[2]}°" if plan[1] == "Winkel" else f"decimal digits {plan[2]} px vertically")
+            return f"Automatic recheck: {trial} ({plan[4]} of {plan[5]}, continues with the next image)."
         attempt = re.fullmatch(r"Versuch (\d+) von (\d+) (läuft|abgeschlossen)(?: …|\.)", message)
         if attempt:
             phase, end = ("in progress", " …") if attempt[3] == "läuft" else ("complete", ".")

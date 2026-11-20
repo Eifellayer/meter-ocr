@@ -603,11 +603,59 @@ header{{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.6rem}}
 @media(max-width:560px){{header{{grid-template-columns:1fr 1fr}}.brand{{grid-column:1/-1}}header > button,.language-bar,.language-bar select{{width:100%}}
 .meter-hero{{margin:-.9rem -.9rem 1rem;padding:1.1rem .9rem 1rem}}.brand-subtitle{{display:none}}.automatic-actions > *,.automatic-actions button{{width:100%}}
 .main-tabs button,.main-guide{{font-size:.86rem}}}}
+/* ---------- 0.4.0: navigation, recognisable collapsible sections, settings grid ---------- */
+.main-tabs button[aria-selected="false"]:not(:disabled):hover{{background:var(--surface-2);color:var(--ink)}}
+.main-tabs button:focus-visible{{outline-offset:-3px}}
+.main-tabs button[aria-selected="true"]{{box-shadow:0 1px 4px light-dark(#0f1f2b33,#0008)}}
+#open-setup:not(:disabled):hover{{border-color:var(--accent);background:var(--accent-soft)}}
+details:not(.manual-panel):not(.settings-item) > summary{{list-style:none;display:flex;align-items:center;gap:.5rem;min-height:2.5rem;width:auto;max-width:100%;padding:.3rem .5rem .3rem .2rem;border-radius:.55rem;cursor:pointer;transition:background .15s,color .15s}}
+details:not(.manual-panel):not(.settings-item) > summary::-webkit-details-marker{{display:none}}
+details:not(.manual-panel):not(.settings-item) > summary::before{{content:"";flex:none;width:.45rem;height:.45rem;margin:0 .2rem 0 .3rem;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(-45deg);transition:transform .2s;opacity:.8}}
+details[open]:not(.manual-panel):not(.settings-item) > summary::before{{transform:rotate(45deg)}}
+details:not(.manual-panel):not(.settings-item) > summary:hover{{background:var(--surface-2);color:var(--ink);text-decoration:none}}
+details.about-project > summary{{width:fit-content!important;margin-inline:auto}}
+details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b088);outline-offset:1px}}
+.setup-dialog .setup-step details.setup-help > summary{{padding:.45rem .2rem;min-height:2.6rem}}
+.setup-dialog .setup-step details.setup-help > summary::before{{content:none}}
+.setup-dialog .setup-step details.setup-help > summary:hover{{background:transparent}}
+.setup-dialog .setup-step details.setup-help:hover{{border-color:light-dark(#b9c6cf,#3b4a57)}}
+@media(prefers-reduced-motion:reduce){{details > summary::before,details > summary::after{{transition:none!important}}}}
+.experiments-box{{border:1px solid var(--accent)!important;border-radius:var(--radius-sm);background:var(--accent-soft)!important;padding:0 .9rem}}
+.experiments-box > summary{{font-weight:650;color:var(--ink)!important}}
+.experiments-box[open]{{padding-bottom:.8rem}}
+.experiments-box > .check-option{{margin:.45rem 0 0;color:var(--ink)}}
+.experiments-box > .experiment-option{{margin-left:1.65rem}}
+.experiments-box > p{{margin:.5rem 0 0;color:var(--muted);font-size:.86rem}}
+#auto-form{{grid-template-columns:minmax(0,1fr);align-items:start;gap:1rem}}
+#auto-form > .crop-actions,#auto-form > .crop-draw,#auto-form > .crop-fields{{margin:0}}
+.settings-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,19rem),1fr));gap:1.1rem 1.4rem;align-items:start}}
+.settings-field{{display:grid;grid-row:span 3;grid-template-rows:auto auto 1fr;grid-template-rows:subgrid;row-gap:.3rem;align-content:start;min-width:0}}
+.settings-field > .field-label{{align-self:end;color:var(--ink);font-weight:650}}
+.settings-field select,.settings-field input:not([type="checkbox"]){{width:100%}}
+.settings-field .field-help{{display:block;margin:0;font-size:.8rem;font-weight:400;line-height:1.45;color:var(--muted)}}
+.settings-wide{{grid-column:1/-1}}
+.settings-wide > .check-option{{color:var(--ink);font-weight:650}}
+.settings-wide > .field-help{{padding-left:1.65rem;max-width:46rem}}
+.settings-more{{display:grid;gap:.6rem}}
+.settings-more > details.help,.settings-more > .reflection-settings{{margin:0;padding:.1rem .8rem;border:1px solid var(--edge);border-radius:var(--radius-sm);background:var(--surface-2)}}
+.settings-more > details.help[open]{{padding-bottom:.8rem}}
+.settings-more > details.help > summary{{color:var(--ink);font-weight:650;font-size:.9rem}}
+.settings-more > details.help > :not(summary){{margin-top:.5rem}}
+.settings-more > .reflection-settings{{padding:.6rem .8rem}}
+.settings-more .reflection-settings .help{{margin:.2rem 0 0 1.4rem}}
+.last-readings{{margin-top:.5rem}}
+.last-readings > summary{{font-weight:650;color:var(--ink)}}
+.last-readings > .settings-note{{margin:.2rem 0 .4rem}}
+.calibration-candidates li[data-role="hint"]{{color:var(--muted)}}
+.candidate-hint{{display:inline-block;margin-left:.25rem;padding:0 .45rem;border:1px solid var(--edge);border-radius:99px;background:var(--surface-2);font-size:.78rem;font-weight:600;color:var(--muted)}}
+.calibration-rejected{{margin:.3rem 0 .5rem;font-size:.88rem;color:var(--muted)}}
+.calibration-rejected > summary{{font-weight:600}}
+.calibration-rejected ul{{margin:.3rem 0 0;padding-left:1.4rem;font-variant-numeric:tabular-nums}}
 </style>
 <header>
 <div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5a8 8 0 1 1 15 0"/><path d="M12 13l3.5-4"/><circle cx="12" cy="13.5" r="1.4" fill="currentColor"/><path d="M7 20h10"/></svg></span>
 <div><h1>{app_name}</h1><p class="brand-subtitle">Zählerstand lokal aus dem Kamerabild</p></div></div>
-<button type="button" id="open-setup">Einrichtung</button>
+<button type="button" title="Einrichtungsassistent öffnen" id="open-setup">Einrichtung</button>
 <form method="post" action="sprache" class="language-bar" id="language-form">
 <input type="hidden" name="csrf" value="{csrf}">
 <label for="language-select">Sprache / Language</label>
@@ -653,6 +701,11 @@ header{{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.6rem}}
 <p id="automatic-attempt-info"></p>
 <p id="automatic-live-reading"></p><ol id="live-ocr-candidates" hidden></ol>
 <div class="digit-grid-wrap" id="automatic-digit-grid" hidden><table class="digit-grid" aria-label="Gelesene Ziffern je Versuch und Stelle"><thead></thead><tbody></tbody></table></div>
+</details>
+<details id="automatic-last-readings" class="activity-details last-readings" open hidden>
+<summary>Die letzten Leseversuche</summary>
+<p class="settings-note">Ziffern je Versuch und Stelle aus der zuletzt beendeten Prüfung. Die Liste bleibt bis zur nächsten Prüfung stehen.</p>
+<div class="digit-grid-wrap" id="automatic-last-digit-grid" hidden><table class="digit-grid" aria-label="Gelesene Ziffern je Versuch und Stelle"><thead></thead><tbody></tbody></table></div>
 </details>
 </div>
 <div class="crop-actions" id="setup-start-actions" {resume_setup_hidden}>
@@ -1159,6 +1212,14 @@ name: Zählerstand (OCR)</code></pre>
 entity: sensor.rf1_ocr_zaehlerstand
 name: Zählerstand (OCR)</code></pre>
 </details>
+<details class="setup-help experiments-box" id="wizard-experiments">
+<summary>Experimentelle Funktionen (Schattenbetrieb)</summary>
+<input type="hidden" name="experiments_option_present" value="1">
+<label class="check-option"><input type="checkbox" name="experiments_enabled" value="1" {experiments_checked}> Experimentelle Funktionen testen</label>
+<label class="check-option experiment-option"><input type="checkbox" name="experiment_perspective" value="1" {experiment_perspective_checked}> Perspektivkorrektur (Kippung)</label>
+<p>Die App liest jedes Bild zusätzlich mit den angehakten Experimenten, aber nur, wenn der Rechner gerade Leistung frei hat. Es zählt weiterhin nur das bewährte Ergebnis; beide stehen im Debug-Protokoll. Die meisten brauchen das nicht.</p>
+<p>Du kannst das jederzeit unter Einstellungen › Automatische Prüfung wieder ändern.</p>
+</details>
 <div class="setup-controls"><button type="button" class="setup-back">Zurück</button><span class="setup-count"></span><button type="submit">Speichern und prüfen</button></div>
 </fieldset>
 <div id="setup-error" class="setup-warning" hidden></div>
@@ -1207,59 +1268,32 @@ name: Zählerstand (OCR)</code></pre>
 <input type="hidden" name="lang" value="{language}">
 <input type="hidden" name="mode" value="{language_mode}">
 <input type="hidden" name="csrf" value="{csrf}">
-<label>Vergleich
+<div class="settings-grid" id="auto-settings-grid">
+<label class="settings-field"><span class="field-label">Vergleich</span>
 <select name="decimals">{auto_decimal_options}</select></label>
-<div class="settings-note" data-precision-options {precision_hidden}>
-<p>Der Präzisionsmodus ist experimentell. Der Wert selbst ist genau, aber die schnell laufende letzte Rolle wird oft nicht sicher erkannt. Dann prüft die App vorübergehend mit zwei Nachkommastellen.</p>
-<label class="check-option"><input type="checkbox" name="precision_mode" value="1" {precision_checked}> Präzisionsmodus: auch die dritte Nachkommastelle vergleichen</label>
-</div>
-<label title="Nach einer unklaren Ablesung folgt ein zusätzlicher Versuch nach fünf Minuten. Schlägt auch der fehl, gilt wieder dieses Intervall.">Prüfintervall (Minuten)
-<input name="interval_minutes" type="number" min="1" max="{max_interval_minutes}" value="{interval_minutes}" required>
-<small {slfork_interval_hidden}>Bei AI on the Edge / SLFork liegen reguläre Prüfungen mindestens fünf Minuten auseinander.</small></label>
-<label>Pause nach drei Fehlprüfungen (Minuten)
-<input name="failure_pause_minutes" type="number" min="5" max="240" value="{failure_pause_minutes}" required>
-<small>Danach prüft die App wieder normal. Bleibt nur die letzte Rolle unklar, pausiert sie nicht.</small></label>
-<label>Max. OCR-Versuche
+<label class="settings-field"><span class="field-label">Max. OCR-Versuche</span>
 <select name="attempts">{auto_attempt_options}</select></label>
-<label>Übereinstimmung für die Intensivprüfung (%)
+<div class="settings-field settings-wide" data-precision-options {precision_hidden}>
+<label class="check-option"><input type="checkbox" name="precision_mode" value="1" {precision_checked}> Präzisionsmodus: auch die dritte Nachkommastelle vergleichen</label>
+<small class="field-help">Der Präzisionsmodus ist experimentell. Der Wert selbst ist genau, aber die schnell laufende letzte Rolle wird oft nicht sicher erkannt. Dann prüft die App vorübergehend mit zwei Nachkommastellen.</small>
+</div>
+<label class="settings-field" title="Nach einer unklaren Ablesung folgt ein zusätzlicher Versuch nach fünf Minuten. Schlägt auch der fehl, gilt wieder dieses Intervall."><span class="field-label">Prüfintervall (Minuten)</span>
+<input name="interval_minutes" type="number" min="1" max="{max_interval_minutes}" value="{interval_minutes}" required>
+<small class="field-help" {slfork_interval_hidden}>Bei AI on the Edge / SLFork liegen reguläre Prüfungen mindestens fünf Minuten auseinander.</small></label>
+<label class="settings-field"><span class="field-label">Pause nach drei Fehlprüfungen (Minuten)</span>
+<input name="failure_pause_minutes" type="number" min="5" max="240" value="{failure_pause_minutes}" required>
+<small class="field-help">Danach prüft die App wieder normal. Bleibt nur die letzte Rolle unklar, pausiert sie nicht.</small></label>
+<label class="settings-field"><span class="field-label">Übereinstimmung für die Intensivprüfung (%)</span>
 <input name="intensive_agreement" type="number" min="1" max="100" step="1" value="{intensive_agreement}" required>
-<small>Ab diesem Wert wechselt die Selbsteinrichtung in die Intensivprüfung. Eine einzelne vermutete Ziffernposition kann sie auch früher gezielt prüfen.</small></label>
-<label title="Qmax steht auf deinem Zähler. Die Vorgabe für einen G4 beträgt 6 m³/h.">Maximaler Durchfluss (m³/h)
-<input name="max_flow" type="text" inputmode="decimal" maxlength="10" value="{max_flow}" required></label>
-<details class="help">
-<summary>Verbrauch auch in kWh</summary>
-<div class="energy-factors">
-<label>Zustandszahl<input name="gas_state_factor" type="text" inputmode="decimal" maxlength="7" placeholder="z. B. 0,9636" value="{gas_state_factor}"></label>
-<label>Brennwert (kWh/m³)<input name="calorific_value" type="text" inputmode="decimal" maxlength="7" placeholder="z. B. 11,25" value="{calorific_value}"></label>
-<label>oder Umrechnungsfaktor<input name="kwh_conversion_factor" type="text" inputmode="decimal" maxlength="7" placeholder="z. B. 10,84" value="{kwh_conversion_factor}"></label>
-</div>
-<small>Die Werte stehen auf der Gasabrechnung oder beim Netzbetreiber. Entweder Zustandszahl und Brennwert eintragen oder nur den fertigen Umrechnungsfaktor (er hat Vorrang). Dann gibt es zusätzlich <code>sensor.rf1_verbrauch_gesamt_kwh</code> für das Energie-Dashboard. Leer lassen schaltet es ab.</small>
-</details>
-<label>Ziffernfarbe
+<small class="field-help">Ab diesem Wert wechselt die Selbsteinrichtung in die Intensivprüfung. Eine einzelne vermutete Ziffernposition kann sie auch früher gezielt prüfen.</small></label>
+<label class="settings-field"><span class="field-label">Maximaler Durchfluss (m³/h)</span>
+<input name="max_flow" type="text" inputmode="decimal" maxlength="10" value="{max_flow}" required>
+<small class="field-help">Qmax steht auf deinem Zähler. Die Vorgabe für einen G4 beträgt 6 m³/h.</small></label>
+<label class="settings-field"><span class="field-label">Ziffernfarbe</span>
 <select name="polarity">{auto_polarity_options}</select></label>
-<details class="help setup-help">
-<summary>ⓘ Automatik im Hintergrund verbessern</summary>
-<label class="check-option"><input type="checkbox" name="fine_alignment_enabled" value="1" {fine_alignment_checked}> Ziffernrahmen langfristig feinjustieren</label>
-<label class="check-option"><input type="checkbox" name="self_repair_enabled" value="1" {self_repair_checked}> Selbstreparatur bei wiederholten Fehlmessungen</label>
-<p>Die App sucht frühestens nach zwei Stunden anhaltender Erkennungsprobleme einen besseren Rahmen. Probleme nur an der letzten Rolle zählen dabei nicht mit. Der bisherige Rahmen gilt bis zur erfolgreichen Gegenprobe.</p>
-<label class="check-option"><input type="checkbox" name="adaptive_interval_enabled" value="1" {adaptive_interval_checked}> Prüfintervall an den Verbrauch anpassen (früher prüfen, wenn eine Rolle bald umspringt)</label>
-</details>
-<details class="help setup-help" id="experiments-settings">
-<summary>ⓘ Experimentelle Funktionen</summary>
-<label class="check-option"><input type="checkbox" name="experiments_enabled" value="1" {experiments_checked}> Experimentelle Funktionen testen</label>
-<label class="check-option experiment-option"><input type="checkbox" name="experiment_perspective" value="1" {experiment_perspective_checked}> Perspektivkorrektur (Kippung)</label>
-<p>Die App liest jedes Bild zusätzlich mit den angehakten Experimenten, aber nur, wenn der Rechner gerade Leistung frei hat. Es zählt weiterhin nur das bewährte Ergebnis; beide stehen im Debug-Protokoll. Die meisten brauchen das nicht.</p>
-</details>
-<div class="reflection-settings setup-help" id="reflection-settings">
-<label class="check-option"><input type="checkbox" name="reflection_estimate_enabled" value="1" {reflection_enabled_checked}> Verdeckte Ziffern ergänzen</label>
-<details class="help" id="reflection-settings-help">
-<summary>ⓘ Spiegelungen und verdeckte Ziffern</summary>
-<p>Die App kann je eine verdeckte Stelle vor und nach dem Komma ergänzen, wenn nur ein Ergebnis zum bisherigen Stand und zum maximalen Durchfluss passt. Berechnete Ziffern bleiben gelb. Ein datierter Startwert kann als erster Vergleichswert dienen.</p>
-<label class="check-option"><input type="checkbox" name="reflection_suggestion_hidden" value="1" {reflection_hide_checked}> Vorschlag bei wiederholt unlesbarer Ziffer ausblenden</label>
-</details>
-</div>
-<label>Bildbereich
+<label class="settings-field"><span class="field-label">Bildbereich</span>
 <select name="crop_mode" id="auto-crop-mode">{auto_crop_mode_options}</select></label>
+</div>
 <div class="crop-draw" id="auto-crop-draw" hidden>
 <p class="settings-note">Ziehe mit Maus oder Finger einen Rahmen um die gesamte Ziffernreihe.</p>
 <div class="crop-draw-image" id="auto-crop-draw-area" hidden>
@@ -1286,6 +1320,38 @@ name: Zählerstand (OCR)</code></pre>
 <label>Breite der Vorkommastellen
 <input name="width" type="number" min="1" max="9999" value="{auto_width_value}"></label>
 <p class="settings-note">Wähle den Ausschnitt im Originalbild. Die Vorkommabreite gilt nach der Drehung.</p>
+</div>
+<div class="settings-more">
+<details class="help">
+<summary>Verbrauch auch in kWh</summary>
+<div class="energy-factors">
+<label>Zustandszahl<input name="gas_state_factor" type="text" inputmode="decimal" maxlength="7" placeholder="z. B. 0,9636" value="{gas_state_factor}"></label>
+<label>Brennwert (kWh/m³)<input name="calorific_value" type="text" inputmode="decimal" maxlength="7" placeholder="z. B. 11,25" value="{calorific_value}"></label>
+<label>oder Umrechnungsfaktor<input name="kwh_conversion_factor" type="text" inputmode="decimal" maxlength="7" placeholder="z. B. 10,84" value="{kwh_conversion_factor}"></label>
+</div>
+<small>Die Werte stehen auf der Gasabrechnung oder beim Netzbetreiber. Entweder Zustandszahl und Brennwert eintragen oder nur den fertigen Umrechnungsfaktor (er hat Vorrang). Dann gibt es zusätzlich <code>sensor.rf1_verbrauch_gesamt_kwh</code> für das Energie-Dashboard. Leer lassen schaltet es ab.</small>
+</details>
+<details class="help setup-help">
+<summary>ⓘ Automatik im Hintergrund verbessern</summary>
+<label class="check-option"><input type="checkbox" name="fine_alignment_enabled" value="1" {fine_alignment_checked}> Ziffernrahmen langfristig feinjustieren</label>
+<label class="check-option"><input type="checkbox" name="self_repair_enabled" value="1" {self_repair_checked}> Selbstreparatur bei wiederholten Fehlmessungen</label>
+<p>Die App sucht frühestens nach zwei Stunden anhaltender Erkennungsprobleme einen besseren Rahmen. Probleme nur an der letzten Rolle zählen dabei nicht mit. Der bisherige Rahmen gilt bis zur erfolgreichen Gegenprobe.</p>
+<label class="check-option"><input type="checkbox" name="adaptive_interval_enabled" value="1" {adaptive_interval_checked}> Prüfintervall an den Verbrauch anpassen (früher prüfen, wenn eine Rolle bald umspringt)</label>
+</details>
+<details class="help setup-help experiments-box" id="experiments-settings">
+<summary>Experimentelle Funktionen (Schattenbetrieb)</summary>
+<label class="check-option"><input type="checkbox" name="experiments_enabled" value="1" {experiments_checked}> Experimentelle Funktionen testen</label>
+<label class="check-option experiment-option"><input type="checkbox" name="experiment_perspective" value="1" {experiment_perspective_checked}> Perspektivkorrektur (Kippung)</label>
+<p>Die App liest jedes Bild zusätzlich mit den angehakten Experimenten, aber nur, wenn der Rechner gerade Leistung frei hat. Es zählt weiterhin nur das bewährte Ergebnis; beide stehen im Debug-Protokoll. Die meisten brauchen das nicht.</p>
+</details>
+<div class="reflection-settings setup-help" id="reflection-settings">
+<label class="check-option"><input type="checkbox" name="reflection_estimate_enabled" value="1" {reflection_enabled_checked}> Verdeckte Ziffern ergänzen</label>
+<details class="help" id="reflection-settings-help">
+<summary>ⓘ Spiegelungen und verdeckte Ziffern</summary>
+<p>Die App kann je eine verdeckte Stelle vor und nach dem Komma ergänzen, wenn nur ein Ergebnis zum bisherigen Stand und zum maximalen Durchfluss passt. Berechnete Ziffern bleiben gelb. Ein datierter Startwert kann als erster Vergleichswert dienen.</p>
+<label class="check-option"><input type="checkbox" name="reflection_suggestion_hidden" value="1" {reflection_hide_checked}> Vorschlag bei wiederholt unlesbarer Ziffer ausblenden</label>
+</details>
+</div>
 </div>
 <div class="crop-actions">
 <button type="submit" id="save-auto-settings">Speichern</button>
@@ -1851,6 +1917,13 @@ document.querySelectorAll('[data-precision-options]').forEach(options => {{
   fraction.addEventListener('change', showPrecisionOptions);
   showPrecisionOptions();
 }});
+// The setup wizard and the settings show the same experiment switches; keep both in step.
+for (const name of ['experiments_enabled', 'experiment_perspective']) {{
+  const boxes = [...document.querySelectorAll('.experiments-box input[name="' + name + '"]')];
+  for (const box of boxes) box.addEventListener('change', () => {{
+    for (const other of boxes) other.checked = box.checked;
+  }});
+}}
 document.querySelector('#close-manual-test').addEventListener('click', () => {{
   manualTestArea.hidden = true;
 }});
@@ -2568,13 +2641,98 @@ function renderSetupCandidates(list, candidates) {{
     const parts = [];
     if (candidate.number) parts.push((en ? 'Frame ' : 'Rahmen ') + candidate.number);
     if (candidate.rotation != null) parts.push(String(candidate.rotation).replace('-', '−') + '°');
-    parts.push(candidate.percent + ' %');
+    if (candidate.percent != null) parts.push(candidate.percent + ' %');
     parts.push(candidate.reading || '–');
+    // 0.4.0 status fields; older status data has none of them.
+    const hits = Number(candidate.hits);
+    if (candidate.hits != null && Number.isFinite(hits)) {{
+      parts.push(hits + (en ? (hits === 1 ? ' hit' : ' hits') : ' Treffer'));
+    }}
+    const merged = Number(candidate.merged);
+    if (Number.isFinite(merged) && merged > 0) {{
+      parts.push(merged + (en ? (merged === 1 ? ' similar frame merged' : ' similar frames merged') :
+        (merged === 1 ? ' ähnlicher Rahmen zusammengefasst' : ' ähnliche Rahmen zusammengefasst')));
+    }}
     if (candidate.selected) parts.push(en ? 'being checked' : 'wird geprüft');
     row.textContent = parts.join(' · ');
+    if (candidate.role === 'hint') {{
+      row.dataset.role = 'hint';
+      const badge = document.createElement('span');
+      badge.className = 'candidate-hint';
+      badge.textContent = en ? 'search aid only' : 'nur Suchhilfe';
+      badge.title = en ? 'Below the confirmation threshold: only used to guide the search.' :
+        'Unter der Bestätigungsschwelle: hilft nur bei der Suche.';
+      row.append(' ', badge);
+    }}
     return row;
   }}));
   list.dataset.values = key;
+}}
+const rejectedReasons = {{
+  small_label: ['zu klein, vermutlich ein Typenschild oder eine Beschriftung', 'too small, probably a type plate or label'],
+  quarter_turn: ['um 90° gedreht, passt nicht zur Zählerausrichtung', 'turned by 90°, does not match the meter orientation'],
+  aspect: ['Seitenverhältnis passt nicht zu einem Zählwerk', 'aspect ratio does not fit a counter'],
+}};
+// Collapsible "Verworfen (n)" list next to a candidate list; created once, closed by default.
+function renderRejectedCandidates(list, rejected) {{
+  const en = lang === 'en';
+  let box = list.nextElementSibling;
+  if (!box?.classList.contains('calibration-rejected')) {{
+    box = document.createElement('details');
+    box.className = 'calibration-rejected';
+    box.append(document.createElement('summary'), document.createElement('ul'));
+    list.after(box);
+  }}
+  const entries = Array.isArray(rejected) ? rejected : [];
+  box.hidden = !entries.length;
+  const key = JSON.stringify(entries);
+  if (box.dataset.values === key) return entries.length;
+  box.dataset.values = key;
+  box.querySelector('summary').textContent = (en ? 'Rejected (' : 'Verworfen (') + entries.length + ')';
+  box.querySelector('ul').replaceChildren(...entries.map(entry => {{
+    const row = document.createElement('li');
+    const known = rejectedReasons[entry?.reason];
+    const parts = [known ? known[en ? 1 : 0] : (en ? 'other reason' : 'sonstiger Grund') +
+      (entry?.reason ? ' (' + entry.reason + ')' : '')];
+    if (entry?.rotation != null) parts.push((en ? 'rotation ' : 'Drehung ') + String(entry.rotation).replace('-', '−') + '°');
+    const frame = Array.isArray(entry?.box) ? entry.box.join(', ') : entry?.box;
+    if (frame) parts.push((en ? 'frame ' : 'Rahmen ') + frame);
+    row.textContent = parts.join(' · ');
+    return row;
+  }}));
+  return entries.length;
+}}
+// "Die letzten Leseversuche" (0.4.0): the attempts of the last finished check stay visible
+// and open until the next check starts; closing it is remembered like the check details.
+const lastReadingsKey = 'rf1-last-readings';
+function rememberDetailsState(details, key) {{
+  if (details.dataset.toggleBound) return;
+  details.dataset.toggleBound = '1';
+  let closed = false;
+  try {{ closed = localStorage.getItem(key) === '1'; }} catch (error) {{}}
+  details.open = !closed;
+  details.addEventListener('toggle', () => {{
+    try {{ localStorage.setItem(key, details.open ? '0' : '1'); }} catch (error) {{}}
+  }});
+}}
+function updateLastReadings(sample, running) {{
+  const details = document.querySelector('#automatic-last-readings');
+  const decimals = Number.isInteger(sample.decimals) ? sample.decimals : null;
+  let stored = null;
+  if (running) {{
+    // A new check replaces the previous attempts, even before its first reading arrives.
+    stored = {{readings: sample.activity_readings || [], decimals}};
+    try {{ localStorage.setItem(lastReadingsKey, JSON.stringify(stored)); }} catch (error) {{}}
+  }} else {{
+    try {{ stored = JSON.parse(localStorage.getItem(lastReadingsKey) || 'null'); }} catch (error) {{}}
+    if (sample.readings?.length) stored = {{readings: sample.readings, decimals}};
+  }}
+  const rows = !running && Array.isArray(stored?.readings) ? stored.readings : [];
+  details.hidden = !rows.length;
+  if (details.hidden) return;
+  rememberDetailsState(details, 'rf1-last-readings-closed');
+  renderDigitGrid(document.querySelector('#automatic-last-digit-grid'), rows,
+    Number.isInteger(stored.decimals) ? stored.decimals : decimals);
 }}
 // Per-digit table of the attempts of a check: rows = attempts, columns = digit positions.
 function renderDigitGrid(wrap, readings, decimals) {{
@@ -2741,8 +2899,9 @@ function refreshCalibration(status) {{
   const reason = status.preview?.reason;
   for (const list of document.querySelectorAll('.calibration-candidates')) {{
     renderSetupCandidates(list, status.candidates || []);
+    const rejectedCount = renderRejectedCandidates(list, status.rejected);
     const parent = list.closest('.calibration-candidate-panel');
-    if (parent) parent.hidden = !list.children.length || !active || background;
+    if (parent) parent.hidden = !(list.children.length || rejectedCount) || !active || background;
   }}
   let message = active && stages[status.stage] ? stages[status.stage] : messages[status.state] || '';
   if (status.state === 'waiting' && status.stage !== 'queued') {{
@@ -3567,6 +3726,7 @@ async function refreshAutomatic() {{
     }}
     renderDigitGrid(document.querySelector('#automatic-digit-grid'), checkDetails.hidden ? [] : sample.activity_readings,
       Number.isInteger(sample.decimals) ? sample.decimals : null);
+    updateLastReadings(sample, !progress.hidden);
     document.querySelector('#automatic-attempt-info').textContent = sample.activity_total > 0
       ? 'Versuche abgeschlossen: ' + (sample.activity_completed || 0) + ' von ' + sample.activity_total
       : 'Die Ziffernerkennung beginnt, sobald das Bild bereitsteht.';
@@ -3663,6 +3823,12 @@ def wizard_energy_factors(field, old_rules):
         text = field(key, None)
         values[key] = old_rules.get(key) if text is None else parse_energy_factor(text, limits)
     return values
+
+
+def experiment_settings(field):
+    """Shadow-mode switches; the setup wizard and the settings send the same two fields."""
+    return {"experiments_enabled": field("experiments_enabled") == "1",
+            "experiments": {"perspective": field("experiment_perspective") == "1"}}
 
 
 def parse_failure_pause(text):
@@ -4979,6 +5145,8 @@ def start_panel(
                         "fraction_digits": fraction_digits, "meter_display": meter_display,
                         "fallback_value": fallback_value, "fallback_time": fallback_time,
                     }
+                    if field("experiments_option_present") == "1":
+                        rules_values.update(experiment_settings(field))
                     if not learn_crop and crop_mode == "manual" and field("digit_boxes"):
                         rules_values["digit_boxes"] = digit_box_settings(
                             json.loads(field("digit_boxes")), integer_digits + fraction_digits,
@@ -5295,8 +5463,7 @@ def start_panel(
                                          "fine_alignment_enabled": field("fine_alignment_enabled") == "1",
                                          "self_repair_enabled": field("self_repair_enabled") == "1",
                                          "adaptive_interval_enabled": field("adaptive_interval_enabled") == "1",
-                                         "experiments_enabled": field("experiments_enabled") == "1",
-                                         "experiments": {"perspective": field("experiment_perspective") == "1"},
+                                         **experiment_settings(field),
                                          "reflection_suggestion_hidden": field("reflection_suggestion_hidden") == "1",
                                          "polarity": polarity[0], "crop_mode": crop_mode[0],
                                          "crop": crop, "width": width, "rotation": rotation, "rotation_fine": rotation_fine, "digit_boxes": boxes,

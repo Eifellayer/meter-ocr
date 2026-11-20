@@ -503,6 +503,9 @@ MOVING_DIGITS_NOTICE = ("Nur die letzten zwei verglichenen Stellen waren unklar 
 REDUCED_PRECISION2_NOTICE = ("Die letzten zwei verglichenen Rollen waren unklar, vermutlich drehten sie sich gerade. Diese Prüfung "
                              "wurde deshalb mit zwei Nachkommastellen weniger bestätigt. Die nächste Prüfung vergleicht wieder alle Stellen.")
 MOVING_NOTICES = (MOVING_DIGIT_NOTICE, MOVING_DIGITS_NOTICE)
+# Reading below a probably misread stored value; the lower-series correction is collecting.
+LOWER_PENDING_NOTICE = ("Zählerstand liegt unter dem letzten gültigen Wert. Bestätigen weitere stimmige "
+                        "Ablesungen den niedrigeren Stand, wird er übernommen.")
 
 
 # The same last position unclear on several checks in a row is not a turning roller:
@@ -1148,7 +1151,10 @@ def schedule_next_check(history, outcome, checked_at, interval_minutes=DEFAULT_I
         history.pop("failure_since", None)
         history.pop("failure_attempts", None)
         history.pop("retry_suppressed", None)
-    elif history.get("check_detail") in MOVING_NOTICES:
+    elif history.get("check_detail") in MOVING_NOTICES or str(history.get("check_detail") or "").endswith(
+            LOWER_PENDING_NOTICE):
+        # Also a reading that only lies below a probably misread stored value (the correction is
+        # still collecting agreeing lower readings) is no failed check: no 30-minute pause (20.11.).
         # Only the last compared roller(s) were turning: everything else was read. That is no
         # reason for a warning or a long pause; simply look again soon.
         history.setdefault("failure_since", checked_at)

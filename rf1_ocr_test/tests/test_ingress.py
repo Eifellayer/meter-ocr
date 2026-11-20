@@ -779,6 +779,53 @@ class IngressTests(IngressFixture):
         self.assertEqual("slfork_camera", self.source["mode"])
         self.assertEqual("http://meter", self.source["url"])
 
+    def experiment_boxes(self, page):
+        """Return the wizard's and the settings' experiment sections of a rendered page."""
+        sections = []
+        for marker in ('id="wizard-experiments"', 'id="experiments-settings"'):
+            section = page[page.index(marker):]
+            sections.append(section[:section.index("</details>")])
+        return sections
+
+    def test_wizard_and_settings_show_and_save_the_same_experiments(self):
+        self.rules.update(experiments_enabled=True, experiments={"perspective": True})
+        page = self.request("/")[0]
+        for section in self.experiment_boxes(page):
+            self.assertIn("Experimentelle Funktionen (Schattenbetrieb)", section)
+            self.assertIn('name="experiments_enabled" value="1" checked', section)
+            self.assertIn('name="experiment_perspective" value="1" checked', section)
+        english = self.request("/", accept="en")[0]
+        self.assertIn("Experimental functions (shadow mode)", self.experiment_boxes(english)[0])
+        self.assertNotIn("Schattenbetrieb", english)
+        values = {
+            "source_mode": "camera", "camera": "camera.meter", "reference": "", "url": "",
+            "meter_display": "rollers", "integer_digits": 5, "fraction_digits": 2, "decimals": 1,
+            "attempts": 3, "polarity": "auto", "crop_mode": "auto", "crop": "0,0,400,90", "width": 250,
+            "rotation": 0, "interval_minutes": 30, "max_flow": "6", "fallback_value": "", "fallback_time": "",
+            "review_minutes": 60, "delivery_hours": 0, "push": "", "target": "",
+        }
+        # An older wizard form without the experiments box keeps the saved switches.
+        self.assertEqual((303, "./?saved=setup&ui=overview"), self.submit("/einrichtung", **values))
+        self.assertEqual((True, {"perspective": True}), (self.rules["experiments_enabled"], self.rules["experiments"]))
+        # The wizard box switches both off, the settings show the same values afterwards.
+        self.assertEqual((303, "./?saved=setup&ui=overview"),
+                         self.submit("/einrichtung", experiments_option_present=1, **values))
+        self.assertEqual((False, {"perspective": False}), (self.rules["experiments_enabled"], self.rules["experiments"]))
+        for section in self.experiment_boxes(self.request("/")[0]):
+            self.assertNotIn("checked", section)
+        self.assertEqual((303, "./?saved=setup&ui=overview"),
+                         self.submit("/einrichtung", experiments_option_present=1, experiments_enabled=1,
+                                     experiment_perspective=1, **values))
+        self.assertEqual((True, {"perspective": True}), (self.rules["experiments_enabled"], self.rules["experiments"]))
+        # The settings save the same fields with the same logic.
+        form = dict(decimals=0, attempts=3, crop_mode="auto", polarity="auto", experiments_enabled=1)
+        self.assertEqual((303, "./?saved=1"), self.submit("/automatik", **form))
+        self.assertEqual((True, {"perspective": False}), (self.rules["experiments_enabled"], self.rules["experiments"]))
+        wizard, settings = self.experiment_boxes(self.request("/")[0])
+        for section in (wizard, settings):
+            self.assertIn('name="experiments_enabled" value="1" checked', section)
+            self.assertNotIn('name="experiment_perspective" value="1" checked', section)
+
     def test_fallback_can_be_saved_and_cleared_without_rerunning_setup(self):
         original = dict(self.rules)
         self.assertEqual(400, self.submit("/fallback", fallback_value="12345.6", fallback_time="")[0])

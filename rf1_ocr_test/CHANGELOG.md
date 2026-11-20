@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.2.5
+
+- **Lieber unklar als falsch:** Am Kamerabild von heute Nacht liest die Texterkennung eine unscharfe 6 in mehreren Einstellungen übereinstimmend als 5 und eine unscharfe 7 als 4. Die Ziffernvorlagen sahen jeweils die richtige Ziffer vorn, wurden aber überstimmt. Jetzt gilt: Liegt die gelesene Ziffer in den Vorlagen deutlich hinter der besten (bzw. bei 5/6 schon knapp), bleibt die Stelle offen. Auch die Rahmenverschiebung übernimmt eine Ziffer nur noch, wenn die Vorlagen keine andere Ziffer klar bevorzugen (1/7 ausgenommen, die verwechseln die Vorlagen selbst).
 ## 0.2.4
 
 - **Unklare Nachkommastellen werden wieder per Rahmenverschiebung gerettet:** Bei Kameras galt für die ganze Prüfung ein Zeitfenster von 20 Sekunden. Seit die Ziffernvorlagen mitlesen, war es nach zwei, drei Lesungen aufgebraucht, und die Verschiebung einzelner Rahmen startete gar nicht mehr („Versuch 5 von 15“). Sie liest das schon aufgenommene Bild und bekommt jetzt ein eigenes Budget von 25 Sekunden. Rahmen der Nachkommastellen werden dabei weiter seitlich verschoben (bis zu einem Viertel der Rahmenbreite), und der rote Rand des Nachkommafelds gilt nicht mehr als „abgeschnittene Ziffer“. Am Kamerabild von heute Nacht wird die 1 an der 7. Stelle so gelesen, die vorher nie erkannt wurde.

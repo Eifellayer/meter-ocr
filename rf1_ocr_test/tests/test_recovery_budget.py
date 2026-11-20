@@ -75,3 +75,44 @@ class RecoveryBudgetTests(TestCase):
         self.assertIn((6 * 60 + 12, 5, 6 * 60 + 60, 55), middle)
         for box in run.single_digit_frames(boxes, 7, (480, 60), last_roller=True):
             self.assertEqual((boxes[7][0], boxes[7][2]), (box[0], box[2]))
+
+
+class BlurContradictionTests(TestCase):
+    def test_blurred_seven_read_as_four_stays_unclear(self):
+        # Runner-up close (7 vs 2), but the digit Tesseract read is far behind.
+        self.assertEqual("?", glyph_match.combine("4", {"7": .74, "2": .72, "4": .50}))
+
+    def test_six_read_as_five_stays_unclear_on_a_small_template_lead(self):
+        self.assertEqual("?", glyph_match.combine("5", {"6": .80, "5": .76, "8": .74}))
+        self.assertEqual("5", glyph_match.combine("5", {"5": .80, "6": .76}))
+
+    def test_one_and_seven_need_a_large_gap_to_contradict(self):
+        self.assertEqual("1", glyph_match.combine("1", {"7": .86, "1": .79}))
+        self.assertEqual("?", glyph_match.combine("1", {"7": .95, "1": .70}))
+
+
+class TemplateVetoTests(TestCase):
+    def test_veto_only_against_a_clearly_preferred_other_digit(self):
+        from unittest import mock
+        import run
+        register = Image.new("RGB", (40, 40))
+        with mock.patch.object(run, "glyph_scores", return_value={"6": .80, "5": .78, "1": .70, "7": .73}):
+            self.assertTrue(run.template_veto(register, (0, 0, 20, 30), "5", "auto", False))
+            self.assertFalse(run.template_veto(register, (0, 0, 20, 30), "6", "auto", False))
+        with mock.patch.object(run, "glyph_scores", return_value={"7": .85, "1": .82}):
+            self.assertFalse(run.template_veto(register, (0, 0, 20, 30), "1", "auto", False))
+        with mock.patch.object(run, "glyph_scores", return_value={}):
+            self.assertFalse(run.template_veto(register, (0, 0, 20, 30), "3", "auto", False))
+
+    def test_recovery_rejects_a_vetoed_agreement(self):
+        from unittest.mock import Mock
+        import run
+        register = Image.new("RGB", (400, 100))
+        boxes = [(50 * index + 5, 20, 50 * index + 45, 80) for index in range(8)]
+        layout = (register, 250, boxes[:5], boxes[5:])
+        read = Mock(return_value="5")
+        result, _ = run.recover_single_digit(
+            layout, "10487.?1", "10487.?1", 5, 3, read, 16, lambda *_, **__: None,
+            lambda: False, lambda _: True, veto=lambda box, digit: digit == "5",
+        )
+        self.assertIsNone(result)

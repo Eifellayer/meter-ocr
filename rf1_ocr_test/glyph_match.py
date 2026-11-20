@@ -27,6 +27,10 @@ CONTRADICT_MARGIN = .08
 # A real meter "1" carries a long flag and matches the "7" template almost as well (seen
 # 20.11.: 7 = .86, 1 = .79 on a clear 1). Between these two the template needs twice the margin.
 CONFUSABLE = ({"1", "7"},)
+# Blurred 6 reads as 5 in several Tesseract profiles while the templates still rank the 6 first
+# (20.11.: 6 = .80, 5 = .76). For this pair a small template lead is enough to leave it unclear.
+BLUR_PAIRS = ({"5", "6"},)
+BLUR_CONTRADICT_MARGIN = .02
 # Anchored completion of hidden whole digits: summed template evidence ahead of the next candidate.
 ANCHOR_MARGIN = .08
 VISIBLE_SCORE = .6
@@ -209,7 +213,13 @@ def combine(tesseract, scores):
     if digit is None:
         return tesseract
     if tesseract in tuple("0123456789"):
-        if digit != tesseract and score >= CONTRADICT_SCORE and margin >= CONTRADICT_MARGIN:
+        # Measured against the digit Tesseract read, not the runner-up: a blurred 7 read as 4
+        # (20.11.: 7 = .74, 2 = .72, 4 far behind) is a clear contradiction as well.
+        gap = score - scores.get(tesseract, 0.0)
+        needed = CONTRADICT_MARGIN * (2 if {digit, tesseract} in CONFUSABLE else 1)
+        if digit != tesseract and score >= CONTRADICT_SCORE and gap >= needed:
+            return "?"
+        if {digit, tesseract} in BLUR_PAIRS and score >= CONTRADICT_SCORE and gap >= BLUR_CONTRADICT_MARGIN:
             return "?"
         return tesseract
     if score >= ACCEPT_SCORE and margin >= ACCEPT_MARGIN:

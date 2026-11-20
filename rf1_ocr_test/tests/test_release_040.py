@@ -121,6 +121,26 @@ class GroupTests(unittest.TestCase):
         self.assertEqual((2, 1, "confirm"), (rows[0]["hits"], rows[0]["merged"], rows[0]["role"]))
         self.assertEqual("hint", rows[1]["role"])
 
+    def test_register_with_hits_is_listed_after_leaving_the_shortlist(self):
+        """0.4.1 (Stefan 20.11., 20:55): two matches with hits were missing from the candidate list."""
+        job = Calibration(10, 0, rank_candidates=True)
+        hit = Layout((100, 50, 300, 100), -13, 150)
+        job.current_stamp = 1
+        job.note_group(hit, ["12345", "12345"], True, 5)
+        job.groups[0]["percent"] = 86
+        job.current_stamp = 2
+        job.note_group(hit, ["12345", "12345"], True, 5)
+        # Five other frames with a higher percentage but no hits fill the shortlist.
+        others = [Layout((100, 150 + 30 * i, 300, 170 + 30 * i), 0, 150) for i in range(5)]
+        job.shortlist = {layout: (95 - i, 5.0, 95 - i) for i, layout in enumerate(others)}
+        for layout in others:
+            job.note_group(layout, ["?2???", "?3???"], False, 5)
+        rows = job.status(0)["candidates"]
+        self.assertEqual(6, len(rows))
+        self.assertEqual((1, 2, -13, "12345"),
+                         (rows[0]["number"], rows[0]["hits"], rows[0]["rotation"], rows[0]["reading"]))
+        self.assertEqual(list(range(1, 7)), [row["number"] for row in rows])
+
     def test_confirmed_frame_stays_listed_when_its_score_fell_out(self):
         job = Calibration(10, 0, rank_candidates=True)
         job.candidate = Layout((10, 10, 200, 60), -13, 120)

@@ -819,6 +819,9 @@ class Calibration:
                 else:
                     self.groups.pop(0)
         group["layouts"].add(layout)
+        if readings:
+            # Remembered per group so a register with hits can be listed after its frames left the shortlist.
+            group["reading"] = str(readings[0]).replace(",", ".")
         sure = digits - len(uncertain_slots(readings, digits)) if readings else 0
         images = group["quality"].setdefault(layout, {})
         images[self.current_stamp] = max(images.get(self.current_stamp, 0), sure)
@@ -1111,6 +1114,25 @@ class Calibration:
                          "hits": len(group["hits"]) if group is not None else self.confirmations,
                          "merged": max(0, len(group["layouts"]) - 1) if group is not None else 0,
                          "role": "confirm"})
+        # Stefan (20.11., 18:48/20:55): registers with hits are always listed, also when their frames were
+        # pushed out of the five-place shortlist by frames with a higher percentage but no hits.
+        listed = [self.group_of(row_layout) for row_layout in self.shortlist] + [self.group_of(candidate)
+                                                                                  if candidate is not None else None]
+        for group in self.groups:
+            if not group["hits"] or any(group is other for other in seen + listed if other is not None):
+                continue
+            layout = self.best_of_group(group["rep"])
+            percent = group.get("percent") or None
+            rows.append({"number": 0, "percent": percent,
+                         "reading": self.candidate_readings.get(layout, group.get("reading", "")),
+                         "rotation": layout.rotation, "box": list(layout.box),
+                         "selected": self.candidate in group["layouts"] if self.candidate is not None else False,
+                         "hits": len(group["hits"]), "merged": max(0, len(group["layouts"]) - 1),
+                         "role": "hint" if percent is not None and percent < self.agreement_threshold else "confirm"})
+        # Registers with hits first, then by percentage; numbers follow the shown order.
+        rows.sort(key=lambda row: (-(row["hits"] or 0), -(row["percent"] or 0)))
+        for number, row in enumerate(rows, 1):
+            row["number"] = number
         return rows
 
     def refine(self, layout, readings, sample, rules, read, stop, on_attempt, tested, frame_ceiling):
@@ -1458,7 +1480,10 @@ class Calibration:
         readable_agreement = agreement_percent(readings, {"reference_required": False}, fraction, digits)
         percentage = min(required_agreement, readable_agreement)
         prefixes = [meter_prefix(value, precision, digits) for value in readings[:2]]
-        self.note_group(layout, readings, prefixes[0] is not None and len(set(prefixes)) == 1, digits + fraction)
+        group = self.note_group(layout, readings, prefixes[0] is not None and len(set(prefixes)) == 1,
+                                digits + fraction)
+        if group is not None:
+            group["percent"] = max(group.get("percent", 0), percentage)
         if required_agreement:
             self.shortlist[layout] = (percentage, round(crop_quality(frame, layout), 2), required_agreement)
             ranked = sorted(self.shortlist.items(), key=lambda pair: pair[1], reverse=True)

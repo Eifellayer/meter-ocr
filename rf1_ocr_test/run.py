@@ -57,7 +57,7 @@ import debug_log
 import experiments
 import glyph_match
 from layout import (MANUAL_ROW_UNCLEAR, PARTLY_UNCLEAR, RAW_ROW_UNCLEAR, digit_row_tilt, fine_rotation as valid_fine_rotation, crop_coordinates, find_digit_row,
-                    digit_box_settings, find_raw_digit_row, normalize_digit_boxes, glyph_clipped, roll_center, rotated_width, scale_digit_boxes, turn_crop)
+                    digit_box_settings, find_raw_digit_row, normalize_digit_boxes, glyph_clipped, glare_slots, roll_center, rotated_width, scale_digit_boxes, turn_crop)
 from meter_learning import (GEOMETRY_REPAIR_LIMIT, GEOMETRY_REPAIR_SECONDS, alignment_rollback, observe_flow,
                             observe_geometry_failures, local_geometry_trials, note_local_issue, note_local_improvement,
                             plan_reflection_recheck, REFLECTION_RECHECK_NOTICE, suggested_interval)
@@ -755,17 +755,30 @@ def read_visible_digits(register, integer_width, whole_boxes, fraction_boxes, li
         kwargs = {"deadline": deadline} if deadline is not None else {}
         return recognize(picture, light_digits, digits, force_polarity=polarity != "auto", profile=profile, **kwargs)
 
+    glared = set()
+    if glyphs and len(whole_boxes) == whole_digits:
+        try:
+            # A flash reflection makes Tesseract invent digits (e.g. a 7) in the washed-out frame.
+            frames = [*whole_boxes, *fraction_boxes[:fraction_digits]]
+            glared = set(glare_slots(register, frames)) | set(glyph_match.washed_out(register, frames))
+        except (OSError, ValueError, ZeroDivisionError):
+            glared = set()
     whole = None if prefer_boxes else read(register.crop((0, 0, integer_width, register.height)))
+    if whole is not None and glared & set(range(whole_digits)):
+        whole = None
     if whole is None:
-        cells = [read_digit(register, box, read, trim_vertical=not prefer_boxes) for box in whole_boxes]
+        cells = ["?" if index in glared else read_digit(register, box, read, trim_vertical=not prefer_boxes)
+                 for index, box in enumerate(whole_boxes)]
         scores = []
         if glyphs and len(whole_boxes) == whole_digits:
             scores = [glyph_scores(register, box, polarity, light_digits) for box in whole_boxes]
-            cells = [glyph_match.combine(cell, score) for cell, score in zip(cells, scores)]
+            cells = ["?" if index in glared else glyph_match.combine(cell, score)
+                     for index, (cell, score) in enumerate(zip(cells, scores))]
         whole = "".join(cells).ljust(whole_digits, "?")
         if scores and whole_range is not None and "?" in whole:
             whole = glyph_match.anchored_whole(whole, scores, *whole_range)
-        if prefer_boxes and whole_digits >= 4 and whole.count("?") == 1 and len(whole_boxes) == whole_digits:
+        if (prefer_boxes and whole_digits >= 4 and whole.count("?") == 1 and len(whole_boxes) == whole_digits
+                and not glared & set(range(whole_digits))):
             # Recover one weak cell with a tightly cropped row read. Keep
             # every independently read cell as a check on OCR alignment.
             top, bottom = min(box[1] for box in whole_boxes), max(box[3] for box in whole_boxes)
@@ -782,10 +795,12 @@ def read_visible_digits(register, integer_width, whole_boxes, fraction_boxes, li
                 row = None
             if row and len(row) == whole_digits and all(a == b or a == "?" for a, b in zip(whole, row)):
                 whole = row
-    fraction_cells = [read_digit(register, box, read) for box in fraction_boxes[:fraction_digits]]
+    fraction_cells = ["?" if whole_digits + index in glared else read_digit(register, box, read)
+                      for index, box in enumerate(fraction_boxes[:fraction_digits])]
     if glyphs:
-        fraction_cells = [glyph_match.combine(cell, glyph_scores(register, box, polarity, light_digits))
-                          for cell, box in zip(fraction_cells, fraction_boxes)]
+        fraction_cells = ["?" if whole_digits + index in glared
+                          else glyph_match.combine(cell, glyph_scores(register, box, polarity, light_digits))
+                          for index, (cell, box) in enumerate(zip(fraction_cells, fraction_boxes))]
     fraction = "".join(fraction_cells)
     return f"{whole}.{fraction.ljust(fraction_digits, '?')}" if fraction_digits else whole
 

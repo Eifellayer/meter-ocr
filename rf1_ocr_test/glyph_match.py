@@ -127,6 +127,44 @@ def correlation_scores(image):
     return best
 
 
+def _percentile(histogram, share):
+    total, seen = sum(histogram), 0
+    for level, count in enumerate(histogram):
+        seen += count
+        if seen >= total * share:
+            return level
+    return 255
+
+
+def washed_out(register, boxes):
+    """Indices of frames covered by a flash reflection, also for tightly drawn frames.
+
+    In the darkest colour channel a reflected frame is bright almost everywhere: its median is
+    at least twice the typical frame median and its brightest part saturates.
+    """
+    if len(boxes) < 3:
+        return []
+    image = register.convert("RGB")
+    red, green, blue = image.split()
+    darkest = ImageChops.darker(ImageChops.darker(red, green), blue)
+    stats = []
+    for left, top, right, bottom in boxes:
+        left, top = max(0, left), max(0, top)
+        right, bottom = min(darkest.width, right), min(darkest.height, bottom)
+        if right - left < 2 or bottom - top < 2:
+            stats.append(None)
+            continue
+        histogram = darkest.crop((left, top, right, bottom)).histogram()
+        stats.append((_percentile(histogram, .5), _percentile(histogram, .95)))
+    medians = sorted(item[0] for item in stats if item is not None)
+    if len(medians) < 3:
+        return []
+    typical = medians[len(medians) // 2]
+    found = [index for index, item in enumerate(stats)
+             if item is not None and item[0] >= max(100, 2 * typical) and item[1] >= 230]
+    return found if len(found) <= 2 else []
+
+
 def digit_scores(crop, light_digits=None):
     """Return {digit: score} for one digit cell, or {} without templates or a usable cell.
 

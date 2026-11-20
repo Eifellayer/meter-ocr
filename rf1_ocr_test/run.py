@@ -34,6 +34,7 @@ from checks import (
     STANDALONE_CACHED_CAPTURE_DELAY, MAX_OCR_ATTEMPTS, DEFAULT_FAILURE_PAUSE_MINUTES, MAX_FAILURE_PAUSE_MINUTES, MIN_FAILURE_PAUSE_MINUTES, SHIFTED_DIGIT_POSITIONS, ROW_SHIFT_READS, ROW_SHIFT_TRIALS, plausible_integer_digits, note_skew, skew_offset, SHIFTED_DIGIT_READS, missing_digit_pattern, single_missing_digit, disputed_digit_pattern, resolve_ocr_readings,
     compare_sample, crop_register, lighting_ocr_profiles, read_register, read_with_retries, record_sample,
     anchored_leading_digits, anchored_hidden_digits, within_anchor_bounds, anchor_bounds,
+    learned_flow_limit, slow_roller_digit,
     automatic_interval_minutes, defer_duplicate_cycle,
     LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, LAST_DIGIT_RETRIES, SUCCESSFUL_CHECKS,
     SEVENTH_DIGIT_WAIT_NOTICE,
@@ -1764,6 +1765,10 @@ def main():
     setup_autostart = {"pending": True, "build": app_build()}
     calibration_preview = {}
     calibration_images = {}
+    # The newest picture of an automatic check. Background searches (eighth digit, frame
+    # relocation, fine adjustment after the setup) only evaluate these pictures and never
+    # request extra ones from the camera.
+    automatic_capture = {"seq": 0, "result": None}
     calibration_preview_version = 0
     geometry_backup = HISTORY.with_name("geometry-backup.json")
     calibration_candidates_path = HISTORY.with_name("calibration-candidates.json")
@@ -2057,7 +2062,7 @@ def main():
             if job.expired(now):
                 job.state = "timeout"
                 return False
-            if job.image_wait_expired(now):
+            if job.image_wait_expired(now) and not job.background:
                 job.state = "image_timeout"
                 return False
             if calibration_configuration_now() != calibration_configuration or get_auto_paused():
@@ -2066,6 +2071,13 @@ def main():
             configured_rules, (configured_camera, _) = calibration_configuration
             if now < calibration_next or (active_rules, active_source) != (configured_rules, configured_camera):
                 return True
+            shared_result = None
+            if job.background:
+                if automatic_capture["seq"] <= job.automatic_seq or automatic_capture["result"] is None:
+                    return True
+                job.automatic_seq = automatic_capture["seq"]
+                picture, drawn, sample = automatic_capture["result"]
+                shared_result = (picture, drawn, dict(sample))
             job.state = "testing"
             job.stage = "capture"
             attempt = deepcopy(job)
@@ -2111,7 +2123,9 @@ def main():
         round_started = time.monotonic()
         round_log = {"fetch_seconds": None, "accepted_at": None, "error": None, "captured": False}
         try:
-            if attempt.intensive and not attempt.stream_unavailable:
+            if shared_result is not None:
+                result = shared_result
+            elif attempt.intensive and not attempt.stream_unavailable:
                 stream_url = None
                 stream_token = None
                 if mode == "slfork_camera":
@@ -2127,7 +2141,9 @@ def main():
                             error.close()
                     if not stream_pictures and not stopped():
                         attempt.stream_unavailable = True
-            if stream_pictures:
+            if shared_result is not None:
+                pass
+            elif stream_pictures:
                 result = capture_esp_snapshot(base, zone, "camera_stream", fetch=lambda _: stream_pictures[-1])
             elif mode == "slfork":
                 result = capture(base, {}, fetch=fetch)
@@ -2518,6 +2534,8 @@ def main():
                     if not provisional and not attempt.automatic:
                         remember_known_good_layout(get_auto_rules(), active_source, selected)
                         history["setup_first_check_revision"] = get_auto_rules()["crop_revision"]
+                        # The setup itself confirmed the reading three times.
+                        history["last_match_at"] = time.time()
                     attempt.state = "saved_reflection" if reflected else "saved_stationary" if provisional else "saved"
                     if attempt.simplified and not provisional and not reflected and not attempt.automatic:
                         calibration = Calibration(
@@ -2816,7 +2834,7 @@ def main():
                           "standalone_candidate",
                           "learned_rotation", "geometry_recovery",
                           "reflection_anchor", "reflection_pending", "reflection_estimate", "reflection_streak", "reflection_live_estimate",
-                          "hidden_digit_prompt",
+                          "hidden_digit_prompt", "flow_peaks", "flow_peak_samples",
                           "reflection_rechecks", "reflection_retry_at", "fresh_ocr_retry_at", "ocr_candidates", "ocr_method",
                           "last_slfork_match", "last_reference", "last_reference_time",
                           "last_reference_is_fallback", "ocr_value", "ocr_readings"):
@@ -2846,7 +2864,9 @@ def main():
         ))
         if format_changed:
             updated["confirmations"] = []
-            updated.pop("last_match_at", None)
+            if history.get("comparison_integer_digits", integer_digits) != integer_digits:
+                # A temporary precision change keeps the time of the last confirmed reading.
+                updated.pop("last_match_at", None)
             updated.pop("last_digit_failures", None)
             for field in ("reflection_anchor", "reflection_pending", "reflection_estimate", "reflection_streak",
                           "reflection_live_estimate", "reflection_rechecks", "reflection_retry_at"):
@@ -2918,6 +2938,9 @@ def main():
                 else:
                     set_activity("working", SLFORK_RAW_NOTICE)
                 result = capture_slfork_raw(base, zone)
+            if result is not None and not manual and not manual_upload and not raw_fallback:
+                with settings_lock:
+                    automatic_capture.update(seq=automatic_capture["seq"] + 1, result=result)
             if result is not None:
                 if not manual:
                     set_activity("working", "Bild wird vorbereitet.")
@@ -3544,6 +3567,24 @@ def main():
                                           f"aus bestätigtem Stand ergänzt: {ocr} -> {value}")
                                     ocr, ocr_confirmed, ocr_readings = value, True, anchored_readings
                                     ocr_method = "anchored"
+                            flow_limit = learned_flow_limit(history, active_rules["max_flow_lph"])
+                            slow_anchor = history.get("reflection_anchor")
+                            slow = (None if ocr_confirmed else slow_roller_digit(
+                                ocr_readings, slow_anchor, read_state["captured"], comparison_decimals,
+                                integer_digits, flow_limit))
+                            if slow:
+                                slow_readings, _ = slow
+                                value, confirmed = resolve_ocr_readings(
+                                    slow_readings, comparison_decimals, integer_digits,
+                                    standalone=require_consensus, standalone_composition=True,
+                                )
+                                if confirmed and within_anchor_bounds(
+                                        value, slow_anchor, read_state["captured"], comparison_decimals,
+                                        integer_digits, flow_limit):
+                                    print(f"Erste Nachkommastelle aus bestätigtem Stand und Durchfluss "
+                                          f"(≤ {flow_limit} l/h) ergänzt: {ocr} -> {value}")
+                                    ocr, ocr_confirmed, ocr_readings = value, True, slow_readings
+                                    ocr_method = "slow_roller"
                         register = read_state["register"]
                         integer_width = read_state["integer_width"]
                         whole_boxes = read_state["whole_boxes"]
@@ -3879,6 +3920,10 @@ def main():
                                 "time": timestamp_epoch(active_rules["fallback_time"], zone),
                                 "value": prefix * 10 ** (3 - decimals),
                             }
+                    if (outcome == "ocr_only" and standalone_reference is not None
+                            and type(image_time) in (int, float)):
+                        # A reading confirmed with a second image counts as a confirmed comparison.
+                        updated["last_match_at"] = image_time
                     track_reflection(
                         updated, ocr, ocr_readings, image_time,
                         verified=outcome == "match" or standalone_reference is not None and outcome == "ocr_only",

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.2
+
+- **Hintergrundsuche ohne Extrabilder:** Die Suche nach der 8. Ziffer, die Rahmen-Nachsuche und die Feinjustierung nach der Einrichtung werten jetzt nur noch die Bilder der normalen automatischen Prüfungen mit aus. Sie fordern keine eigenen Bilder (und keinen zusätzlichen Blitz) mehr an – bisher kam nach der Einrichtung alle 13 Sekunden ein Extrabild. Die Restzeit-Anzeige („noch höchstens … min“) und der Zeitbalken entfallen; stattdessen steht dort „läuft nebenbei mit den normalen Prüfbildern mit“.
+- **Erste Nachkommastelle zuverlässiger:** Ist nur die erste Nachkommastelle unklar (z. B. „10492,?5“) und kommt seit dem zuletzt bestätigten Stand (10492,80) mit dem gelernten Durchfluss nur ein Wert in Frage, ergänzt die App die Stelle (10492,85). Der Durchfluss wird aus den bestätigten Ablesungen der letzten 7 Tage gelernt (doppelter Höchstwert, mindestens 1,5 m³/h, nie über der eingestellten Grenze) und erst nach 12 Messungen genutzt. Die Gegenprüfung mit einem zweiten Bild bleibt. Debug-Protokoll: `method: slow_roller`.
+- **„Letzter bestätigter Abgleich“ bleibt gefüllt:** Er zählt jetzt auch Ablesungen, die mit einem zweiten Bild gegengeprüft wurden, und die Bestätigung aus der Einrichtung. Ein vorübergehender Wechsel der verglichenen Nachkommastellen löscht ihn nicht mehr. Steht dort „–“, erklärt ein Hinweis beim Darüberfahren den Grund.
+
 ## 0.3.1
 
 - **Einrichtung bestätigt das gefundene Zählwerk wieder (kritisch):** Jede fein nachjustierte Fassung desselben Rahmens (z. B. −12° statt −13°, Ziffernrahmen leicht verschoben) galt bisher als neuer Kandidat und setzte die Bestätigungen zurück – heute 16 Bilder mit richtiger Lesung (10492,09 → 10492,18 …), aber 0 von 3 Bestätigungen und Abbruch nach 20 Minuten. Jetzt zählt jedes Bild desselben Zählwerks (Außenrahmen ≥ 80 % deckungsgleich, Drehung ±2°, gleiche Ziffernzahl) als Bestätigung; die Zählerstandsfolge muss weiterhin zum möglichen Durchfluss passen, sodass ein versetzter Rahmen nicht bestätigt wird.

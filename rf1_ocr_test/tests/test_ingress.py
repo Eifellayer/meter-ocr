@@ -1192,7 +1192,7 @@ class BrowserTests(IngressFixture):
             self.calibration.update(state="saved", intensive=False)
             success = page.locator("#setup-success")
             success.get_by_text("Zähler erfolgreich eingerichtet", exact=True).wait_for()
-            self.assertIn("20 Minuten", success.inner_text())
+            self.assertIn("mit den normalen Prüfbildern", success.inner_text())
             self.assertIsNone(page.locator("#calibration-diagnostics").get_attribute("open"))
             self.assertEqual("true", page.locator("#tab-overview").get_attribute("aria-selected"))
             self.assertFalse(page.locator("#calibration-overview").is_visible())

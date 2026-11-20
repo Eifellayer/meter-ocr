@@ -704,6 +704,8 @@ class Calibration:
     refinement_seen: set = field(default_factory=set)
     angle_compared: set = field(default_factory=set)
     rejected_regions: list = field(default_factory=list)
+    # Background searches only use pictures of automatic checks: last one already evaluated.
+    automatic_seq: int = 0
 
     def expired(self, now):
         return self.remaining(now) <= 0

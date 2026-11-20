@@ -650,7 +650,7 @@ header{{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.6rem}}
 <span class="setup-success-icon" aria-hidden="true">✓</span>
 <div><strong>Zähler erfolgreich eingerichtet</strong>
 <p id="setup-duration" {setup_duration_hidden}>{setup_duration}</p>
-<p>Die Automatik läuft. In den nächsten 20 Minuten optimiert die App im Hintergrund noch Rahmen und Winkel.</p></div>
+<p>Die Automatik läuft. Rahmen und Winkel verbessert die App automatisch im Hintergrund mit den normalen Prüfbildern weiter.</p></div>
 </div>
 <div class="activity-status" data-state="{automatic_activity_state}" data-routine-ok="{automatic_routine_ok}">
 <p role="status" aria-live="polite"><strong>Automatik:</strong> <span id="automatic-activity">{automatic_activity}</span></p>
@@ -3332,15 +3332,15 @@ function syncHero() {{
     ? wholeDigits.length + comparedDecimals + 1 : 0;
   let noteText = '', noteState = '';
   if (/[0-9?]/.test(reading) && frameRelocating) {{
-    const minutesLeft = lastDigitProgress ? Math.max(1, Math.ceil(lastDigitProgress.seconds / 60)) : 0;
     noteText = lang === 'en'
       ? 'The frame of the last digit sat beside its roller and is being searched again in the background. Until then the app checks with one decimal place less.'
       : 'Der Rahmen der letzten Stelle saß neben der Rolle und wird gerade im Hintergrund neu gesucht. Bis dahin prüft die App mit einer Nachkommastelle weniger.';
-    if (minutesLeft) noteText += lang === 'en' ? ` At most ${{minutesLeft}} min left.` : ` Das dauert noch höchstens ${{minutesLeft}} min.`;
+    noteText += lang === 'en' ? ' This runs automatically in the background with the normal check pictures.'
+      : ' Das läuft automatisch im Hintergrund mit den normalen Prüfbildern mit.';
     noteState = 'searching';
   }} else if (/[0-9?]/.test(reading) && lastDigitSearching) {{
-    const minutesLeft = lastDigitProgress ? Math.max(1, Math.ceil(lastDigitProgress.seconds / 60)) : 0;
-    const left = minutesLeft ? (lang === 'en' ? ` (at most ${{minutesLeft}} min)` : ` (noch höchstens ${{minutesLeft}} min)`) : '';
+    // No countdown: the search only evaluates the pictures of the normal automatic checks.
+    const left = lang === 'en' ? ' (runs along with the normal check pictures)' : ' (läuft nebenbei mit den normalen Prüfbildern mit)';
     if (/[0-9]$/.test(fractionDigits)) {{
       noteText = lang === 'en' ? `Optimising${{left}}: all digits are read, the app is improving frames and angle.`
         : `Optimierung läuft${{left}}: Alle Ziffern sind gelesen, die App verbessert noch Rahmen und Winkel.`;
@@ -3382,11 +3382,8 @@ function syncHero() {{
   note.dataset.state = noteState;
   note.hidden = !noteText;
   const searchProgress = document.querySelector('#hero-search-progress');
-  searchProgress.hidden = !(['searching', 'optimizing'].includes(noteState) && lastDigitProgress);
-  if (!searchProgress.hidden) {{
-    searchProgress.max = lastDigitProgress.duration;
-    searchProgress.value = lastDigitProgress.elapsed;
-  }}
+  // Background searches have no time limit to show: they run along with the automatic checks.
+  searchProgress.hidden = true;
   const fractionRollers = document.querySelectorAll('#meter-odometer .roller.fraction');
   fractionRollers.forEach((roller, index) => roller.classList.toggle(
     'searching', noteState === 'searching' && index === fractionRollers.length - 1));
@@ -3731,6 +3728,8 @@ async function refreshAutomatic() {{
         ['last-match', sample.last_match]]) {{
       document.querySelector('#automatic-' + id).textContent = value ? formatStamp(value) : '–';
     }}
+    document.querySelector('#automatic-last-match').title = sample.last_match ? '' : (lang === 'en'
+      ? 'No confirmed reading since the setup yet' : 'Noch keine bestätigte Lesung seit der Einrichtung');
     if (staleView) showStale('');
   }} catch (error) {{
     const message = String(error?.stack || error).split(String.fromCharCode(10)).slice(0, 2).join(' ');

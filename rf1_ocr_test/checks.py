@@ -786,6 +786,69 @@ def within_anchor_bounds(ocr, anchor, stamp, decimals, integer_digits, max_flow_
     return bounds[0] - step <= litres <= bounds[1]
 
 
+# A slowly turning roller (e.g. the first decimal) can be completed from the last confirmed
+# reading only within the flow this meter really reaches, learned from confirmed readings.
+FLOW_PEAK_MIN_SECONDS = 300
+FLOW_PEAK_MAX_SECONDS = 6 * 60 * 60
+FLOW_PEAK_DAYS = 7
+FLOW_PEAK_MIN_SAMPLES = 12
+SLOW_ROLLER_FLOOR_LPH = 1500
+SLOW_ROLLER_MARGIN = 2
+
+
+def note_flow_peak(history, previous, following, max_flow_lph):
+    """Remember the highest flow per day between two confirmed readings (last 7 days)."""
+    if (not isinstance(previous, dict) or type(previous.get("value")) is not int
+            or type(previous.get("time")) not in (int, float)):
+        return
+    elapsed = following["time"] - previous["time"]
+    delta = following["value"] - previous["value"]
+    if not FLOW_PEAK_MIN_SECONDS <= elapsed <= FLOW_PEAK_MAX_SECONDS or delta < 0:
+        return
+    rate = round(delta * 3600 / elapsed)
+    if type(max_flow_lph) in (int, float) and rate > max_flow_lph:
+        return
+    peaks = history.get("flow_peaks")
+    peaks = {key: value for key, value in peaks.items() if type(value) is int} if isinstance(peaks, dict) else {}
+    day = str(int(following["time"] // 86400))
+    peaks[day] = max(rate, peaks.get(day, 0))
+    keep = sorted(peaks, key=lambda key: int(key) if key.isdigit() else -1)[-FLOW_PEAK_DAYS:]
+    history["flow_peaks"] = {key: peaks[key] for key in keep}
+    samples = history.get("flow_peak_samples", 0)
+    history["flow_peak_samples"] = min((samples if type(samples) is int else 0) + 1, 100000)
+
+
+def learned_flow_limit(history, max_flow_lph):
+    """Twice the highest learned flow (at least 1.5 m³/h), never above the configured limit.
+
+    None until enough confirmed readings were seen; then no slow-roller completion happens.
+    """
+    peaks = history.get("flow_peaks")
+    samples = history.get("flow_peak_samples", 0)
+    if (not isinstance(peaks, dict) or type(samples) is not int or samples < FLOW_PEAK_MIN_SAMPLES
+            or type(max_flow_lph) not in (int, float) or max_flow_lph <= 0):
+        return None
+    values = [value for value in peaks.values() if type(value) is int and value >= 0]
+    if not values:
+        return None
+    return min(max_flow_lph, max(SLOW_ROLLER_FLOOR_LPH, SLOW_ROLLER_MARGIN * max(values)))
+
+
+SLOW_ROLLER_NOTICE = "Erste Nachkommastelle aus dem zuletzt bestätigten Stand und dem bisherigen Durchfluss ergänzt."
+
+
+def slow_roller_digit(readings, anchor, stamp, decimals, integer_digits, flow_limit_lph):
+    """Complete an unclear first decimal when only one value is reachable since the anchor.
+
+    Uses the learned flow limit instead of the configured maximum, all other compared digits
+    still need a majority. Returns (normalized readings, filled slots) or None.
+    """
+    if not decimals or flow_limit_lph is None:
+        return None
+    return anchored_hidden_digits(readings, anchor, stamp, decimals, integer_digits, flow_limit_lph,
+                                  [integer_digits])
+
+
 def track_reflection(history, ocr, readings, stamp, *, verified, unclear, decimals,
                      integer_digits, max_flow_lph, enabled, manual_anchor=None):
     pattern = single_missing_digit(ocr, readings, decimals, integer_digits) if unclear else None
@@ -821,6 +884,7 @@ def track_reflection(history, ocr, readings, stamp, *, verified, unclear, decima
                                               following, decimals, max_flow_lph)
             if estimate:
                 history["reflection_estimate"] = estimate
+        note_flow_peak(history, history.get("reflection_anchor"), following, max_flow_lph)
         history["reflection_anchor"] = following
 
 

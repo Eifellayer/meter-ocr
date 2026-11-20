@@ -32,7 +32,7 @@ class AppIdentityTests(unittest.TestCase):
     def test_release_metadata_preserves_stable_app_identity(self):
         config = yaml.safe_load((APP / "config.yaml").read_text(encoding="utf-8"))
         repository = yaml.safe_load((APP.parent / "repository.yaml").read_text(encoding="utf-8"))
-        self.assertEqual("0.2.9", config["version"])
+        self.assertEqual("0.2.10", config["version"])
         self.assertEqual("rf1_ocr_test", config["slug"])
         self.assertEqual("AI Meter Reader", config["name"])
         self.assertNotIn("stage", config)
@@ -74,7 +74,7 @@ class DocumentationTests(unittest.TestCase):
                 self.assertLess(len(page), 4000)
                 self.assertIn(title, page)
                 self.assertIn("](rf1_ocr_test/DOCS.md)", page)
-                self.assertIn("Version 0.2.9", page)
+                self.assertIn("Version 0.2.10", page)
                 self.assertIn("supervisor_add_addon_repository", page)
                 self.assertIn("repository_url=https%3A%2F%2Fgithub.com%2FEifellayer%2Fmeter-ocr", page)
                 self.assertIn("](docs/HISTORY.md)", page)
@@ -87,10 +87,10 @@ class DocumentationTests(unittest.TestCase):
             self.assertIn(text, de)
         for text in ("10 minutes by default", "5 minutes", "30 minutes by default", "ESP as camera only"):
             self.assertIn(text, en)
-        self.assertIn("Version 0.2.9", app_docs)
+        self.assertIn("Version 0.2.10", app_docs)
         self.assertIn("sensor.rf1_verbrauch_gesamt", app_docs)
         changelog = (APP / "CHANGELOG.md").read_text(encoding="utf-8")
-        self.assertIn("## 0.2.9", changelog)
+        self.assertIn("## 0.2.10", changelog)
         self.assertIn("## 0.1.0", changelog)
         self.assertNotIn("## 0.6", changelog)
 
@@ -141,7 +141,8 @@ class ComparisonTests(unittest.TestCase):
         self.assertEqual(2, common_exact_precision("10448.087", "10448.0869", 4))
 
     def test_auto_cycle_can_use_fifteen_reads_with_majority_composition(self):
-        readings = iter(["12345.120"] * 8 + ["12346.120"] * 7)
+        # 12:3 is clear enough; an 8:7 split on a whole digit stays open since 0.2.10.
+        readings = iter(["12345.120"] * 12 + ["12346.120"] * 3)
         value, confirmed, attempts = read_with_retries(
             lambda _: next(readings), {"raw_value": "99999.000", "actual_value": "99999.000"},
             0, max_attempts=5, extra_attempts=10)

@@ -32,7 +32,7 @@ class AppIdentityTests(unittest.TestCase):
     def test_release_metadata_preserves_stable_app_identity(self):
         config = yaml.safe_load((APP / "config.yaml").read_text(encoding="utf-8"))
         repository = yaml.safe_load((APP.parent / "repository.yaml").read_text(encoding="utf-8"))
-        self.assertEqual("0.2.5", config["version"])
+        self.assertEqual("0.2.6", config["version"])
         self.assertEqual("rf1_ocr_test", config["slug"])
         self.assertEqual("AI Meter Reader", config["name"])
         self.assertNotIn("stage", config)
@@ -58,6 +58,14 @@ class AppIdentityTests(unittest.TestCase):
         self.assertEqual("no-cache", request.get_header("Pragma"))
 
 
+class VersionFooterTests(unittest.TestCase):
+    def test_every_page_shows_the_installed_version_in_the_footer(self):
+        for language in ("de", "en"):
+            page = formatted_page(language)
+            self.assertIn('class="app-version"', page)
+            self.assertIn("CHANGELOG.md", page)
+
+
 class DocumentationTests(unittest.TestCase):
     def test_readmes_are_short_and_link_to_the_guide(self):
         for quickstart, title in (("README.md", "Schnellstart"), ("README.en.md", "Quick start")):
@@ -66,7 +74,7 @@ class DocumentationTests(unittest.TestCase):
                 self.assertLess(len(page), 4000)
                 self.assertIn(title, page)
                 self.assertIn("](rf1_ocr_test/DOCS.md)", page)
-                self.assertIn("Version 0.2.5", page)
+                self.assertIn("Version 0.2.6", page)
                 self.assertIn("supervisor_add_addon_repository", page)
                 self.assertIn("repository_url=https%3A%2F%2Fgithub.com%2FEifellayer%2Fmeter-ocr", page)
                 self.assertIn("](docs/HISTORY.md)", page)
@@ -79,10 +87,10 @@ class DocumentationTests(unittest.TestCase):
             self.assertIn(text, de)
         for text in ("10 minutes by default", "5 minutes", "30 minutes by default", "ESP as camera only"):
             self.assertIn(text, en)
-        self.assertIn("Version 0.2.5", app_docs)
+        self.assertIn("Version 0.2.6", app_docs)
         self.assertIn("sensor.rf1_verbrauch_gesamt", app_docs)
         changelog = (APP / "CHANGELOG.md").read_text(encoding="utf-8")
-        self.assertIn("## 0.2.5", changelog)
+        self.assertIn("## 0.2.6", changelog)
         self.assertIn("## 0.1.0", changelog)
         self.assertNotIn("## 0.6", changelog)
 

@@ -1360,7 +1360,7 @@ Bei anhaltenden Problemen benachrichtigen
 </div>
 </main>
 
-<footer class="page-footer">Kostenloses Hobbyprojekt · <a href="https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8" target="_blank" rel="noopener noreferrer">Freiwillig mit PayPal unterstützen</a>
+<footer class="page-footer"><a class="app-version" href="https://github.com/Eifellayer/meter-ocr/blob/main/rf1_ocr_test/CHANGELOG.md" target="_blank" rel="noopener noreferrer">{app_name} {app_version}</a> · Kostenloses Hobbyprojekt · <a href="https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8" target="_blank" rel="noopener noreferrer">Freiwillig mit PayPal unterstützen</a>
 <details class="about-project"><summary>Über AI Meter Reader</summary><p><a href="https://github.com/Eifellayer" target="_blank" rel="noopener noreferrer">Projekt von EifelLayer auf GitHub</a></p><p>KI-unterstützt entwickelt. Keine geeichte Messung oder Gewähr für OCR-Ergebnisse. Bitte Zählerstände bei Bedarf direkt am Gerät prüfen.</p><p><a id="roadmap-link" href="https://github.com/Eifellayer/meter-ocr/blob/main/RELEASE-PLAN.md" target="_blank" rel="noopener noreferrer">Roadmap auf GitHub</a></p></details>
 </footer>
 <script>
@@ -4288,6 +4288,7 @@ def start_panel(
             self.reply(page.format(**values,
                 language=language,
                 app_name=APP_NAME,
+                app_version=html.escape(os.environ.get("BUILD_VERSION", "") or ""),
                 language_mode=mode,
                 start_automatic_hidden="" if start_automatic_check else "hidden",
                 start_automatic_disabled="" if summary["can_start_automatic"] else "disabled",

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.2.6
+
+- **Versionsnummer unten auf jeder Seite:** Übersicht, Einstellungen, Werkzeuge und Einrichtung zeigen unten dezent „AI Meter Reader 0.2.6“ mit Link zu den Änderungen.
 ## 0.2.5
 
 - **Lieber unklar als falsch:** Am Kamerabild von heute Nacht liest die Texterkennung eine unscharfe 6 in mehreren Einstellungen übereinstimmend als 5 und eine unscharfe 7 als 4. Die Ziffernvorlagen sahen jeweils die richtige Ziffer vorn, wurden aber überstimmt. Jetzt gilt: Liegt die gelesene Ziffer in den Vorlagen deutlich hinter der besten (bzw. bei 5/6 schon knapp), bleibt die Stelle offen. Auch die Rahmenverschiebung übernimmt eine Ziffer nur noch, wenn die Vorlagen keine andere Ziffer klar bevorzugen (1/7 ausgenommen, die verwechseln die Vorlagen selbst).

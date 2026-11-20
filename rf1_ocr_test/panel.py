@@ -267,6 +267,7 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .crop-draw{{grid-column:1/-1;padding:.85rem;border:1px solid var(--edge);border-radius:.65rem}}
 .crop-draw > p{{margin:.3rem 0 .7rem}}
 .crop-actions{{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:.55rem}}
+.discovered-row{{display:flex;gap:.5rem;align-items:flex-end}}.discovered-row label{{flex:1}}.icon-refresh{{min-height:44px;min-width:44px;padding:0;font-size:1.2rem}}
 .crop-reset{{background:transparent}}
 .crop-draw-image{{position:relative;max-width:700px;touch-action:none;user-select:none;cursor:crosshair}}
 .crop-draw-image img{{display:block;width:100%;height:auto;pointer-events:none}}
@@ -1001,7 +1002,8 @@ name: Zählerstand (OCR)</code></pre>
 </div>
 <div id="wizard-discovered-sources" class="setup-help">
 <label>Geräte suchen<input type="search" id="wizard-camera-search" placeholder="z. B. Gaszähler"></label>
-<label>In Home Assistant gefunden<select id="wizard-discovered-source" disabled><option value="">Es wurden keine Geräte gefunden</option></select></label>
+<div class="discovered-row"><label>In Home Assistant gefunden<select id="wizard-discovered-source" disabled><option value="">Es wurden keine Geräte gefunden</option></select></label><button type="button" id="wizard-refresh-sources" class="icon-refresh" aria-label="Neu suchen" title="Neu suchen">↻</button></div>
+<p id="wizard-discovery-status" class="settings-note" role="status" aria-live="polite" hidden></p>
 </div>
 <label id="wizard-source-url">ESP-Adresse<input name="url" value="{source_url}" maxlength="150" placeholder="http://esp-gaszaehler.local"></label>
 <div id="wizard-esp-camera-only" class="setup-help" hidden>
@@ -1732,23 +1734,45 @@ const discoveredSource = document.querySelector('#wizard-discovered-source');
 const cameraSearch = document.querySelector('#wizard-camera-search');
 let sourceSuggestions = [];
 let loadingSourceSuggestions = false;
-async function loadSourceSuggestions() {{
-  if (loadingSourceSuggestions || sourceSuggestions.length) return;
+let sourceRetryTimer = null;
+const refreshSources = document.querySelector('#wizard-refresh-sources');
+const discoveryStatus = document.querySelector('#wizard-discovery-status');
+function showDiscoveryStatus(text) {{
+  discoveryStatus.textContent = text;
+  discoveryStatus.hidden = !text;
+}}
+async function loadSourceSuggestions(force = false, retry = true) {{
+  if (loadingSourceSuggestions || (sourceSuggestions.length && !force)) return;
   loadingSourceSuggestions = true;
+  refreshSources.disabled = true;
+  if (sourceRetryTimer) {{ clearTimeout(sourceRetryTimer); sourceRetryTimer = null; }}
+  showDiscoveryStatus(lang === 'en' ? 'Searching Home Assistant …' : 'Suche in Home Assistant …');
+  let failed = false;
   try {{
     const response = await fetch('bildquellen', {{cache: 'no-store'}});
     if (!response.ok) throw Error('Device discovery failed');
     const suggestions = await response.json();
     if (!Array.isArray(suggestions)) throw Error('Invalid device list');
     sourceSuggestions = suggestions;
-    filterWizardSources();
   }} catch (_) {{
     // Keep the selector visible and disabled when Home Assistant is not ready.
-    filterWizardSources();
+    failed = true;
   }} finally {{
     loadingSourceSuggestions = false;
+    refreshSources.disabled = false;
+  }}
+  filterWizardSources();
+  if (failed) {{
+    showDiscoveryStatus(lang === 'en' ? 'Home Assistant is not reachable right now. The app tries again shortly; you can also tap ↻.' : 'Home Assistant ist gerade nicht erreichbar. Die App versucht es gleich noch einmal; du kannst auch ↻ antippen.');
+  }} else {{
+    showDiscoveryStatus('');
+  }}
+  // Home Assistant often answers empty or with 502 right after a restart: try once more by itself.
+  if ((failed || !sourceSuggestions.length) && retry) {{
+    sourceRetryTimer = setTimeout(() => loadSourceSuggestions(true, false), 5000);
   }}
 }}
+refreshSources.addEventListener('click', () => loadSourceSuggestions(true, true));
 function filterWizardSources() {{
   const selected = discoveredSource.value;
   const term = cameraSearch.value.trim().toLowerCase();

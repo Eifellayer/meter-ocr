@@ -24,6 +24,9 @@ ACCEPT_MARGIN = .05
 # A Tesseract digit is dropped when the templates clearly prefer another digit.
 CONTRADICT_SCORE = .72
 CONTRADICT_MARGIN = .08
+# A real meter "1" carries a long flag and matches the "7" template almost as well (seen
+# 20.11.: 7 = .86, 1 = .79 on a clear 1). Between these two the template needs twice the margin.
+CONFUSABLE = ({"1", "7"},)
 # Anchored completion of hidden whole digits: summed template evidence ahead of the next candidate.
 ANCHOR_MARGIN = .08
 VISIBLE_SCORE = .6
@@ -210,6 +213,9 @@ def combine(tesseract, scores):
             return "?"
         return tesseract
     if score >= ACCEPT_SCORE and margin >= ACCEPT_MARGIN:
+        runner_up = ranked({key: value for key, value in scores.items() if key != digit})[0]
+        if {digit, runner_up} in CONFUSABLE and margin < 2 * ACCEPT_MARGIN:
+            return tesseract
         return digit
     return tesseract
 

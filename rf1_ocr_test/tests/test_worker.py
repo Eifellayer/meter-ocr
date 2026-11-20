@@ -404,8 +404,11 @@ class SingleDigitRecheckTests(TestCase):
             digit = value[position]
             pattern = value[:position] + "?" + value[position + 1:]
             left, top, right, bottom = boxes[index]
-            self.assertEqual([(left - 2, top, right - 2, bottom), (left + 2, top, right + 2, bottom)],
-                             list(run.single_digit_frames(boxes, index, image.size)))
+            frames = list(run.single_digit_frames(boxes, index, image.size))
+            self.assertEqual([(left - 2, top, right - 2, bottom), (left + 2, top, right + 2, bottom)], frames[:2])
+            # Wider steps follow, up to a quarter of the frame, always with the same size.
+            self.assertEqual((left - 10, top, right - 10, bottom), frames[-2])
+            self.assertTrue(all(box[2] - box[0] == right - left and box[1:4:2] == (top, bottom) for box in frames))
             for dx in (-2, 2):
                 with self.subTest(index=index, dx=dx):
                     preferred = (left + dx, top, right + dx, bottom)

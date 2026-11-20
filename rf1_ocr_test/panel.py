@@ -4230,11 +4230,17 @@ def start_panel(
                        "Erste automatische Prüfung noch unklar")
             detail = ("The app will try again with a fresh image." if language == "en" else
                       "Die App prüft mit einem frischen Bild erneut.")
-        routine_ok = (tone == "ok" and not paused and not setup_pending
+        # In the seven-digit mode the third decimal is compared only as far as it is
+        # stable; the eighth digit is searched in the background for days. That is
+        # normal operation, so the last-digit hint is not a warning there.
+        last_digit_only = (partial_eighth_digit and not precision_pending
+                           and history.get("check_detail") in (LAST_DIGIT_NOTICE, LAST_DIGIT_PASS))
+        routine_ok = ((tone == "ok" or last_digit_only) and not paused and not setup_pending
                       and history.get("source_connection_status") != "error")
         if routine_ok and partial_eighth_digit:
             # Normal operation in the seven-digit mode: no warning. The hero note
             # above the reading already explains the eighth digit.
+            tone, icon, incident = "ok", "✓", ""
             heading = ("All good. The 8th digit is still being confirmed." if language == "en"
                        else "Alles OK. Die 8. Ziffer wird noch abgesichert.")
             detail = ""

@@ -1687,9 +1687,11 @@ def main():
                            "Einrichtung erforderlich: Lege zuerst die Bildquelle fest." if setup_pending else
                            "App läuft. Wartet auf die nächste automatische Prüfung.")}
 
-    def set_activity(state, detail, *, completed=None, total=None, reading=None, candidates=None):
+    def set_activity(state, detail, *, completed=None, total=None, reading=None, candidates=None, readings=None):
+        # readings: every attempt of the running check, for the per-digit table under "Prüfdetails".
         activity.update(state=state, detail=detail, updated_at=time.time(), completed=completed, total=total,
-                        reading=reading, candidates=candidates)
+                        reading=reading, candidates=candidates,
+                        readings=[str(value) for value in readings][-12:] if readings else None)
 
     def ready_for_automatic(rules, source):
         if setup_pending and history.get("statistics_preserved_after_reset"):
@@ -3091,7 +3093,8 @@ def main():
                                 current_attempt = attempts + 1 if running else attempts
                                 set_activity("working", f"Zählerbild wird gelesen · Versuch {current_attempt} von {ocr_limit}",
                                              completed=attempts, total=ocr_limit,
-                                             reading=ocr_readings[-1] if ocr_readings else None)
+                                             reading=ocr_readings[-1] if ocr_readings else None,
+                                             readings=ocr_readings)
                         require_consensus = (raw_fallback and not manual_reference) or (standalone and not manual)
                         configured_attempts = manual_options["attempts"] if manual else max_attempts
                         if require_consensus:
@@ -3379,7 +3382,8 @@ def main():
                                         )
                                         set_activity("working", "Nachprüfung: Dieselben Ziffern waren wiederholt unklar.",
                                                      completed=ocr_attempts, total=ocr_limit,
-                                                     reading=ocr_readings[-1] if ocr_readings else None)
+                                                     reading=ocr_readings[-1] if ocr_readings else None,
+                                                     readings=ocr_readings)
                                         values = [read_layout(trial, profile) for profile in OCR_PROFILES[:2]]
                                         ocr_attempts += len(values)
                                         prefix = meter_prefix(values[0], comparison_decimals, integer_digits)

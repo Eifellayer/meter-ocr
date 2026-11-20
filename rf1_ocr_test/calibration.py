@@ -866,8 +866,13 @@ class Calibration:
                 "background": self.background, "purpose": self.purpose,
                 "coarse_attempts": self.coarse_attempts, "coarse_limit": COARSE_LIMIT,
                 "shortlist": [score[0] for score in self.shortlist.values() if len(score) == 3],
-                "candidates": [{"percent": score[0], "reading": self.candidate_readings.get(layout, "")}
-                               for layout, score in self.shortlist.items() if len(score) == 3],
+                "candidates": [{"number": number, "percent": score[0],
+                                "reading": self.candidate_readings.get(layout, ""),
+                                "rotation": layout.rotation, "box": list(layout.box),
+                                "selected": layout == self.candidate}
+                               for number, (layout, score) in enumerate(
+                                   ((item, value) for item, value in self.shortlist.items() if len(value) == 3),
+                                   start=1)],
                 "candidate_agreement": selected_score[0] if len(selected_score) == 3 else None,
                 "seconds": max(0, ceil(self.remaining(now)))}
 

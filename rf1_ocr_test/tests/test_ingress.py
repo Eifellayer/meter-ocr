@@ -1068,14 +1068,14 @@ class BrowserTests(IngressFixture):
             page.goto(self.base + "?ui=settings")
             self.assertEqual("true", page.locator("#tab-settings").get_attribute("aria-selected"))
             page.locator("#calibration-start").click()
-            page.locator("#calibration-overview .setup-phase").wait_for(state="visible")
+            page.locator("#calibration-overview .setup-timeline-box").wait_for(state="visible")
             self.assertEqual("true", page.locator("#tab-overview").get_attribute("aria-selected"))
             self.assertIn("saved=calibration", page.url)
             self.assertIn("ui=overview", page.url)
             self.assertFalse(page.locator(".activity-status").is_visible())
             self.calibration.update(state="testing", stage="search", seconds=880)
-            page.locator("#calibration-overview .setup-current-step").filter(
-                has_text="Ziffernreihe finden").wait_for()
+            page.locator('#calibration-overview .setup-timeline li[data-state="current"]').filter(
+                has_text="Zählwerk finden").wait_for()
             self.assertTrue(page.locator("#calibration-overview-progress").is_visible())
             self.assertTrue(page.locator("#calibration-open-region").is_visible())
 
@@ -1089,7 +1089,7 @@ class BrowserTests(IngressFixture):
                 has_text="sucht die App noch die dritte Nachkommastelle").wait_for()
             self.assertEqual("true", page.locator("#tab-overview").get_attribute("aria-selected"))
             self.assertTrue(page.locator(".activity-status").is_visible())
-            for selector in (".setup-phase", ".calibration-candidate-panel",
+            for selector in (".setup-timeline-box", ".calibration-candidate-panel",
                              ".calibration-photo-panel", "#calibration-open-region",
                              "#calibration-overview-progress", ".calibration-skip"):
                 self.assertFalse(page.locator("#calibration-overview " + selector).is_visible(),
@@ -1103,6 +1103,59 @@ class BrowserTests(IngressFixture):
             self.assertTrue(page.locator(".activity-status").is_visible())
             self.calibration.update(state="saved", background=False)
             page.locator("#calibration-overview").wait_for(state="hidden")
+            browser.close()
+
+    def test_setup_progress_timeline_ticks_off_steps_from_one_progress_state(self):
+        from playwright.sync_api import sync_playwright
+
+        self.setup_pending = False
+        self.source_selected = True
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(executable_path=os.getenv("RF1_CHROMIUM"))
+            for width, language in ((390, "de"), (1200, "en")):
+                page = browser.new_page(viewport={"width": width, "height": 900},
+                                        locale="de-DE" if language == "de" else "en-GB",
+                                        reduced_motion="reduce")
+                page.set_default_timeout(7000)
+                self.control_calibration("setup", 20)
+                self.calibration.update(simplified=True)
+                page.goto(self.base + f"?ui=overview&lang={language}")
+                timeline = page.locator("#calibration-overview .setup-timeline")
+                timeline.locator('li[data-state="current"]').first.wait_for()
+                self.assertEqual(6, timeline.locator("li").count())
+                self.assertEqual("image", timeline.locator('li[data-state="current"]').get_attribute("data-step"))
+                self.assertEqual("optional", timeline.locator('li[data-step="background"]').get_attribute("data-state"))
+                self.calibration.update(
+                    state="testing", stage="ocr", tested=2, attempts=7, variant=2, rotation=-13,
+                    confirmations=1, seconds=700,
+                    candidates=[{"number": 1, "percent": 62, "reading": "1049?.3?", "rotation": -12,
+                                 "box": [1, 2, 3, 4], "selected": False},
+                                {"number": 2, "percent": 88, "reading": "10491.33?", "rotation": -13,
+                                 "box": [5, 6, 7, 8], "selected": True}])
+                current = timeline.locator('li[data-state="current"]')
+                current.filter(has_text="(1/3)").wait_for()
+                self.assertEqual("confirm", current.get_attribute("data-step"))
+                self.assertEqual(3, timeline.locator('li[data-state="done"]').count())
+                detail = current.locator(".setup-step-detail").inner_text()
+                expected = ("Rahmen 2 von 2", "Drehung −13°", "1 von 3 Bestätigungen") if language == "de" else (
+                    "Frame 2 of 2", "Rotation −13°", "1 of 3 confirmations")
+                for part in expected:
+                    self.assertIn(part, detail)
+                heading = page.locator("#setup-timeline-title").inner_text()
+                self.assertEqual("So weit ist die Einrichtung" if language == "de" else "Setup progress", heading)
+                stats = page.locator("#calibration-overview .setup-timeline-stats").inner_text()
+                self.assertIn("88 %", stats)
+                candidates = page.locator("#calibration-overview .calibration-candidates li")
+                self.assertEqual(2, candidates.count())
+                self.assertTrue(page.locator("#calibration-overview .calibration-candidate-panel").is_visible())
+                self.assertEqual("true", candidates.nth(1).get_attribute("data-selected"))
+                self.assertIn("−13°", candidates.nth(1).inner_text())
+                overflow = page.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth")
+                self.assertLessEqual(overflow, 0)
+                page.screenshot(path=f"/tmp/setup-timeline-{width}-{language}.png", full_page=True)
+                self.calibration.update(state="saved")
+                page.locator("#calibration-overview").wait_for(state="hidden")
+                page.close()
             browser.close()
 
     def test_fine_verification_skip_shows_an_accuracy_warning_before_saving(self):
@@ -1257,14 +1310,16 @@ class BrowserTests(IngressFixture):
             page.locator('#setup-form button[type="submit"]').click()
             page.get_by_text("Einrichtung gespeichert.", exact=True).wait_for()
             self.assertEqual("true", page.locator("#tab-overview").get_attribute("aria-selected"))
-            page.locator("#calibration-overview .setup-phase").wait_for(state="visible")
+            page.locator("#calibration-overview .setup-timeline-box").wait_for(state="visible")
             self.assertEqual(18, self.calibration["limit"])
             self.assertTrue(self.rules["reflection_estimate_enabled"])
             self.assertEqual("12345,67", self.rules["fallback_value"])
             self.calibration.update(state="testing", stage="ocr", rotation=-6, variant=2, seconds=880)
             page.locator("#calibration-overview-state").filter(has_text="Rahmen 2 wird mit Drehung -6° geprüft").wait_for()
-            page.locator("#calibration-overview .setup-current-step").filter(has_text="Ziffernreihe finden").wait_for()
-            page.locator("#calibration-overview .setup-next-step").filter(has_text="Rahmen und Drehung prüfen").wait_for()
+            page.locator('#calibration-overview .setup-timeline li[data-state="current"]').filter(
+                has_text="Rahmen und Drehung prüfen").wait_for()
+            self.assertIn("Drehung −6°", page.locator(
+                '#calibration-overview .setup-timeline li[data-state="current"] .setup-step-detail').inner_text())
             self.assertEqual("20", page.locator("#calibration-overview-progress").get_attribute("value"))
             page.locator("#calibration-overview-progress").wait_for(state="visible")
             self.assertEqual("20", page.locator("#calibration-overview-progress").get_attribute("value"))
@@ -1408,11 +1463,21 @@ class BrowserTests(IngressFixture):
             page.wait_for_function("document.querySelector('.activity-status').dataset.offline === 'false'")
             Image.new("RGB", (200, 45), "white").save(self.automatic_preview, "JPEG")
             self.activity = {"state": "working", "detail": "Zählerbild wird gelesen · Versuch 3 von 5",
-                             "completed": 2, "total": 5, "reading": "12345.6??"}
+                             "completed": 2, "total": 5, "reading": "12345.6??",
+                             "readings": ["12345.6?7", "12348.6??"]}
             page.get_by_text("Zählerbild wird gelesen · Versuch 3 von 5", exact=True).wait_for()
             details = page.locator("#automatic-activity-details")
-            self.assertIsNone(details.get_attribute("open"))
-            details.locator("summary").click()
+            # Open by default while a check runs (0.3.0), with one row per attempt and a result row.
+            self.assertTrue(details.evaluate("element => element.open"))
+            grid = details.locator("#automatic-digit-grid")
+            grid.wait_for(state="visible")
+            self.assertEqual(3, grid.locator("tbody tr").count())
+            result = grid.locator("tr.digit-result td")
+            self.assertEqual(8, result.count())
+            self.assertEqual("ok", result.nth(0).get_attribute("data-tone"))
+            self.assertEqual("warn", result.nth(4).get_attribute("data-tone"))
+            self.assertEqual("bad", result.nth(6).get_attribute("data-tone"))
+            self.assertEqual("true", result.nth(7).get_attribute("data-uncompared"))
             details.get_by_text("Versuche abgeschlossen: 2 von 5", exact=True).wait_for()
             details.get_by_text("Zuletzt gelesen (noch unbestätigt): 12345.6??", exact=True).wait_for()
             page.wait_for_function("document.querySelector('#automatic-progress').value === 2")

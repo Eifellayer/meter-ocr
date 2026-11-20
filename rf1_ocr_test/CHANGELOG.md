@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.9
+
+- **Bilder ohne Blitz erkennen und neu aufnehmen:** Die App merkt sich, wie hell Bilder mit Blitz normalerweise sind. Ist ein Bild deutlich dunkler (Licht noch nicht an oder kurz vorher von außen ausgeschaltet, z. B. durch einen „Blitz dauerhaft an“-Schalter am ESP), schaltet sie das Licht ein, wartet und nimmt sofort ein neues Bild. So wird aus einem dunklen Bild keine Fehlprüfung („1????.???“) mehr. Das gilt für Prüfungen, Einrichtung und Vorschau.
+- **Funktionierender Rahmen bleibt Ausgangspunkt:** Jede mit einem zweiten Bild bestätigte Prüfung merkt sich den Rahmen als „bewährt“. Wird die Einrichtung erneut gestartet (auch über den Assistenten), prüft sie diesen Rahmen zuerst, statt bei null zu beginnen. Bisher geschah das nur nach bestimmten Einrichtungen, darum begann die Einrichtung heute früh wieder mit „Ziffernreihe finden“.
+- **Debug-Protokoll:** Jeder Start einer Einrichtung oder Hintergrundsuche wird mit Auslöser protokolliert (`setup_start`: Nutzer, Update, Wiederholung, Selbstreparatur, 8. Ziffer, Rahmen-Nachsuche), dunkle Bilder als `dark_picture`.
 ## 0.2.8
 
 - **Neu-suchen-Knopf auf dem Handy wieder klein:** Im Einrichtungsassistenten zog eine Regel für schmale Bildschirme den Knopf ↻ neben „In Home Assistant gefunden“ auf volle Breite; die Auswahlliste war kaum noch zu sehen. Der Knopf ist jetzt immer 44 × 44 px groß, die Liste nutzt den Rest der Zeile.

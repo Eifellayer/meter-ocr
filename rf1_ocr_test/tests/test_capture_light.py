@@ -122,3 +122,83 @@ class CameraLightTest(unittest.TestCase):
     def test_garbage_answer_means_no_light(self):
         from run import camera_light
         self.assertEqual("", camera_light("camera.x", "t", post=lambda u, t, p: b"<html>", now=lambda: 0))
+
+
+def grey_jpeg(value):
+    import io
+    from PIL import Image
+    buffer = io.BytesIO()
+    Image.new("L", (80, 60), value).save(buffer, "JPEG")
+    return buffer.getvalue()
+
+
+class DarkPictureTest(unittest.TestCase):
+    """A picture taken without (or with a fading) light is retaken with the light on."""
+
+    def setUp(self):
+        import run
+        self.run = run
+        run.LIT_BRIGHTNESS.clear()
+
+    def tearDown(self):
+        self.run.LIT_BRIGHTNESS.clear()
+
+    def calls_for(self, pictures, states):
+        calls = []
+        states = list(states)
+
+        def fetch(url, token, timeout=8):
+            calls.append(("get", ""))
+            return json.dumps({"state": states.pop(0) if states else "off"}).encode()
+
+        def post(url, token, payload):
+            calls.append(("post", url.rsplit("/", 1)[-1]))
+
+        def take():
+            calls.append(("take", ""))
+            return pictures.pop(0)
+
+        return calls, fetch, post, take
+
+    def test_first_lit_picture_sets_the_reference(self):
+        calls, fetch, post, take = self.calls_for([grey_jpeg(90)], ["off"])
+        lit_picture("light.blitz", take, "t", fetch=fetch, post=post, sleep=lambda _: None)
+        self.assertAlmostEqual(90, self.run.LIT_BRIGHTNESS["light.blitz"], delta=2)
+
+    def test_dark_picture_is_retaken_with_light(self):
+        self.run.LIT_BRIGHTNESS["light.blitz"] = 85
+        bright = grey_jpeg(85)
+        calls, fetch, post, take = self.calls_for([grey_jpeg(48), bright], ["off"])
+        picture = lit_picture("light.blitz", take, "t", fetch=fetch, post=post, sleep=lambda _: None)
+        self.assertEqual(bright, picture)
+        self.assertEqual(2, calls.count(("take", "")))
+        self.assertEqual(2, calls.count(("post", "turn_on")))
+        self.assertIn(("post", "turn_off"), calls)
+
+    def test_light_switched_off_by_someone_else_is_switched_on_and_off_again(self):
+        # The ESP's "keep flash on" switch ended right before the picture.
+        self.run.LIT_BRIGHTNESS["light.blitz"] = 85
+        bright = grey_jpeg(85)
+        calls, fetch, post, take = self.calls_for([grey_jpeg(48), bright], ["on", "off"])
+        picture = lit_picture("light.blitz", take, "t", fetch=fetch, post=post, sleep=lambda _: None)
+        self.assertEqual(bright, picture)
+        self.assertIn(("post", "turn_on"), calls)
+        self.assertIn(("post", "turn_off"), calls)
+
+    def test_light_that_really_stays_on_is_not_switched_off(self):
+        self.run.LIT_BRIGHTNESS["light.blitz"] = 85
+        calls, fetch, post, take = self.calls_for([grey_jpeg(48), grey_jpeg(84)], ["on", "on"])
+        lit_picture("light.blitz", take, "t", fetch=fetch, post=post, sleep=lambda _: None)
+        self.assertNotIn(("post", "turn_off"), calls)
+
+    def test_dark_pictures_do_not_lower_the_reference(self):
+        self.run.LIT_BRIGHTNESS["light.blitz"] = 85
+        calls, fetch, post, take = self.calls_for([grey_jpeg(40), grey_jpeg(42)], ["off"])
+        lit_picture("light.blitz", take, "t", fetch=fetch, post=post, sleep=lambda _: None)
+        self.assertEqual(85, self.run.LIT_BRIGHTNESS["light.blitz"])
+
+    def test_normal_lit_picture_is_taken_once(self):
+        self.run.LIT_BRIGHTNESS["light.blitz"] = 85
+        calls, fetch, post, take = self.calls_for([grey_jpeg(80)], ["off"])
+        lit_picture("light.blitz", take, "t", fetch=fetch, post=post, sleep=lambda _: None)
+        self.assertEqual(1, calls.count(("take", "")))

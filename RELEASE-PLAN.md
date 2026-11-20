@@ -120,6 +120,7 @@ Zwischenschritte (je eigene Versionen, vorher in diesem Plan konkretisieren): Me
 
 ## Später
 
+- **Feintuning nach der Einrichtungs-Reparatur (Stefan 20.11., 16:00):** Fast gleiche Kandidaten zusammenfassen und schneller bestätigen. Beispiel 0.3.0 nach 10:15 min: vier Rahmen, alle 88 %, −12°/−13°, fast gleiche Lage, Lesungen 10492.22?/25?/17?/16? – die App bestätigt sie einzeln nacheinander. Ziel: Rahmen mit ≥ 80 % Überlappung und ±1–2° Drehung zu einem Kandidaten zusammenfassen; Treffer an derselben Stelle bzw. beim selben Winkel zählen als Bestätigung; Kandidatenliste zeigt „4 ähnliche Rahmen zusammengefasst“.
 - Mehrere Zähler mit eigener Quelle, eigenen Rahmen und eigener Historie.
 - Hallsensor / Impulszähler über ESPHome als Kontrollquelle.
 - Einzelziffern-Klassifikator als Machbarkeitsstudie gegen Tesseract.

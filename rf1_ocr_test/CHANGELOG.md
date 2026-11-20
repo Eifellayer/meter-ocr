@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.2.2
+
+- **Blitzreflex nie als Ziffer lesen:** Die erste Automatik nach der Einrichtung zeigte, dass die Texterkennung in der überstrahlten Stelle eine 7 oder 5 „erfindet“. Eine Stelle unter dem Reflex wird jetzt gar nicht mehr gelesen und nur aus dem letzten bekannten Stand ergänzt. Der Reflex wird zusätzlich auch bei eng gezeichneten Ziffernrahmen erkannt.
 ## 0.2.1
 
 - **Unscharfe Ziffern lesen (Härtetest mit absichtlich unscharfer, schräger Kamera und Blitzreflex):** Neben der Texterkennung vergleicht die App jede Ziffer mit unscharf gerechneten Ziffernvorlagen. Liest Tesseract eine Stelle nicht, übernimmt die App die Vorlage nur bei klarem Abstand zur zweitbesten Ziffer; widerspricht die Vorlage einer gelesenen Ziffer deutlich, bleibt die Stelle offen. An den Kamerabildern des Härtetests werden die 0 und die 8 jetzt gelesen, die vorher nie erkannt wurden.

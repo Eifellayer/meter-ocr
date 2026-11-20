@@ -59,6 +59,27 @@ class TemplateTests(unittest.TestCase):
         self.assertEqual(glyph_match.digit_scores(Image.new("RGB", (4, 8))), {})
 
 
+class WashedOutTests(unittest.TestCase):
+    def register(self, bright_index=None, background=40):
+        image = Image.new("RGB", (300, 60), (background,) * 3)
+        draw = ImageDraw.Draw(image)
+        for index in range(6):
+            draw.rectangle((index * 50 + 18, 15, index * 50 + 30, 45), fill=(150, 150, 150))
+        if bright_index is not None:
+            draw.rectangle((bright_index * 50, 0, bright_index * 50 + 49, 59), fill=(255, 255, 250))
+        return image, [(index * 50 + 5, 5, index * 50 + 45, 55) for index in range(6)]
+
+    def test_reflection_frame_found(self):
+        image, boxes = self.register(2)
+        self.assertEqual(glyph_match.washed_out(image, boxes), [2])
+
+    def test_no_reflection_no_frame(self):
+        image, boxes = self.register()
+        self.assertEqual(glyph_match.washed_out(image, boxes), [])
+        light, boxes = self.register(background=230)
+        self.assertEqual(glyph_match.washed_out(light, boxes), [])
+
+
 class CombineTests(unittest.TestCase):
     def test_tesseract_digit_kept_without_clear_conflict(self):
         self.assertEqual(glyph_match.combine("6", {"6": .70, "8": .69}), "6")
@@ -126,6 +147,32 @@ class BlurredCameraStripTests(unittest.TestCase):
             with self.subTest(name=name):
                 # Last confirmed reading 10483.335 nine hours earlier, maximum flow 6 m³/h.
                 self.assertEqual(self.read(name, (10483, 10537)), expected)
+
+    def test_reflection_frame_is_never_read(self):
+        import run
+        from checks import OCR_PROFILES
+
+        _, boxes = STRIPS["esphome_blur_strip_0107.png"]
+        with Image.open(FIXTURES / "esphome_blur_strip_0107.png") as image:
+            register = image.convert("RGB")
+        calls = []
+
+        def invent_seven(picture, light, digits, **kwargs):
+            calls.append(picture.size)
+            return "7" if digits == 1 else None
+
+        value = run.read_visible_digits(
+            register, boxes[5][0], boxes[:5], boxes[5:], True, "auto", profile=OCR_PROFILES[0],
+            whole_digits=5, fraction_digits=2, prefer_boxes=True, recognize=invent_seven,
+        )
+        # The washed-out third frame is skipped instead of trusting an invented 7.
+        self.assertEqual(value[2], "?")
+        self.assertEqual(len(calls), 6)
+        filled = run.read_visible_digits(
+            register, boxes[5][0], boxes[:5], boxes[5:], True, "auto", profile=OCR_PROFILES[0],
+            whole_digits=5, fraction_digits=2, prefer_boxes=True, whole_range=(10486, 10487),
+        )
+        self.assertEqual(filled, "10486.84")
 
     def test_strips_without_known_reading_never_show_a_wrong_digit(self):
         for name, (expected, _) in STRIPS.items():

@@ -722,6 +722,42 @@ class CalibrationTests(TestCase):
         self.assertEqual(["position_error"], reasons)
         self.assertEqual(0, self.job.confirmations)
 
+    def test_no_quarter_turn_when_an_upright_candidate_reads_most_digits(self):
+        # Camera without reference (Stefan 20.11., 18:46): "10493.3??" at −12° is clearly the
+        # register; ±90°/180° must not be searched just because the last roller was turning.
+        sample = {"reference_required": False}
+        image = frame(1)
+        self.job.examine(image, None, sample, 100, RULES, lambda layout, profile: "1049?", lambda: False)
+        self.rotated_candidates.assert_not_called()
+
+    def test_search_angles_reach_fourteen_degrees_without_right_angles(self):
+        self.assertIn(-14, calibration.ANGLES)
+        self.assertIn(20, calibration.ANGLES)
+        self.assertFalse({90, -90, 180} & set(calibration.ANGLES))
+        self.assertTrue(calibration.meter_like(["10493.3??"]))
+        self.assertFalse(calibration.meter_like(["??3??.???"]))
+
+    def test_search_continues_around_the_best_angle_in_one_degree_steps(self):
+        seen = []
+
+        def rows(image, whole, fraction, limit=4):
+            seen.append(image.info.get("angle"))
+            return []
+
+        original = calibration.turn_crop
+
+        def turned(image, angle, expand=True):
+            result = original(image, angle, expand=expand)
+            result.info["angle"] = angle
+            return result
+
+        current = Layout((0, 0, 60, 20), -12, 40)
+        with patch.object(calibration, "find_raw_digit_rows", side_effect=rows), \
+                patch.object(calibration, "turn_crop", side_effect=turned):
+            list(layouts(frame(1), None, RULES, 3, current))
+        self.assertIn(-13, seen)
+        self.assertIn(-14, seen)
+
     def test_first_photo_tries_a_quarter_turn_after_an_unreliable_candidate(self):
         sample = {"reference_time": 100, "actual_value": "12345", "raw_value": "12345"}
         rotated = Layout((0, 0, 20, 30), 90, 30)

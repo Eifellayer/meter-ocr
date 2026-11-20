@@ -31,7 +31,11 @@ INTENSIVE_VERIFICATION_SECONDS = 4 * 60
 CAPTURE_INTERVAL = 5
 PERFECT_CONFIRMATION_INTERVAL = 12
 LAST_DIGIT_CAPTURE_INTERVAL = 2
-ANGLES = (-3, 3, -1, 1, -2, 2, -4, 4, -6, 6, -9, 9, -12, 12, -18, 18, 90, -90, 180)
+# Fine grid up to ±20° (no jump from 12° to 18°). Right angles are no longer part of the
+# regular rotation: quarter turns are only tried when nothing with the right digit count
+# was found (quarter_turn_layouts, Stefan 20.11., 18:46).
+ANGLES = (-3, 3, -1, 1, -2, 2, -4, 4, -6, 6, -9, 9, -12, 12, -14, 14, -16, 16, -18, 18, -20, 20)
+SEARCH_ANGLE_LIMIT = 20
 SMALL_ANGLES = (0, -1, 1, -2, 2, -3, 3)
 MAX_LAYOUTS_PER_IMAGE = 5
 COARSE_LIMIT = 50
@@ -270,6 +274,12 @@ def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False
     raw_limit = neighbour_limit - 1
     angles = (0,) if upright else (
         SMALL_ANGLES if offset == 0 else (0, ANGLES[first], ANGLES[(first + 1) % len(ANGLES)]))
+    if not upright and current is not None and abs(current.rotation) <= SEARCH_ANGLE_LIMIT:
+        # Search around the angle that already read best, in 1° steps (e.g. −12° → −13°, −14°).
+        center = round(current.rotation)
+        nearby = [center + step for step in (0, -1, 1, -2, 2)
+                  if abs(center + step) <= SEARCH_ANGLE_LIMIT and center + step not in angles]
+        angles = tuple(angles) + tuple(nearby)
     if len(emitted) < raw_limit:
         ranked = []
         for angle in angles:
@@ -284,7 +294,7 @@ def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False
             yield glyph_window
         windows = []
         for angle in angles:
-            if abs(angle) > 12:
+            if abs(angle) > SEARCH_ANGLE_LIMIT:
                 continue
             window = find_dark_strip(turn_crop(frame, angle, expand=False), whole + fraction)
             if window and (not ranked or window[2] - window[0] > 1.25 * (ranked[0][3][2] - ranked[0][3][0])):
@@ -546,6 +556,14 @@ def penultimate_issue(readings, sample, whole):
             if unaffected == target[:slot] + target[slot + 1:] and rows[0][slot] != target[slot]:
                 return slot, unaffected
     return None
+
+
+def meter_like(readings, minimum=5):
+    """Did an upright candidate already read most of a register (e.g. "10493.3??")?
+
+    Then the picture is not turned by a right angle and quarter turns are not searched.
+    """
+    return any(sum(char.isdigit() for char in str(value)) >= minimum for value in readings)
 
 
 def skip_small_labels(candidates):
@@ -1339,7 +1357,10 @@ class Calibration:
                         yield known
                 yield from skip_small_labels(list(detect(len(self.seen) - 1, seed, on_regions)))
                 if (len(self.seen) == 1 and not self.automatic and not self.intensive
-                        and not stop() and not any(reliable(score) for score, _, _ in coarse)):
+                        and not stop() and not any(reliable(score) for score, _, _ in coarse)
+                        and (has_reference or not any(
+                            meter_like(readings, max(4, digits + rules["fraction_digits"] - 3))
+                            for _, _, readings in coarse))):
                     # Search the complete photo at right angles before asking for another image.
                     yield from quarter_turn_layouts(frame, rules, self.region)
 

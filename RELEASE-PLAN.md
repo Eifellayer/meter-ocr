@@ -148,3 +148,17 @@ Zwischenschritte (je eigene Versionen, vorher in diesem Plan konkretisieren): Me
 - Nur Stable-Releases; jede Änderung über Branch, Pull Request und grüne Prüftests.
 - Roadmap und Zwischenstände werden vor jedem größeren Schritt gesichert.
 - Erledigtes steht im [Changelog](rf1_ocr_test/CHANGELOG.md), die Zeit vor 0.1.0 im [Rückblick](docs/HISTORY.md).
+
+## Modul-Umbau (0.6.0, Stück für Stück, ab Do 26.11. 06:00)
+
+Ziel: Änderungen berühren nur das betroffene Modul und dessen Tests, die volle Suite läuft nur vor einem Release.
+
+| Schritt | Inhalt | Fertig, wenn … |
+| --- | --- | --- |
+| 1 | Statusanzeige aus `panel.py` in ein eigenes Modul `status_view.py` auslagern (reine Funktion: Prüfergebnis → Ton, Überschrift, Text) | Alle bisherigen Statustexte identisch, eigene Tests für das Modul laufen ohne `panel.py` in unter 10 s |
+| 2 | Setup-Assistent (Wizard-Schritte) als eigenes Modul | Wizard-Tests laufen einzeln, `panel.py` nur noch Oberfläche |
+| 3 | Prüfschleife in `run.py` nach Aufgaben trennen (Prüfung, Optimierung, Verbrauch, HA-Anbindung) | Jede Aufgabe hat eigene Tests |
+| 4 | Feste Datenform für Prüfung und Einstellungen (JSON mit Schema statt verstreuter Schlüssel) | Ein Schema-Test je Datei |
+| 5 | Texte für Statuswerte zentral in `i18n.py`, nicht mehr über Textvergleiche | Keine Textvergleiche mehr in `panel.py` und `run.py` |
+
+Regeln: keine Funktionsänderung in denselben Commits wie ein Umbau; Schritt 1 nur, wenn kein Sparbetrieb-Hinweis einen Release verbietet.

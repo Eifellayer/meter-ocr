@@ -48,7 +48,7 @@ from calibration import (Calibration, Layout, CAPTURE_INTERVAL, PERFECT_CONFIRMA
                          DEFAULT_INTENSIVE_AGREEMENT, SHORTLIST_LIMIT, TIME_LIMIT, LAST_DIGIT_CAPTURE_INTERVAL,
                          image_quality_hints, two_decimal_reading, uncertain_slots, valid_intensive_agreement)
 from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, LOWER_PENDING, LOWER_RECOVERED, MAX_FLOW_LPH,
-                         CALORIFIC_RANGE, CONVERSION_RANGE, STATE_FACTOR_RANGE, ImplausibleReading, energy_kwh, track_lower_series,
+                         CALORIFIC_RANGE, CONVERSION_RANGE, STATE_FACTOR_RANGE, ImplausibleReading, energy_kwh, plausible_lower_drop, track_lower_series,
                          valid_energy_factor,
                          accumulate_consumption, fallback_detail, format_cubic_metres, record_consumption_sample)
 from checks import (without_light, unclear_trailing_decimals, setup_tilt, initial_skew_state, FRAME_OFF_NOTICE, FRAME_OFF_STREAK, FRAME_OFF_WAIT_NOTICE, MOVING_DIGIT_NOTICE,
@@ -1110,6 +1110,23 @@ def last_verified_configured_geometry(history, rules, source_key):
     return None
 
 
+def usable_known_good_geometry(saved, scopes, digits):
+    """The remembered frame if it fits this camera and digit count, else None.
+
+    A file from 0.2.9 or older ("camera" missing) was keyed on settings that do not move
+    the digits (source mode, reference sensor, display style). It is still offered as the
+    starting point when the digit count matches; the setup checks it on fresh images
+    before anything is saved (20.11.).
+    """
+    if not isinstance(saved, dict) or not isinstance(saved.get("geometry"), dict):
+        return None
+    if saved.get("scope") in scopes:
+        return saved["geometry"]
+    if "camera" not in saved and len(saved["geometry"].get("digit_boxes") or ()) == digits:
+        return saved["geometry"]
+    return None
+
+
 def calibration_source_id(source):
     return hashlib.sha256(json.dumps(without_light(source), sort_keys=True).encode()).hexdigest()
 
@@ -1760,16 +1777,20 @@ def main():
     def load_known_good_layout(rules, source):
         try:
             saved = json.loads(known_good_geometry_path.read_text(encoding="utf-8"))
-            if saved["scope"] in (known_good_scope(rules, source), legacy_known_good_scope(rules, source)):
-                return geometry_layout(saved["geometry"], rules)
-        except (OSError, ValueError, TypeError, KeyError):
+            geometry = usable_known_good_geometry(
+                saved, (known_good_scope(rules, source), legacy_known_good_scope(rules, source)),
+                rules["integer_digits"] + rules["fraction_digits"])
+            if geometry is not None:
+                return geometry_layout(geometry, rules)
+        except (OSError, ValueError, TypeError, KeyError, AttributeError):
             pass
         return None
 
     def remember_known_good_layout(rules, source, layout):
         if layout == load_known_good_layout(rules, source):
             return
-        saved = {"scope": known_good_scope(rules, source), "geometry": layout.settings()}
+        camera = source.get("camera") or str(source.get("url") or "").rstrip("/")
+        saved = {"scope": known_good_scope(rules, source), "camera": camera, "geometry": layout.settings()}
         try:
             atomic_write(known_good_geometry_path, json.dumps(saved).encode(), 0o600)
         except OSError:
@@ -3598,7 +3619,10 @@ def main():
                                             new_standalone = new_consumption = None
                                 except ImplausibleReading as error:
                                     if (str(error) == LOWER_READING and not allow_lower and not raw_fallback
-                                            and not accept_reference and captured is not None):
+                                            and not accept_reference and captured is not None
+                                            and plausible_lower_drop(history.get("consumption"), captured, ocr,
+                                                                     decimals, active_rules["max_flow_lph"],
+                                                                     integer_digits)):
                                         lower_series, lower_confirmed = track_lower_series(
                                             history.get("lower_series"), captured, ocr, decimals,
                                             active_rules["max_flow_lph"], integer_digits,

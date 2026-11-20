@@ -1411,6 +1411,7 @@ class StateTests(TestCase):
         self.assertNotIn("standalone_candidate", started)
         saved = json.loads(files["HISTORY"].with_name("known-good-geometry.json").read_text())
         self.assertEqual("0,0,500,100", saved["geometry"]["crop"])
+        self.assertIn("camera", saved)
         self.assertEqual("standalone_pending", check("12346.???")["check_status"])
         failed = check("12345.???")
         self.assertEqual("ocr_unclear", failed["check_status"])

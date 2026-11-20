@@ -48,7 +48,7 @@ from calibration import (Calibration, Layout, CAPTURE_INTERVAL, PERFECT_CONFIRMA
                          DEFAULT_INTENSIVE_AGREEMENT, SHORTLIST_LIMIT, TIME_LIMIT, LAST_DIGIT_CAPTURE_INTERVAL,
                          image_quality_hints, two_decimal_reading, uncertain_slots, valid_intensive_agreement)
 from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, LOWER_PENDING, LOWER_RECOVERED, MAX_FLOW_LPH,
-                         CALORIFIC_RANGE, CONVERSION_RANGE, STATE_FACTOR_RANGE, ImplausibleReading, energy_kwh, track_lower_series,
+                         CALORIFIC_RANGE, CONVERSION_RANGE, STATE_FACTOR_RANGE, ImplausibleReading, energy_kwh, plausible_lower_drop, track_lower_series,
                          valid_energy_factor,
                          accumulate_consumption, fallback_detail, format_cubic_metres, record_consumption_sample)
 from checks import (without_light, unclear_trailing_decimals, setup_tilt, initial_skew_state, FRAME_OFF_NOTICE, FRAME_OFF_STREAK, FRAME_OFF_WAIT_NOTICE, MOVING_DIGIT_NOTICE,
@@ -1110,6 +1110,23 @@ def last_verified_configured_geometry(history, rules, source_key):
     return None
 
 
+def usable_known_good_geometry(saved, scopes, digits):
+    """The remembered frame if it fits this camera and digit count, else None.
+
+    A file from 0.2.9 or older ("camera" missing) was keyed on settings that do not move
+    the digits (source mode, reference sensor, display style). It is still offered as the
+    starting point when the digit count matches; the setup checks it on fresh images
+    before anything is saved (20.11.).
+    """
+    if not isinstance(saved, dict) or not isinstance(saved.get("geometry"), dict):
+        return None
+    if saved.get("scope") in scopes:
+        return saved["geometry"]
+    if "camera" not in saved and len(saved["geometry"].get("digit_boxes") or ()) == digits:
+        return saved["geometry"]
+    return None
+
+
 def calibration_source_id(source):
     return hashlib.sha256(json.dumps(without_light(source), sort_keys=True).encode()).hexdigest()
 
@@ -1332,6 +1349,31 @@ def setup_attempted_before():
         return '"kind": "setup_' in debug_log.read_text(debug_log.MAX_ENTRIES)
     except (OSError, ValueError):
         return False
+
+
+def last_setup_unfinished(text=None):
+    """True if the newest user/update setup ran out of time or failed and nothing read since.
+
+    Then a new version restarts the setup on its own after the update, even though an older
+    frame is still stored (Stefan 20.11.2026: setup timed out, automatic read only "?????.9??").
+    """
+    try:
+        lines = (debug_log.read_text(debug_log.MAX_ENTRIES) if text is None else text).splitlines()
+    except (OSError, ValueError):
+        return False
+    for line in reversed(lines):
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        kind = entry.get("kind")
+        if kind == "automatic" and entry.get("outcome") in SUCCESSFUL_CHECKS:
+            return False
+        if kind == "setup_start" and entry.get("trigger") in ("user", "update", "retry"):
+            return False
+        if kind == "setup_end" and entry.get("purpose") == "setup":
+            return entry.get("state") in ("timeout", "failed")
+    return False
 
 
 def automatic_inputs_ready(rules, source, history, *, legacy_crop=False):
@@ -1760,16 +1802,20 @@ def main():
     def load_known_good_layout(rules, source):
         try:
             saved = json.loads(known_good_geometry_path.read_text(encoding="utf-8"))
-            if saved["scope"] in (known_good_scope(rules, source), legacy_known_good_scope(rules, source)):
-                return geometry_layout(saved["geometry"], rules)
-        except (OSError, ValueError, TypeError, KeyError):
+            geometry = usable_known_good_geometry(
+                saved, (known_good_scope(rules, source), legacy_known_good_scope(rules, source)),
+                rules["integer_digits"] + rules["fraction_digits"])
+            if geometry is not None:
+                return geometry_layout(geometry, rules)
+        except (OSError, ValueError, TypeError, KeyError, AttributeError):
             pass
         return None
 
     def remember_known_good_layout(rules, source, layout):
         if layout == load_known_good_layout(rules, source):
             return
-        saved = {"scope": known_good_scope(rules, source), "geometry": layout.settings()}
+        camera = source.get("camera") or str(source.get("url") or "").rstrip("/")
+        saved = {"scope": known_good_scope(rules, source), "camera": camera, "geometry": layout.settings()}
         try:
             atomic_write(known_good_geometry_path, json.dumps(saved).encode(), 0o600)
         except OSError:
@@ -2709,6 +2755,20 @@ def main():
             wake_worker.wait(timeout=2)
             continue
         setup_retry.update(job=None, count=0)
+        if setup_autostart["pending"] and not manual:
+            setup_autostart["pending"] = False
+            build = setup_autostart["build"]
+            if setup_autostart_due(history, build, calibration, last_setup_unfinished):
+                # The last setup did not finish: a new version tries again on its own.
+                history["setup_autostart_build"] = build
+                try:
+                    atomic_write(HISTORY, json.dumps(history).encode("utf-8"), 0o600)
+                    if control_calibration("setup", DEFAULT_LIMIT, trigger="update"):
+                        print("Neue App-Version: unterbrochene Selbsteinrichtung startet automatisch neu.")
+                        debug_log.record(kind="setup_autostart", build=build, reason="unfinished")
+                        continue
+                except (OSError, ValueError):
+                    print("Selbsteinrichtung konnte nach dem Update nicht automatisch starten.")
         setup_autostart["pending"] = False
         if remaining > 0 and not startup and not manual and not source_changed and not run_automatic_now:
             set_activity("waiting", SEVENTH_DIGIT_WAIT_NOTICE if history.get("seventh_digit_wait") else
@@ -3598,7 +3658,10 @@ def main():
                                             new_standalone = new_consumption = None
                                 except ImplausibleReading as error:
                                     if (str(error) == LOWER_READING and not allow_lower and not raw_fallback
-                                            and not accept_reference and captured is not None):
+                                            and not accept_reference and captured is not None
+                                            and plausible_lower_drop(history.get("consumption"), captured, ocr,
+                                                                     decimals, active_rules["max_flow_lph"],
+                                                                     integer_digits)):
                                         lower_series, lower_confirmed = track_lower_series(
                                             history.get("lower_series"), captured, ocr, decimals,
                                             active_rules["max_flow_lph"], integer_digits,

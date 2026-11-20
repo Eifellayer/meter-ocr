@@ -4,7 +4,7 @@ from bisect import bisect_left, bisect_right
 from datetime import datetime, time, timedelta
 import re
 
-from checks import FALLBACK_NOTICE, meter_prefix
+from checks import FALLBACK_NOTICE, LOWER_PENDING_NOTICE, meter_prefix
 
 DEFAULT_FLOW_LPH = 6_000
 MAX_FLOW_LPH = 999_999_999
@@ -17,7 +17,7 @@ FALLBACK_UNKNOWN_TIME = "Für die Plausibilitätsprüfung fehlt ein gültiger Me
 FALLBACK_UNCLEAR_OCR = "OCR-Stand unsicher."
 LOWER_RECOVERY_READINGS = 3
 LOWER_RECOVERY_SECONDS = 15 * 60
-LOWER_PENDING = "Zählerstand liegt unter dem letzten gültigen Wert. Bestätigen weitere stimmige Ablesungen den niedrigeren Stand, wird er übernommen."
+LOWER_PENDING = LOWER_PENDING_NOTICE
 LOWER_RECOVERED = ("Mehrere stimmige Ablesungen lagen unter dem gespeicherten Stand. Der höhere Wert war ein Lesefehler, "
                    "der Zählerstand wurde korrigiert.")
 
@@ -107,6 +107,29 @@ def track_lower_series(series, stamp, reading, decimals, max_flow_lph, integer_d
     rows = [*rows, [stamp, litres]][-2 * LOWER_RECOVERY_READINGS:]
     confirmed = len(rows) >= LOWER_RECOVERY_READINGS and rows[-1][0] - rows[0][0] >= LOWER_RECOVERY_SECONDS
     return rows, confirmed
+
+
+LOWER_DROP_MIN_LITRES = 2_000
+
+
+def plausible_lower_drop(previous, stamp, reading, decimals, max_flow_lph, integer_digits=5):
+    """Is a reading below the stored value close enough to be a correction of a misread?
+
+    A misread booked shortly before is off by a digit step, not by thousands of cubic
+    metres. A frame shifted by one digit ("04912" instead of "10491") must never be taken
+    as a correction. Allowed: at least 2 m³, or twice the flow limit (at most the
+    default 6 m³/h) over the time since the stored value was taken.
+    """
+    prefix = meter_prefix(reading, decimals, integer_digits)
+    if prefix is None or not isinstance(previous, dict) or type(stamp) not in (int, float):
+        return False
+    stored = max(value for value in (previous.get("reading_litres"), previous.get("anchor_litres"),
+                                     previous.get("pending_litres"), 0) if type(value) is int)
+    stored_at = previous.get("timestamp")
+    hours = max(0.0, stamp - stored_at) / 3600 if type(stored_at) in (int, float) else 0.0
+    flow = min(max_flow_lph, DEFAULT_FLOW_LPH) if max_flow_lph else DEFAULT_FLOW_LPH
+    limit = max(LOWER_DROP_MIN_LITRES, 2 * flow * hours)
+    return 0 < stored - prefix * 10 ** (3 - decimals) <= limit
 
 
 CONFIRM_MIN_SECONDS = 4 * 60

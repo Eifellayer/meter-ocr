@@ -254,6 +254,41 @@ class CalibrationTests(TestCase):
                        101, rules, read, lambda: False)
         self.assertEqual(0, strict.confirmations)
 
+    def test_fine_tuned_frames_of_the_same_register_keep_counting(self):
+        # Stefan 20.11.2026: every image read the right register, but each refined frame
+        # (−12° instead of −13°, box nudged) counted as new: 16 images, 0 confirmations.
+        rules = {**RULES, "decimals": 3, "fraction_digits": 3, "attempts": 3}
+        reference = calibration.two_decimal_reading("12345.239")
+        sample = {"reference_time": 100, "raw_value": reference, "actual_value": reference}
+        frames = [Layout((243, 21, 631, 181), -13, 252, method="register_window"),
+                  Layout((243, 21, 631, 181), -12, 252, method="refined"),
+                  Layout((241, 19, 633, 186), -12, 254, method="refined")]
+        for strict in (False, True):
+            with self.subTest(strict=strict):
+                job = Calibration(5, 0, simplified=True)
+                results = []
+                for index, layout in enumerate(frames, start=1):
+                    self.candidates.return_value = [layout]
+                    with patch.object(calibration, "same_register",
+                                      calibration.similar_layout if strict else calibration.same_register):
+                        results.append(job.examine(Image.new("RGB", (800, 600), (0, 20, index)), None, sample,
+                                                   100 + index, rules, lambda *_: "12345.23?", lambda: False))
+                if strict:  # the 0.3.0 rule counted 1, 1, 1
+                    self.assertLess(job.confirmations, 3)
+                else:
+                    self.assertEqual(3, job.confirmations)
+                    self.assertIsNotNone(results[-1])
+
+    def test_same_register_needs_overlap_turn_and_digit_count(self):
+        from calibration import same_register
+        boxes = tuple((index * 120, 100, index * 120 + 100, 900) for index in range(8))
+        found = Layout((243, 21, 631, 181), -13, 252, boxes, method="register_window")
+        self.assertTrue(same_register(found, Layout((245, 22, 629, 183), -11, 250, boxes, method="refined")))
+        self.assertFalse(same_register(found, Layout((243, 21, 631, 181), -10, 252, boxes, method="refined")))
+        self.assertFalse(same_register(found, Layout((243, 200, 631, 260), -13, 252, boxes, method="refined")))
+        self.assertFalse(same_register(found, Layout((243, 21, 631, 181), -13, 252, boxes[:7], method="refined")))
+        self.assertFalse(same_register(found, None))
+
     def test_changing_layout_cannot_reuse_confirmations(self):
         self.examine(1, 100)
         self.candidates.return_value = [OTHER_LAYOUT]
@@ -585,12 +620,13 @@ class CalibrationTests(TestCase):
                     on_angle=lambda _, angle: angles.append(angle))
         self.assertEqual([-1, 1, -2, 2], angles)
         self.assertEqual(2, job.candidate.rotation)
-        self.assertEqual(1, job.confirmations)
+        # 2° from the first hit is still the same register: the hit counts on (0.3.1).
+        self.assertEqual(2, job.confirmations)
         chosen = job.candidate
         job.examine(frame(2), None, sample, 102, rules, read, lambda: False, angle_read=read,
                     on_angle=lambda _, angle: angles.append(angle))
         self.assertEqual(chosen, job.candidate)
-        self.assertEqual(2, job.confirmations)
+        self.assertEqual(3, job.confirmations)
         self.assertEqual([-1, 1, -2, 2], angles)
 
     def test_intensive_last_digit_can_recover_a_frame_too_far_above_and_left(self):

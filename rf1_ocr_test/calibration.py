@@ -143,6 +143,29 @@ def similar_layout(layout, other):
     return True
 
 
+def same_register(layout, other, overlap=.8, max_turn=2):
+    """The same meter register, even if one frame was fine-tuned (refined boxes, ±1–2°).
+
+    Used only to count setup confirmations. ``similar_layout`` treats every refined frame as
+    new, which reset the confirmations 1 → 2 → 1 on every image although each image read the
+    right register (Stefan, 20.11.2026: 16 images, 0 confirmations). A shifted frame is still
+    caught afterwards, because the readings must form a plausible counter series.
+    """
+    if layout is None or other is None:
+        return False
+    if layout == other or similar_layout(layout, other):
+        return True
+    if abs(layout.rotation - other.rotation) > max_turn or len(layout.digit_boxes) != len(other.digit_boxes):
+        return False
+    left, top = max(layout.box[0], other.box[0]), max(layout.box[1], other.box[1])
+    right, bottom = min(layout.box[2], other.box[2]), min(layout.box[3], other.box[3])
+    if right <= left or bottom <= top:
+        return False
+    area = lambda box: max(1, (box[2] - box[0]) * (box[3] - box[1]))
+    shared = (right - left) * (bottom - top)
+    return shared / (area(layout.box) + area(other.box) - shared) >= overlap
+
+
 def unrotate_box(box, size, angle):
     """Convert a box in a center-rotated image to bounds in the original."""
     if angle == 0:
@@ -1331,7 +1354,8 @@ class Calibration:
                 sample, compare_sample(sample, value, precision, integer_digits=digits)[0]) is None
                 for value in readings)
             l, t, r, b = layout.box
-            return (reference_match, self.confirmations > 0 and similar_layout(layout, self.candidate),
+            return (reference_match, self.confirmations > 0 and (same_register if self.simplified else similar_layout)(
+                        layout, self.candidate),
                     (r - l) * (b - t), layout.method == "register_window", agreement)
 
         def reliable(score):
@@ -1653,9 +1677,15 @@ class Calibration:
                     if on_selected is not None:
                         on_selected(layout, readings)
                 rejection = "implausible"
-                same = similar_layout(layout, self.candidate)
-                if same and layout != self.candidate:
+                # Plain setup: a fine-tuned frame of the same register keeps its hits. The
+                # last-digit and follow-up checks keep the strict rule for their verified boxes.
+                same = (same_register(layout, self.candidate)
+                        if self.simplified and not (self.intensive or self.followup)
+                        else similar_layout(layout, self.candidate))
+                if same and layout != self.candidate and similar_layout(layout, self.candidate):
                     # Keep the first frame of this digit row; the small differences are noise.
+                    # A fine-tuned frame of the same register is kept as it is: it produced
+                    # the readings of this image.
                     layout = self.candidate
                 anchor = self.counter if same or recovered_slot else baseline or {}
                 counter = accumulate_consumption(anchor, "calibration", stamp, readings[0], precision,

@@ -169,3 +169,55 @@ class LowerRecoveryTranslationTests(TestCase):
         self.assertIn("higher value was a misread", english_result(LOWER_RECOVERED))
         rejected = run.STANDALONE_REJECTED_NOTICE + " " + LOWER_PENDING
         self.assertIn("further consistent readings", english_result(rejected))
+
+
+class LowerCorrectionGuardTests(TestCase):
+    """0.3.1: a correction needs a plausible drop, and collecting it is no failed check."""
+
+    def test_only_a_small_drop_counts_as_correction(self):
+        from consumption import plausible_lower_drop
+        stored = {"reading_litres": 10491600, "anchor_litres": 10491600, "timestamp": 0}
+        # 20.11.: 10491.6 booked by mistake, the meter showed 10491.3 half an hour later.
+        self.assertTrue(plausible_lower_drop(stored, 1800, "10491.33", 2, FLOW))
+        # A frame shifted by one digit reads "04912.27": never a correction.
+        self.assertFalse(plausible_lower_drop(stored, 1800, "04912.27", 2, FLOW))
+        # Ten cubic metres lower right after the booking is no misread of the last digits ...
+        self.assertFalse(plausible_lower_drop(stored, 600, "10481.60", 2, FLOW))
+        # ... but allowed after a day (a wrong high value stood for a long time).
+        self.assertTrue(plausible_lower_drop(stored, 24 * 3600, "10481.60", 2, FLOW))
+        # Without a flow limit the default flow is used, not "anything goes".
+        self.assertFalse(plausible_lower_drop(stored, 1800, "04912.27", 2, run.MAX_FLOW_LPH))
+        self.assertFalse(plausible_lower_drop(stored, 1800, "10491.70", 2, FLOW))
+        self.assertFalse(plausible_lower_drop(None, 1800, "10491.33", 2, FLOW))
+
+    def test_collecting_lower_readings_does_not_start_the_failure_pause(self):
+        from checks import schedule_next_check
+        history = {"check_detail": LOWER_PENDING}
+        for minute in range(5):
+            schedule_next_check(history, "ocr_unclear", minute * 300.0, 10)
+        self.assertNotIn("failure_attempts", history)
+        self.assertNotIn("retry_suppressed", history)
+        self.assertLessEqual(history["next_check_at"] - 1200.0, 300)
+        history["check_detail"] = run.STANDALONE_REJECTED_NOTICE + " " + LOWER_PENDING
+        schedule_next_check(history, "ocr_unclear", 1500.0, 10)
+        self.assertNotIn("failure_attempts", history)
+        history["check_detail"] = LOWER_READING
+        for minute in range(3):
+            schedule_next_check(history, "ocr_unclear", 1800.0 + minute * 300, 10)
+        self.assertTrue(history["retry_suppressed"])
+
+
+class KnownGoodGeometryTests(TestCase):
+    def test_old_known_good_file_is_still_a_starting_point(self):
+        geometry = {"crop": "1,2,3,4", "digit_boxes": [[0, 0, 1, 1]] * 8}
+        self.assertEqual(geometry, run.usable_known_good_geometry(
+            {"scope": "new", "camera": "camera.x", "geometry": geometry}, ("new", "old"), 8))
+        # 0.2.9 file with a key that no longer matches: still offered when the digit count fits.
+        self.assertEqual(geometry, run.usable_known_good_geometry(
+            {"scope": "something-else", "geometry": geometry}, ("new", "old"), 8))
+        self.assertIsNone(run.usable_known_good_geometry(
+            {"scope": "something-else", "geometry": geometry}, ("new", "old"), 7))
+        # New file for another camera: never.
+        self.assertIsNone(run.usable_known_good_geometry(
+            {"scope": "other-camera", "camera": "camera.y", "geometry": geometry}, ("new", "old"), 8))
+        self.assertIsNone(run.usable_known_good_geometry(None, ("new",), 8))

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- **Unscharfe Ziffern lesen (Härtetest mit absichtlich unscharfer, schräger Kamera und Blitzreflex):** Neben der Texterkennung vergleicht die App jede Ziffer mit unscharf gerechneten Ziffernvorlagen. Liest Tesseract eine Stelle nicht, übernimmt die App die Vorlage nur bei klarem Abstand zur zweitbesten Ziffer; widerspricht die Vorlage einer gelesenen Ziffer deutlich, bleibt die Stelle offen. An den Kamerabildern des Härtetests werden die 0 und die 8 jetzt gelesen, die vorher nie erkannt wurden.
+- **Verdeckte und unsichere Vorkommastellen aus dem letzten bekannten Stand:** Fehlen danach noch Vorkommastellen (z. B. unter dem Blitzreflex), ergänzt die App sie aus dem zuletzt bekannten Zählerstand und dem maximalen Durchfluss – nur wenn genau ein Wert passt oder die Vorlagen einen Wert klar bevorzugen. Das hilft der Selbsteinrichtung und der Automatik; die übliche Gegenprüfung mit zwei Bildern bleibt.
 ## 0.2.0
 
 - **Ziffernrahmen auf die Ziffer zentriert:** Die Einrichtung rückt jeden Rahmen seitlich auf die hellen Striche der Ziffer. Bisher konnte ein Lichtreflex den Rahmen so verschieben, dass eine 8 halb abgeschnitten war.

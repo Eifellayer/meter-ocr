@@ -33,7 +33,7 @@ from checks import (
     STANDALONE_PENDING, STANDALONE_PENDING_NOTICE, STANDALONE_REJECTED_NOTICE, STANDALONE_VERIFIED_NOTICE,
     STANDALONE_CACHED_CAPTURE_DELAY, MAX_OCR_ATTEMPTS, DEFAULT_FAILURE_PAUSE_MINUTES, MAX_FAILURE_PAUSE_MINUTES, MIN_FAILURE_PAUSE_MINUTES, SHIFTED_DIGIT_POSITIONS, ROW_SHIFT_READS, ROW_SHIFT_TRIALS, plausible_integer_digits, note_skew, skew_offset, SHIFTED_DIGIT_READS, missing_digit_pattern, single_missing_digit, disputed_digit_pattern, resolve_ocr_readings,
     compare_sample, crop_register, lighting_ocr_profiles, read_register, read_with_retries, record_sample,
-    anchored_leading_digits, anchored_hidden_digits, within_anchor_bounds,
+    anchored_leading_digits, anchored_hidden_digits, within_anchor_bounds, anchor_bounds,
     automatic_interval_minutes, defer_duplicate_cycle,
     LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, LAST_DIGIT_RETRIES, SUCCESSFUL_CHECKS,
     SEVENTH_DIGIT_WAIT_NOTICE,
@@ -55,6 +55,7 @@ from checks import (without_light, unclear_trailing_decimals, setup_tilt, initia
                     REDUCED_PRECISION_NOTICE, REDUCED_PRECISION2_NOTICE, MOVING_DIGITS_NOTICE, only_last_compared_unclear)
 import debug_log
 import experiments
+import glyph_match
 from layout import (MANUAL_ROW_UNCLEAR, PARTLY_UNCLEAR, RAW_ROW_UNCLEAR, digit_row_tilt, fine_rotation as valid_fine_rotation, crop_coordinates, find_digit_row,
                     digit_box_settings, find_raw_digit_row, normalize_digit_boxes, glyph_clipped, roll_center, rotated_width, scale_digit_boxes, turn_crop)
 from meter_learning import (GEOMETRY_REPAIR_LIMIT, GEOMETRY_REPAIR_SECONDS, alignment_rollback, observe_flow,
@@ -735,8 +736,17 @@ def recover_single_digit(layout, pattern, current, whole_digits, fraction_digits
     return (filled + current[len(pattern):], moved[:whole_digits], moved[whole_digits:]), attempted
 
 
+def glyph_scores(register, box, polarity, light_digits):
+    """Template scores for one digit frame (second opinion next to Tesseract), {} on failure."""
+    try:
+        return glyph_match.digit_scores(register.crop(box), None if polarity == "auto" else light_digits)
+    except (OSError, ValueError, ZeroDivisionError):
+        return {}
+
+
 def read_visible_digits(register, integer_width, whole_boxes, fraction_boxes, light_digits, polarity, *, profile,
-                        whole_digits=5, fraction_digits=3, deadline=None, prefer_boxes=False, recognize=None):
+                        whole_digits=5, fraction_digits=3, deadline=None, prefer_boxes=False, recognize=None,
+                        whole_range=None, glyphs=True):
     recognize = recognize or read_register
     if polarity != "auto":
         light_digits = polarity == "light"
@@ -747,8 +757,14 @@ def read_visible_digits(register, integer_width, whole_boxes, fraction_boxes, li
 
     whole = None if prefer_boxes else read(register.crop((0, 0, integer_width, register.height)))
     if whole is None:
-        whole = "".join(read_digit(register, box, read, trim_vertical=not prefer_boxes)
-                        for box in whole_boxes).ljust(whole_digits, "?")
+        cells = [read_digit(register, box, read, trim_vertical=not prefer_boxes) for box in whole_boxes]
+        scores = []
+        if glyphs and len(whole_boxes) == whole_digits:
+            scores = [glyph_scores(register, box, polarity, light_digits) for box in whole_boxes]
+            cells = [glyph_match.combine(cell, score) for cell, score in zip(cells, scores)]
+        whole = "".join(cells).ljust(whole_digits, "?")
+        if scores and whole_range is not None and "?" in whole:
+            whole = glyph_match.anchored_whole(whole, scores, *whole_range)
         if prefer_boxes and whole_digits >= 4 and whole.count("?") == 1 and len(whole_boxes) == whole_digits:
             # Recover one weak cell with a tightly cropped row read. Keep
             # every independently read cell as a check on OCR alignment.
@@ -766,8 +782,29 @@ def read_visible_digits(register, integer_width, whole_boxes, fraction_boxes, li
                 row = None
             if row and len(row) == whole_digits and all(a == b or a == "?" for a, b in zip(whole, row)):
                 whole = row
-    fraction = "".join(read_digit(register, box, read) for box in fraction_boxes[:fraction_digits])
+    fraction_cells = [read_digit(register, box, read) for box in fraction_boxes[:fraction_digits]]
+    if glyphs:
+        fraction_cells = [glyph_match.combine(cell, glyph_scores(register, box, polarity, light_digits))
+                          for cell, box in zip(fraction_cells, fraction_boxes)]
+    fraction = "".join(fraction_cells)
     return f"{whole}.{fraction.ljust(fraction_digits, '?')}" if fraction_digits else whole
+
+
+def glyph_whole_range(history, rules, zone, captured):
+    """Whole cubic metres the meter can show at ``captured`` after the newest known reading.
+
+    Used only as a hint to fill unclear whole digits; the reading itself is checked as before.
+    """
+    if type(captured) not in (int, float):
+        return None
+    consumption = history.get("consumption") or {}
+    counted = ({"value": consumption["reading_litres"], "time": consumption["timestamp"]}
+               if type(consumption.get("reading_litres")) is int
+               and type(consumption.get("timestamp")) in (int, float) else None)
+    anchor = newest_anchor(history.get("reflection_anchor"), counted, captured)
+    anchor = newest_anchor(anchor, manual_reading_anchor(rules, zone), captured)
+    bounds = anchor_bounds(anchor, captured, 3, rules.get("max_flow_lph"))
+    return (bounds[0] // 1000, bounds[1] // 1000) if bounds else None
 
 
 def wizard_camera_preview(source, token, zone, *, full_size=False):
@@ -1891,6 +1928,7 @@ def main():
                                 {}, "calibration", stamp, active_rules["fallback_value"], min(precision, configured_rules["decimals"]),
                                 active_rules["max_flow_lph"], active_rules["integer_digits"], confirmed=True,
                             )
+                    glyph_range = glyph_whole_range(history, active_rules, zone, captured)
                     with Image.open(io.BytesIO(picture)) as frame:
                         if frame.width * frame.height > MAX_IMAGE_PIXELS:
                             raise ValueError("Kamerabild hat zu viele Pixel")
@@ -2030,6 +2068,7 @@ def main():
                                 whole_digits=whole, fraction_digits=2 if reduced else fraction,
                                 deadline=deadline if ocr_deadline is None else ocr_deadline,
                                 prefer_boxes=bool(layout.digit_boxes), recognize=cached_digit,
+                                whole_range=glyph_range,
                             )
                             return two_decimal_reading(value) if reduced else value
 
@@ -2803,6 +2842,8 @@ def main():
                                 manual_options["polarity"] if manual else active_rules["polarity"],
                                 profile=profile, whole_digits=integer_digits, fraction_digits=fraction_digits,
                                 **({"prefer_boxes": True} if custom_boxes else {}),
+                                whole_range=None if manual else glyph_whole_range(
+                                    history, active_rules, zone, read_state["captured"]),
                             )
 
                         def read(profile):

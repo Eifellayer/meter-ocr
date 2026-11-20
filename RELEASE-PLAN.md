@@ -162,3 +162,11 @@ Ziel: Änderungen berühren nur das betroffene Modul und dessen Tests, die volle
 | 5 | Texte für Statuswerte zentral in `i18n.py`, nicht mehr über Textvergleiche | Keine Textvergleiche mehr in `panel.py` und `run.py` |
 
 Regeln: keine Funktionsänderung in denselben Commits wie ein Umbau; Schritt 1 nur, wenn kein Sparbetrieb-Hinweis einen Release verbietet.
+
+## Ablauf am Do 26.11. ab 06:30: EIN gebündeltes Release (Stefan 20.11., 21:47)
+
+Gilt vor allen anderen Einträgen dieser Datei, sobald das Guthaben wieder da ist.
+- Support-Runde und Modul-Umbau Schritt 1 werden gemeinsam in einer Session umgesetzt und als **ein** Release 0.6.0 veröffentlicht (kein zweites Release danach).
+- Reihenfolge innerhalb dieses einen Releases: zuerst die offenen Support-Punkte aus Issue #210 und RELEASE-PLAN.md, dann Schritt 1 des Umbaus.
+- Der PR #236 (fix-0.4.2) wird Teil dieses Releases und nicht separat gemergt.
+- Der Support-Lauf um 05:47 am 26.11. (eigene Aufgabe) bleibt unverändert; er stellt danach den Zeitplan auf 05:47/17:47 um.

@@ -82,9 +82,10 @@ class LastDigitHintTests(IngressFixture):
             page.goto(self.base + "/")
             note = page.locator("#hero-digit-note")
             page.wait_for_function("document.querySelector('#hero-digit-note').dataset.state === 'searching'")
-            self.assertEqual("Die 8. Ziffer wird im Hintergrund gesucht (noch höchstens 9 min).", note.inner_text())
-            self.assertTrue(page.locator("#hero-search-progress").is_visible())
-            self.assertEqual(660, page.locator("#hero-search-progress").evaluate("bar => bar.value"))
+            self.assertEqual("Die 8. Ziffer wird im Hintergrund gesucht (läuft nebenbei mit den normalen Prüfbildern mit).",
+                             note.inner_text())
+            # No countdown or time-limit bar: the search uses the automatic check pictures.
+            self.assertFalse(page.locator("#hero-search-progress").is_visible())
             self.assertIn("searching", page.locator("#meter-odometer .roller.fraction").last.get_attribute("class"))
             page.screenshot(path=os.environ.get("RF1_SHOT", "/tmp/searching.png"))
             browser.close()
@@ -109,7 +110,8 @@ class LastDigitHintTests(IngressFixture):
             page.goto(self.base + "/")
             page.wait_for_function("document.querySelector('#hero-digit-note').dataset.state === 'optimizing'")
             self.assertIn("Optimierung läuft", page.locator("#hero-digit-note").inner_text())
-            self.assertIn("noch höchstens 9 min", page.locator("#hero-digit-note").inner_text())
+            self.assertIn("läuft nebenbei mit", page.locator("#hero-digit-note").inner_text())
+            self.assertNotIn("höchstens", page.locator("#hero-digit-note").inner_text())
             self.assertNotIn("searching", page.locator("#meter-odometer .roller.fraction").last.get_attribute("class"))
             self.assertFalse(page.locator("#hero-stale").is_visible())
             browser.close()

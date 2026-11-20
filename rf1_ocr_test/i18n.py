@@ -145,8 +145,8 @@ EN_UI = {
     "Ziffernzeile gefunden · ": "Digit row found · ",
     "Schwelle ": "Threshold ",
     " Ohne Vergleichswert braucht die App einen plausiblen Anstieg oder einen Startwert.": " Without a reference, the app needs a plausible increase or a starting reading.",
-    "Die Automatik läuft. In den nächsten 20 Minuten optimiert die App im Hintergrund noch Rahmen und Winkel.":
-        "Automatic checks are running. For the next 20 minutes the app keeps optimising frames and angle in the background.",
+    "Die Automatik läuft. Rahmen und Winkel verbessert die App automatisch im Hintergrund mit den normalen Prüfbildern weiter.":
+        "Automatic checks are running. The app keeps improving frames and angle in the background using the normal check pictures.",
     "Werkzeuge zur Erkennung": "Meter reading tools",
     "Werkzeuge": "Tools",
     "Prüfdetails": "Check details",

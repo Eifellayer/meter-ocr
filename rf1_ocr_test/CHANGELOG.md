@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.10
+
+- **Kein falscher Kubikmeter mehr bei uneinigen Lesungen:** Heute Mittag lasen 3 von 5 Lesungen eines Bildes 10491,4 und 2 von 5 10490,4 – die App nahm die Mehrheit, der Zähler stand aber bei 10490,6. Widersprechen sich Lesungen bei einer Vorkommastelle mit mindestens zwei Stimmen je Ziffer, bleibt die Stelle jetzt offen (lieber unklar als falsch). Ausnahme: eine Rolle, die gerade weiterdreht (rechts daneben steht 9 oder 0). Der zu hohe Stand korrigiert sich über die vorhandene Lesefehler-Korrektur (nach drei stimmigen niedrigeren Ablesungen über mindestens 15 Minuten); dafür werden niedrigere Ziffern nicht mehr als „unmöglich“ ausgeblendet, wenn der gespeicherte Stand selbst falsch ist; zu viel gebuchter Verbrauch wird nicht doppelt gezählt, die nächsten Buchungen gleichen ihn aus.
+- **Kamera zu dunkel eingestellt? Die App regelt nach:** Bleibt das Bild auch mit eingeschaltetem Blitz deutlich dunkler als gewohnt, erhöht die App die Verstärkung der Kamera (ESPHome-Regler am selben Gerät, z. B. „Verstärkung“) in kleinen Schritten, höchstens alle 5 Minuten und höchstens bis 20. Debug-Protokoll: `exposure_adjust`. Vorher wartet sie nach einem dunklen Bild ein zweites Mal etwas länger auf den Blitz.
+- **Zählerstand-Sensor bleibt nach einer Einrichtung verfügbar:** Bis zur ersten neuen Ablesung zeigt `sensor.rf1_ocr_zaehlerstand` den zuletzt gebuchten Stand (`is_fallback: true`) statt „nicht verfügbar“.
+- **Bewährter Rahmen geht nicht mehr verloren:** Der zuletzt bewährte Rahmen gilt jetzt für dieselbe Kamera und dieselbe Ziffernzahl – unabhängig von Bildquellen-Modus, Vergleichssensor, Licht, Ziffernfarbe oder Anzeigeart. Bisher reichte eine solche Änderung im Assistenten, und die nächste Einrichtung begann wieder bei „Ziffernreihe finden“ (`known_good: false`).
 ## 0.2.9
 
 - **Bilder ohne Blitz erkennen und neu aufnehmen:** Die App merkt sich, wie hell Bilder mit Blitz normalerweise sind. Ist ein Bild deutlich dunkler (Licht noch nicht an oder kurz vorher von außen ausgeschaltet, z. B. durch einen „Blitz dauerhaft an“-Schalter am ESP), schaltet sie das Licht ein, wartet und nimmt sofort ein neues Bild. So wird aus einem dunklen Bild keine Fehlprüfung („1????.???“) mehr. Das gilt für Prüfungen, Einrichtung und Vorschau.

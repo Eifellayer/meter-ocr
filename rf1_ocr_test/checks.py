@@ -285,6 +285,34 @@ def explain_uncertain_positions(readings, decimals, integer_digits=5):
     return "OCR unsicher. " + " ".join(groups)
 
 
+def disputed_integer_positions(readings, integer_digits, decimals=0):
+    """Whole-number positions on which the readings of one image seriously disagree.
+
+    Two different digits, each read at least twice, cannot both be right. A turning roller
+    explains this only between neighbouring digits while the position to its right shows
+    9 or 0 (the carry). Anything else is a misread (e.g. a narrow 0 read as 1); taking the
+    majority there booked a whole cubic metre too much (20.11.2026, 10490.4 -> 10491.4).
+    """
+    disputed = set()
+    rows = [str(value) for value in readings]
+    for position in range(integer_digits):
+        votes = Counter(row[position] for row in rows if position < len(row) and row[position].isdigit())
+        top = max(votes.values(), default=0)
+        # A rival digit counts when it was read at least twice and by at least a third as
+        # many readings as the leading digit (3:2 or 8:7 is a dispute, 12:3 is noise).
+        strong = sorted(digit for digit, count in votes.items() if count >= 2 and 3 * count >= top)
+        if len(strong) < 2:
+            continue
+        if len(strong) == 2 and (int(strong[1]) - int(strong[0])) % 10 in (1, 9):
+            following = position + 1 if position + 1 < integer_digits else integer_digits + 1
+            if following < integer_digits or decimals:
+                carry = [row[following] for row in rows if following < len(row) and row[following].isdigit()]
+                if carry and all(char in "90" for char in carry):
+                    continue
+        disputed.add(position)
+    return disputed
+
+
 def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace=None, *, standalone=False,
                       integer_digits=5, stop_before_attempt=None, force_all_attempts=False,
                       extra_attempts=0, profiles=OCR_PROFILES, defer_composition=False,
@@ -324,6 +352,8 @@ def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace
             prefixes = Counter(item[:prefix_length] for item in readings
                                if meter_prefix(item, decimals, integer_digits) is not None)
             stable = next((item for item, count in prefixes.items() if count >= minimum_votes), None)
+            if stable is not None and disputed_integer_positions(readings, integer_digits, decimals):
+                stable = None
             if stable is not None:
                 return next(item for item in readings if item.startswith(stable)), True, index
 
@@ -377,6 +407,9 @@ def resolve_ocr_readings(readings, decimals, integer_digits, *, standalone=False
     prefixes = Counter(value[:prefix_length] for value in readings
                        if meter_prefix(value, decimals, integer_digits) is not None)
     prefix = next((value for value, count in prefixes.items() if count >= minimum_votes), None)
+    disputed = disputed_integer_positions(readings, integer_digits, decimals)
+    if disputed:
+        prefix = None
     if not compose:
         if prefix is not None:
             return next(value for value in readings if value.startswith(prefix)), True
@@ -395,6 +428,8 @@ def resolve_ocr_readings(readings, decimals, integer_digits, *, standalone=False
         votes = Counter(value[position] for value in readings
                         if position < len(value) and value[position] in "0123456789")
         digit, count = votes.most_common(1)[0] if votes else ("", 0)
+        if position in disputed:
+            continue
         if count >= majority:
             combined[position] = digit
         elif allowed and position < integer_digits and count >= 2 and len(votes) == 1:
@@ -403,6 +438,8 @@ def resolve_ocr_readings(readings, decimals, integer_digits, *, standalone=False
     for position in range(integer_digits):
         if position in combined:
             display[position] = combined[position]
+        elif position in disputed and position < len(display):
+            display[position] = "?"
     if decimals:
         for position in range(integer_digits + 1, integer_digits + 1 + decimals):
             if position in combined and position < len(display):

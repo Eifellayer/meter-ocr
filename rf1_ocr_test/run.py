@@ -429,6 +429,54 @@ def remember_lit_brightness(light, brightness):
     LIT_BRIGHTNESS[light] = brightness if reference is None else 0.8 * reference + 0.2 * brightness
 
 
+GAIN_ADJUST_SECONDS = 5 * 60
+GAIN_ADJUST_MAX_STEP = 8
+GAIN_ADJUST_CEILING = 20
+GAIN_ADJUSTED = {}
+GAIN_ENTITY = re.compile(r"number\.[a-z0-9_]+")
+
+
+def raise_camera_gain(light, brightness, token, *, fetch, post, now=time.monotonic):
+    """Pictures stay dark even with the light on: raise the camera's gain a little (ESPHome).
+
+    The gain control is a number entity on the same Home Assistant device as the light
+    (e.g. number.esp_gaszaehler_verstarkung). Steps are small, bounded and at most every
+    few minutes, so a manual setting is corrected gently, never overshot. Returns the new
+    value or None.
+    """
+    expected = LIT_BRIGHTNESS.get(light)
+    if not light or not brightness or not expected:
+        return None
+    last = GAIN_ADJUSTED.get(light)
+    if last is not None and now() - last < GAIN_ADJUST_SECONDS:
+        return None
+    GAIN_ADJUSTED[light] = now()
+    base = "http://supervisor/core/api"
+    template = ("{%% set d = device_id('%s') %%}{{ (device_entities(d) if d else []) "
+                "| select('match', '^number\\..*(verst|gain)') | list | first | default('') }}" % light)
+    try:
+        answer = post(f"{base}/template", token, {"template": template})
+        entity = (answer.decode("utf-8") if isinstance(answer, bytes) else str(answer or "")).strip()
+        if not GAIN_ENTITY.fullmatch(entity):
+            return None
+        state = json.loads(fetch(f"{base}/states/{entity}", token, timeout=4))
+        current = float(state["state"])
+        attributes = state.get("attributes") or {}
+        ceiling = min(float(attributes.get("max", GAIN_ADJUST_CEILING)), GAIN_ADJUST_CEILING)
+        if current >= ceiling:
+            return None
+        wanted = current * expected / max(brightness, 1)
+        target = min(ceiling, current + GAIN_ADJUST_MAX_STEP, max(current + 1, round(wanted)))
+        post(f"{base}/services/number/set_value", token, {"entity_id": entity, "value": target})
+    except (OSError, ValueError, TypeError, KeyError, AttributeError, UnicodeDecodeError) as error:
+        print(f"Verstärkung der Kamera konnte nicht angepasst werden: {type(error).__name__}")
+        return None
+    print(f"Bilder bleiben trotz Licht dunkel – Verstärkung {current:g} -> {target:g}")
+    debug_log.record(kind="exposure_adjust", entity=entity, old=current, new=target,
+                     brightness=brightness, expected=round(expected))
+    return target
+
+
 def lit_picture(light, take, token, *, fetch, post, delay=LIGHT_DELAY, sleep=time.sleep):
     """Switch a Home Assistant light on for one picture, like AI on the Edge's flash.
 
@@ -474,6 +522,16 @@ def lit_picture(light, take, token, *, fetch, post, delay=LIGHT_DELAY, sleep=tim
                 retry_brightness = picture_brightness(retry)
                 if retry_brightness is not None and (brightness is None or retry_brightness > brightness):
                     picture, brightness = retry, retry_brightness
+                if dark_picture(light, brightness):
+                    # The ESP may still be busy switching: one more, longer wait before giving up.
+                    sleep(2 * delay)
+                    retry = take()
+                    retry_brightness = picture_brightness(retry)
+                    if retry_brightness is not None and (brightness is None or retry_brightness > brightness):
+                        picture, brightness = retry, retry_brightness
+                if dark_picture(light, brightness):
+                    # Still dark with the light on: the camera itself is set too dark.
+                    raise_camera_gain(light, brightness, token, fetch=fetch, post=post)
             except OSError as error:
                 print(f"Neues Bild mit Licht nicht möglich: {type(error).__name__}")
         if not dark_picture(light, brightness):
@@ -1141,6 +1199,17 @@ def publish_standalone(history, camera, token):
         value = last["reading"][:digits + (last["decimals"] + 1 if last["decimals"] else 0)]
         captured = last["image_time"]
         is_fallback = history.get("check_status") != "ocr_only"
+    else:
+        # No reading yet after a new setup or reset: keep showing the last booked value
+        # instead of "unavailable" (dashboards and statistics would show a gap).
+        counter = history.get("consumption")
+        if (isinstance(counter, dict) and isinstance(counter.get("source"), list)
+                and camera in counter["source"] and type(counter.get("anchor_litres")) is int):
+            step = counter.get("anchor_step") or counter.get("step_litres") or 1
+            decimals = {1: 3, 10: 2, 100: 1}.get(step, 0)
+            value = f"{counter['anchor_litres'] / 1000:.{decimals}f}"
+            captured = counter.get("anchor_time")
+            is_fallback = True
     payload = {
         "state": value,
         "attributes": {"friendly_name": "Meter OCR Zählerstand" + LABEL_SUFFIX, "unit_of_measurement": "m³",
@@ -1671,6 +1740,13 @@ def main():
             return True
 
     def known_good_scope(rules, source):
+        # Only what moves the digits in the picture: which camera and how many digits.
+        # Source mode, reference sensor, light, polarity or display style do not, and a
+        # changed setting there must not throw away a frame that read for hours (20.11.).
+        camera = source.get("camera") or str(source.get("url") or "").rstrip("/")
+        return calibration_source_id(["known-good", camera, rules["integer_digits"], rules["fraction_digits"]])
+
+    def legacy_known_good_scope(rules, source):
         format_keys = ("integer_digits", "fraction_digits", "meter_display", "polarity")
         return calibration_source_id([source, [rules[key] for key in format_keys]])
 
@@ -1682,7 +1758,7 @@ def main():
     def load_known_good_layout(rules, source):
         try:
             saved = json.loads(known_good_geometry_path.read_text(encoding="utf-8"))
-            if saved["scope"] == known_good_scope(rules, source):
+            if saved["scope"] in (known_good_scope(rules, source), legacy_known_good_scope(rules, source)):
                 return geometry_layout(saved["geometry"], rules)
         except (OSError, ValueError, TypeError, KeyError):
             pass
@@ -3245,6 +3321,21 @@ def main():
                                 ocr_readings, comparison_decimals, integer_digits, standalone=require_consensus,
                                 standalone_composition=True, allowed=allowed,
                             )
+                            if allowed and not ocr_confirmed:
+                                # The anchor itself may be a misread (20.11.: 10491.4 booked while the
+                                # meter showed 10490.6). Readings that agree on a LOWER value must still
+                                # reach the misread correction (lower_series) instead of being blanked.
+                                plain, plain_confirmed = resolve_ocr_readings(
+                                    ocr_readings, comparison_decimals, integer_digits,
+                                    standalone=require_consensus, standalone_composition=True,
+                                )
+                                whole = (int(plain[:integer_digits]) if plain[:integer_digits].isdigit()
+                                         and len(plain) >= integer_digits else None)
+                                if whole is not None and whole < counter["anchor_litres"] // 1000:
+                                    # Whole digits agree on a lower value; unclear trailing decimals are
+                                    # handled by the coarser check below as usual.
+                                    print(f"Lesung {plain} liegt unter dem gespeicherten Stand – zur Prüfung auf Lesefehler")
+                                    ocr, ocr_confirmed = plain, plain_confirmed
                             if ocr_confirmed and ocr not in ocr_readings:
                                 ocr_method = "composed"
                             regular_status = compare_sample(

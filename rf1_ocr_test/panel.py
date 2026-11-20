@@ -2296,7 +2296,7 @@ function showRegionChoices(boxes) {{
       regionValue.value = box.join(',');
       paintRegion(box);
       regionStartButton.disabled = false;
-      regionStartButton.form.requestSubmit(regionStartButton);
+      regionStartButton.focus();
     }});
     regionChoices.append(button);
   }});
@@ -3084,6 +3084,9 @@ function syncHero() {{
   const reading = (document.querySelector('#automatic-ocr').textContent || '').trim().replace(',', '.');
   const [wholeDigits, fractionDigits = ''] = reading.split('.');
   const position = wholeDigits.length + fractionDigits.length;
+  // The digit searched in the background is the first one that is not compared yet.
+  const searchedPosition = reading.includes('.') && comparedDecimals !== null
+    ? wholeDigits.length + comparedDecimals + 1 : 0;
   let noteText = '', noteState = '';
   if (/[0-9?]/.test(reading) && frameRelocating) {{
     const minutesLeft = lastDigitProgress ? Math.max(1, Math.ceil(lastDigitProgress.seconds / 60)) : 0;
@@ -3110,9 +3113,11 @@ function syncHero() {{
       : '';
     noteText = lang === 'en'
       ? `Temporarily only ${{comparedDecimals}} decimal places are compared (setting: ${{configuredDecimals}}). `
-        + (at ? `The search for the ${{position}}th digit starts at about ${{at}}.` : `The background search for the ${{position}}th digit is retried automatically.`)
+        + (searchedPosition ? (at ? `The search for the ${{searchedPosition}}th digit starts at about ${{at}}.` : `The background search for the ${{searchedPosition}}th digit is retried automatically.`)
+          : (at ? `The search for the last digit starts at about ${{at}}.` : `The background search for the last digit is retried automatically.`))
       : `Vorübergehend werden nur ${{comparedDecimals}} Nachkommastellen verglichen (eingestellt: ${{configuredDecimals}}). `
-        + (at ? `Die Suche nach der ${{position}}. Ziffer beginnt gegen ${{at}} Uhr.` : `Die Suche nach der ${{position}}. Ziffer wird automatisch wiederholt.`);
+        + (searchedPosition ? (at ? `Die Suche nach der ${{searchedPosition}}. Ziffer beginnt gegen ${{at}} Uhr.` : `Die Suche nach der ${{searchedPosition}}. Ziffer wird automatisch wiederholt.`)
+          : (at ? `Die Suche nach der letzten Ziffer beginnt gegen ${{at}} Uhr.` : `Die Suche nach der letzten Ziffer wird automatisch wiederholt.`));
     noteState = 'skipped';
   }} else if (fractionDigits.endsWith('?') && comparedDecimals !== null && comparedDecimals < fractionDigits.length) {{
     noteText = lang === 'en'

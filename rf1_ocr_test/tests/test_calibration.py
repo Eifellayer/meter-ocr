@@ -206,6 +206,23 @@ class CalibrationTests(TestCase):
         self.candidates.assert_not_called()
         self.assertTrue(self.job.status(101)["known_good_available"])
 
+    def test_known_good_crop_is_tried_first_even_outside_a_chosen_region(self):
+        # A mistaken tap on a region proposal must not replace a working, confirmed frame.
+        self.job = Calibration(5, 0, rank_candidates=True, known_good_layout=OTHER_LAYOUT,
+                               region=(0, 0, 50, 50))
+        sample = {"reference_time": 100, "raw_value": "12345", "actual_value": "12345"}
+        attempted = []
+
+        def read(layout, profile):
+            attempted.append(layout)
+            return "12345"
+
+        with patch.object(calibration, "guided_layouts", return_value=[LAYOUT]) as guided:
+            self.assertIsNone(self.job.examine(frame(1), None, sample, 101, RULES, read, lambda: False))
+        self.assertEqual({OTHER_LAYOUT}, set(attempted))
+        self.assertEqual(1, self.job.confirmations)
+        guided.assert_not_called()
+
     def test_search_resumes_when_the_known_good_crop_no_longer_reads(self):
         self.job = Calibration(5, 0, rank_candidates=True, known_good_layout=OTHER_LAYOUT)
         sample = {"reference_time": 100, "raw_value": "12345", "actual_value": "12345"}

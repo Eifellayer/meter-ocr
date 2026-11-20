@@ -1385,7 +1385,7 @@ class BrowserTests(IngressFixture):
             overview = page.locator("#calibration-overview-state")
             overview.filter(has_text="Grün bedeutet lesbar. Ein gültiger Vergleichswert").wait_for()
             cards = page.locator("#calibration-overview .calibration-candidate-panel")
-            cards.locator("summary").click()
+            cards.locator("summary").first.click()
             self.assertEqual(["100 % · 12345.678", "87 % · 12345.67?"], cards.locator("li").all_text_contents())
             self.calibration.update(confirmations=1, candidate_agreement=100,
                                     preview={"frame": 15, "crop": 15, "reading": "12345.67?", "reason": "accepted"})

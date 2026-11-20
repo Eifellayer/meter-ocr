@@ -1302,15 +1302,10 @@ class Calibration:
             def search_candidates():
                 known = self.known_good_layout
                 if known is not None and not self.confirmations:
-                    if self.region:
-                        left, top, right, bottom = (
-                            round(value * size / 1000)
-                            for value, size in zip(self.region, frame.size * 2)
-                        )
-                    else:
-                        left, top, right, bottom = 0, 0, frame.width, frame.height
+                    # A confirmed frame is always tried first, even outside a chosen search region:
+                    # a mistaken tap on a region proposal must never replace a working setup.
                     a, b, c, d = known.box
-                    if left <= a < c <= right and top <= b < d <= bottom:
+                    if 0 <= a < c <= frame.width and 0 <= b < d <= frame.height:
                         yield known
                 yield from skip_small_labels(list(detect(len(self.seen) - 1, seed, on_regions)))
                 if (len(self.seen) == 1 and not self.automatic and not self.intensive

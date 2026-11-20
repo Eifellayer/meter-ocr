@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.3
+
+- **Funktionierende Einrichtung bleibt erhalten:** Ein Tippen auf einen vorgeschlagenen Ziffernbereich im Vorschaubild startet die Selbsteinrichtung nicht mehr sofort neu, sondern markiert den Bereich nur; gestartet wird erst mit dem Knopf darunter. Startet eine neue Einrichtung trotzdem, prüft sie den zuletzt bestätigten Rahmen immer zuerst – auch wenn ein anderer Suchbereich gewählt ist. So setzt sich kein Rahmen auf dem Gehäuserand durch, solange der alte Rahmen weiter liest.
+- **Richtige Stelle im Hinweis:** „Die Suche nach der 8. Ziffer wird automatisch wiederholt“ statt „1. Ziffer“, wenn gerade nur eine Ziffer im Hintergrund gelesen wird.
 ## 0.2.2
 
 - **Blitzreflex nie als Ziffer lesen:** Die erste Automatik nach der Einrichtung zeigte, dass die Texterkennung in der überstrahlten Stelle eine 7 oder 5 „erfindet“. Eine Stelle unter dem Reflex wird jetzt gar nicht mehr gelesen und nur aus dem letzten bekannten Stand ergänzt. Der Reflex wird zusätzlich auch bei eng gezeichneten Ziffernrahmen erkannt.

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.2.8
+
+- **Neu-suchen-Knopf auf dem Handy wieder klein:** Im Einrichtungsassistenten zog eine Regel für schmale Bildschirme den Knopf ↻ neben „In Home Assistant gefunden“ auf volle Breite; die Auswahlliste war kaum noch zu sehen. Der Knopf ist jetzt immer 44 × 44 px groß, die Liste nutzt den Rest der Zeile.
 ## 0.2.7
 
 - **Geräte neu suchen:** Im Einrichtungsassistenten steht neben „In Home Assistant gefunden“ ein kleiner Knopf ↻ („Neu suchen“). Antwortet Home Assistant gerade nicht (z. B. direkt nach einem Neustart) oder ist die Liste leer, sucht die App nach einigen Sekunden einmal selbst erneut und sagt, wenn Home Assistant nicht erreichbar ist.

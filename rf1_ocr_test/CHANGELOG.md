@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.2
+
+- **Ein besserer Rahmen behält seinen besten Wert:** Las derselbe Rahmen auf einem späteren Bild schlechter, wurde sein früherer, besserer Prozentwert überschrieben (z. B. auf 75 %) und er rutschte in der Kandidatenliste nach hinten oder fiel heraus. Jetzt zählt der beste Wert über alle Bilder; nur die Zusatzprüfung mit weiteren Leseprofilen auf demselben Bild darf ihn noch senken.
+- **Treffer auch mit einer Nachkommastelle weniger:** Läuft Gas, dreht die zweite Nachkommastelle oft gerade. Lesen beide Leseprofile alle Vorkommastellen und eine Nachkommastelle gleich (z. B. 10494,2), zählt das jetzt als Treffer für das Zählwerk in der Kandidatenliste und bei der Wahl des besten Rahmens. Die Bestätigung der Einrichtung bleibt vorerst bei der bisherigen Regel.
+
 ## 0.4.1
 
 - **Kandidatenliste zeigt jedes Zählwerk mit Treffern:** Rahmen mit Treffern fielen aus der Liste, sobald fünf andere Rahmen mit höherem Prozentwert (aber ohne Treffer) kamen – die Liste wurde nur aus diesen fünf Plätzen gebaut. Jetzt steht jedes Zählwerk mit Treffern immer in der Liste, mit seinem besten Rahmen, Winkel und zuletzt gelesenem Wert. Sortiert wird nach Treffern, dann nach Prozent.

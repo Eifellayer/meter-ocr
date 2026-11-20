@@ -52,6 +52,21 @@ HOPELESS_DIGITS = 3
 
 
 
+def agreeing_prefixes(readings, precision, digits):
+    """Precision at which two OCR readings agree: the requested one, or one decimal less (min. 1).
+
+    Returns None if they do not agree. Used for setup hits only: the whole digits and at least
+    one decimal must be sure and identical in both readings (Stefan 20.11., 21:23).
+    """
+    if len(readings) < 2:
+        return None
+    for decimals in (precision, precision - 1) if precision >= 2 else (precision,):
+        first, second = (meter_prefix(value, decimals, digits) for value in readings[:2])
+        if first is not None and first == second:
+            return decimals
+    return None
+
+
 def last_digit_candidates(layout, roll_center=None):
     """Frames for the last roller: settle its horizontal centre first, then move only vertically.
 
@@ -785,6 +800,7 @@ class Calibration:
     # 0.4.0: frames of the same register (±2°, ≥ 80 % overlap) are one group: hits are counted
     # per image for the group, the list shows one entry per group, the best frame is saved.
     groups: list = field(default_factory=list)
+    score_stamps: dict = field(default_factory=dict)
     rejected: list = field(default_factory=list)
     skews: list = field(default_factory=list)
     current_stamp: float = 0
@@ -1479,13 +1495,19 @@ class Calibration:
         required_agreement = agreement_percent(readings, sample, precision, digits)
         readable_agreement = agreement_percent(readings, {"reference_required": False}, fraction, digits)
         percentage = min(required_agreement, readable_agreement)
-        prefixes = [meter_prefix(value, precision, digits) for value in readings[:2]]
-        group = self.note_group(layout, readings, prefixes[0] is not None and len(set(prefixes)) == 1,
-                                digits + fraction)
+        prefixes = agreeing_prefixes(readings[:2], precision, digits)
+        group = self.note_group(layout, readings, prefixes is not None, digits + fraction)
         if group is not None:
             group["percent"] = max(group.get("percent", 0), percentage)
         if required_agreement:
-            self.shortlist[layout] = (percentage, round(crop_quality(frame, layout), 2), required_agreement)
+            score = (percentage, round(crop_quality(frame, layout), 2), required_agreement)
+            # Stefan (20.11., 21:24): a frame that read better on an earlier image must keep that score;
+            # a later, worse image of the same frame no longer pushes it down (e.g. to 75 %).
+            previous = self.shortlist.get(layout)
+            if previous is not None and self.score_stamps.get(layout) != self.current_stamp:
+                score = max(score, previous)
+            self.score_stamps[layout] = self.current_stamp
+            self.shortlist[layout] = score
             ranked = sorted(self.shortlist.items(), key=lambda pair: pair[1], reverse=True)
             # Keep every register group with hits in the list (Stefan 20.11., 18:48: a −13° frame with
             # seven hits was pushed out by near-duplicates); near-duplicates only fill free places.
@@ -1916,6 +1938,7 @@ class Calibration:
                 if stop():
                     return None
                 prefixes = [meter_prefix(value, precision, digits) for value in readings]
+                image_precision = precision
                 if None in prefixes:
                     on_decision("unclear")
                     continue
@@ -1923,9 +1946,10 @@ class Calibration:
                     on_decision("disagree")
                     continue
                 if has_reference:
-                    status, _ = compare_sample(sample, readings[0], precision, integer_digits=digits)
+                    status, _ = compare_sample(sample, readings[0], image_precision, integer_digits=digits)
                     reason = reference_rejection(sample, status)
-                    if reason == "reference_mismatch" and position_error(readings[0], sample, precision, digits):
+                    if reason == "reference_mismatch" and position_error(readings[0], sample, image_precision,
+                                                                         digits):
                         self.reject_region(layout)
                         on_decision("position_error")
                         continue
@@ -1967,7 +1991,7 @@ class Calibration:
                     # the readings of this image.
                     layout = self.candidate
                 anchor = self.counter if same or recovered_slot else baseline or {}
-                counter = accumulate_consumption(anchor, "calibration", stamp, readings[0], precision,
+                counter = accumulate_consumption(anchor, "calibration", stamp, readings[0], image_precision,
                                                 flow, digits)
             except (OSError, ValueError, subprocess.SubprocessError):
                 on_decision(rejection)

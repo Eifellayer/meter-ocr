@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.1
+
+- **Kandidatenliste zeigt jedes Zählwerk mit Treffern:** Rahmen mit Treffern fielen aus der Liste, sobald fünf andere Rahmen mit höherem Prozentwert (aber ohne Treffer) kamen – die Liste wurde nur aus diesen fünf Plätzen gebaut. Jetzt steht jedes Zählwerk mit Treffern immer in der Liste, mit seinem besten Rahmen, Winkel und zuletzt gelesenem Wert. Sortiert wird nach Treffern, dann nach Prozent.
+
 ## 0.4.0
 
 - **Einrichtung misst die Schräglage zuerst:** Vor jeder Texterkennung bestimmt die App die Neigung des Zählwerks im Bild (ca. 0,2 s) und sucht zuerst dort und ±1°/±2° daneben. Ein um −14° gedrehter Zähler wird so gleich auf dem ersten Bild gefunden, statt dass das Winkelraster ihn erst nach vielen Bildern erreicht.

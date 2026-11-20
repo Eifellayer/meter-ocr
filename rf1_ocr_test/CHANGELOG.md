@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.4
+
+- **Einrichtung sucht feiner um den passenden Winkel:** Das Winkelraster reicht jetzt in kleinen Schritten bis ±20° (bisher Sprung von 12° auf 18°, −14° fehlte), und rund um den Winkel, der schon am besten las (z. B. −12°), sucht die Einrichtung in 1°-Schritten weiter (−13°, −14°). Die Suche nach dem dunklen Ziffernfenster läuft im ganzen Bereich bis ±20°.
+- **Keine ±90°/180°-Rahmen mehr, wenn das Zählwerk schon gefunden ist:** Rechte Winkel gehören nicht mehr zum normalen Suchraster. Die Einrichtung probiert sie beim ersten Bild nur noch, wenn kein aufrechter Rahmen die Ziffern schon weitgehend las (bei Kameras ohne Vergleichswert) – vorher kostete das bei drehender letzter Rolle viele Minuten.
+
 ## 0.3.3
 
 - **Auch die zweite Nachkommastelle wird ergänzt:** Bei drei Nachkommastellen ergänzt die App wie in 0.3.2 nun auch eine unklare zweite Nachkommastelle (heute 18:31 „10493,1?3“ drei Minuten nach bestätigten 10493,193), wenn mit dem gelernten Durchfluss nur ein Wert möglich ist. Die schnellste, zuletzt verglichene Rolle und die Vorkommastellen werden nie so ergänzt.

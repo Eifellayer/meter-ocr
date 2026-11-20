@@ -267,7 +267,7 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .crop-draw{{grid-column:1/-1;padding:.85rem;border:1px solid var(--edge);border-radius:.65rem}}
 .crop-draw > p{{margin:.3rem 0 .7rem}}
 .crop-actions{{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:.55rem}}
-.discovered-row{{display:flex;gap:.5rem;align-items:flex-end}}.discovered-row label{{flex:1}}.icon-refresh{{min-height:44px;min-width:44px;padding:0;font-size:1.2rem}}
+.discovered-row{{display:flex;gap:.5rem;align-items:flex-end}}.discovered-row label{{flex:1 1 auto;min-width:0}}.discovered-row select{{width:100%}}.icon-refresh,form:not(.language-bar) button.icon-refresh{{flex:0 0 44px;width:44px;min-width:44px;max-width:44px;height:44px;min-height:44px;padding:0;font-size:1.2rem}}
 .crop-reset{{background:transparent}}
 .crop-draw-image{{position:relative;max-width:700px;touch-action:none;user-select:none;cursor:crosshair}}
 .crop-draw-image img{{display:block;width:100%;height:auto;pointer-events:none}}

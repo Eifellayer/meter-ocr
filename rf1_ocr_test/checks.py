@@ -834,19 +834,22 @@ def learned_flow_limit(history, max_flow_lph):
     return min(max_flow_lph, max(SLOW_ROLLER_FLOOR_LPH, SLOW_ROLLER_MARGIN * max(values)))
 
 
-SLOW_ROLLER_NOTICE = "Erste Nachkommastelle aus dem zuletzt bestätigten Stand und dem bisherigen Durchfluss ergänzt."
+SLOW_ROLLER_NOTICE = "Langsame Nachkommastelle aus dem zuletzt bestätigten Stand und dem bisherigen Durchfluss ergänzt."
 
 
 def slow_roller_digit(readings, anchor, stamp, decimals, integer_digits, flow_limit_lph):
-    """Complete an unclear first decimal when only one value is reachable since the anchor.
+    """Complete unclear first or second decimals when only one value is reachable since the anchor.
 
     Uses the learned flow limit instead of the configured maximum, all other compared digits
     still need a majority. Returns (normalized readings, filled slots) or None.
     """
     if not decimals or flow_limit_lph is None:
         return None
-    return anchored_hidden_digits(readings, anchor, stamp, decimals, integer_digits, flow_limit_lph,
-                                  [integer_digits])
+    # Slow rollers only: never a whole digit and never the fastest (last compared) roller.
+    slots = [integer_digits + offset for offset in range(min(2, decimals - 1))] if decimals > 1 else []
+    if decimals == 1:
+        return None
+    return anchored_hidden_digits(readings, anchor, stamp, decimals, integer_digits, flow_limit_lph, slots)
 
 
 def track_reflection(history, ocr, readings, stamp, *, verified, unclear, decimals,

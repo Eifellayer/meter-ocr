@@ -648,6 +648,25 @@ def read_digit(register, box, read, trim_vertical=False):
         return "?"
 
 
+TEMPLATE_VETO_GAP = .02
+
+
+def template_veto(register, box, digit, polarity, light_digits):
+    """True when the digit templates clearly prefer another digit than the one Tesseract agreed on.
+
+    Blurred 6 and 5 look alike for Tesseract; on the meter both profiles read a clear 6 as 5
+    (20.11.), while the templates still ranked the 6 first. Such a frame is not trusted.
+    """
+    scores = glyph_scores(register, box, polarity, light_digits)
+    if not scores or digit not in scores:
+        return False
+    best = glyph_match.ranked(scores)[0]
+    if best == digit or {best, digit} in glyph_match.CONFUSABLE:
+        # The templates themselves mix up 1 and 7 on this meter; they cannot veto there.
+        return False
+    return scores[best] - scores[digit] >= TEMPLATE_VETO_GAP
+
+
 def single_digit_frames(boxes, index, size, *, last_roller=False):
     normalized = list(map(list, normalize_digit_boxes(boxes, size)))
     left, top, right, bottom = boxes[index]
@@ -679,7 +698,8 @@ def single_digit_frames(boxes, index, size, *, last_roller=False):
                     yield left + dx, top, right + dx, bottom
 
 
-def recover_single_digit(layout, pattern, current, whole_digits, fraction_digits, read, available, report, stop, accept):
+def recover_single_digit(layout, pattern, current, whole_digits, fraction_digits, read, available, report, stop, accept,
+                         veto=None):
     """Probe each missing slot on this register with nudged frames and two agreeing OCR profiles.
 
     Only the unclear positions are re-read; every other digit stays as read. All slots have to
@@ -731,7 +751,7 @@ def recover_single_digit(layout, pattern, current, whole_digits, fraction_digits
             report(attempted, position=position)
             second = read(box, OCR_PROFILES[1])
             attempted += 1
-            if first != second:
+            if first != second or (veto is not None and veto(box, first)):
                 report(attempted, box, "disagreement", position=position)
                 continue
             candidate = filled[:position] + first + filled[position + 1:]
@@ -3070,6 +3090,9 @@ def main():
                                         sample, candidate, comparison_decimals, integer_digits=integer_digits,
                                         exact_prefix=exact_partial,
                                     )[0] in ("match", "ocr_only"),
+                                    veto=lambda box, digit: template_veto(
+                                        register_for_digit, box, digit, polarity,
+                                        options["helle_ziffern"] if polarity == "auto" else polarity == "light"),
                                 )
                                 ocr_attempts += used
                                 ocr_limit = budget

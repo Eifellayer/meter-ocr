@@ -84,6 +84,21 @@ Stand: 20. November 2026 · Version **0.2.9**
 - Echter Test mit höherer Auflösung am eigenen Zähler (bisher nur simuliert).
 - Optionale LED-Steuerung: Licht nur für die Aufnahme ein- und danach sicher wieder ausschalten.
 
+## Ziel Version 1.0 (Vision, Nutzer 20.11., 08:54)
+
+1.0 erst, wenn das Ding „wirklich fertig“ ist. Dann gilt:
+
+- **Jeder Zähler:** alle gängigen mechanischen Zähler (Gas, Wasser, Strom-Ferraris; Rollenzählwerk mit Vor- und Nachkommastellen, rote/schwarze Rollen, helle und dunkle Ziffern, Zeiger-/Analogstellen bei Wasserzählern).
+- **Jede Kamera:** AI-on-the-Edge-ESP, ESPHome-Kamera, beliebige HA-Kamera, USB-/Pi-Kamera.
+- **Widrige Umstände:** beliebiger Winkel und Schräglage, Perspektive, Spiegelung/gespiegeltes Bild, Reflexe und Blitzflecken, Unschärfe, schwaches oder wechselndes Licht – alles erkennt und korrigiert die App **ganz allein** (Fire and Forget, keine Handarbeit bei der Einrichtung).
+- **Plattformen:**
+  - als Home-Assistant-App (wie heute);
+  - **Standalone auf einem Raspberry Pi**, Ziel mindestens **Pi Zero 2 W** (4 × Cortex-A53, 512 MB RAM): eigene Weboberfläche, MQTT/HA-Discovery und REST-Ausgabe, ohne Home Assistant lauffähig. Rechenzeit ist dort zweitrangig („hat alle Zeit der Welt“), Speicher ist die Grenze: Tesseract plus Bildverarbeitung muss in deutlich unter 512 MB laufen, Einrichtung darf Minuten dauern, Prüfungen im Hintergrund.
+  - **als ESPHome-Komponente auf dem ESP32-S3 (mit PSRAM):** Der ESP liest im Betrieb selbst – mit dem gelernten Rahmen, Winkel und einem kleinen Ziffernnetz (TFLite Micro, vgl. tools/digit_net). Die rechenintensive Selbsteinrichtung (Rahmen-/Winkelsuche) läuft einmalig auf HA bzw. dem Pi und überträgt das Ergebnis auf den ESP; danach braucht der ESP keinen Server mehr.
+- **Qualität:** Fehlquote ≤ 10 %, keine sicheren Fehllesungen, Selbstheilung bei verschobener Kamera, verständliche Oberfläche DE/EN, Beta-Rückmeldungen mehrerer Nutzer mit unterschiedlichen Zählern eingearbeitet.
+
+Zwischenschritte (je eigene Versionen, vorher in diesem Plan konkretisieren): Messung Speicher-/Zeitbedarf auf Pi Zero 2 W; Kernlogik von HA-Abhängigkeiten trennen (Bibliothek + dünne HA-/Standalone-Hülle); Ziffernnetz als TFLite exportieren und auf dem ESP32-S3 testen; ESPHome-Komponente mit übertragbarer Geometrie.
+
 ## Später
 
 - Mehrere Zähler mit eigener Quelle, eigenen Rahmen und eigener Historie.

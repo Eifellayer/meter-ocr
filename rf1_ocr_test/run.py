@@ -98,6 +98,8 @@ ENERGY_ENTITY = f"sensor.{NAMESPACE}_verbrauch_gesamt_kwh"
 MAX_IMAGE_PIXELS = 4_000_000
 LIVE_CAPTURE_WINDOW_SECONDS = 20
 LIVE_CAPTURE_MAX_ATTEMPTS = 10
+# Frame nudging re-reads the image already taken, so the capture window above does not apply.
+DIGIT_RECOVERY_SECONDS = 25
 INTENSIVE_ROTATIONS = (-6, 6)
 MAX_LEARNED_ROTATION = 18
 FRESH_OCR_NOTICE = "Der Zählerstand konnte nicht bestätigt werden. Ein frisches Kamerabild folgt in Kürze."
@@ -665,6 +667,16 @@ def single_digit_frames(boxes, index, size, *, last_roller=False):
         dx = max(-left, min(dx, size[0] - right))
         dy = max(-top, min(dy, size[1] - bottom))
         yield left + dx, top + dy, right + dx, bottom + dy
+    if not last_roller:
+        # Then wider steps up to a quarter of the frame: on a slanted camera the frames of the
+        # decimal rollers can sit that far beside the glyph (red border inside, digit cut off).
+        width = right - left
+        for fraction in (9, 6, 4):
+            step = max(2, width // fraction)
+            for dx in (-step, step):
+                dx = max(-left, min(dx, size[0] - right))
+                if dx:
+                    yield left + dx, top, right + dx, bottom
 
 
 def recover_single_digit(layout, pattern, current, whole_digits, fraction_digits, read, available, report, stop, accept):
@@ -2599,6 +2611,7 @@ def main():
         fine_rotation = None
         local_trial = None
         shifted_trial = None
+        recovery_log = None
         restoring_local = False
         recover_geometry = False
         geometry_warning = False
@@ -2976,21 +2989,37 @@ def main():
                         observed = same_frame[-1] if same_frame else ""
                         pattern = disputed_digit_pattern(same_frame, comparison_decimals, integer_digits,
                                                          SHIFTED_DIGIT_POSITIONS)
+                        paused_now = not manual and get_auto_paused()
                         near_hit = (digit_probe_enabled and regular_status != "match"
                                     and read_state["captured"] is not None and not sample.get("reference_is_fallback")
                                     and (pattern or not ocr_confirmed
                                          and missing_digit_pattern(observed, comparison_decimals, integer_digits,
                                                                    SHIFTED_DIGIT_POSITIONS))
-                                    and not stop_ocr())
+                                    and not paused_now)
+                        recovery_log = {"tried": near_hit}
+                        if not near_hit:
+                            recovery_log["reason"] = (
+                                "matched" if regular_status == "match" else
+                                "confirmed" if ocr_confirmed else
+                                "disabled" if not digit_probe_enabled else
+                                "paused" if paused_now else
+                                "no_capture_time" if read_state["captured"] is None else
+                                "fallback_reference" if sample.get("reference_is_fallback") else
+                                "too_many_unclear")
                         if near_hit:
                             layout = tuple(read_state[key] for key in (
                                 "register", "integer_width", "whole_boxes", "fraction_boxes",
                             ))
                             # Only digits that are really missing get extra reads, up to SHIFTED_DIGIT_READS.
                             budget = ocr_attempts + SHIFTED_DIGIT_READS
-                            digit_deadline = time.monotonic() + 10
-                            if live_source:
-                                digit_deadline = min(digit_deadline, live_deadline)
+                            recovery_started = time.monotonic()
+                            recovery_reads = ocr_attempts
+                            # Own budget on the image already taken: the live capture window (fresh
+                            # pictures for a moving meter) is usually used up by the regular reads.
+                            digit_deadline = recovery_started + DIGIT_RECOVERY_SECONDS
+
+                            def stop_recovery():
+                                return (not manual and get_auto_paused()) or time.monotonic() >= digit_deadline
 
                             def report_digit(attempts, box=None, evidence=None, position=None):
                                 if box is not None and pattern:
@@ -3036,8 +3065,7 @@ def main():
 
                                 recovery, used = recover_single_digit(
                                     layout, pattern, observed, integer_digits, fraction_digits, read_shifted,
-                                    budget - ocr_attempts, report_digit,
-                                    lambda: stop_ocr() or time.monotonic() >= digit_deadline,
+                                    budget - ocr_attempts, report_digit, stop_recovery,
                                     lambda candidate: compare_sample(
                                         sample, candidate, comparison_decimals, integer_digits=integer_digits,
                                         exact_prefix=exact_partial,
@@ -3059,7 +3087,7 @@ def main():
                                         sample, ocr, comparison_decimals, integer_digits=integer_digits,
                                         exact_prefix=exact_partial,
                                     )[0]
-                            if not ocr_confirmed and custom_boxes and not stop_ocr():
+                            if not ocr_confirmed and custom_boxes and not stop_recovery():
                                 # Still unclear: move the whole row of frames a little (the camera
                                 # image shifts slightly between captures) and read again. Accept only
                                 # two agreeing profiles, no cut-off digits and a plausible value.
@@ -3071,7 +3099,7 @@ def main():
                                     shifts = [(0, -max(1, box_height // 8)), (0, max(1, box_height // 8)),
                                               (-max(1, box_width // 10), 0), (max(1, box_width // 10), 0)]
                                     for dx, dy in shifts[:ROW_SHIFT_TRIALS]:
-                                        if ocr_attempts + 2 > budget + ROW_SHIFT_READS or stop_ocr():
+                                        if ocr_attempts + 2 > budget + ROW_SHIFT_READS or stop_recovery():
                                             break
                                         moved = [(left + dx, top + dy, right + dx, bottom + dy)
                                                  for left, top, right, bottom in boxes_now]
@@ -3112,6 +3140,11 @@ def main():
                                         )[0]
                                         break
                                 ocr_limit = max(ocr_limit, ocr_attempts)
+                            recovery_log.update(
+                                pattern=pattern or None, reads=ocr_attempts - recovery_reads,
+                                seconds=round(time.monotonic() - recovery_started, 1),
+                                result=ocr_method if ocr_method in ("shifted", "row_shifted") else (
+                                    "timeout" if time.monotonic() >= digit_deadline else "unclear"))
                         if digit_probe_enabled and not ocr_confirmed:
                             # A moving meter can show different digits on separate photographs.
                             ocr_readings = same_frame
@@ -3885,7 +3918,7 @@ def main():
                 options["helle_ziffern"] if active_rules["polarity"] == "auto" else active_rules["polarity"] == "light",
                 active_rules["polarity"] != "auto")
             debug_log.record(
-                experiment=experiment,
+                experiment=experiment, recovery=local.get("recovery_log"),
                 kind="manual" if manual else "automatic", image=data.get("esp_timestamp"), crop=source,
                 ocr=ocr, readings=local.get("ocr_readings"), attempts=data.get("ocr_attempts"),
                 method=local.get("ocr_method"), outcome=outcome, detail=updated.get("check_detail"),

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.4
+
+- **Unklare Nachkommastellen werden wieder per Rahmenverschiebung gerettet:** Bei Kameras galt für die ganze Prüfung ein Zeitfenster von 20 Sekunden. Seit die Ziffernvorlagen mitlesen, war es nach zwei, drei Lesungen aufgebraucht, und die Verschiebung einzelner Rahmen startete gar nicht mehr („Versuch 5 von 15“). Sie liest das schon aufgenommene Bild und bekommt jetzt ein eigenes Budget von 25 Sekunden. Rahmen der Nachkommastellen werden dabei weiter seitlich verschoben (bis zu einem Viertel der Rahmenbreite), und der rote Rand des Nachkommafelds gilt nicht mehr als „abgeschnittene Ziffer“. Am Kamerabild von heute Nacht wird die 1 an der 7. Stelle so gelesen, die vorher nie erkannt wurde.
+- **Keine 7 statt 1:** Die Ziffernvorlagen halten die 1 dieses Zählers (mit langer Fahne) leicht für eine 7. Zwischen 1 und 7 übernimmt die App eine Vorlage jetzt nur noch bei deutlichem Abstand.
+- **Debug-Protokoll:** Neues Feld `recovery` je Prüfung – ob die Rahmenverschiebung versucht wurde, warum nicht, mit welchem Ergebnis und wie lange.
 ## 0.2.3
 
 - **Funktionierende Einrichtung bleibt erhalten:** Ein Tippen auf einen vorgeschlagenen Ziffernbereich im Vorschaubild startet die Selbsteinrichtung nicht mehr sofort neu, sondern markiert den Bereich nur; gestartet wird erst mit dem Knopf darunter. Startet eine neue Einrichtung trotzdem, prüft sie den zuletzt bestätigten Rahmen immer zuerst – auch wenn ein anderer Suchbereich gewählt ist. So setzt sich kein Rahmen auf dem Gehäuserand durch, solange der alte Rahmen weiter liest.

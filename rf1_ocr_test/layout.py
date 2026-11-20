@@ -856,7 +856,26 @@ def glyph_clipped(image, box):
     if busiest < 12:
         return False
     edge = max(1, width // 12)
-    return max(profile[:edge]) > busiest * .75 or max(profile[-edge:]) > busiest * .75
+    if not (max(profile[:edge]) > busiest * .75 or max(profile[-edge:]) > busiest * .75):
+        return False
+    if image.mode != "RGB":
+        return True
+    # A red decimal field next to a black roller, the comma or the field border also vary along
+    # a column. Confirm on the bright strokes alone (darkest channel: red and black both dark).
+    from PIL import ImageChops
+    red, green, blue = image.split()
+    darkest = ImageChops.darker(ImageChops.darker(red, green), blue)
+    margin = max(4, width // 2)
+    region = (max(0, left - margin), top, min(gray.width, right + margin), bottom)
+    strokes = bright_glyphs(darkest.crop(region), max(3, round((bottom - top) * .35)))
+    # Stroke mass per column: also a plain vertical "1" counts (it hardly varies along a column).
+    offset = left - region[0]
+    mass = [ImageStat.Stat(strokes.crop((x, 0, x + 1, bottom - top))).mean[0]
+            for x in range(offset, offset + width)]
+    heaviest = max(mass)
+    if heaviest < 12:
+        return True
+    return max(mass[:edge]) > heaviest * .5 or max(mass[-edge:]) > heaviest * .5
 
 
 def glare_slots(register, boxes):

@@ -523,6 +523,13 @@ def lit_picture(light, take, token, *, fetch, post, delay=LIGHT_DELAY, sleep=tim
                 if retry_brightness is not None and (brightness is None or retry_brightness > brightness):
                     picture, brightness = retry, retry_brightness
                 if dark_picture(light, brightness):
+                    # The ESP may still be busy switching: one more, longer wait before giving up.
+                    sleep(2 * delay)
+                    retry = take()
+                    retry_brightness = picture_brightness(retry)
+                    if retry_brightness is not None and (brightness is None or retry_brightness > brightness):
+                        picture, brightness = retry, retry_brightness
+                if dark_picture(light, brightness):
                     # Still dark with the light on: the camera itself is set too dark.
                     raise_camera_gain(light, brightness, token, fetch=fetch, post=post)
             except OSError as error:
@@ -1192,6 +1199,17 @@ def publish_standalone(history, camera, token):
         value = last["reading"][:digits + (last["decimals"] + 1 if last["decimals"] else 0)]
         captured = last["image_time"]
         is_fallback = history.get("check_status") != "ocr_only"
+    else:
+        # No reading yet after a new setup or reset: keep showing the last booked value
+        # instead of "unavailable" (dashboards and statistics would show a gap).
+        counter = history.get("consumption")
+        if (isinstance(counter, dict) and isinstance(counter.get("source"), list)
+                and camera in counter["source"] and type(counter.get("anchor_litres")) is int):
+            step = counter.get("anchor_step") or counter.get("step_litres") or 1
+            decimals = {1: 3, 10: 2, 100: 1}.get(step, 0)
+            value = f"{counter['anchor_litres'] / 1000:.{decimals}f}"
+            captured = counter.get("anchor_time")
+            is_fallback = True
     payload = {
         "state": value,
         "attributes": {"friendly_name": "Meter OCR Zählerstand" + LABEL_SUFFIX, "unit_of_measurement": "m³",
@@ -3311,10 +3329,13 @@ def main():
                                     ocr_readings, comparison_decimals, integer_digits,
                                     standalone=require_consensus, standalone_composition=True,
                                 )
-                                whole = meter_prefix(plain, 0, integer_digits) if plain_confirmed else None
+                                whole = (int(plain[:integer_digits]) if plain[:integer_digits].isdigit()
+                                         and len(plain) >= integer_digits else None)
                                 if whole is not None and whole < counter["anchor_litres"] // 1000:
+                                    # Whole digits agree on a lower value; unclear trailing decimals are
+                                    # handled by the coarser check below as usual.
                                     print(f"Lesung {plain} liegt unter dem gespeicherten Stand – zur Prüfung auf Lesefehler")
-                                    ocr, ocr_confirmed = plain, True
+                                    ocr, ocr_confirmed = plain, plain_confirmed
                             if ocr_confirmed and ocr not in ocr_readings:
                                 ocr_method = "composed"
                             regular_status = compare_sample(

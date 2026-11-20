@@ -193,7 +193,7 @@ class DarkPictureTest(unittest.TestCase):
 
     def test_dark_pictures_do_not_lower_the_reference(self):
         self.run.LIT_BRIGHTNESS["light.blitz"] = 85
-        calls, fetch, post, take = self.calls_for([grey_jpeg(40), grey_jpeg(42)], ["off"])
+        calls, fetch, post, take = self.calls_for([grey_jpeg(40), grey_jpeg(42), grey_jpeg(41)], ["off"])
         lit_picture("light.blitz", take, "t", fetch=fetch, post=post, sleep=lambda _: None)
         self.assertEqual(85, self.run.LIT_BRIGHTNESS["light.blitz"])
 

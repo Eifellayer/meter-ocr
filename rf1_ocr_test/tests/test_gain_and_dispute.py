@@ -75,10 +75,22 @@ class CameraGainTest(unittest.TestCase):
     def test_dark_with_light_raises_gain_in_bounded_steps(self):
         run.LIT_BRIGHTNESS["light.blitz"] = 79
         calls, fetch, post = self.make()
-        pictures = iter([grey_jpeg(24), grey_jpeg(25)])
+        pictures = iter([grey_jpeg(24), grey_jpeg(25), grey_jpeg(25)])
         run.lit_picture("light.blitz", lambda: next(pictures), "t", fetch=fetch, post=post, sleep=lambda _: None)
         sets = [call[2] for call in calls if call[0] == "post" and call[1] == "set_value"]
         self.assertEqual([{"entity_id": "number.esp_verstarkung", "value": 6}], sets)
+
+    def test_late_light_gets_a_second_longer_wait(self):
+        run.LIT_BRIGHTNESS["light.blitz"] = 79
+        calls, fetch, post = self.make()
+        bright = grey_jpeg(80)
+        pictures = iter([grey_jpeg(24), grey_jpeg(25), bright])
+        waits = []
+        picture = run.lit_picture("light.blitz", lambda: next(pictures), "t", fetch=fetch, post=post,
+                                  sleep=waits.append)
+        self.assertEqual(bright, picture)
+        self.assertIn(3.0, waits)
+        self.assertFalse([call for call in calls if call[0] == "post" and call[1] == "set_value"])
 
     def test_gain_is_adjusted_at_most_every_few_minutes(self):
         run.LIT_BRIGHTNESS["light.blitz"] = 79
@@ -105,3 +117,17 @@ class CameraGainTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StandaloneSensorTest(unittest.TestCase):
+    def test_sensor_keeps_the_booked_value_after_a_new_setup(self):
+        sent = []
+        history = {"consumption": {"source": ["esphome", "camera.gas", ""], "anchor_litres": 10490400,
+                                   "anchor_step": 100, "anchor_time": 1.0}}
+        from unittest.mock import patch
+        with patch.object(run, "publish_state", lambda url, payload, token: sent.append(payload)):
+            run.publish_standalone(history, "camera.gas", "t")
+            run.publish_standalone(history, "camera.other", "t")
+        self.assertEqual("10490.4", sent[0]["state"])
+        self.assertTrue(sent[0]["attributes"]["is_fallback"])
+        self.assertEqual("unavailable", sent[1]["state"])

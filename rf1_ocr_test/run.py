@@ -396,6 +396,39 @@ def post_json(url, token, payload, timeout=8):
         return response.read(MAX_RESPONSE_BYTES)
 
 
+# Median brightness of recent pictures taken with the capture light, per light (adaptive,
+# in memory). A picture far darker than that was taken without (or with a fading) light.
+LIT_BRIGHTNESS = {}
+DARK_PICTURE_RATIO = 0.75
+
+
+def picture_brightness(picture):
+    """Median grey value of a small copy of the picture, or None if it cannot be decoded."""
+    try:
+        with Image.open(io.BytesIO(picture)) as image:
+            histogram = image.convert("L").resize((80, 60)).histogram()
+        seen = 0
+        for value, count in enumerate(histogram):
+            seen += count
+            if seen * 2 > 80 * 60:
+                return value
+        return None
+    except (OSError, ValueError, TypeError, Image.DecompressionBombError):
+        return None
+
+
+def dark_picture(light, brightness):
+    reference = LIT_BRIGHTNESS.get(light)
+    return brightness is not None and reference is not None and brightness < reference * DARK_PICTURE_RATIO
+
+
+def remember_lit_brightness(light, brightness):
+    if brightness is None:
+        return
+    reference = LIT_BRIGHTNESS.get(light)
+    LIT_BRIGHTNESS[light] = brightness if reference is None else 0.8 * reference + 0.2 * brightness
+
+
 def lit_picture(light, take, token, *, fetch, post, delay=LIGHT_DELAY, sleep=time.sleep):
     """Switch a Home Assistant light on for one picture, like AI on the Edge's flash.
 
@@ -418,7 +451,34 @@ def lit_picture(light, take, token, *, fetch, post, delay=LIGHT_DELAY, sleep=tim
                 sleep(delay)
             except OSError as error:
                 print(f"Licht für die Aufnahme konnte nicht eingeschaltet werden: {type(error).__name__}")
-        return take()
+        picture = take()
+        brightness = picture_brightness(picture)
+        if dark_picture(light, brightness):
+            # Light not (yet) on, or switched off externally just before the picture
+            # (e.g. by a "keep the flash on" switch on the ESP): switch on, wait, take again.
+            debug_log.record(kind="dark_picture", brightness=brightness,
+                             expected=round(LIT_BRIGHTNESS.get(light, 0)), already_on=already_on)
+            print("Bild ohne Licht erkannt – Licht an und neues Bild.")
+            try:
+                if already_on and not switched:
+                    try:
+                        still_on = json.loads(fetch(f"{base}/states/{light}", token, timeout=4)).get("state") == "on"
+                    except (OSError, ValueError, TypeError, AttributeError):
+                        still_on = True
+                    # Switched off by someone else in the meantime: now the app owns it.
+                    switched = not still_on
+                post(f"{base}/services/light/turn_on", token, {"entity_id": light})
+                switched = switched or not already_on
+                sleep(delay)
+                retry = take()
+                retry_brightness = picture_brightness(retry)
+                if retry_brightness is not None and (brightness is None or retry_brightness > brightness):
+                    picture, brightness = retry, retry_brightness
+            except OSError as error:
+                print(f"Neues Bild mit Licht nicht möglich: {type(error).__name__}")
+        if not dark_picture(light, brightness):
+            remember_lit_brightness(light, brightness)
+        return picture
     finally:
         if switched:
             switch_light_off(light, token, fetch=fetch, post=post, sleep=sleep)
@@ -1724,7 +1784,7 @@ def main():
                          "setup_pending_started": None if completed else pending_started,
                          "setup_pending_metrics": None if completed else pending_metrics})
 
-    def control_calibration(action, limit, region=None, *, verification_id=None):
+    def control_calibration(action, limit, region=None, *, verification_id=None, trigger="user"):
         nonlocal calibration, calibration_configuration, calibration_next
         with settings_lock:
             if action == "repair":
@@ -1817,6 +1877,9 @@ def main():
                 calibration_images.clear()
                 calibration_configuration = configuration
                 calibration_next = now
+                # Who started which search: a setup must never start unnoticed.
+                debug_log.record(kind="setup_start", action=action, trigger=trigger,
+                                 region=bool(region), known_good=known_good is not None)
             wake_worker.set()
             return True
 
@@ -2501,7 +2564,7 @@ def main():
                     try:
                         if resume_optional_eighth_digit(
                                 history, active_rules, active_source, now.timestamp(),
-                                lambda: control_calibration("intensive", DEFAULT_LIMIT)):
+                                lambda: control_calibration("intensive", DEFAULT_LIMIT, trigger="eighth_digit")):
                             atomic_write(HISTORY, json.dumps(history).encode("utf-8"), 0o600)
                     except (OSError, ValueError, TypeError) as error:
                         print(f"Hintergrundprüfung der achten Ziffer konnte nicht erneut starten: {type(error).__name__}")
@@ -2509,7 +2572,7 @@ def main():
                         if relocate_last_digit_due(history, active_rules, now.timestamp()):
                             history["last_digit_relocate_at"] = now.timestamp() + EIGHTH_DIGIT_RETRY_SECONDS
                             history.pop("last_digit_relocate_due", None)
-                            if control_calibration("relocate_last", DEFAULT_LIMIT):
+                            if control_calibration("relocate_last", DEFAULT_LIMIT, trigger="relocate"):
                                 print("Rahmen der letzten Stelle sitzt vermutlich daneben – suche ihn im Hintergrund neu")
                             atomic_write(HISTORY, json.dumps(history).encode("utf-8"), 0o600)
                     except (OSError, ValueError, TypeError) as error:
@@ -2543,7 +2606,7 @@ def main():
                 setup_retry.update(job=None, count=0)
                 try:
                     atomic_write(HISTORY, json.dumps(history).encode("utf-8"), 0o600)
-                    if control_calibration("setup", DEFAULT_LIMIT):
+                    if control_calibration("setup", DEFAULT_LIMIT, trigger="update"):
                         print("Neue App-Version: Selbsteinrichtung startet automatisch neu.")
                         debug_log.record(kind="setup_autostart", build=build)
                         continue
@@ -2556,7 +2619,7 @@ def main():
                 if time.monotonic() >= setup_retry["at"]:
                     setup_retry.update(job=None, count=setup_retry["count"] + 1)
                     try:
-                        control_calibration("setup", job.limit)
+                        control_calibration("setup", job.limit, trigger="retry")
                     except (OSError, ValueError):
                         print("Selbsteinrichtung konnte nicht automatisch neu gestartet werden.")
                     continue
@@ -3715,8 +3778,10 @@ def main():
                                     stabilizing_until, _ = setup_deadlines(get_auto_rules(), active_source)
                                     interval_minutes = stabilization_interval(interval_minutes, stabilizing_until, now.timestamp())
                                     optimization_paused = True
-                    if (verified and not stationary_partial and source == "manual" and active_rules["crop_mode"] == "manual"
-                            and not rotation_adjustment and not raw_fallback):
+                    # A frame that reads a value confirmed by a second picture is the starting point
+                    # for any later setup (also when the setup wizard is run again).
+                    if ((verified or outcome == "ocr_only") and not stationary_partial and source == "manual"
+                            and active_rules["crop_mode"] == "manual" and not raw_fallback):
                         with settings_lock:
                             if get_auto_rules() == active_rules and get_source()[0] == active_source:
                                 remember_known_good_layout(active_rules, active_source,
@@ -3973,7 +4038,7 @@ def main():
             with settings_lock:
                 if get_auto_rules() == active_rules and get_source()[0] == active_source and not get_auto_paused():
                     try:
-                        repair_started = bool(control_calibration("repair", GEOMETRY_REPAIR_LIMIT))
+                        repair_started = bool(control_calibration("repair", GEOMETRY_REPAIR_LIMIT, trigger="repair"))
                     except (OSError, ValueError) as error:
                         print(f"Automatische Nachjustierung nicht gestartet: {type(error).__name__}")
         if geometry_warning and reminder.enabled:

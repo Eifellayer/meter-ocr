@@ -154,13 +154,6 @@ header{{display:flex;align-items:baseline;justify-content:space-between;gap:.5re
 .demo-grid{{display:grid;gap:.8rem;grid-template-columns:repeat(auto-fit,minmax(min(100%,13rem),1fr))}}
 .demo-grid figure{{margin:0}}
 .demo-grid img{{width:100%;background:#101b23;border-radius:.6rem}}
-#experimental summary{{cursor:pointer;font-weight:650}}
-#experimental-meter-list{{margin-top:1rem}}
-.experimental-meter-card{{padding:.85rem;margin:.65rem 0;border:1px solid var(--edge);border-radius:.75rem}}
-.experimental-meter-card p{{margin:.35rem 0}}
-.experimental-hour-chart{{display:flex;gap:3px;align-items:end;height:4.5rem;margin-top:.6rem;border-bottom:1px solid var(--edge)}}
-.experimental-hour-chart span{{flex:1;min-width:0;background:#64c8ac;border-radius:3px 3px 0 0}}
-#experimental-form textarea{{display:block;width:100%;font:inherit;padding:.5rem;background:var(--surface);color:inherit;border:1px solid var(--edge);border-radius:.5rem}}
 .setup-success-icon{{font-size:1.5rem;font-weight:750;line-height:1.25}}
 .setup-success strong{{font-size:clamp(1.15rem,4vw,1.4rem)}}
 .setup-success p{{margin:.35rem 0 0}}
@@ -602,10 +595,10 @@ header #open-setup,header .language-bar,header .language-bar select{{width:100%;
 header{{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.6rem}}
 .main-tabs button[aria-selected="true"]:not(:disabled):hover{{background:var(--ink);color:var(--surface)}}
 .calibration-card form > :is(p,div,details){{grid-column:1/-1}}
-.settings-item:not(.manual-panel) > summary,#experimental > summary{{display:flex;align-items:center;justify-content:space-between;list-style:none;cursor:pointer}}
-.settings-item:not(.manual-panel) > summary::-webkit-details-marker,#experimental > summary::-webkit-details-marker{{display:none}}
-.settings-item:not(.manual-panel) > summary::after,#experimental > summary::after{{content:"";width:.55rem;height:.55rem;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);transition:transform .2s;margin-right:.2rem}}
-.settings-item:not(.manual-panel)[open] > summary::after,#experimental[open] > summary::after{{transform:rotate(-135deg)}}
+.settings-item:not(.manual-panel) > summary{{display:flex;align-items:center;justify-content:space-between;list-style:none;cursor:pointer}}
+.settings-item:not(.manual-panel) > summary::-webkit-details-marker{{display:none}}
+.settings-item:not(.manual-panel) > summary::after{{content:"";width:.55rem;height:.55rem;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);transition:transform .2s;margin-right:.2rem}}
+.settings-item:not(.manual-panel)[open] > summary::after{{transform:rotate(-135deg)}}
 .reset-section > summary{{color:var(--bad)}}
 @media(max-width:560px){{header{{grid-template-columns:1fr 1fr}}.brand{{grid-column:1/-1}}header > button,.language-bar,.language-bar select{{width:100%}}
 .meter-hero{{margin:-.9rem -.9rem 1rem;padding:1.1rem .9rem 1rem}}.brand-subtitle{{display:none}}.automatic-actions > *,.automatic-actions button{{width:100%}}
@@ -1358,18 +1351,6 @@ Bei anhaltenden Problemen benachrichtigen
 <button type="button" id="open-reset">Auf Werkseinstellungen zurücksetzen</button>
 </div></details>
 </div>
-<details class="panel" id="experimental" {extra_meter_open}><summary>Experimentell · Mehrere Zähler</summary>
-<p>Zusätzliche Home-Assistant-Sensoren beobachten. Diese Funktion ist experimentell. Praxistests stehen noch aus.</p>
-<p class="settings-note">Unterstützt fortlaufend steigende Zähler in m³ oder kWh. Pro Zeile eine Entität und optional das Prüfintervall in Minuten, z. B. <code>sensor.wasserzaehler, 15</code>.</p>
-<form id="experimental-form" method="post" action="experimentelle-zaehler">
-<input type="hidden" name="csrf" value="{csrf}"><input type="hidden" name="lang" value="{language}">
-<input type="hidden" name="mode" value="{language_mode}">
-<label>Zusätzliche Zähler<textarea rows="3" name="meters" maxlength="640">{extra_meter_config}</textarea></label>
-<button type="submit">Zähler speichern</button>
-<p role="status" id="experimental-status"></p>
-</form>
-<div id="experimental-meter-list"></div>
-</details>
 <dialog class="setup-dialog" id="demo-dialog" aria-labelledby="demo-title">
 <div class="dialog-heading"><h2 id="demo-title">Zähler-Demo</h2><button type="button" id="close-demo">Schließen</button></div>
 <p>Probiere die Erkennung mit einem künstlichen Gaszählerbild. Deine echte Einrichtung und Verbrauchsdaten bleiben getrennt.</p>
@@ -3460,77 +3441,6 @@ function renderConsumption(data) {{
   }}
 }}
 
-const experimental = document.querySelector('#experimental');
-const extraForm = document.querySelector('#experimental-form');
-const extraStatus = document.querySelector('#experimental-status');
-async function refreshExperimental() {{
-  if (!experimental.open) return;
-  const reply = await fetch('experimentelle-zaehler', {{cache:'no-store'}});
-  if (!reply.ok) return;
-  const rows = await reply.json();
-  const grid = document.querySelector('#experimental-meter-list');
-  const snapshot = JSON.stringify(rows);
-  if (grid.dataset.snapshot === snapshot) return;
-  grid.dataset.snapshot = snapshot;
-  const states = {{
-    waiting: 'Wartet auf Daten', ok: 'Aktuell', stale: 'Wartet auf neuen Sensorwert',
-    reset: 'Neuer Ausgangswert gespeichert', reset_pending: 'Möglicher Zählerrücksprung',
-    unavailable: 'Kein gültiger Sensorwert',
-  }};
-  grid.replaceChildren(...rows.map(meter => {{
-    const card = document.createElement('article');
-    card.className = 'experimental-meter-card';
-    const heading = document.createElement('strong');
-    heading.textContent = meter.label;
-    const status = document.createElement('p');
-    status.textContent = states[meter.status] + ' · ' + meter.id;
-    const last = document.createElement('p');
-    const value = amount => amount == null ? '–' : consumptionFormat.format(amount / 1000) + ' ' + meter.unit;
-    last.textContent = 'Letzte Ablesung ' + value(meter.reading) +
-      (meter.timestamp ? ' · ' + formatStamp(meter.timestamp) : '');
-    const usage = document.createElement('p');
-    const format = bucket => (bucket.estimated ? '≈ ' : '') + value(bucket.litres) +
-      (bucket.partial ? ' · teilweise' : '');
-    usage.textContent = 'Diese Stunde ' + format(meter.usage.hours[0]) + ' · Heute ' + format(meter.usage.days[0]);
-    const chart = document.createElement('div');
-    chart.className = 'experimental-hour-chart';
-    chart.setAttribute('role', 'img');
-    chart.setAttribute('aria-label', 'Verbrauch je Stunde');
-    const hours = meter.usage.hours.slice().reverse();
-    const max = Math.max(1, ...hours.map(entry => entry.litres || 0));
-    for (const entry of hours) {{
-      const bar = document.createElement('span');
-      bar.title = entry.label + ' · ' + format(entry);
-      bar.style.height = entry.litres === null ? '0%' : Math.max(3, 100 * entry.litres / max) + '%';
-      chart.append(bar);
-    }}
-    const days = document.createElement('details');
-    const daysLabel = document.createElement('summary');
-    daysLabel.textContent = 'Verlauf nach Tag';
-    days.append(daysLabel);
-    for (const entry of meter.usage.days) {{
-      const day = document.createElement('p');
-      day.textContent = entry.label + ' · ' + format(entry);
-      days.append(day);
-    }}
-    card.append(heading, status, last, usage, chart, days);
-    return card;
-  }}));
-}}
-experimental.addEventListener('toggle', () => refreshExperimental().catch(() => {{}}));
-extraForm.addEventListener('submit', async event => {{
-  event.preventDefault();
-  try {{
-    const response = await fetch('experimentelle-zaehler', {{
-      method: 'POST', body: new URLSearchParams(new FormData(extraForm)),
-    }});
-    if (!response.ok) throw Error();
-    extraStatus.textContent = 'Zähler gespeichert.';
-    await refreshExperimental();
-  }} catch (_) {{
-    extraStatus.textContent = 'Prüfe die Sensor-IDs und Prüfintervalle.';
-  }}
-}});
 function showStale(kind) {{
   staleView = kind;
   const box = document.querySelector('#hero-stale');
@@ -3612,7 +3522,6 @@ async function refreshAutomatic() {{
     configuredDecimals = Number.isInteger(sample.configured_decimals) ? sample.configured_decimals : comparedDecimals;
     lastDigitSearchAt = typeof sample.last_digit_search_at === 'number' ? sample.last_digit_search_at : null;
     partialEighthDigit = sample.partial_eighth_digit === true;
-    if (experimental.open) refreshExperimental().catch(() => {{}});
     document.querySelector('#paused-notice').hidden = !sample.paused;
     document.querySelector('#pause-auto-form').hidden = sample.paused;
     document.querySelector('#start-automatic').disabled = !sample.can_start_automatic;
@@ -3863,7 +3772,7 @@ def start_panel(
     request_factory_reset=None, get_reset_status=None, skip_setup=None, get_activity=None,
     get_auto_paused=None, save_auto_paused=None, discover_sources=None,
     settings_lock=None, get_calibration=None, control_calibration=None, get_calibration_image=None,
-    has_calibration_backup=None, get_wizard_image=None, statistics_zone=timezone.utc, experimental_meters=None,
+    has_calibration_backup=None, get_wizard_image=None, statistics_zone=timezone.utc,
     can_start_automatic=None, start_automatic_check=None,
 ):
     images = {"/aktuell.jpg": current_image, "/treffer.jpg": good_image,
@@ -4400,9 +4309,6 @@ def start_panel(
                         )
                 self.reply(json.dumps(snapshot).encode("utf-8"), "application/json; charset=utf-8")
                 return
-            if path == "/experimentelle-zaehler" and experimental_meters is not None:
-                self.reply(json.dumps(experimental_meters.snapshot()).encode("utf-8"), "application/json")
-                return
             if path not in ("/", "/automatic"):
                 self.send_error(404)
                 return
@@ -4436,7 +4342,6 @@ def start_panel(
             automatic += f" (Home Assistant: {source_name})" if source_name else " (Home Assistant)"
             scripts = f"<script>{profile_script(user)}</script>" if user and mode == "auto" else ""
             summary = automatic_summary(history, language, auto_rules)
-            extra_meters = experimental_meters.snapshot() if experimental_meters is not None else []
             delivery = get_delivery()
             source, setup_pending = get_source()
             source_selected = source.get("selected", not setup_pending)
@@ -4560,10 +4465,6 @@ def start_panel(
                 instance_id=INSTANCE_ID,
                 ignore_hidden="" if summary["incident"] else "hidden",
                 profile_script=scripts,
-                extra_meter_config=html.escape("\n".join(
-                    f"{meter['id']}, {meter['minutes']}" for meter in extra_meters
-                )),
-                extra_meter_open="open" if extra_meters else "",
                 overview_hidden="hidden" if settings_tab_active or tools_tab_active else "",
                 settings_hidden="" if settings_tab_active else "hidden",
                 tools_hidden="" if tools_tab_active else "hidden",
@@ -4760,7 +4661,7 @@ def start_panel(
             if path not in ("/pruefen", "/automatik", "/ausschnitt-uebernehmen", "/sprache",
                             "/benachrichtigungen", "/bildquelle", "/einrichtung", "/einrichtungsbild",
                             "/einrichtung-ueberspringen", "/werkreset", "/automatik-pause",
-                            "/spiegelungs-hinweis-ausblenden", "/ergaenzte-ziffer-bestaetigen", "/selbsteinrichtung", "/fallback", "/ziffernrahmen", "/zaehler-demo", "/experimentelle-zaehler", "/automatik-jetzt", "/vergleichsgenauigkeit"):
+                            "/spiegelungs-hinweis-ausblenden", "/ergaenzte-ziffer-bestaetigen", "/selbsteinrichtung", "/fallback", "/ziffernrahmen", "/zaehler-demo", "/automatik-jetzt", "/vergleichsgenauigkeit"):
                 self.send_error(404)
                 return
             fallback = browser_locale(self.headers.get("Accept-Language", ""))
@@ -4946,20 +4847,6 @@ def start_panel(
                     problem(503)
                 finally:
                     demo_lock.release()
-                return
-            if path == "/experimentelle-zaehler":
-                if experimental_meters is None:
-                    self.send_error(404)
-                    return
-                try:
-                    experimental_meters.configure(field("meters"))
-                except ValueError:
-                    problem(400)
-                    return
-                except OSError:
-                    problem(503)
-                    return
-                self.reply(b'{}', "application/json")
                 return
             if path == "/einrichtungsbild":
                 try:

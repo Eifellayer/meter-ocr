@@ -69,7 +69,6 @@ from settings import DEFAULTS, SCHEMA_VERSION, load_options
 from source_settings import (LIGHT, CAMERA, DISCOVERY_TEMPLATE, ESP_ADDRESS_MODES, REFERENCE,
                              discovered_sources, source_check_key, source_rules)
 from panel import start_panel
-from experimental_meters import ExperimentalMeters
 from language import load_preferences
 from transport import open_core
 
@@ -2566,12 +2565,6 @@ def main():
         write_setup_log(setup_entries)
         return True
 
-    extra_meters = ExperimentalMeters(
-        HISTORY.with_name("experimental-meters.json"),
-        lambda entity: json.loads(get_bytes(f"http://supervisor/core/api/states/{entity}", token, timeout=5)),
-        atomic_write, zone,
-    )
-    extra_meters.start()
     _, update_progress, reset_manual_progress = start_panel(
         HISTORY, DESTINATION, GOOD_IMAGE, requested, default_decimals, default_attempts,
         get_auto_rules, save_auto_rules, options["ausschnitt"], options["vorkomma_breite"], TEST_IMAGE,
@@ -2585,7 +2578,7 @@ def main():
         get_auto_paused=get_auto_paused, save_auto_paused=save_auto_paused,
         settings_lock=settings_lock, get_calibration=calibration_status, control_calibration=control_calibration,
         get_calibration_image=calibration_image, has_calibration_backup=lambda: read_geometry_backup() is not None,
-        statistics_zone=zone, experimental_meters=extra_meters,
+        statistics_zone=zone,
         can_start_automatic=automatic_check_available, start_automatic_check=start_automatic_now,
     )
     reminder = Reminder(token)
@@ -2615,7 +2608,8 @@ def main():
                 if keep_statistics and path == HISTORY:
                     continue
                 path.unlink(missing_ok=True)
-            extra_meters.reset(keep_statistics=keep_statistics)
+            # Left over from the removed "Experimentell · Mehrere Zähler" field (≤ 0.3.2).
+            HISTORY.with_name("experimental-meters.json").unlink(missing_ok=True)
             history = retained_history
             auto_paused["value"] = False
             configured_source = dict(default_source)

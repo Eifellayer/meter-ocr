@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.3
+
+- **Auch die zweite Nachkommastelle wird ergänzt:** Bei drei Nachkommastellen ergänzt die App wie in 0.3.2 nun auch eine unklare zweite Nachkommastelle (heute 18:31 „10493,1?3“ drei Minuten nach bestätigten 10493,193), wenn mit dem gelernten Durchfluss nur ein Wert möglich ist. Die schnellste, zuletzt verglichene Rolle und die Vorkommastellen werden nie so ergänzt.
+- **„Experimentell · Mehrere Zähler“ entfernt:** Das Textfeld beobachtete nur andere Home-Assistant-Sensoren und rechnete daraus Verbrauch – das kann Home Assistant selbst (Verbrauchszähler-Helfer, Energie-Dashboard), und es hatte nichts mit weiteren Kamera-Zählern zu tun. Feld, Abfrage und Hintergrunddienst sind weg; frühere Einträge werden nicht mehr beachtet und beim Zurücksetzen auf Werkseinstellungen gelöscht. Echte mehrere Zähler (eigene Kamera, eigene Rahmen und Historie) bleiben Ziel für Version 1.0 und bekommen dann einen Assistenten.
+
 ## 0.3.2
 
 - **Hintergrundsuche ohne Extrabilder:** Die Suche nach der 8. Ziffer, die Rahmen-Nachsuche und die Feinjustierung nach der Einrichtung werten jetzt nur noch die Bilder der normalen automatischen Prüfungen mit aus. Sie fordern keine eigenen Bilder (und keinen zusätzlichen Blitz) mehr an – bisher kam nach der Einrichtung alle 13 Sekunden ein Extrabild. Die Restzeit-Anzeige („noch höchstens … min“) und der Zeitbalken entfallen; stattdessen steht dort „läuft nebenbei mit den normalen Prüfbildern mit“.

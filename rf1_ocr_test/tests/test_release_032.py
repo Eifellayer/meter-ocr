@@ -72,6 +72,17 @@ class SlowRollerTest(unittest.TestCase):
     def test_other_digits_still_need_a_majority(self):
         self.assertIsNone(slow_roller_digit(["10492.?5?", "10492.???"], self.anchor, 1120.0, 2, 5, 1800))
 
+    def test_second_decimal_completed_with_three_decimals(self):
+        # 18:31: "10493.1?3" three minutes after the confirmed 10493.193.
+        anchor = {"time": 1000.0, "value": 10493193}
+        filled = slow_roller_digit(["10493.1?3", "10493.1?3"], anchor, 1180.0, 3, 5, 1500)
+        self.assertEqual((["10493.193", "10493.193"], [6]), filled)
+
+    def test_last_compared_roller_is_never_filled(self):
+        anchor = {"time": 1000.0, "value": 10493190}
+        self.assertIsNone(slow_roller_digit(["10493.19?", "10493.19?"], anchor, 1060.0, 3, 5, 1500))
+        self.assertIsNone(slow_roller_digit(["10493.?", "10493.?"], anchor, 1060.0, 1, 5, 1500))
+
     def test_whole_digits_are_never_filled(self):
         self.assertIsNone(slow_roller_digit(["1049?.85?", "1049?.85?"], self.anchor, 1120.0, 2, 5, 1800))
 

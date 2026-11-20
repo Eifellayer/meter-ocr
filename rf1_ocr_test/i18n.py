@@ -13,6 +13,9 @@ from layout import MANUAL_ROW_UNCLEAR, PARTLY_UNCLEAR, RAW_ROW_UNCLEAR
 
 
 EN_UI = {
+    ">So weit ist die Einrichtung<": ">Setup progress<",
+    "<summary>Gefundene Rahmen (Kandidaten)</summary>": "<summary>Frames found (candidates)</summary>",
+    'aria-label="Gelesene Ziffern je Versuch und Stelle"': 'aria-label="Digits read per attempt and position"',
     "Klappt es dauerhaft nicht? <a": "Still not working? <a",
     "(öffnet ein vorausgefülltes Formular auf GitHub, ohne private Daten).": "(opens a prefilled form on GitHub, without private data).",
     "ⓘ Experimentelle Funktionen": "ⓘ Experimental functions",

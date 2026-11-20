@@ -258,6 +258,42 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .calibration-crop-region{{position:absolute;border:2px solid #ffcd60;border-radius:.1rem;box-shadow:0 0 0 1px #151c23;pointer-events:none}}
 .calibration-candidates{{font-variant-numeric:tabular-nums;padding-inline-start:1.8rem;margin:.45rem 0}}
 .calibration-candidates li{{margin:.2rem 0}}
+/* Setup progress: vertical timeline of the work steps (0.3.0). */
+.setup-timeline-box{{display:block;margin:.75rem 0}}
+.setup-timeline-box h3{{margin:0 0 .5rem;font-size:1rem}}
+.setup-timeline{{list-style:none;margin:0;padding:0}}
+.setup-timeline li{{position:relative;display:grid;grid-template-columns:1.6rem 1fr;column-gap:.6rem;padding:0 0 .75rem}}
+.setup-timeline li::before{{content:"";position:absolute;left:.75rem;top:1.1rem;bottom:-.1rem;border-left:2px solid var(--edge)}}
+.setup-timeline li:last-child::before{{display:none}}
+.setup-timeline li[data-state="done"]::before{{border-left-color:light-dark(#8fa9b8,#c9d6df)}}
+.setup-timeline li[data-state="current"]::before,.setup-timeline li[data-state="todo"]::before{{border-left-style:dashed}}
+.setup-dot{{grid-row:1/span 2;justify-self:center;display:grid;place-items:center;width:.95rem;height:.95rem;margin-top:.2rem;border-radius:50%;box-sizing:border-box;font-size:.62rem;line-height:1;z-index:1}}
+.setup-timeline li[data-state="done"] .setup-dot{{background:light-dark(#ffffff,#f4f7fa);color:light-dark(#185d35,#185d35);border:1px solid light-dark(#7aa58a,#ffffff);animation:setup-tick .35s ease-out}}
+.setup-timeline li[data-state="current"] .setup-dot{{width:1.35rem;height:1.35rem;margin-top:0;background:light-dark(#ffffff,#f4f7fa);border:3px solid var(--accent);animation:setup-pulse 1.6s ease-in-out infinite}}
+.setup-timeline li[data-state="todo"] .setup-dot,.setup-timeline li[data-state="optional"] .setup-dot{{background:transparent;border:2px solid light-dark(#a3b1bb,#6c7a85)}}
+.setup-step-label{{font-weight:500}}
+.setup-timeline li[data-state="current"] .setup-step-label{{font-weight:750}}
+.setup-timeline li[data-state="todo"] .setup-step-label,.setup-timeline li[data-state="optional"] .setup-step-label{{color:var(--muted);font-size:.92rem}}
+.setup-step-result{{color:var(--muted);font-size:.85rem;font-variant-numeric:tabular-nums}}
+.setup-step-detail{{grid-column:2;font-size:.88rem;font-variant-numeric:tabular-nums;color:light-dark(#243b4b,#e5edf5)}}
+.setup-step-head{{display:flex;flex-wrap:wrap;gap:.2rem .6rem;align-items:baseline;justify-content:space-between;min-width:0}}
+.setup-timeline-stats{{margin:.1rem 0 0;color:var(--muted);font-size:.85rem;font-variant-numeric:tabular-nums}}
+@keyframes setup-pulse{{0%,100%{{box-shadow:0 0 0 0 light-dark(#0b8f7c55,#38c9b055)}}50%{{box-shadow:0 0 0 .4rem light-dark(#0b8f7c00,#38c9b000)}}}}
+@keyframes setup-tick{{from{{transform:scale(.4);opacity:0}}to{{transform:scale(1);opacity:1}}}}
+@media(prefers-reduced-motion:reduce){{.setup-timeline .setup-dot{{animation:none!important}}}}
+.calibration-candidate-panel{{margin:.6rem 0;padding:.55rem .75rem;border:1px solid var(--edge);border-radius:.6rem}}
+.calibration-candidate-panel summary{{cursor:pointer;font-weight:650}}
+.calibration-candidates li[data-selected="true"]{{font-weight:700}}
+.calibration-candidates li[data-selected="true"]::marker{{color:var(--accent)}}
+.digit-grid-wrap{{overflow-x:auto;margin:.4rem 0}}
+.digit-grid{{border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:.88rem}}
+.digit-grid th,.digit-grid td{{padding:.15rem .35rem;text-align:center;border-bottom:1px solid var(--edge)}}
+.digit-grid th[scope="row"]{{text-align:start;font-weight:600;white-space:nowrap}}
+.digit-grid .digit-sep{{border-left:2px solid light-dark(#c0392b,#ff8a80)}}
+.digit-grid td[data-uncompared="true"],.digit-grid th[data-uncompared="true"]{{opacity:.45}}
+.digit-grid tr.digit-result td[data-tone="ok"]{{color:light-dark(#185d35,#9ce5b5);font-weight:750}}
+.digit-grid tr.digit-result td[data-tone="warn"]{{color:light-dark(#8a5a00,#ffd27a);font-weight:750}}
+.digit-grid tr.digit-result td[data-tone="bad"]{{color:light-dark(#a1262d,#ffb6bb);font-weight:750}}
 .calibration-photo-grid figcaption{{margin-top:.35rem;color:var(--muted)}}
 .calibration-photo-panel .calibration-preview-help{{font-size:.83rem;color:var(--muted);margin:.35rem 0 0}}
 .calibration-photo-panel .calibration-preview-reading{{overflow-wrap:anywhere;font-weight:650;font-variant-numeric:tabular-nums;margin:.25rem 0 0}}
@@ -619,10 +655,11 @@ header{{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.6rem}}
 <div class="activity-status" data-state="{automatic_activity_state}" data-routine-ok="{automatic_routine_ok}">
 <p role="status" aria-live="polite"><strong>Automatik:</strong> <span id="automatic-activity">{automatic_activity}</span></p>
 <progress id="automatic-progress" class="setup-progress" aria-label="Fortschritt der automatischen Prüfung" {automatic_progress_hidden}></progress>
-<details id="automatic-activity-details" class="activity-details" {automatic_progress_hidden}>
+<details id="automatic-activity-details" class="activity-details" open {automatic_progress_hidden}>
 <summary>Prüfdetails</summary>
 <p id="automatic-attempt-info"></p>
 <p id="automatic-live-reading"></p><ol id="live-ocr-candidates" hidden></ol>
+<div class="digit-grid-wrap" id="automatic-digit-grid" hidden><table class="digit-grid" aria-label="Gelesene Ziffern je Versuch und Stelle"><thead></thead><tbody></tbody></table></div>
 </details>
 </div>
 <div class="crop-actions" id="setup-start-actions" {resume_setup_hidden}>
@@ -665,9 +702,12 @@ header{{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.6rem}}
 <div id="calibration-overview" class="calibration-live" hidden>
 <p id="calibration-overview-state" role="status"></p>
 <p class="calibration-last-digit-note settings-note" hidden></p>
-<dl class="setup-phase" hidden><div><dt>Aktueller Schritt</dt><dd class="setup-current-step"></dd></div>
-<div><dt>Nächster Schritt</dt><dd class="setup-next-step"></dd></div></dl>
-<details class="setup-help calibration-candidate-panel" hidden><summary>Kandidaten</summary><ol class="calibration-candidates"></ol></details>
+<div class="setup-timeline-box" role="group" aria-labelledby="setup-timeline-title" hidden>
+<h3 id="setup-timeline-title">So weit ist die Einrichtung</h3>
+<ol class="setup-timeline" aria-live="polite"></ol>
+<p class="setup-timeline-stats"></p>
+</div>
+<details class="setup-help calibration-candidate-panel" open hidden><summary>Gefundene Rahmen (Kandidaten)</summary><ol class="calibration-candidates"></ol></details>
 {calibration_skip_html}
 <p class="calibration-image-hint settings-note" hidden></p>
 <button type="button" id="calibration-open-region">Ziffernfeld manuell markieren</button>
@@ -2442,6 +2482,186 @@ function updateCalibrationNotice() {{
   notice.hidden = routineOk || !document.querySelector('#setup-success').hidden ||
     Date.now() >= calibrationNoticeUntil;
 }}
+// One progress state for the step plan, the timeline and the candidate list (0.3.0).
+function setupProgressModel(status) {{
+  const en = lang === 'en';
+  const active = status.state === 'waiting' || status.state === 'testing';
+  const saved = String(status.state || '').startsWith('saved');
+  const stage = status.stage;
+  const confirmations = Number(status.confirmations || status.reflected_confirmations || 0);
+  const required = Number(status.required || 3);
+  const candidates = status.candidates || [];
+  const best = candidates.reduce((top, item) => Math.max(top, Number(item.percent) || 0), 0);
+  let current = ['queued', 'capture'].includes(stage) && !status.tested ? 0 :
+    ['verify', 'verify_wait'].includes(stage) || confirmations > 0 ? 3 :
+    ['shortlist', 'refine', 'angle', 'digit_probe', 'ocr'].includes(stage) || candidates.length ? 2 : 1;
+  if (saved) current = 5;
+  const elapsed = Math.max(0, Number(status.duration || 0) - Number(status.seconds || 0));
+  const clock = Math.floor(elapsed / 60) + ':' + String(elapsed % 60).padStart(2, '0');
+  const selected = candidates.find(item => item.selected);
+  const detail = [];
+  if (current === 0) detail.push(en ? 'Waiting for a camera image' : 'Wartet auf ein Kamerabild');
+  if (current === 1) detail.push(status.row_found ? (en ? 'Digit row found: ' : 'Ziffernreihe erkannt: ') + status.row_found + ' %' :
+    (en ? 'Searching the image for the counter window' : 'Sucht im Bild das Zählwerkfenster'));
+  if (current >= 2 && current <= 3) {{
+    if (candidates.length) {{
+      const number = selected ? selected.number : Number(status.variant) || 1;
+      detail.push((en ? 'Frame ' : 'Rahmen ') + Math.min(number, candidates.length) + (en ? ' of ' : ' von ') + candidates.length);
+    }}
+    if (status.rotation != null) detail.push((en ? 'Rotation ' : 'Drehung ') + String(status.rotation).replace('-', '−') + '°');
+    detail.push(confirmations + (en ? ' of ' : ' von ') + required + (en ? ' confirmations' : ' Bestätigungen'));
+  }}
+  const steps = [
+    {{key: 'image', label: en ? 'Get camera image' : 'Kamerabild holen',
+     result: status.tested ? status.tested + (en ? (status.tested === 1 ? ' image' : ' images') : (status.tested === 1 ? ' Bild' : ' Bilder')) : ''}},
+    {{key: 'find', label: en ? 'Find the counter' : 'Zählwerk finden',
+     result: en ? 'Counter found' : 'Zählwerk gefunden'}},
+    {{key: 'check', label: en ? 'Check frame and rotation' : 'Rahmen und Drehung prüfen',
+     result: best ? (en ? 'best match ' : 'beste Übereinstimmung ') + best + ' %' : ''}},
+    {{key: 'confirm', label: (en ? 'Confirm frame' : 'Rahmen bestätigen') + ' (' + Math.min(confirmations, required) + '/' + required + ')',
+     result: confirmations >= required || saved ? (en ? 'confirmed' : 'bestätigt') : ''}},
+    {{key: 'save', label: en ? 'Save setup' : 'Einrichtung speichern', result: saved ? (en ? 'saved' : 'gespeichert') : ''}},
+  ];
+  if (status.simplified) steps.push({{key: 'background', optional: true,
+    label: en ? 'In the background: refine the last digit (optional)' : 'Im Hintergrund: letzte Stelle verfeinern (optional)', result: ''}});
+  steps.forEach((step, index) => {{
+    step.state = step.optional ? 'optional' : index < current ? 'done' : index === current ? 'current' : 'todo';
+    step.detail = step.state === 'current' ? detail.join(' · ') : '';
+    if (step.state !== 'done') step.result = '';
+  }});
+  const stats = (en ? 'Images: ' : 'Bilder: ') + (status.tested || 0) +
+    (en ? ' · Frames tested: ' : ' · Rahmen getestet: ') + (status.attempts || 0) +
+    (en ? ' · Time so far: ' : ' · Bisherige Dauer: ') + clock + ' min' +
+    (best ? (en ? ' · Best match: ' : ' · Beste Übereinstimmung: ') + best + ' %' : '');
+  return {{active, current: Math.min(current, 3), steps, stats, candidates}};
+}}
+function renderSetupTimeline(box, model) {{
+  const list = box.querySelector('.setup-timeline');
+  const key = JSON.stringify(model.steps);
+  if (list.dataset.model !== key) {{
+    const previous = JSON.parse(list.dataset.model || '[]');
+    list.replaceChildren(...model.steps.map((step, index) => {{
+      const row = document.createElement('li');
+      row.dataset.state = step.state;
+      row.dataset.step = step.key;
+      if (step.state === 'current') row.setAttribute('aria-current', 'step');
+      const dot = document.createElement('span');
+      dot.className = 'setup-dot';
+      dot.setAttribute('aria-hidden', 'true');
+      dot.textContent = step.state === 'done' ? '✓' : '';
+      // Animate only a step that was just completed, not every refresh.
+      if (step.state === 'done' && previous[index]?.state === 'done') dot.style.animation = 'none';
+      const head = document.createElement('div');
+      head.className = 'setup-step-head';
+      const label = document.createElement('span');
+      label.className = 'setup-step-label';
+      label.textContent = step.label;
+      head.append(label);
+      if (step.result) {{
+        const result = document.createElement('span');
+        result.className = 'setup-step-result';
+        result.textContent = step.result;
+        head.append(result);
+      }}
+      row.append(dot, head);
+      if (step.detail) {{
+        const detail = document.createElement('div');
+        detail.className = 'setup-step-detail';
+        detail.textContent = step.detail;
+        row.append(detail);
+      }}
+      return row;
+    }}));
+    list.dataset.model = key;
+  }}
+  const stats = box.querySelector('.setup-timeline-stats');
+  if (stats.textContent !== model.stats) stats.textContent = model.stats;
+}}
+function renderSetupCandidates(list, candidates) {{
+  const en = lang === 'en';
+  const key = JSON.stringify(candidates);
+  if (list.dataset.values === key) return;
+  list.replaceChildren(...candidates.map(candidate => {{
+    const row = document.createElement('li');
+    row.dataset.selected = String(candidate.selected === true);
+    const parts = [];
+    if (candidate.number) parts.push((en ? 'Frame ' : 'Rahmen ') + candidate.number);
+    if (candidate.rotation != null) parts.push(String(candidate.rotation).replace('-', '−') + '°');
+    parts.push(candidate.percent + ' %');
+    parts.push(candidate.reading || '–');
+    if (candidate.selected) parts.push(en ? 'being checked' : 'wird geprüft');
+    row.textContent = parts.join(' · ');
+    return row;
+  }}));
+  list.dataset.values = key;
+}}
+// Per-digit table of the attempts of a check: rows = attempts, columns = digit positions.
+function renderDigitGrid(wrap, readings, decimals) {{
+  const en = lang === 'en';
+  const rows = (readings || []).map(value => String(value ?? ''));
+  wrap.hidden = !rows.length;
+  if (!rows.length) return;
+  const key = JSON.stringify([rows, decimals]);
+  if (wrap.dataset.values === key) return;
+  wrap.dataset.values = key;
+  const split = rows.map(value => {{
+    const [whole, fraction = ''] = value.replace(',', '.').split('.');
+    return {{whole: [...whole], fraction: [...fraction]}};
+  }});
+  const wholeCount = Math.max(...split.map(item => item.whole.length));
+  const fractionCount = Math.max(...split.map(item => item.fraction.length));
+  const compared = Number.isInteger(decimals) ? decimals : fractionCount;
+  const cells = split.map(item => [
+    ...Array(wholeCount - item.whole.length).fill('?'), ...item.whole,
+    ...item.fraction, ...Array(fractionCount - item.fraction.length).fill('?')]);
+  const total = wholeCount + fractionCount;
+  const table = wrap.querySelector('table');
+  const head = table.tHead;
+  head.replaceChildren();
+  const headRow = head.insertRow();
+  const corner = document.createElement('th');
+  corner.textContent = en ? 'Digit' : 'Stelle';
+  headRow.append(corner);
+  for (let index = 0; index < total; index++) {{
+    const cell = document.createElement('th');
+    cell.scope = 'col';
+    cell.textContent = String(index + 1);
+    if (index === wholeCount) cell.className = 'digit-sep';
+    if (index >= wholeCount + compared) cell.dataset.uncompared = 'true';
+    headRow.append(cell);
+  }}
+  const body = table.tBodies[0];
+  body.replaceChildren();
+  cells.forEach((values, attempt) => {{
+    const row = body.insertRow();
+    const label = document.createElement('th');
+    label.scope = 'row';
+    label.textContent = (en ? 'Attempt ' : 'Versuch ') + (attempt + 1);
+    row.append(label);
+    values.forEach((digit, index) => {{
+      const cell = row.insertCell();
+      cell.textContent = digit;
+      if (index === wholeCount) cell.className = 'digit-sep';
+      if (index >= wholeCount + compared) cell.dataset.uncompared = 'true';
+    }});
+  }});
+  const result = body.insertRow();
+  result.className = 'digit-result';
+  const label = document.createElement('th');
+  label.scope = 'row';
+  label.textContent = en ? 'Result' : 'Ergebnis';
+  result.append(label);
+  for (let index = 0; index < total; index++) {{
+    const counts = {{}};
+    for (const values of cells) if (/[0-9]/.test(values[index])) counts[values[index]] = (counts[values[index]] || 0) + 1;
+    const ranked = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    const cell = result.insertCell();
+    cell.textContent = ranked.length ? ranked[0][0] : '?';
+    cell.dataset.tone = !ranked.length ? 'bad' : ranked.length === 1 ? 'ok' : 'warn';
+    if (index === wholeCount) cell.className = 'digit-sep';
+    if (index >= wholeCount + compared) cell.dataset.uncompared = 'true';
+  }}
+}}
 function refreshCalibration(status) {{
   refreshCalibrationImages(status?.preview);
   for (const form of document.querySelectorAll('.calibration-skip')) {{
@@ -2522,12 +2742,15 @@ function refreshCalibration(status) {{
   }};
   const steps = status.intensive ? ['Kamerabild laden', 'Letzte Rolle prüfen', 'Ergebnis gegenprüfen'] :
     ['Kamerabild laden', 'Ziffernreihe finden', 'Rahmen und Drehung prüfen', 'Rahmen bestätigen'];
-  const confirm = Number(status.confirmations || status.reflected_confirmations || 0) > 0;
   const stage = status.stage;
-  const current = ['queued', 'capture'].includes(stage) ? 0 :
-    status.intensive ? (['verify', 'verify_wait'].includes(stage) ? 2 : 1) :
-    ['verify', 'verify_wait'].includes(stage) || stage === 'waiting' && confirm ? 3 :
-    ['shortlist', 'refine', 'angle', 'digit_probe'].includes(stage) ? 2 : 1;
+  const progressModel = setupProgressModel(status);
+  // The step plan and the timeline come from the same progress state.
+  const current = status.intensive ? (['queued', 'capture'].includes(stage) ? 0 :
+    ['verify', 'verify_wait'].includes(stage) ? 2 : 1) : progressModel.current;
+  for (const box of document.querySelectorAll('.setup-timeline-box')) {{
+    box.hidden = !active || status.automatic || status.intensive || background;
+    if (!box.hidden) renderSetupTimeline(box, progressModel);
+  }}
   for (const plan of document.querySelectorAll('.setup-phase')) {{
     plan.hidden = !active || status.automatic;
     plan.querySelector('.setup-current-step').textContent = steps[current];
@@ -2536,13 +2759,9 @@ function refreshCalibration(status) {{
   }}
   const reason = status.preview?.reason;
   for (const list of document.querySelectorAll('.calibration-candidates')) {{
-    list.replaceChildren(...(status.candidates || []).map(candidate => {{
-      const row = document.createElement('li');
-      row.textContent = candidate.percent + ' % · ' + (candidate.reading || '–');
-      return row;
-    }}));
+    renderSetupCandidates(list, status.candidates || []);
     const parent = list.closest('.calibration-candidate-panel');
-    if (parent) parent.hidden = !list.children.length;
+    if (parent) parent.hidden = !list.children.length || !active || background;
   }}
   let message = active && stages[status.stage] ? stages[status.stage] : messages[status.state] || '';
   if (status.state === 'waiting' && status.stage !== 'queued') {{
@@ -3428,7 +3647,20 @@ async function refreshAutomatic() {{
     renderOcrCandidates(document.querySelector('#live-ocr-candidates'), sample.activity_candidates);
     const checkDetails = document.querySelector('#automatic-activity-details');
     checkDetails.hidden = progress.hidden;
-    if (checkDetails.hidden) checkDetails.open = false;
+    if (!checkDetails.hidden && !checkDetails.dataset.toggleBound) {{
+      checkDetails.dataset.toggleBound = '1';
+      checkDetails.addEventListener('toggle', () => {{
+        try {{ localStorage.setItem('rf1-check-details-closed', checkDetails.open ? '0' : '1'); }} catch (error) {{}}
+      }});
+    }}
+    if (!checkDetails.hidden && !checkDetails.dataset.restored) {{
+      checkDetails.dataset.restored = '1';
+      let closed = false;
+      try {{ closed = localStorage.getItem('rf1-check-details-closed') === '1'; }} catch (error) {{}}
+      checkDetails.open = !closed;
+    }}
+    renderDigitGrid(document.querySelector('#automatic-digit-grid'), checkDetails.hidden ? [] : sample.activity_readings,
+      Number.isInteger(sample.decimals) ? sample.decimals : null);
     document.querySelector('#automatic-attempt-info').textContent = sample.activity_total > 0
       ? 'Versuche abgeschlossen: ' + (sample.activity_completed || 0) + ' von ' + sample.activity_total
       : 'Die Ziffernerkennung beginnt, sobald das Bild bereitsteht.';
@@ -4032,6 +4264,7 @@ def start_panel(
             "activity_total": activity.get("total"),
             "activity_reading": activity.get("reading"),
             "activity_candidates": activity.get("candidates"),
+            "activity_readings": activity.get("readings"),
             "paused": paused,
             "source_connection": source_connection,
             "source_connection_state": history.get("source_connection_status", "unknown"),

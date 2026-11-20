@@ -2,4 +2,4 @@
 
 Liest mechanische Zähler lokal aus dem Kamerabild (Tesseract-OCR) und stellt Zählerstand und Gesamtverbrauch für Home Assistant bereit.
 
-Version **0.2.10** · [Anleitung](DOCS.md) · [Änderungen](CHANGELOG.md) · [English](README.en.md)
+Version **0.3.0** · [Anleitung](DOCS.md) · [Änderungen](CHANGELOG.md) · [English](README.en.md)

@@ -23,6 +23,7 @@ from PIL import Image
 from app_channel import APP_NAME, NAMESPACE
 import bug_report
 import status_view
+import system_monitor
 from auto_rules import frames_locked, user_frames
 import debug_log
 
@@ -906,6 +907,17 @@ name: Zählerstand (OCR)</code></pre>
 <a class="button-link" id="report-bug" href="fehler-melden" target="_blank" rel="noopener noreferrer">Fehler melden</a></p>
 <p class="settings-note" id="report-bug-note">Öffnet auf GitHub ein vorausgefülltes Fehlerformular mit App-Version, Art der Bildquelle und Fehlquote. Es wird nichts automatisch gesendet; hänge das heruntergeladene Protokoll selbst an.</p>
 <pre id="debug-log-text" class="debug-log-text">–</pre>
+</details>
+<details id="system-monitor">
+<summary>Systemauslastung</summary>
+<p class="settings-note">Auslastung des Geräts und Anteil dieser App. Die Texterkennung zählt zur App. Die Werte gelten für die letzten Sekunden.</p>
+<dl class="consumption-summary" id="system-monitor-values">
+<div><dt>Prozessor gesamt</dt><dd id="system-cpu">–</dd></div>
+<div><dt>Prozessor durch die App</dt><dd id="system-app-cpu">–</dd></div>
+<div><dt>Arbeitsspeicher belegt</dt><dd id="system-memory">–</dd></div>
+<div><dt>Arbeitsspeicher der App</dt><dd id="system-app-memory">–</dd></div>
+<div><dt>Temperatur</dt><dd id="system-temperature">–</dd></div>
+</dl>
 </details>
 <div class="manual-test-area" id="manual-test-area" {manual_area_hidden}>
 <div class="manual-test-heading"><h2>Manueller Test</h2>
@@ -3429,8 +3441,11 @@ const automaticBanner = document.querySelector('#automatic-banner');
 function renderOdometer(reading) {{
   const box = document.querySelector('#meter-odometer');
   const text = String(reading || '').trim();
-  if (box.dataset.rendered === text) return;
-  box.dataset.rendered = text;
+  // Rollers beyond the compared decimal places are not needed and not shown (0.5.0).
+  const shown = Number.isInteger(configuredDecimals) ? configuredDecimals : 9;
+  const key = text + '|' + shown;
+  if (box.dataset.rendered === key) return;
+  box.dataset.rendered = key;
   box.setAttribute('aria-label', (lang === 'en' ? 'Meter reading ' : 'Zählerstand ') + (text || '–'));
   if (!/[0-9?]/.test(text)) {{
     const empty = document.createElement('span');
@@ -3439,7 +3454,8 @@ function renderOdometer(reading) {{
     box.replaceChildren(empty);
     return;
   }}
-  const [whole, fraction = ''] = text.replace(',', '.').split('.');
+  const [whole, allFraction = ''] = text.replace(',', '.').split('.');
+  const fraction = allFraction.slice(0, shown);
   const roller = (char, isFraction) => {{
     const cell = document.createElement('span');
     cell.className = 'roller' + (isFraction ? ' fraction' : '') + (/[0-9]/.test(char) ? '' : ' unclear');
@@ -3658,6 +3674,32 @@ document.querySelector('#debug-log').addEventListener('toggle', async (event) =>
   }} catch (_) {{
     target.textContent = lang === 'en' ? 'Log could not be loaded.' : 'Protokoll konnte nicht geladen werden.';
   }}
+}});
+let systemMonitorTimer = null;
+async function refreshSystemMonitor() {{
+  const set = (id, text) => {{ document.querySelector(id).textContent = text; }};
+  const percent = value => value == null ? '–' : value + ' %';
+  try {{
+    const response = await fetch('systemstatus', {{cache: 'no-store'}});
+    if (!response.ok) throw Error();
+    const data = await response.json();
+    set('#system-cpu', percent(data.cpu_percent) + (data.cores ? ' · ' + data.cores + (lang === 'en' ? ' cores' : ' Kerne') : ''));
+    set('#system-app-cpu', percent(data.app_cpu_percent));
+    set('#system-memory', data.memory_total_mb == null ? '–'
+      : percent(data.memory_used_percent) + ' · ' + (data.memory_total_mb - data.memory_available_mb) + ' / ' + data.memory_total_mb + ' MB');
+    set('#system-app-memory', data.app_memory_mb == null ? '–' : data.app_memory_mb + ' MB');
+    set('#system-temperature', data.temperature_c == null
+      ? (lang === 'en' ? 'not available on this device' : 'auf diesem Gerät nicht verfügbar')
+      : String(data.temperature_c).replace('.', lang === 'en' ? '.' : ',') + ' °C');
+  }} catch (_) {{
+    set('#system-cpu', lang === 'en' ? 'Could not be loaded.' : 'Konnte nicht geladen werden.');
+  }}
+}}
+document.querySelector('#system-monitor').addEventListener('toggle', event => {{
+  clearInterval(systemMonitorTimer);
+  if (!event.target.open) return;
+  refreshSystemMonitor();
+  systemMonitorTimer = setInterval(refreshSystemMonitor, 5000);
 }});
 async function refreshAutomatic() {{
   let refreshDelay = 15000;
@@ -4327,6 +4369,9 @@ def start_panel(
                     self.send_error(404)
                 else:
                     self.reply(content, "image/jpeg")
+                return
+            if path == "/systemstatus":
+                self.reply(json.dumps(system_monitor.snapshot()).encode("utf-8"), "application/json")
                 return
             if path == "/debug-protokoll":
                 try:

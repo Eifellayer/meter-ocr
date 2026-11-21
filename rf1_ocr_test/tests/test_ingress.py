@@ -168,6 +168,14 @@ class IngressTests(IngressFixture):
         page, _ = self.request("/", accept="en")
         self.assertIn(">Report a problem<", page)
 
+    def test_system_load_is_served_as_json(self):
+        sample = json.loads(self.request("/systemstatus")[0])
+        self.assertGreaterEqual(sample["cores"], 1)
+        self.assertIn("app_memory_mb", sample)
+        page = self.request("/")[0].decode() if isinstance(self.request("/")[0], bytes) else self.request("/")[0]
+        self.assertIn('id="system-monitor"', page)
+        self.assertIn('id="frames-note-overview"', page)
+
     def test_demo_post_is_separate_from_the_main_meter(self):
         values = {"csrf": self.csrf, "lang": "de", "reflection": "0"}
         before = dict(self.rules)

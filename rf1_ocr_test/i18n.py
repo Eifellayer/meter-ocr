@@ -88,6 +88,14 @@ EN_UI = {
     "Schräges künstliches Zählerbild": "Generated tilted meter image",
     "Gerader Ausschnitt mit Ziffernrahmen": "Aligned crop with digit boxes",
     "Demo-Bild wird geprüft …": "Reading the demo image …",
+    "Systemauslastung": "System load",
+    "Auslastung des Geräts und Anteil dieser App. Die Texterkennung zählt zur App. Die Werte gelten für die letzten Sekunden.":
+        "Load of the device and the share of this app. Text recognition counts towards the app. The values cover the last few seconds.",
+    "Prozessor gesamt": "Processor, total",
+    "Prozessor durch die App": "Processor used by the app",
+    "Arbeitsspeicher belegt": "Memory in use",
+    "Arbeitsspeicher der App": "Memory of the app",
+    "Temperatur": "Temperature",
     "Rahmen: von Hand gesetzt. Die Automatik liest genau diese Rahmen und verändert sie nicht.":
         "Frames: placed by hand. The automatic check reads exactly these frames and does not change them.",
     "Rahmen: von der Selbsteinrichtung gefunden. Die Automatik darf sie nachjustieren.":

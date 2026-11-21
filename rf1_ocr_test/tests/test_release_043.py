@@ -109,5 +109,35 @@ class DemoTests(unittest.TestCase):
         demo._complete.clear()
 
 
+class NeededRollerTests(unittest.TestCase):
+    """0.5.0: routine checks do not read rollers nobody compares."""
+
+    def read(self, needed):
+        from PIL import Image
+        register = Image.new("RGB", (800, 100), "black")
+        boxes = [(index * 100, 0, index * 100 + 90, 100) for index in range(8)]
+        seen = []
+
+        def recognize(picture, light, digits, **_):
+            seen.append(picture.size)
+            return "7"
+
+        value = run.read_visible_digits(register, 500, boxes[:5], boxes[5:], False, "auto", profile=0,
+                                        prefer_boxes=True, recognize=recognize, glyphs=False,
+                                        needed_fraction=needed)
+        return value, len(seen)
+
+    def test_unneeded_decimal_rollers_stay_unread(self):
+        everything, all_reads = self.read(None)
+        self.assertEqual("77777.777", everything)
+        one, one_reads = self.read(1)
+        self.assertEqual("77777.7??", one)
+        none, none_reads = self.read(0)
+        self.assertEqual("77777.???", none)
+        self.assertLess(one_reads, all_reads)
+        self.assertLess(none_reads, one_reads)
+        self.assertEqual(everything, self.read(3)[0])
+
+
 if __name__ == "__main__":
     unittest.main()

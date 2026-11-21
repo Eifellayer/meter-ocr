@@ -940,7 +940,12 @@ def read_digits_parallel(tasks):
 
 def read_visible_digits(register, integer_width, whole_boxes, fraction_boxes, light_digits, polarity, *, profile,
                         whole_digits=5, fraction_digits=3, deadline=None, prefer_boxes=False, recognize=None,
-                        whole_range=None, glyphs=True, parallel=None):
+                        whole_range=None, glyphs=True, parallel=None, needed_fraction=None):
+    """Read the register digit by digit; unclear digits come back as "?".
+
+    ``needed_fraction``: decimal rollers beyond this count are not read at all and stay "?"
+    (0.5.0). The routine check does not need them, and the last roller is the slowest to read.
+    """
     # Real OCR calls are independent processes and may run side by side; a supplied reader
     # only when the caller says it is safe for threads.
     side_by_side = recognize is None if parallel is None else parallel
@@ -995,6 +1000,9 @@ def read_visible_digits(register, integer_width, whole_boxes, fraction_boxes, li
                 row = None
             if row and len(row) == whole_digits and all(a == b or a == "?" for a, b in zip(whole, row)):
                 whole = row
+    unread = set() if needed_fraction is None else {
+        whole_digits + index for index in range(max(0, needed_fraction), fraction_digits)}
+    glared |= unread
     fraction_cells = gather([
         "?" if whole_digits + index in glared else partial(read_digit, register, box, read)
         for index, box in enumerate(fraction_boxes[:fraction_digits])])
@@ -2805,6 +2813,9 @@ def main():
                                 *layout[:4], options["helle_ziffern"],
                                 manual_options["polarity"] if manual else active_rules["polarity"],
                                 profile=profile, whole_digits=integer_digits, fraction_digits=fraction_digits,
+                                # Only the compared decimal places and one more roller (it shows whether
+                                # the last compared roller is turning) are read in routine checks.
+                                needed_fraction=None if manual else min(fraction_digits, decimals + 1),
                                 **({"prefer_boxes": True} if custom_boxes else {}),
                                 whole_range=None if manual else glyph_whole_range(
                                     history, active_rules, zone, read_state["captured"]),

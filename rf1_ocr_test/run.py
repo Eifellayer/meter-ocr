@@ -57,6 +57,7 @@ from checks import (without_light, unclear_trailing_decimals, last_two_compared_
 import debug_log
 import experiments
 import idle_work
+import system_monitor
 import read_plan
 import seven_segment
 import glyph_match
@@ -767,6 +768,48 @@ def shadow_experiments(rules, manual, register, boxes, stable, light, forced):
         except (OSError, ValueError, subprocess.SubprocessError) as error:
             record[name] = {"error": type(error).__name__}
     return record
+
+
+def idle_job(reason, register, boxes, ocr, light, forced, image, now):
+    """What the waiting time may look at again: the register of the last check, already cut out."""
+    digits = re.sub(r"[^0-9?]", "", ocr or "")
+    if reason not in idle_work.REASONS or register is None or not boxes:
+        return None
+    if reason == "unclear_check" and ("?" not in digits or len(digits) != len(boxes)):
+        return None
+    return {"reason": reason, "register": register, "boxes": list(boxes), "digits": digits, "stable": ocr,
+            "light": light, "forced": forced, "image": image, "at": now}
+
+
+def idle_step(job, rules, now, next_check, used, *, sample=None):
+    """One small piece of work between two checks; returns (reads used so far, debug record or None).
+
+    Works only with the picture of the last check (no new image, no light), only with a reason
+    and only on an idle machine (``idle_work.budget``). The result is diagnostic: it goes to the
+    debug log and never changes the meter reading.
+    """
+    allowed = idle_work.budget(now, job["at"], next_check,
+                               system_monitor.snapshot() if sample is None else sample, job["reason"], used)
+    if not allowed:
+        return used, None
+    if job["reason"] == "experiment":
+        if used:
+            return used, None
+        result = shadow_experiments(rules, False, job["register"], job["boxes"], job["stable"],
+                                    job["light"], job["forced"])
+        if not result or result.get("skipped"):
+            return used, None
+        return idle_work.MAX_READS_PER_WAIT, {"experiment": result}
+
+    def read(picture, digits):
+        # The second profile: the check itself already tried the first one on this picture.
+        return read_register(picture, job["light"], digits, profile=OCR_PROFILES[1],
+                             force_polarity=job["forced"], isolated_digit=True)
+
+    unclear = [index for index, digit in enumerate(job["digits"]) if digit == "?"][:allowed]
+    reread = [{"position": index + 1, "digit": read_digit(job["register"], job["boxes"][index], read)}
+              for index in unclear]
+    return used + len(reread), {"reread": reread}
 
 
 def read_digit(register, box, read, trim_vertical=False):
@@ -1612,6 +1655,7 @@ def main():
     # digits in whole degrees, this gives the remaining fine angle to save with the layout.
     calibration_tilts = {}
     read_plan_state = {}
+    idle_state = {"job": None, "used": 0}
     calibration_next = 0.0
     calibration_worker = None
     setup_retry = {"job": None, "at": 0.0, "count": 0}
@@ -2533,6 +2577,13 @@ def main():
                 except OSError as error:
                     print(f"Prüfstatus konnte nicht übertragen werden: {error}")
                 check_reminder(reminder, history, now, review_after)
+            if idle_state["job"] is not None and calibration is None:
+                waiting = idle_state["job"]
+                idle_state["used"], idle_record = idle_step(
+                    waiting, active_rules, time.time(), time.time() + remaining, idle_state["used"])
+                if idle_record is not None:
+                    idle_state["job"] = None
+                    debug_log.record(kind="idle", reason=waiting["reason"], image=waiting["image"], **idle_record)
             wake_worker.wait(timeout=min(remaining, RETRY_INTERVAL,
                                          CAPTURE_INTERVAL if calibration is not None
                                          and calibration.state in ("waiting", "testing") else RETRY_INTERVAL))
@@ -4059,6 +4110,17 @@ def main():
                 # Kept for work between the checks; never fetched specially for it (idle_work).
                 idle_work.remember_check_image(HISTORY.parent, local.get("picture"),
                                                lambda *arguments: atomic_write(*arguments))
+                # Left for the waiting time: an experiment the busy machine skipped, or digits
+                # that stayed unclear. Only the newest check counts; older work is dropped.
+                idle_state["job"] = idle_job(
+                    "experiment" if experiment and experiment.get("skipped") else
+                    "unclear_check" if "?" in (ocr or "") else "",
+                    local.get("register"),
+                    [*(local.get("whole_boxes") or []), *(local.get("fraction_boxes") or [])], ocr,
+                    options["helle_ziffern"] if active_rules["polarity"] == "auto"
+                    else active_rules["polarity"] == "light",
+                    active_rules["polarity"] != "auto", data.get("esp_timestamp"), time.time())
+                idle_state["used"] = 0
                 taken_over = local.get("assumed_whole") or ""
                 planned = read_plan.after_check(read_plan_state, active_rules, outcome, taken_over, ocr, time.time())
                 read_plan_state.clear()

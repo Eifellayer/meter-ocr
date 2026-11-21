@@ -75,5 +75,53 @@ class IdleBudgetTests(unittest.TestCase):
         self.assertGreater(self.budget(sample={"cpu_percent": None, "temperature_c": None}), 0)
 
 
+class IdleStepTests(unittest.TestCase):
+    """The waiting time looks again at the last check picture; diagnostic only (run.idle_step)."""
+
+    calm = {"cpu_percent": 5, "memory_used_percent": 40, "temperature_c": 45}
+
+    def job(self, reason="unclear_check", ocr="1049?.6?"):
+        import run
+        from PIL import Image
+        boxes = [[i * 10, 0, i * 10 + 10, 20] for i in range(7)]
+        return run.idle_job(reason, Image.new("RGB", (70, 20)), boxes, ocr, False, False, "bild-1", 1000.0)
+
+    def test_only_unclear_checks_with_matching_frames_leave_work(self):
+        import run
+        self.assertIsNone(self.job(ocr="10490.67"))
+        self.assertIsNone(self.job(ocr="1049?"))
+        self.assertIsNone(run.idle_job("", None, [], "1?", False, False, "b", 1.0))
+        self.assertEqual("1049?6?", self.job()["digits"])
+
+    def test_unclear_digits_are_read_again_with_the_second_profile(self):
+        import run
+        from unittest.mock import patch
+        with patch.object(run, "read_register", return_value="7") as read:
+            used, record = run.idle_step(self.job(), {}, 1100.0, 1400.0, 0, sample=self.calm)
+        self.assertEqual(2, used)
+        self.assertEqual({"reread": [{"position": 5, "digit": "7"}, {"position": 7, "digit": "7"}]}, record)
+        self.assertEqual({run.OCR_PROFILES[1]}, {call.kwargs["profile"] for call in read.call_args_list})
+
+    def test_nothing_runs_on_a_loaded_machine_or_close_to_a_check(self):
+        import run
+        from unittest.mock import patch
+        with patch.object(run, "read_register") as read:
+            self.assertEqual((0, None), run.idle_step(self.job(), {}, 1100.0, 1400.0, 0,
+                                                      sample={**self.calm, "cpu_percent": 80}))
+            self.assertEqual((0, None), run.idle_step(self.job(), {}, 1005.0, 1400.0, 0, sample=self.calm))
+            self.assertEqual((0, None), run.idle_step(self.job(), {}, 1100.0, 1130.0, 0, sample=self.calm))
+        read.assert_not_called()
+
+    def test_skipped_experiment_is_caught_up_once(self):
+        import run
+        from unittest.mock import patch
+        job = self.job("experiment", "10490.67")
+        with patch.object(run, "shadow_experiments", return_value={"stable": "10490.67", "seven_segment": {}}) as shadow:
+            used, record = run.idle_step(job, {"experiments_enabled": True}, 1100.0, 1400.0, 0, sample=self.calm)
+            self.assertEqual((run.idle_work.MAX_READS_PER_WAIT, {"experiment": shadow.return_value}), (used, record))
+        with patch.object(run, "shadow_experiments", return_value={"skipped": "busy"}):
+            self.assertEqual((0, None), run.idle_step(job, {}, 1100.0, 1400.0, 0, sample=self.calm))
+
+
 if __name__ == "__main__":
     unittest.main()

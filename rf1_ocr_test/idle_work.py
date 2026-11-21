@@ -50,3 +50,33 @@ def kept_images(folder):
 def forget_images(folder):
     for path in image_paths(folder):
         path.unlink(missing_ok=True)
+
+
+# --- When the waiting time may be used -------------------------------------------------
+# Stefan 21.11.2026: only a few tests in between, never load the machine (a Raspberry Pi)
+# needlessly, and only with the pictures already taken.
+MAX_READS_PER_WAIT = 6        # digit reads (each one OCR process) between two checks
+MIN_SECONDS_AFTER_CHECK = 20  # let the machine settle after a check
+MIN_SECONDS_BEFORE_CHECK = 60  # stay clear of the next check
+REASONS = ("unclear_check", "experiment", "control")
+
+
+def budget(now, last_check, next_check, system_sample, reason, used=0):
+    """How many reads the app may still do in this waiting time (0 = leave the machine alone).
+
+    ``reason`` says why there is anything to do: the last check was unclear, an experiment is
+    switched on, or a control read is due. Without a reason nothing runs. ``system_sample`` is
+    ``system_monitor.snapshot()``; a busy or hot machine gets no extra work.
+    """
+    if reason not in REASONS or used >= MAX_READS_PER_WAIT:
+        return 0
+    if type(last_check) not in (int, float) or type(next_check) not in (int, float):
+        return 0
+    if now - last_check < MIN_SECONDS_AFTER_CHECK or next_check - now < MIN_SECONDS_BEFORE_CHECK:
+        return 0
+    sample = system_sample or {}
+    cpu, memory, heat = sample.get("cpu_percent"), sample.get("memory_used_percent"), sample.get("temperature_c")
+    # Stricter than "busy": extra work only on a machine that is clearly idle.
+    if (cpu is not None and cpu >= 50) or (memory is not None and memory >= 85) or (heat is not None and heat >= 70):
+        return 0
+    return MAX_READS_PER_WAIT - used

@@ -614,6 +614,8 @@ EN_UI = {
     "Nach einer fehlgeschlagenen automatischen Prüfung folgen bis zu zwei weitere Bildprüfungen im Abstand von fünf Minuten. Bleiben alle drei Prüfungen erfolglos, pausiert AI Meter Reader für die eingestellte Zeit (Standard: 30 Minuten) und versucht es dann erneut. Prüfe Beleuchtung, Abstand und Fokus.": "After a failed automatic check, up to two more image checks follow at five-minute intervals. If all three fail, AI Meter Reader pauses for the configured time (default: 30 minutes), then tries again. Check lighting, distance, and focus.",
     "Wartet auf die nächste automatische Prüfung.": "Waiting for the next automatic check.",
     "App läuft. Wartet auf die nächste automatische Prüfung.": "App is running and waiting for the next automatic check.",
+    "App läuft. Wartet auf die nächste automatische Prüfung. Im Hintergrund ist noch eine Nacharbeit offen.":
+        "App is running and waiting for the next automatic check. One background job is still open.",
     "Automatik:": "Automatic checks:",
     "Einrichtung erforderlich: Lege zuerst die Bildquelle fest.": "Setup required. Choose an image source.",
     "Automatik pausiert. Manuelle Tests bleiben verfügbar.": "Automatic checks are paused. Manual tests are still available.",

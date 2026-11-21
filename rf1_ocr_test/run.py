@@ -771,6 +771,9 @@ def shadow_experiments(rules, manual, register, boxes, stable, light, forced):
     return record
 
 
+IDLE_PENDING_NOTICE = "App läuft. Wartet auf die nächste automatische Prüfung. Im Hintergrund ist noch eine Nacharbeit offen."
+
+
 def idle_job(reason, register, boxes, ocr, light, forced, image, now):
     """What the waiting time may look at again: the register of the last check, already cut out."""
     digits = re.sub(r"[^0-9?]", "", ocr or "")
@@ -1656,7 +1659,7 @@ def main():
     # digits in whole degrees, this gives the remaining fine angle to save with the layout.
     calibration_tilts = {}
     read_plan_state = {}
-    idle_state = {"job": None, "used": 0}
+    idle_state = {"jobs": [], "used": 0}  # work left by the last two checks, newest first
     calibration_next = 0.0
     calibration_worker = None
     setup_retry = {"job": None, "at": 0.0, "count": 0}
@@ -2563,6 +2566,7 @@ def main():
                          FRESH_OCR_NOTICE if history.get("fresh_ocr_retry_at") else
                          REFLECTION_RECHECK_NOTICE if history.get("reflection_retry_at") else
                          STANDALONE_PENDING_NOTICE if history.get("check_status") == STANDALONE_PENDING
+                         else IDLE_PENDING_NOTICE if any(idle_state["jobs"]) and calibration is None
                          else "App läuft. Wartet auf die nächste automatische Prüfung.")
             # Refresh status after a Home Assistant restart, even between checks.
             if "check_status" in history:
@@ -2579,12 +2583,12 @@ def main():
                 except OSError as error:
                     print(f"Prüfstatus konnte nicht übertragen werden: {error}")
                 check_reminder(reminder, history, now, review_after)
-            if idle_state["job"] is not None and calibration is None:
-                waiting = idle_state["job"]
+            waiting = next((job for job in idle_state["jobs"] if job), None)
+            if waiting is not None and calibration is None:
                 idle_state["used"], idle_record = idle_step(
                     waiting, active_rules, time.time(), time.time() + remaining, idle_state["used"])
                 if idle_record is not None:
-                    idle_state["job"] = None
+                    idle_state["jobs"][idle_state["jobs"].index(waiting)] = None
                     debug_log.record(kind="idle", reason=waiting["reason"], image=waiting["image"], **idle_record)
             wake_worker.wait(timeout=min(remaining, RETRY_INTERVAL,
                                          CAPTURE_INTERVAL if calibration is not None
@@ -4116,14 +4120,14 @@ def main():
                                                lambda *arguments: atomic_write(*arguments))
                 # Left for the waiting time: an experiment the busy machine skipped, or digits
                 # that stayed unclear. Only the newest check counts; older work is dropped.
-                idle_state["job"] = idle_job(
+                idle_state["jobs"][:] = idle_work.keep_recent(idle_state["jobs"], idle_job(
                     "experiment" if experiment and experiment.get("skipped") else
                     "unclear_check" if "?" in (ocr or "") else "",
                     local.get("register"),
                     [*(local.get("whole_boxes") or []), *(local.get("fraction_boxes") or [])], ocr,
                     options["helle_ziffern"] if active_rules["polarity"] == "auto"
                     else active_rules["polarity"] == "light",
-                    active_rules["polarity"] != "auto", data.get("esp_timestamp"), time.time())
+                    active_rules["polarity"] != "auto", data.get("esp_timestamp"), time.time()))
                 idle_state["used"] = 0
                 taken_over = local.get("assumed_whole") or ""
                 planned = read_plan.after_check(read_plan_state, active_rules, outcome, taken_over, ocr, time.time())

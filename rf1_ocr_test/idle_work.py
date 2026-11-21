@@ -61,6 +61,15 @@ MIN_SECONDS_BEFORE_CHECK = 60  # stay clear of the next check
 REASONS = ("unclear_check", "experiment", "control")
 
 
+def keep_recent(jobs, newest):
+    """Work of the last two checks, newest first; ``None`` marks a check that left nothing.
+
+    A check and its cross-check are two pictures: both may be looked at again, anything
+    older is dropped.
+    """
+    return [newest, *jobs][:KEPT_IMAGES]
+
+
 def budget(now, last_check, next_check, system_sample, reason, used=0):
     """How many reads the app may still do in this waiting time (0 = leave the machine alone).
 

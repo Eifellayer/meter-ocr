@@ -3134,6 +3134,7 @@ let correctionLayout = null;
 let correctionSource = null;
 let originalCorrection = [];
 let correctionBusy = false;
+let correctionPreferTest = false;
 
 function updateCorrectionControls() {{
   const index = Number(correctionPosition.value);
@@ -3161,11 +3162,14 @@ async function openDigitCorrection(last = false) {{
     if (!layout || layout.integer_digits + layout.fraction_digits !== {crop_digit_count} ||
         ['waiting', 'testing'].includes(job.calibration?.state)) throw new Error();
     const images = [];
+    // Opened from a finished manual test: its own picture first (also an uploaded one).
+    if (correctionPreferTest && job.phase === 'done' && job.checked_at) images.push({{kind: 'test', version: String(job.checked_at)}});
+    correctionPreferTest = false;
     if (job.digit_correction_image) images.push({{kind: 'current', version: job.digit_correction_image}});
     if (job.calibration?.preview?.frame) images.push({{kind: 'calibration', version: job.calibration.preview.frame}});
     if (!images.length) throw new Error();
     for (const source of images) {{
-      const url = (source.kind === 'current' ? 'aktuell.jpg?v=' : 'lernvorschau.jpg?bild=frame&v=') +
+      const url = (source.kind === 'test' ? 'testbild.jpg?v=' : source.kind === 'current' ? 'aktuell.jpg?v=' : 'lernvorschau.jpg?bild=frame&v=') +
         encodeURIComponent(source.version);
       correctionImage.src = url;
       try {{
@@ -3272,7 +3276,10 @@ async function submitDigitCorrection(action) {{
 }}
 correctionSearch.addEventListener('click', () => submitDigitCorrection('search'));
 correctionSave.addEventListener('click', () => submitDigitCorrection('save'));
-document.querySelector('#correct-after-test').addEventListener('click', () => correctionOpen.click());
+document.querySelector('#correct-after-test').addEventListener('click', () => {{
+  correctionPreferTest = true;
+  correctionOpen.click();
+}});
 correctionSaveManual.addEventListener('click', () => submitDigitCorrection('save_manual'));
 function renderOcrCandidates(list, candidates) {{
   const evidence = {{
@@ -5507,6 +5514,12 @@ def start_panel(
                     version = field("image_version")
                     if field("image_kind") == "calibration":
                         content = get_calibration_image("frame", version) if get_calibration_image else None
+                    elif field("image_kind") == "test":
+                        # The picture of the last manual test (also an uploaded one); it only
+                        # changes with the next manual test.
+                        manual_picture = images.get("/testbild.jpg")
+                        content = (manual_picture.read_bytes()
+                                   if manual_picture is not None and manual_picture.exists() else None)
                     else:
                         with current_image.open("rb") as stream:
                             content = stream.read() if str(os.fstat(stream.fileno()).st_mtime_ns) == version else None

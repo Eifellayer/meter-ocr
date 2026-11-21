@@ -127,6 +127,7 @@ class IngressFixture(TestCase):
             automatic_preview=self.automatic_preview, get_activity=lambda: dict(self.activity),
             discover_sources=lambda: self.suggestions,
             get_wizard_image=wizard_image,
+            test_source_image=getattr(self, "test_source", None),
             get_calibration=lambda: self.calibration, control_calibration=self.control_calibration,
             get_calibration_image=lambda kind, version: self.calibration_images.get((kind, version)),
             get_auto_paused=lambda: self.paused,
@@ -349,6 +350,27 @@ class IngressTests(IngressFixture):
         self.assertIn('id="test-live"', page)
         self.assertIn('id="correct-after-test"', page)
         self.assertIn("job.readings || []", page)
+
+    def test_frame_editor_can_search_on_the_picture_of_the_last_manual_test(self):
+        self.server.shutdown()
+        self.test_source = self.root / "testbild.jpg"
+        self.start_panel()
+        self.source_selected = True
+        self.setup_pending = False
+        self.rules.update(crop_mode="manual", crop="5,5,405,95", width=250, crop_revision="known", rotation=0)
+        boxes = [[i * 125, 100, (i + 1) * 125, 900] for i in range(8)]
+        self.rules["digit_boxes"] = boxes
+        Image.new("RGB", (460, 120), "gray").save(self.root / "current.jpg")
+        job = json.loads(self.request("/status")[0])
+        args = dict(csrf=self.csrf, token=job["digit_correction"]["token"], index="7", image_kind="test",
+                    image_version="123", digit_boxes=json.dumps(boxes), action="search")
+        # No manual test yet: nothing to search on.
+        self.assertEqual(409, self.submit("/ziffernrahmen", **{k: v for k, v in args.items() if k != "csrf"})[0])
+        Image.new("RGB", (460, 120), "white").save(self.root / "testbild.jpg", "JPEG")
+        with patch.object(panel, "suggest_single_digit_box", return_value={"box": [880, 80, 995, 900], "digit": "8"}) as search:
+            proposal, status = self.request("/ziffernrahmen", data=args)
+        self.assertEqual((200, [880, 80, 995, 900]), (status, json.loads(proposal)["box"]))
+        self.assertGreater(search.call_args.args[0].getpixel((5, 5))[0], 200)  # the white test picture, not the gray camera one
 
     def test_frames_saved_for_the_manual_test_leave_the_automatic_alone(self):
         self.source_selected = True

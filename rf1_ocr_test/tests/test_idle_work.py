@@ -123,5 +123,13 @@ class IdleStepTests(unittest.TestCase):
             self.assertEqual((0, None), run.idle_step(job, {}, 1100.0, 1400.0, 0, sample=self.calm))
 
 
+class KeepRecentTests(unittest.TestCase):
+    def test_only_the_work_of_the_last_two_checks_stays(self):
+        jobs = idle_work.keep_recent([], {"image": "a"})
+        jobs = idle_work.keep_recent(jobs, None)
+        self.assertEqual([None, {"image": "a"}], jobs)
+        self.assertEqual([{"image": "c"}, None], idle_work.keep_recent(jobs, {"image": "c"}))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -56,6 +56,7 @@ from checks import (without_light, unclear_trailing_decimals, setup_tilt, initia
                     REDUCED_PRECISION_NOTICE, REDUCED_PRECISION2_NOTICE, MOVING_DIGITS_NOTICE, only_last_compared_unclear)
 import debug_log
 import experiments
+import seven_segment
 import glyph_match
 from layout import (MANUAL_ROW_UNCLEAR, PARTLY_UNCLEAR, RAW_ROW_UNCLEAR, digit_row_tilt, fine_rotation as valid_fine_rotation, crop_coordinates, find_digit_row,
                     digit_box_settings, find_raw_digit_row, normalize_digit_boxes, glyph_clipped, glare_slots, roll_center, rotated_width, scale_digit_boxes, turn_crop)
@@ -756,6 +757,10 @@ def shadow_experiments(rules, manual, register, boxes, stable, light, forced):
         try:
             if name == "perspective":
                 record[name] = experiments.shadow_perspective(register, boxes, read_box)
+            elif name == "seven_segment":
+                started = time.monotonic()
+                record[name] = {"reading": seven_segment.read_digits(register, boxes),
+                                "seconds": round(time.monotonic() - started, 3)}
         except (OSError, ValueError, subprocess.SubprocessError) as error:
             record[name] = {"error": type(error).__name__}
     return record

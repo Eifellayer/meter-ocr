@@ -15,6 +15,7 @@ from layout import bright_glyphs, digit_components, glare_slots
 
 EXPERIMENTS = {
     "perspective": "Perspektivkorrektur (Kippung)",
+    "seven_segment": "Digitalanzeige: Segmente direkt lesen",
 }
 # A trapezoid below this difference in glyph height is treated as level.
 MIN_KEYSTONE = 0.03

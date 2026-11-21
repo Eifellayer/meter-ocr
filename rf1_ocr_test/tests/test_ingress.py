@@ -804,7 +804,7 @@ class IngressTests(IngressFixture):
         return sections
 
     def test_wizard_and_settings_show_and_save_the_same_experiments(self):
-        self.rules.update(experiments_enabled=True, experiments={"perspective": True})
+        self.rules.update(experiments_enabled=True, experiments={"perspective": True, "seven_segment": False})
         page = self.request("/")[0]
         for section in self.experiment_boxes(page):
             self.assertIn("Experimentelle Funktionen (Schattenbetrieb)", section)
@@ -822,21 +822,21 @@ class IngressTests(IngressFixture):
         }
         # An older wizard form without the experiments box keeps the saved switches.
         self.assertEqual((303, "./?saved=setup&ui=overview"), self.submit("/einrichtung", **values))
-        self.assertEqual((True, {"perspective": True}), (self.rules["experiments_enabled"], self.rules["experiments"]))
+        self.assertEqual((True, {"perspective": True, "seven_segment": False}), (self.rules["experiments_enabled"], self.rules["experiments"]))
         # The wizard box switches both off, the settings show the same values afterwards.
         self.assertEqual((303, "./?saved=setup&ui=overview"),
                          self.submit("/einrichtung", experiments_option_present=1, **values))
-        self.assertEqual((False, {"perspective": False}), (self.rules["experiments_enabled"], self.rules["experiments"]))
+        self.assertEqual((False, {"perspective": False, "seven_segment": False}), (self.rules["experiments_enabled"], self.rules["experiments"]))
         for section in self.experiment_boxes(self.request("/")[0]):
             self.assertNotIn("checked", section)
         self.assertEqual((303, "./?saved=setup&ui=overview"),
                          self.submit("/einrichtung", experiments_option_present=1, experiments_enabled=1,
                                      experiment_perspective=1, **values))
-        self.assertEqual((True, {"perspective": True}), (self.rules["experiments_enabled"], self.rules["experiments"]))
+        self.assertEqual((True, {"perspective": True, "seven_segment": False}), (self.rules["experiments_enabled"], self.rules["experiments"]))
         # The settings save the same fields with the same logic.
         form = dict(decimals=0, attempts=3, crop_mode="auto", polarity="auto", experiments_enabled=1)
         self.assertEqual((303, "./?saved=1"), self.submit("/automatik", **form))
-        self.assertEqual((True, {"perspective": False}), (self.rules["experiments_enabled"], self.rules["experiments"]))
+        self.assertEqual((True, {"perspective": False, "seven_segment": False}), (self.rules["experiments_enabled"], self.rules["experiments"]))
         wizard, settings = self.experiment_boxes(self.request("/")[0])
         for section in (wizard, settings):
             self.assertIn('name="experiments_enabled" value="1" checked', section)

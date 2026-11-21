@@ -1240,6 +1240,7 @@ name: Zählerstand (OCR)</code></pre>
 <input type="hidden" name="experiments_option_present" value="1">
 <label class="check-option"><input type="checkbox" name="experiments_enabled" value="1" {experiments_checked}> Experimentelle Funktionen testen</label>
 <label class="check-option experiment-option"><input type="checkbox" name="experiment_perspective" value="1" {experiment_perspective_checked}> Perspektivkorrektur (Kippung)</label>
+<label class="check-option experiment-option"><input type="checkbox" name="experiment_seven_segment" value="1" {experiment_seven_segment_checked}> Digitalanzeige: Segmente direkt lesen</label>
 <p>Die App liest jedes Bild zusätzlich mit den angehakten Experimenten, aber nur, wenn der Rechner gerade Leistung frei hat. Es zählt weiterhin nur das bewährte Ergebnis; beide stehen im Debug-Protokoll. Die meisten brauchen das nicht.</p>
 <p>Du kannst das jederzeit unter Einstellungen › Automatische Prüfung wieder ändern.</p>
 </details>
@@ -1366,6 +1367,7 @@ name: Zählerstand (OCR)</code></pre>
 <summary>Experimentelle Funktionen (Schattenbetrieb)</summary>
 <label class="check-option"><input type="checkbox" name="experiments_enabled" value="1" {experiments_checked}> Experimentelle Funktionen testen</label>
 <label class="check-option experiment-option"><input type="checkbox" name="experiment_perspective" value="1" {experiment_perspective_checked}> Perspektivkorrektur (Kippung)</label>
+<label class="check-option experiment-option"><input type="checkbox" name="experiment_seven_segment" value="1" {experiment_seven_segment_checked}> Digitalanzeige: Segmente direkt lesen</label>
 <p>Die App liest jedes Bild zusätzlich mit den angehakten Experimenten, aber nur, wenn der Rechner gerade Leistung frei hat. Es zählt weiterhin nur das bewährte Ergebnis; beide stehen im Debug-Protokoll. Die meisten brauchen das nicht.</p>
 </details>
 <div class="reflection-settings setup-help" id="reflection-settings">
@@ -1949,7 +1951,7 @@ document.querySelectorAll('[data-precision-options]').forEach(options => {{
   showPrecisionOptions();
 }});
 // The setup wizard and the settings show the same experiment switches; keep both in step.
-for (const name of ['experiments_enabled', 'experiment_perspective']) {{
+for (const name of ['experiments_enabled', 'experiment_perspective', 'experiment_seven_segment']) {{
   const boxes = [...document.querySelectorAll('.experiments-box input[name="' + name + '"]')];
   for (const box of boxes) box.addEventListener('change', () => {{
     for (const other of boxes) other.checked = box.checked;
@@ -3903,7 +3905,8 @@ def wizard_energy_factors(field, old_rules):
 def experiment_settings(field):
     """Shadow-mode switches; the setup wizard and the settings send the same two fields."""
     return {"experiments_enabled": field("experiments_enabled") == "1",
-            "experiments": {"perspective": field("experiment_perspective") == "1"}}
+            "experiments": {"perspective": field("experiment_perspective") == "1",
+                            "seven_segment": field("experiment_seven_segment") == "1"}}
 
 
 def parse_failure_pause(text):
@@ -4655,6 +4658,8 @@ def start_panel(
                 fine_alignment_checked="checked" if auto_rules.get("fine_alignment_enabled") else "",
                 adaptive_interval_checked="checked" if auto_rules.get("adaptive_interval_enabled") else "",
                 experiments_checked="checked" if auto_rules.get("experiments_enabled") else "",
+                experiment_seven_segment_checked=("checked" if (auto_rules.get("experiments") or {}).get("seven_segment")
+                                                  else ""),
                 experiment_perspective_checked=("checked" if (auto_rules.get("experiments") or {}).get("perspective")
                                                 else ""),
                 reflection_hide_checked="checked" if auto_rules.get("reflection_suggestion_hidden") else "",

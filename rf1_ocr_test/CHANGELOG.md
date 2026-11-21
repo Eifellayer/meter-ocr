@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.4
+
+Nachkontrolle direkt nach 0.4.3: Die Einrichtung lief weiter den strengen Weg.
+
+- **Die einfache Einrichtung gilt jetzt bei jeder Vergleichsgenauigkeit.** Steht sie auf „Volle Kubikmeter“ oder einer Nachkommastelle, verlangte die Einrichtung ohne Referenzwert trotzdem alle drei Nachkommastellen, also auch die schnell laufende letzte Rolle. Sie bestätigte dann nie. Jetzt genügen bei jeder Einrichtung und Selbstreparatur eines Zählers mit drei Nachkommarollen die ersten zwei Nachkommastellen; die Korrekturen aus 0.4.2 und 0.4.3 greifen damit auch hier.
+- **Debug-Protokoll:** Der Start einer Einrichtung zeigt die Vergleichsgenauigkeit und die Art der Einrichtung.
+
 ## 0.4.3
 
 Nachkontrolle direkt nach 0.4.2: Die Einrichtung las das Zählwerk richtig („10501.50?“), bestätigte es aber nicht.

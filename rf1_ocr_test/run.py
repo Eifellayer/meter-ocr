@@ -1430,6 +1430,17 @@ def app_build():
         return ""
 
 
+def plain_setup(rules, action):
+    """Does this job confirm the frames with two decimals (the plain setup)?
+
+    The comparison precision is a rule for the routine checks. A setup must not ask for more
+    than they do: with "whole cubic metres" (0) and no reference it demanded all three decimals,
+    including the fast last roller, and never confirmed (0.4.4).
+    """
+    return action in ("setup", "start", "repair") and (
+        rules["fraction_digits"] == 3 or rules["decimals"] in (2, 3))
+
+
 def setup_autostart_due(history, build, job, attempted):
     """Restart an unfinished setup once per installed version, without user interaction.
 
@@ -2051,7 +2062,9 @@ def main():
                 # 0.4.3: a setup that compares two decimals is the same plain setup. Before, only
                 # three compared decimals got it; with two (the default after a factory reset) the
                 # setup ran the strict path without the 0.4.2 corrections and never confirmed.
-                simplified = rules["decimals"] in (2, 3) and action in ("setup", "start", "repair")
+                # 0.4.4: and so is every setup of a meter with three decimal rollers, whatever
+                # precision the routine checks compare (0 demanded all three decimals here).
+                simplified = plain_setup(rules, action)
                 intensive = action in ("intensive", "relocate_last")
                 if intensive and (rules["fraction_digits"] != 3 or rules["decimals"] != 3):
                     raise ValueError("The meter must display three decimal digits")
@@ -2110,7 +2123,8 @@ def main():
                 calibration_next = now
                 # Who started which search: a setup must never start unnoticed.
                 debug_log.record(kind="setup_start", action=action, trigger=trigger,
-                                 region=bool(region), known_good=known_good is not None)
+                                 region=bool(region), known_good=known_good is not None,
+                                 decimals=rules["decimals"], simplified=simplified)
             wake_worker.set()
             return True
 

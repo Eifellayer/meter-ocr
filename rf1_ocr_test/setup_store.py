@@ -22,6 +22,24 @@ SETUP_RETRY_LIMIT = 3
 SETUP_RETRY_LONG_SECONDS = 3600
 
 
+def geometry_check_key(rules, source_key):
+    return [source_key, rules["crop_mode"], rules["crop"], rules["rotation"], rules["width"],
+            rules["integer_digits"], rules["fraction_digits"], rules["crop_revision"]]
+
+
+def last_verified_configured_geometry(history, rules, source_key):
+    """Recover an existing saved crop only when history corroborates its revision."""
+    recorded = history.get("geometry_recovery", {})
+    if (rules["crop_mode"] == "manual" and rules["crop_revision"]
+            and history.get("check_status") in ("match", "ocr_only")
+            and not history.get("ocr_rotation_adjustment")
+            and recorded.get("key") == geometry_check_key(rules, source_key)
+            and recorded.get("stamp") == history.get("last_epoch")
+            and recorded.get("failures") == 0):
+        return rules
+    return None
+
+
 def usable_known_good_geometry(saved, scopes, digits):
     """The remembered frame if it fits this camera and digit count, else None.
 

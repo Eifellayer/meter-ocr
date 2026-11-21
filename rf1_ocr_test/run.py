@@ -68,7 +68,8 @@ from reminder import Reminder
 from notification_settings import (DEFAULT_DELIVERY_HOURS, DEFAULT_REVIEW_MINUTES, PUSH_SERVICE,
                                    notification_rules)
 from settings import DEFAULTS, SCHEMA_VERSION, load_options
-from setup_store import (SetupStore, app_build, calibration_source_id, last_setup_unfinished, plain_setup,
+import setup_flow
+from setup_store import (SetupStore, geometry_check_key, last_verified_configured_geometry, app_build, calibration_source_id, last_setup_unfinished, plain_setup,
                          saved_layout_rules, setup_attempted_before, SETUP_RETRY_LIMIT, SETUP_RETRY_LONG_SECONDS, SETUP_RETRY_SECONDS, setup_autostart_due, setup_retry_delay,
                          usable_known_good_geometry)
 from auto_rules import changed_rules, default_rules, stored_rules, valid_experiments
@@ -1184,24 +1185,6 @@ def transfer_jpeg(picture):
     raise ValueError("JPEG lässt sich nicht auf die Übertragungsgröße verkleinern")
 
 
-def geometry_check_key(rules, source_key):
-    return [source_key, rules["crop_mode"], rules["crop"], rules["rotation"], rules["width"],
-            rules["integer_digits"], rules["fraction_digits"], rules["crop_revision"]]
-
-
-def last_verified_configured_geometry(history, rules, source_key):
-    """Recover an existing saved crop only when history corroborates its revision."""
-    recorded = history.get("geometry_recovery", {})
-    if (rules["crop_mode"] == "manual" and rules["crop_revision"]
-            and history.get("check_status") in ("match", "ocr_only")
-            and not history.get("ocr_rotation_adjustment")
-            and recorded.get("key") == geometry_check_key(rules, source_key)
-            and recorded.get("stamp") == history.get("last_epoch")
-            and recorded.get("failures") == 0):
-        return rules
-    return None
-
-
 def standalone_calibration_reference(rules, source, source_key, captured, previous):
     """Use a recent reading from this meter until a newer automatic reading takes over."""
     saved = rules.get("calibration_reference")
@@ -1696,10 +1679,7 @@ def main():
                 # setup ran the strict path without the 0.4.2 corrections and never confirmed.
                 # 0.4.4: and so is every setup of a meter with three decimal rollers, whatever
                 # precision the routine checks compare (0 demanded all three decimals here).
-                simplified = plain_setup(rules, action)
-                intensive = action in ("intensive", "relocate_last")
-                if intensive and (rules["fraction_digits"] != 3 or rules["decimals"] != 3):
-                    raise ValueError("The meter must display three decimal digits")
+                simplified, intensive = setup_flow.job_kind(rules, action)
                 if running and (action == "repair" or (
                         calibration.limit == limit and calibration.region == region
                         and calibration.simplified == simplified and calibration.intensive == intensive
@@ -1710,45 +1690,9 @@ def main():
                 if repair:
                     atomic_write(geometry_backup, json.dumps({"source": source, "rules": get_auto_rules()}).encode(),
                                  0o600)
-                scope = candidate_scope(configuration, region, simplified, intensive)
-                # A new setup starts without the frames of earlier runs: after the camera was
-                # moved they only read rubbish first and were even chosen again (Stefan 21.11.).
-                shortlist = {} if repair or action == "setup" else load_calibration_candidates(scope, rules)
-                known_good = load_known_good_layout(rules, source)
-                if known_good is None:
-                    source_key = source_check_key(source)
-                    verified_geometry = last_verified_configured_geometry(history, rules, source_key)
-                    if verified_geometry:
-                        known_good = geometry_layout(verified_geometry, rules)
-                if intensive:
-                    previous = geometry_layout(rules, rules) if rules["crop_mode"] == "manual" else known_good
-                    if previous is None:
-                        raise ValueError("A saved crop is required for the last digit")
-                reflected_layout = None
-                reflected_positions = ()
-                marked = rules.get("setup_reflection")
-                if (not repair and not intensive and rules["reflection_estimate_enabled"]
-                        and isinstance(marked, dict) and marked.get("source") == setup_source_id(source)):
-                    try:
-                        layout = geometry_layout(marked, rules)
-                        positions = tuple(marked["positions"])
-                        if (layout.digit_boxes and 1 <= len(positions) <= 2
-                                and all(type(index) is int and 0 <= index < len(layout.digit_boxes)
-                                        for index in positions)):
-                            reflected_layout, reflected_positions = layout, positions
-                    except (ValueError, TypeError, KeyError):
-                        pass
-                background = intensive and (action == "relocate_last" or stationary_partial_active(rules, source))
-                calibration = Calibration(limit=limit, started=now, automatic=repair,
-                                          rank_candidates=not (repair or intensive), shortlist=shortlist,
-                                          simplified=simplified, intensive=intensive,
-                                          background=background, followup=background,
-                                          purpose="relocate" if action == "relocate_last" else "",
-                                          duration=GEOMETRY_REPAIR_SECONDS if repair else TIME_LIMIT,
-                                          attempt_limit=GEOMETRY_REPAIR_LIMIT if repair else MAX_ATTEMPTS,
-                                          previous_layout=previous, region=region,
-                                          known_good_layout=reflected_layout or known_good,
-                                          reflected_layout=reflected_layout, reflected_positions=reflected_positions)
+                calibration, known_good = setup_flow.new_job(
+                    action, limit, region, configuration, history, setup_store, previous, now,
+                    simplified=simplified, intensive=intensive, make=Calibration)
                 calibration_preview.clear()
                 calibration_images.clear()
                 calibration_configuration = configuration

@@ -139,5 +139,26 @@ class NeededRollerTests(unittest.TestCase):
         self.assertEqual(everything, self.read(3)[0])
 
 
+class ResetLedgerTests(unittest.TestCase):
+    """0.5.0 (support round 21.11.): a reset that keeps statistics must not book volume twice."""
+
+    def test_a_reset_between_two_bookings_adds_nothing(self):
+        from consumption import accumulate_consumption
+        ledger = {}
+        readings = [(0, "10496.29"), (600, "10497.60"), (1200, "10499.38"), (1800, "10501.82"), (2400, "10501.90")]
+        plain = {}
+        for stamp, value in readings:
+            plain = accumulate_consumption(plain, "meter", stamp + 1, value, 2, 60000)
+        for index, (stamp, value) in enumerate(readings):
+            ledger = accumulate_consumption(ledger, "meter", stamp + 1, value, 2, 60000)
+            if index in (1, 3):
+                ledger = run.factory_reset_history({"consumption": ledger, "check_status": "match"},
+                                                   keep_statistics=True)["consumption"]
+        self.assertEqual(plain["total_litres"], ledger["total_litres"])
+        self.assertEqual(plain["anchor_litres"], ledger["anchor_litres"])
+        # Booked is what a later reading confirmed: from the start value to the last but one.
+        self.assertEqual(10501820 - 10496290, ledger["total_litres"])
+
+
 if __name__ == "__main__":
     unittest.main()

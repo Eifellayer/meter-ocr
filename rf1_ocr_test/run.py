@@ -47,7 +47,7 @@ from checks import (
 )
 from calibration import (Calibration, Layout, CAPTURE_INTERVAL, PERFECT_CONFIRMATION_INTERVAL, DEFAULT_LIMIT, MIN_IMAGES, MIN_IMAGE_LIMIT, MAX_IMAGES, MAX_ATTEMPTS,
                          DEFAULT_INTENSIVE_AGREEMENT, SHORTLIST_LIMIT, TIME_LIMIT, LAST_DIGIT_CAPTURE_INTERVAL,
-                         image_quality_hints, two_decimal_reading, uncertain_slots, valid_intensive_agreement)
+                         image_quality_hints, register_light_hints, two_decimal_reading, uncertain_slots, valid_intensive_agreement)
 from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, LOWER_PENDING, LOWER_RECOVERED, MAX_FLOW_LPH,
                          CALORIFIC_RANGE, CONVERSION_RANGE, STATE_FACTOR_RANGE, ImplausibleReading, energy_kwh, plausible_lower_drop, track_lower_series,
                          valid_energy_factor,
@@ -4135,6 +4135,8 @@ def main():
                 read_plan_state.update(planned)
             debug_log.record(
                 assumed_whole=(local.get("assumed_whole") or None) if not manual else None,
+                image_hints=(register_light_hints(local["register"])
+                             if not manual and local.get("register") is not None else None),
                 library={"filled": library_filled, "learned": local.get("library_learned", 0),
                          "samples": digit_library.LIBRARY.samples()}
                 if (library_filled or local.get("library_learned")) else None,

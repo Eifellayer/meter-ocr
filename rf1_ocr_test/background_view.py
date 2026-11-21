@@ -42,7 +42,7 @@ def summary(text):
     """Evaluate debug-log text (one JSON object per line); broken lines are skipped."""
     tested = {name: {"label": label, "runs": 0, "same": 0, "different": 0, "unclear": 0, "no_result": 0,
                      "errors": 0, "seconds": 0.0} for name, label in EXPERIMENTS.items()}
-    result = {"checks": 0, "skipped_busy": 0, "experiments": tested, "last": None,
+    result = {"checks": 0, "skipped_busy": 0, "experiments": tested, "last": None, "image_hints": {},
               "idle": {"runs": 0, "experiments": 0, "reread": 0, "resolved": 0, "last": None}}
     for line in str(text or "").splitlines():
         try:
@@ -54,6 +54,9 @@ def summary(text):
         kind, record = entry.get("kind"), entry.get("experiment")
         if kind == "automatic":
             result["checks"] += 1
+            for hint in entry.get("image_hints") or []:
+                if hint in ("dark", "bright", "low_contrast"):
+                    result["image_hints"][hint] = result["image_hints"].get(hint, 0) + 1
         elif kind == "idle":
             idle = result["idle"]
             idle["runs"] += 1

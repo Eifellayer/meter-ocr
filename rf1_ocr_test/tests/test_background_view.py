@@ -36,6 +36,13 @@ class SummaryTests(unittest.TestCase):
         self.assertEqual({"runs": 2, "experiments": 1, "reread": 2, "resolved": 1, "last": "t2"}, result["idle"])
         self.assertEqual(1, result["experiments"]["seven_segment"]["same"])
 
+    def test_picture_hints_of_the_checks_are_counted(self):
+        result = background_view.summary(lines(
+            {"kind": "automatic", "image_hints": ["dark", "low_contrast"]},
+            {"kind": "automatic", "image_hints": ["dark", "erfunden"]},
+            {"kind": "manual", "image_hints": ["bright"]}))
+        self.assertEqual({"dark": 2, "low_contrast": 1}, result["image_hints"])
+
     def test_empty_log_gives_zeroes(self):
         result = background_view.summary("")
         self.assertEqual(0, result["checks"])

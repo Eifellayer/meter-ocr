@@ -3787,6 +3787,11 @@ async function refreshBackgroundWork() {{
           (tested.seconds == null ? '' : (en ? ' · on average ' : ' · im Schnitt ') +
             String(tested.seconds).replace('.', en ? '.' : ',') + ' s')));
     }}
+    const hintNames = en ? {{dark: 'too dark', bright: 'too bright', low_contrast: 'low contrast'}}
+      : {{dark: 'zu dunkel', bright: 'zu hell', low_contrast: 'wenig Kontrast'}};
+    const hints = Object.entries(data.image_hints || {{}}).map(([name, count]) => hintNames[name] + ' ' + count + '×');
+    rows.push((en ? 'Picture hints in these checks: ' : 'Bildhinweise in diesen Prüfungen: ') +
+      (hints.length ? hints.join(' · ') : (en ? 'none' : 'keine')));
     if (data.skipped_busy) rows.push((en ? 'Skipped because the device was busy: ' : 'Wegen Auslastung übersprungen: ') + data.skipped_busy);
     const idle = data.idle;
     rows.push(!idle.runs

@@ -131,5 +131,16 @@ class KeepRecentTests(unittest.TestCase):
         self.assertEqual([{"image": "c"}, None], idle_work.keep_recent(jobs, {"image": "c"}))
 
 
+class RegisterLightHintTests(unittest.TestCase):
+    def test_dark_bright_and_flat_registers_are_named(self):
+        from PIL import Image, ImageDraw
+        import calibration
+        self.assertEqual(["dark", "low_contrast"], calibration.register_light_hints(Image.new("RGB", (200, 60), "#101010")))
+        self.assertEqual(["bright", "low_contrast"], calibration.register_light_hints(Image.new("RGB", (200, 60), "#f5f5f5")))
+        good = Image.new("RGB", (200, 60), "#202020")
+        ImageDraw.Draw(good).rectangle((20, 5, 180, 55), fill="#e0e0e0")
+        self.assertEqual([], calibration.register_light_hints(good))
+
+
 if __name__ == "__main__":
     unittest.main()

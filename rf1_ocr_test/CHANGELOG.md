@@ -8,7 +8,7 @@ Beta. Großer Umbau in einem Stück: Die App ist in Bereiche aufgeteilt, liest i
 
 - **Nur noch die Ziffern, die gebraucht werden.** Die Routineprüfung liest die Nachkommarollen jenseits der Vergleichsgenauigkeit nicht mehr; die letzte, ständig drehende Rolle war die langsamste.
 - **Vordere drei Stellen werden übernommen statt gelesen**, sobald eine vollständige Prüfung sie bestätigt hat. Spätestens nach 10 Prüfungen oder einer Stunde liest die App wieder alles, bei einer Abweichung sofort.
-- **Arbeit in der Wartezeit:** Zwischen zwei Prüfungen holt die App kein neues Bild und schaltet kein Licht. Sie schaut nur mit dem Bild der letzten Prüfung nochmals hin, wenn es einen Anlass gibt (Ziffern unklar, Experiment wegen Auslastung übersprungen), höchstens sechs Lesungen je Pause und nur auf einem ruhigen Gerät. Das Ergebnis steht im Debug-Protokoll und ändert nie den Zählerstand.
+- **Arbeit in der Wartezeit:** Zwischen zwei Prüfungen holt die App kein neues Bild und schaltet kein Licht. Sie schaut nur mit dem Bild der letzten Prüfung nochmals hin, wenn es einen Anlass gibt (Ziffern unklar, Experiment wegen Auslastung übersprungen), höchstens sechs Lesungen je Pause und nur auf einem ruhigen Gerät. Gemerkt wird die Nacharbeit der letzten zwei Prüfungen (Prüfung und Gegenprüfung); solange etwas offen ist, steht das dezent im Status. Das Ergebnis steht im Debug-Protokoll und ändert nie den Zählerstand.
 - **Von Hand gesetzte Rahmen bleiben, wie du sie gesetzt hast.** Die App richtet sie nicht mehr nach und speichert keine eigene Feinkorrektur darüber. Von der Selbsteinrichtung gefundene Rahmen werden weiter nachgeführt.
 - **Einrichtung:** Eine Bestätigung zählt nicht mehr, wenn derselbe Rahmen danach einen kleineren Stand liest. Teil-Treffer stehen im Einrichtungsstatus.
 - **Nach einem Werksreset** springt der Sensor nicht mehr auf den alten gebuchten Stand zurück.
@@ -16,10 +16,10 @@ Beta. Großer Umbau in einem Stück: Die App ist in Bereiche aufgeteilt, liest i
 
 **Oberfläche**
 
-- **Manueller Test:** „Jetzt prüfen“ steht oben im Testbereich. Während des Lesens zeigt die App, was sie bisher gelesen hat. Nach dem Test lässt sich der Ziffernrahmen direkt korrigieren.
+- **Manueller Test:** „Jetzt prüfen“ steht oben im Testbereich. Während des Lesens zeigt die App, was sie bisher gelesen hat. Nach dem Test lässt sich der Ziffernrahmen direkt am Bild dieses Tests korrigieren, auch an einem hochgeladenen.
 - **Ziffernrahmen getrennt speichern:** „Für Automatik speichern“ oder „Für manuellen Test speichern“. Der zweite Knopf ändert nur den Test und startet keine automatische Prüfung.
 - **Zähler-Demo mit echten Bildern:** vier echte Kamerabilder eines Gaszählers, gelesen wie bei der automatischen Prüfung. Zu sehen ist nur das Zählwerk, alles andere ist übermalt.
-- **Schattenmodus sichtbar:** Unter Werkzeuge zeigt „Schattenmodus und Arbeit im Hintergrund“, wie oft ein Experiment lief und ob es dasselbe gelesen hat wie die normale Prüfung.
+- **Schattenmodus sichtbar:** Unter Werkzeuge zeigt „Schattenmodus und Arbeit im Hintergrund“, wie oft ein Experiment lief und ob es dasselbe gelesen hat wie die normale Prüfung, dazu die Bildhinweise der Prüfungen (zu dunkel, zu hell, wenig Kontrast), wie sie bisher nur die Einrichtung zeigte.
 - **Experimente haben Stufen:** Aus oder Schattenmodus. „Aktiv testen“ ist sichtbar, aber in dieser Version noch für kein Experiment freigegeben.
 - **Neues Experiment „Digitalanzeige: Segmente direkt lesen“** für Zähler mit Sieben-Segment-Anzeige, nur im Schattenmodus.
 - **Systemauslastung** unter Werkzeuge: Prozessor, Arbeitsspeicher, Anteil der App und Temperatur, soweit das Gerät sie meldet.
@@ -32,7 +32,7 @@ Beta. Großer Umbau in einem Stück: Die App ist in Bereiche aufgeteilt, liest i
 - Regeln, Einrichtungsspeicher, Einrichtungsablauf, Statusanzeige, Systemwerte, Leseplan, Wartezeit-Arbeit und Auswertung des Schattenmodus liegen in eigenen Modulen mit eigenen Tests. Die Abläufe selbst bleiben in `run.py`.
 - Eine Einrichtung wird in den Tests auf echten, übermalten Kamerabildern nachgespielt.
 
-**Noch nicht enthalten:** „Aktiv testen“ für Experimente, die neue Kandidatenbewertung mit zwei Prozentwerten, die Digitalanzeige in der Selbsteinrichtung, eine Fortschrittsanzeige für Hintergrundprüfungen und das überarbeitete Handbuch mit Bildschirmfotos.
+**Noch nicht enthalten:** „Aktiv testen“ für Experimente, die neue Kandidatenbewertung mit zwei Prozentwerten, die Digitalanzeige in der Selbsteinrichtung, Infrarot-Nachtsicht als Blitz, die neu geordneten Einstellungen und das überarbeitete Handbuch mit Bildschirmfotos.
 
 ## 0.4.4
 

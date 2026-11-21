@@ -527,6 +527,21 @@ def crop_quality(frame, layout):
     return (ImageStat.Stat(across).mean[0] + ImageStat.Stat(down).mean[0]) / 2
 
 
+def register_light_hints(register):
+    """The light part of ``image_quality_hints`` for a register that is already cut out.
+
+    Used by the routine check (0.5.0) so the hints of the setup are also available later:
+    "dark", "bright" or "low_contrast". Sharpness needs the whole frame and is left out.
+    """
+    gray = register.convert("L").resize((160, 48), Image.Resampling.BILINEAR)
+    levels = sorted(gray.tobytes())
+    low, high = levels[len(levels) // 10], levels[len(levels) * 9 // 10]
+    hints = ["dark"] if high < 45 else ["bright"] if low > 215 else []
+    if high - low < 32:
+        hints.append("low_contrast")
+    return hints
+
+
 def image_quality_hints(frame, layout):
     """Give a rough first-frame assessment of the digit area."""
     gray = crop_register(frame, layout.box).convert("L").resize((160, 48), Image.Resampling.BILINEAR)

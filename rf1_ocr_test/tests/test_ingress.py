@@ -321,6 +321,16 @@ class IngressTests(IngressFixture):
         status = json.loads(self.request("/automatic")[0])
         self.assertIn("seit mindestens 40 Minuten nicht sicher erkannt", status["geometry_warning"])
 
+    def test_manual_test_can_be_started_at_the_top_and_shows_digits_while_reading(self):
+        page = self.request("/")[0]
+        top = page.index('id="start-check-top"')
+        self.assertLess(page.index('id="manual-test-area"'), top)
+        self.assertLess(top, page.index('id="manual-panel"'))
+        self.assertIn('form="manual-form" id="start-check-top"', page)
+        self.assertIn('id="test-live"', page)
+        self.assertIn('id="correct-after-test"', page)
+        self.assertIn("job.readings || []", page)
+
     def test_frames_saved_for_the_manual_test_leave_the_automatic_alone(self):
         self.source_selected = True
         self.setup_pending = False

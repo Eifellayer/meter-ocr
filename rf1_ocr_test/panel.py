@@ -425,8 +425,8 @@ transition:background .15s,transform .05s,box-shadow .15s}}
 button:not(:disabled):hover{{background:light-dark(#e8edf1,#22303c)}}
 button:not(:disabled):active{{transform:translateY(1px)}}
 button:disabled{{opacity:.5;cursor:not-allowed}}
-#start-automatic,#start-check-with-options,#save-digit-correction,form button[type="submit"]:not(.crop-reset){{background:var(--accent);border-color:transparent;color:var(--accent-ink)}}
-#start-automatic:not(:disabled):hover,#start-check-with-options:not(:disabled):hover,form button[type="submit"]:not(.crop-reset):not(:disabled):hover{{background:light-dark(#097a6a,#5fd8c3)}}
+#start-automatic,#start-check-with-options,#start-check-top,#save-digit-correction,form button[type="submit"]:not(.crop-reset){{background:var(--accent);border-color:transparent;color:var(--accent-ink)}}
+#start-automatic:not(:disabled):hover,#start-check-with-options:not(:disabled):hover,#start-check-top:not(:disabled):hover,form button[type="submit"]:not(.crop-reset):not(:disabled):hover{{background:light-dark(#097a6a,#5fd8c3)}}
 select,input{{border-radius:var(--radius-sm);background:var(--surface);border:1px solid var(--edge)}}
 /* Compact form fields (0.1.7): smaller selects and inputs, less visual weight in settings, tools and setup. */
 form select,form input:not([type="checkbox"]):not([type="radio"]):not([type="file"]){{min-height:2.25rem;padding:.4rem .65rem;font-size:.92rem}}
@@ -930,18 +930,21 @@ name: Zählerstand (OCR)</code></pre>
 </details>
 <div class="manual-test-area" id="manual-test-area" {manual_area_hidden}>
 <div class="manual-test-heading"><h2>Manueller Test</h2>
+<button type="submit" form="manual-form" id="start-check-top">Jetzt prüfen</button>
 <button type="button" id="close-manual-test">Schließen</button></div>
 <div class="test-box" id="test-box" data-phase="idle" data-result="neutral" tabindex="-1" {test_hidden} role="status" aria-live="polite">
 <strong id="test-head">Aktueller Schritt: Bereit</strong>
 <p id="test-status">{request_status}</p>
 <progress id="test-progress" max="{default_attempts}" value="0" aria-label="OCR-Versuche" hidden></progress>
 <small id="test-meta">Bereit für den manuellen Test.</small>
+<p id="test-live" class="test-live" hidden></p>
 <div class="test-result" id="test-result" hidden>
 <p id="test-result-detail"></p>
 <dl id="manual-readings" hidden><dt>Erkannter Stand</dt><dd id="manual-ocr"></dd>
 <dt>Referenz</dt><dd><span id="manual-reference"></span><small id="manual-reference-note" class="reference-note" hidden></small></dd>
 <dt>Bildzeit</dt><dd id="manual-image-time">–</dd></dl>
 <small id="test-result-stamp"></small>
+<p><button type="button" id="correct-after-test" hidden>Ziffernrahmen an diesem Bild korrigieren</button></p>
 <details class="ocr-details" id="ocr-details" hidden>
 <summary>Mehr Infos: Was wurde bei den OCR-Versuchen gelesen?</summary>
 <p class="ocr-scope"></p>
@@ -1981,7 +1984,7 @@ let statusPending = false;
 const manualPanel = document.querySelector('#manual-panel');
 const manualForm = document.querySelector('#manual-form');
 const testBox = document.querySelector('#test-box');
-const testButtons = [document.querySelector('#start-check-with-options')];
+const testButtons = [document.querySelector('#start-check-with-options'), document.querySelector('#start-check-top')];
 function setTestActive(active) {{
   for (const [index, button] of testButtons.entries()) {{
     button.disabled = active;
@@ -3241,6 +3244,7 @@ async function submitDigitCorrection(action) {{
 }}
 correctionSearch.addEventListener('click', () => submitDigitCorrection('search'));
 correctionSave.addEventListener('click', () => submitDigitCorrection('save'));
+document.querySelector('#correct-after-test').addEventListener('click', () => correctionOpen.click());
 correctionSaveManual.addEventListener('click', () => submitDigitCorrection('save_manual'));
 function renderOcrCandidates(list, candidates) {{
   const evidence = {{
@@ -3329,6 +3333,14 @@ async function refreshTestStatus() {{
       'Versuche abgeschlossen: ' + done :
       active ? 'Prüfung läuft …' :
       job.phase === 'done' ? (done === 1 ? '1 OCR-Versuch' : done + ' OCR-Versuche') : 'Bereit für den manuellen Test.';
+
+    const live = document.querySelector('#test-live');
+    const seen = active && job.phase === 'ocr' ? (job.readings || []) : [];
+    live.hidden = !seen.length;
+    live.textContent = seen.length ? 'Bisher gelesen: ' + seen.join(' · ') : '';
+    const correctAfter = document.querySelector('#correct-after-test');
+    correctAfter.hidden = job.phase !== 'done' || !job.digit_correction;
+    correctAfter.disabled = calibrating;
 
     if (job.phase === 'done') {{
       sourcePreview.hidden = false;

@@ -89,6 +89,8 @@ EN_UI = {
     "Gerader Ausschnitt mit Ziffernrahmen": "Aligned crop with digit boxes",
     "Demo-Bild wird geprüft …": "Reading the demo image …",
     "Für Automatik speichern": "Save for automatic checks",
+    "Ziffernrahmen an diesem Bild korrigieren": "Correct digit boxes on this image",
+    "Bisher gelesen: ": "Read so far: ",
     "Für manuellen Test speichern": "Save for the manual test",
     "„Für Automatik“ gilt ab der nächsten automatischen Prüfung. „Für manuellen Test“ ändert nur den Test unter Werkzeuge; die Automatik behält ihre Rahmen und startet keine Prüfung.":
         "“For automatic checks” applies from the next automatic check. “For the manual test” only changes the test under Tools; the automatic check keeps its frames and starts no check.",

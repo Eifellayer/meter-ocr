@@ -2959,7 +2959,9 @@ def main():
                             update_progress(request_id, "ocr", f"OCR-Prüfung gestartet (max. {manual_options['attempts']} Versuche).", 0)
                         def report_ocr(attempts, message):
                             if manual:
-                                update_progress(request_id, "ocr", message, attempts)
+                                # Every reading so far, so the test shows the digits while it runs (0.5.0).
+                                update_progress(request_id, "ocr", message, attempts,
+                                                readings=list(read_state["frame_reads"])[-12:])
                             else:
                                 running = "läuft" in message
                                 current_attempt = attempts + 1 if running else attempts

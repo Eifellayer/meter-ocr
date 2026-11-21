@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.1
+
+Nachkontrolle direkt nach 0.5.0 am echten Zähler.
+
+- **Eine laufende Einrichtung bricht nicht mehr ab, wenn du einen Hinweis ausblendest.** Der neue Knopf „Hinweis ausblenden“ (Bildqualität) änderte eine Einstellung, und die Einrichtung hielt das für eine geänderte Konfiguration: Sie endete nach dem ersten Bild als „abgebrochen“, obwohl das Zählwerk gelesen und bestätigt war. Reine Anzeige-Einstellungen zählen jetzt nicht mehr als Änderung.
+
 ## 0.5.0
 
 Beta. Großer Umbau in einem Stück: Die App ist in Bereiche aufgeteilt, liest im Normalbetrieb weniger und zeigt mehr von dem, was sie tut. Bitte nach dem Update einmal die Übersicht ansehen.

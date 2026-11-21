@@ -73,5 +73,25 @@ class AutoRulesTests(unittest.TestCase):
         self.assertEqual("", auto_rules.stored_rules(dict(saved, frames_origin="alien"), self.options)["frames_origin"])
 
 
+class ViewPreferenceTests(unittest.TestCase):
+    """Hiding a hint during a setup cancelled the setup (0.5.0, found on the live system)."""
+
+    def test_hiding_a_hint_is_not_a_configuration_change(self):
+        import auto_rules
+        before = {"crop": "1,2,3,4", "quality_hint_hidden": False, "decimals": 2}
+        after = {**before, "quality_hint_hidden": True}
+        self.assertTrue(auto_rules.only_view_changed(before, after))
+        self.assertFalse(auto_rules.only_view_changed(before, {**after, "decimals": 3}))
+        source = ({"camera": "camera.gas"}, False)
+        self.assertEqual((after, source), auto_rules.carry_view_preferences((before, source), after))
+        self.assertIsNone(auto_rules.carry_view_preferences(None, after))
+
+    def test_other_settings_are_never_carried_over(self):
+        import auto_rules
+        remembered = ({"decimals": 2, "quality_hint_hidden": False}, "quelle")
+        carried = auto_rules.carry_view_preferences(remembered, {"decimals": 3, "quality_hint_hidden": True})
+        self.assertEqual(({"decimals": 2, "quality_hint_hidden": True}, "quelle"), carried)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1477,7 +1477,7 @@ def main():
         nonlocal auto_rules
         updated_rules = changed_rules(auto_rules, values)
         atomic_write(AUTO_RULES, json.dumps(updated_rules, indent=2).encode("utf-8"), 0o600)
-        view_preferences = ("reflection_suggestion_hidden", "reflection_confirmed_id")
+        view_preferences = ("reflection_suggestion_hidden", "reflection_confirmed_id", "quality_hint_hidden")
         needs_check = any(updated_rules[key] != auto_rules.get(key) for key in updated_rules
                           if key not in view_preferences)
         view_changed = any(updated_rules[key] != auto_rules.get(key) for key in view_preferences)

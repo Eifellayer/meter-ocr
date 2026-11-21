@@ -750,6 +750,13 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 </div>
 </dialog>
 <div id="calibration-overview" class="calibration-live" hidden>
+<form method="post" action="bildqualitaet-hinweis-ausblenden" class="quality-hint settings-note" {quality_hint_hidden}>
+<input type="hidden" name="lang" value="{language}"><input type="hidden" name="mode" value="{language_mode}">
+<input type="hidden" name="csrf" value="{csrf}">
+<p>Je schlechter das Kamerabild (Unschärfe, Spiegelungen, schwaches Licht, schräger Blickwinkel), desto länger dauern Einrichtung und Optimierung. Ein scharfes, gerades Bild ohne Lichtfleck auf den Ziffern spart am meisten Zeit.</p>
+<label class="check-option"><input type="checkbox" name="hide" value="1" onchange="this.form.submit()"> Diesen Hinweis dauerhaft ausblenden</label>
+<noscript><button type="submit">Speichern</button></noscript>
+</form>
 <p id="calibration-overview-state" role="status"></p>
 <p class="calibration-last-digit-note settings-note" hidden></p>
 <div class="setup-timeline-box" role="group" aria-labelledby="setup-timeline-title" hidden>
@@ -1094,6 +1101,7 @@ name: Zählerstand (OCR)</code></pre>
 <input type="hidden" name="csrf" value="{csrf}">
 <ol class="setup-stepper" id="setup-stepper" aria-label="Schritte"><li data-step="0" data-state="current">Bildquelle</li><li data-step="1">Anzeige</li><li data-step="2">Ausschnitt</li><li data-step="3">Hinweise</li></ol>
 <fieldset class="setup-step active" data-step="0"><legend>1. Bildquelle</legend>
+<p class="settings-note quality-hint" {quality_hint_hidden}>Je schlechter das Kamerabild (Unschärfe, Spiegelungen, schwaches Licht, schräger Blickwinkel), desto länger dauern Einrichtung und Optimierung. Ein scharfes, gerades Bild ohne Lichtfleck auf den Ziffern spart am meisten Zeit.</p>
 <div class="source-mode-guide">
 <label>Woher kommt das Zählerbild?<select name="source_mode" id="wizard-source-mode" required>{wizard_source_options}</select></label>
 <ul class="settings-note" aria-label="Erklärung der Bildquellen">
@@ -1366,6 +1374,7 @@ name: Zählerstand (OCR)</code></pre>
 <summary>ⓘ Spiegelungen und verdeckte Ziffern</summary>
 <p>Die App kann je eine verdeckte Stelle vor und nach dem Komma ergänzen, wenn nur ein Ergebnis zum bisherigen Stand und zum maximalen Durchfluss passt. Berechnete Ziffern bleiben gelb. Ein datierter Startwert kann als erster Vergleichswert dienen.</p>
 <label class="check-option"><input type="checkbox" name="reflection_suggestion_hidden" value="1" {reflection_hide_checked}> Vorschlag bei wiederholt unlesbarer Ziffer ausblenden</label>
+<label class="check-option"><input type="checkbox" name="quality_hint_hidden" value="1" {quality_hint_checked}> Hinweis „Bildqualität bestimmt die Dauer“ ausblenden</label>
 </details>
 </div>
 </div>
@@ -4646,6 +4655,8 @@ def start_panel(
                 experiment_perspective_checked=("checked" if (auto_rules.get("experiments") or {}).get("perspective")
                                                 else ""),
                 reflection_hide_checked="checked" if auto_rules.get("reflection_suggestion_hidden") else "",
+                quality_hint_checked="checked" if auto_rules.get("quality_hint_hidden") else "",
+                quality_hint_hidden="hidden" if auto_rules.get("quality_hint_hidden") else "",
                 reflection_suggestion_hidden="" if summary["reflection_suggestion"] else "hidden",
                 reflection_estimate_hidden="" if estimate.get("confirmed") else "hidden",
                 reflection_approval_hidden="" if pending_estimate else "hidden",
@@ -4797,7 +4808,7 @@ def start_panel(
             if path not in ("/pruefen", "/automatik", "/ausschnitt-uebernehmen", "/sprache",
                             "/benachrichtigungen", "/bildquelle", "/einrichtung", "/einrichtungsbild",
                             "/einrichtung-ueberspringen", "/werkreset", "/automatik-pause",
-                            "/spiegelungs-hinweis-ausblenden", "/ergaenzte-ziffer-bestaetigen", "/selbsteinrichtung", "/fallback", "/ziffernrahmen", "/zaehler-demo", "/automatik-jetzt", "/vergleichsgenauigkeit"):
+                            "/spiegelungs-hinweis-ausblenden", "/bildqualitaet-hinweis-ausblenden", "/ergaenzte-ziffer-bestaetigen", "/selbsteinrichtung", "/fallback", "/ziffernrahmen", "/zaehler-demo", "/automatik-jetzt", "/vergleichsgenauigkeit"):
                 self.send_error(404)
                 return
             fallback = browser_locale(self.headers.get("Accept-Language", ""))
@@ -5013,6 +5024,15 @@ def start_panel(
                     wizard_image_lock.release()
                 return
 
+            if path == "/bildqualitaet-hinweis-ausblenden":
+                try:
+                    with rules_lock:
+                        save_auto_rules({**read_auto_rules(), "quality_hint_hidden": True}, request_check=False)
+                except (OSError, ValueError):
+                    problem(503)
+                    return
+                self.redirect("?ui=overview" + keep_mode)
+                return
             if path == "/spiegelungs-hinweis-ausblenden":
                 try:
                     with rules_lock:
@@ -5437,6 +5457,7 @@ def start_panel(
                                          "adaptive_interval_enabled": field("adaptive_interval_enabled") == "1",
                                          **experiment_settings(field),
                                          "reflection_suggestion_hidden": field("reflection_suggestion_hidden") == "1",
+                                         "quality_hint_hidden": field("quality_hint_hidden") == "1",
                                          "polarity": polarity[0], "crop_mode": crop_mode[0],
                                          "crop": crop, "width": width, "rotation": rotation, "rotation_fine": rotation_fine, "digit_boxes": boxes,
                                          "max_flow_lph": max_flow, "interval_minutes": interval_minutes,

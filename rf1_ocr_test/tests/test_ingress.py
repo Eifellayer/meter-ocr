@@ -168,6 +168,14 @@ class IngressTests(IngressFixture):
         page, _ = self.request("/", accept="en")
         self.assertIn(">Report a problem<", page)
 
+    def test_the_image_quality_note_can_be_hidden_for_good(self):
+        page = self.request("/")[0]
+        self.assertIn("desto länger dauern Einrichtung und Optimierung", page)
+        self.assertIn('class="quality-hint settings-note" >', page)
+        self.assertEqual(303, self.submit("/bildqualitaet-hinweis-ausblenden", hide="1")[0])
+        self.assertTrue(self.rules["quality_hint_hidden"])
+        self.assertIn('class="quality-hint settings-note" hidden>', self.request("/")[0])
+
     def test_system_load_is_served_as_json(self):
         sample = json.loads(self.request("/systemstatus")[0])
         self.assertGreaterEqual(sample["cores"], 1)

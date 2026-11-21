@@ -88,6 +88,10 @@ EN_UI = {
     "Schräges künstliches Zählerbild": "Generated tilted meter image",
     "Gerader Ausschnitt mit Ziffernrahmen": "Aligned crop with digit boxes",
     "Demo-Bild wird geprüft …": "Reading the demo image …",
+    "Je schlechter das Kamerabild (Unschärfe, Spiegelungen, schwaches Licht, schräger Blickwinkel), desto länger dauern Einrichtung und Optimierung. Ein scharfes, gerades Bild ohne Lichtfleck auf den Ziffern spart am meisten Zeit.":
+        "The worse the camera image (blur, reflections, low light, slanted view), the longer setup and optimization take. A sharp, straight image without a light spot on the digits saves the most time.",
+    "Diesen Hinweis dauerhaft ausblenden": "Hide this note permanently",
+    "Hinweis „Bildqualität bestimmt die Dauer“ ausblenden": "Hide the note “image quality determines the duration”",
     "Systemauslastung": "System load",
     "Auslastung des Geräts und Anteil dieser App. Die Texterkennung zählt zur App. Die Werte gelten für die letzten Sekunden.":
         "Load of the device and the share of this app. Text recognition counts towards the app. The values cover the last few seconds.",

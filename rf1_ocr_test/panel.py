@@ -865,7 +865,8 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 <div><dt>Heute</dt><dd id="consumption-day">–</dd></div>
 </dl>
 <div class="consumption-chart" id="consumption-chart" role="img" aria-label="Verbrauch je Stunde, letzte 24 Stunden" hidden></div>
-<p class="consumption-chart-axis" id="consumption-chart-axis" hidden><span>vor 24 h</span><span>jetzt</span></p>
+<p class="consumption-chart-axis" id="consumption-chart-axis" hidden><span>vor 24 h</span><span id="consumption-chart-peak"></span><span>jetzt</span></p>
+<p id="consumption-resolution" class="settings-note" hidden></p>
 <p id="consumption-empty" class="settings-note">Die Statistik füllt sich mit bestätigten Ablesungen.</p>
 <details id="consumption-details" hidden>
 <summary>Verlauf nach Stunde und Tag</summary>
@@ -3579,6 +3580,18 @@ function renderConsumption(data) {{
       return bar;
     }}));
     chart.dataset.values = chartKey;
+    const top = Math.max(0, ...hours.map(bucket => bucket.litres || 0));
+    document.querySelector('#consumption-chart-peak').textContent = top
+      ? (lang === 'en' ? 'highest hour: ' : 'höchste Stunde: ') + consumptionFormat.format(top / 1000) + ' m³' : '';
+  }}
+  const coarse = document.querySelector('#consumption-resolution');
+  const step = Number(data.resolution_litres) || 0;
+  coarse.hidden = chart.hidden || step < 100;
+  if (!coarse.hidden) {{
+    const size = consumptionFormat.format(step / 1000) + ' m³';
+    coarse.textContent = lang === 'en'
+      ? 'The meter is read in steps of ' + size + '. Hourly values are therefore only rough; compare more decimal places for a finer chart.'
+      : 'Der Zähler wird in Schritten von ' + size + ' abgelesen. Die Stundenwerte sind deshalb nur grob; mit mehr verglichenen Nachkommastellen wird die Anzeige feiner.';
   }}
   document.querySelector('#consumption-empty').hidden = available;
   document.querySelector('#consumption-details').hidden = !available;

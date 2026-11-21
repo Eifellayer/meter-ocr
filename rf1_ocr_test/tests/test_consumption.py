@@ -121,6 +121,13 @@ class ConsumptionStatisticsTests(TestCase):
         self.assertTrue(stats["days"][0]["partial"])
         self.assertFalse(stats["days"][0]["estimated"])
 
+    def test_volume_counted_across_a_precision_change_is_shown_as_estimated(self):
+        stats = self.summarize([(0, 1000, 1000), (1800, 1000, 1000), (3600, 1400, 10), (5400, 1450, 10)], 5401)
+        self.assertEqual({"litres": 400, "estimated": True},
+                         {key: stats["hours"][1][key] for key in ("litres", "estimated")})
+        self.assertEqual(50, stats["hours"][0]["litres"])
+        self.assertEqual(1000, stats["resolution_litres"])
+
     def test_retention_keeps_only_recent_samples_and_the_boundary_anchor(self):
         day = 86400
         series = self.record([(i * day, i * 20, 1) for i in range(20)])

@@ -121,6 +121,9 @@ def learnable_shift(enabled, key, rotation, boxes, size, prefix):
     return key, [rotation, [list(box) for box in relative]], prefix
 
 
+SETUP_READ_LOG_LIMIT = 24
+
+
 def setup_round_log(attempt, round_log, started, now):
     """Count one setup capture round; return a debug entry once a new image was evaluated."""
     stats = attempt.image_stats
@@ -148,7 +151,10 @@ def setup_round_log(attempt, round_log, started, now):
         "round_s": round(now - started, 1),
         "images": len(attempt.seen),
         "confirmations": attempt.confirmations,
+        "partial_hits": attempt.partial_hits,
         "attempts": attempt.attempts,
+        "simplified": attempt.simplified,
+        "reads": round_log.get("reads") or None,
     }
     attempt.image_stats = {}
     return [entry]
@@ -1917,7 +1923,8 @@ def main():
     def candidate_scope(configuration, region, simplified, intensive):
         rules, source = configuration
         relevant = ("integer_digits", "fraction_digits", "decimals", "polarity", "meter_display")
-        key = [without_light(source), [rules[name] for name in relevant], region, simplified, intensive]
+        # The app version belongs to the scope: frames found by an older version are not reused.
+        key = [without_light(source), [rules[name] for name in relevant], region, simplified, intensive, app_build()]
         return hashlib.sha256(json.dumps(key, sort_keys=True).encode()).hexdigest()
 
     def load_calibration_candidates(scope, rules):
@@ -2041,7 +2048,10 @@ def main():
                 rules = configuration[0]
                 # A repair confirms the frames with two decimals like a plain setup: the third
                 # roller (glare, always turning) must not keep a moved camera from being found again.
-                simplified = rules["decimals"] == 3 and action in ("setup", "start", "repair")
+                # 0.4.3: a setup that compares two decimals is the same plain setup. Before, only
+                # three compared decimals got it; with two (the default after a factory reset) the
+                # setup ran the strict path without the 0.4.2 corrections and never confirmed.
+                simplified = rules["decimals"] in (2, 3) and action in ("setup", "start", "repair")
                 intensive = action in ("intensive", "relocate_last")
                 if intensive and (rules["fraction_digits"] != 3 or rules["decimals"] != 3):
                     raise ValueError("The meter must display three decimal digits")
@@ -2056,7 +2066,9 @@ def main():
                     atomic_write(geometry_backup, json.dumps({"source": source, "rules": get_auto_rules()}).encode(),
                                  0o600)
                 scope = candidate_scope(configuration, region, simplified, intensive)
-                shortlist = {} if repair else load_calibration_candidates(scope, rules)
+                # A new setup starts without the frames of earlier runs: after the camera was
+                # moved they only read rubbish first and were even chosen again (Stefan 21.11.).
+                shortlist = {} if repair or action == "setup" else load_calibration_candidates(scope, rules)
                 known_good = load_known_good_layout(rules, source)
                 if known_good is None:
                     source_key = source_check_key(source)
@@ -2211,7 +2223,7 @@ def main():
         reflected = False
         stream_pictures = []
         round_started = time.monotonic()
-        round_log = {"fetch_seconds": None, "accepted_at": None, "error": None, "captured": False}
+        round_log = {"fetch_seconds": None, "accepted_at": None, "error": None, "captured": False, "reads": []}
         try:
             if shared_result is not None:
                 result = shared_result
@@ -2431,6 +2443,12 @@ def main():
                                             calibration_tilts.pop(next(iter(calibration_tilts)))
                             reading = recognize(layout, profile, register)
                             readings.append(reading)
+                            if len(round_log["reads"]) < SETUP_READ_LOG_LIMIT:
+                                # Which frame read what: without this a failed setup could not be explained.
+                                box = layout.box
+                                round_log["reads"].append(
+                                    f"{layout.method or 'frame'} {box[0]},{box[1]},{box[2]},{box[3]} "
+                                    f"{layout.rotation}° P{OCR_PROFILES.index(profile) if profile in OCR_PROFILES else '?'} {reading}")
                             report_crop(layout, register, reading)
                             return reading
 
@@ -2627,7 +2645,8 @@ def main():
                         # The setup itself confirmed the reading three times.
                         history["last_match_at"] = time.time()
                     attempt.state = "saved_reflection" if reflected else "saved_stationary" if provisional else "saved"
-                    if attempt.simplified and not provisional and not reflected and not attempt.automatic:
+                    if (attempt.simplified and not provisional and not reflected and not attempt.automatic
+                            and get_auto_rules()["decimals"] == 3):
                         calibration = Calibration(
                             limit=attempt.limit, started=now, intensive=True,
                             background=True, followup=True, previous_layout=selected,

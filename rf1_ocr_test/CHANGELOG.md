@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.3
+
+Nachkontrolle direkt nach 0.4.2: Die Einrichtung las das Zählwerk richtig („10501.50?“), bestätigte es aber nicht.
+
+- **Die Korrekturen aus 0.4.2 gelten auch, wenn zwei Nachkommastellen verglichen werden.** Das ist die Voreinstellung nach einem Werksreset. Bisher bekam nur die Einstellung mit drei Nachkommastellen die einfache Einrichtung, mit zwei lief der strenge Weg: 15 Lesungen je Bild und keine Bestätigung.
+- **Gespeicherte Rahmen früherer Läufe werden bei einer neuen Einrichtung nicht mehr verwendet.** Nach dem Umhängen der Kamera lasen sie nur Unsinn oder wurden sogar wieder gewählt. Rahmen einer älteren App-Version werden nie übernommen.
+- **Rahmen bleiben bei dem Winkel, für den sie eingepasst wurden.** Der Winkelvergleich bevorzugte bei gleicher Lesung die kleinere Drehung (z. B. −9° statt −12°). Die Rahmen blieben dabei stehen und saßen an den äußeren Rollen eine halbe Ziffer zu hoch oder zu tief.
+- **Debug-Protokoll zeigt je Einrichtungsbild, welcher Rahmen was gelesen hat** (bis zu 24 Lesungen mit Verfahren, Ausschnitt, Winkel, Leseprofil), dazu Teil-Treffer und die Art der Einrichtung.
+
 ## 0.4.2
 
 Ausgelöst am 21.11.2026: Nach einem Werksreset lief die Einrichtung in den Timeout, die Automatik las nichts mehr. Nachgestellt mit echten Kamerabildern.

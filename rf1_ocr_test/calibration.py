@@ -1096,7 +1096,11 @@ class Calibration:
                 trial_support = stress_score(trial, values) if best_support < 3 else -1
                 if trial_support > best_support and not stop():
                     best = rank, trial, values
-            elif (rank, -abs(trial.rotation)) > (best[0], -abs(best[1].rotation)):
+            elif rank > best[0] or (rank == best[0] and not layout.digit_boxes
+                                    and abs(trial.rotation) < abs(best[1].rotation)):
+                # Digit frames belong to the angle they were fitted at: three degrees off, the
+                # outer frames sit half a digit too high or too low. Only frames without own
+                # digit boxes still prefer the smaller turn among equal readings (0.4.3).
                 best = rank, trial, values
             if accept_first and (rank[0] if referenced else rank[1]):
                 break
@@ -1737,7 +1741,7 @@ class Calibration:
             # each image paid for all other candidates and a full angle comparison.
             # Only for the meter window found by its row of bright digits: a small label that
             # happens to read completely must not win against the larger display.
-            short = self.simplified and layout.method == "register_window"
+            short = precision == 2 and layout.method == "register_window"
             shown = precision if short else rules["fraction_digits"]
             if (self.rank_candidates and reliable(score)
                     and agreement_percent(readings, sample, shown, digits) == 100

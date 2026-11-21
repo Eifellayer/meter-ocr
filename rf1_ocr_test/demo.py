@@ -83,6 +83,7 @@ REAL_LAYOUT = {"box": (195, 190, 666, 369), "width": 286, "rotation": -11,
                "digit_boxes": [[50, 375, 127, 603], [155, 378, 231, 603], [268, 378, 348, 599],
                                [372, 378, 453, 599], [473, 386, 557, 599], [594, 386, 684, 596],
                                [718, 386, 805, 596], [853, 390, 944, 592]]}
+REAL_SECONDS = 60  # a real picture needs 14 digit reads; a small or busy machine takes a while
 REAL_DECIMALS = 2  # the last roller turns all the time; the routine check does not read it either
 _real_complete = {}
 
@@ -93,11 +94,12 @@ def _jpeg(picture):
         return base64.b64encode(buffer.getvalue()).decode()
 
 
-def run_real_demo(number, select, read):
+def run_real_demo(number, select, read, seconds=REAL_SECONDS):
     """Read one of the real pictures the way the automatic check does.
 
     ``select`` and ``read`` are the app's own ``select_register`` and ``read_visible_digits``
-    (handed in by the worker; this module must not import it).
+    (handed in by the worker; this module must not import it). Digits that are not read
+    within ``seconds`` stay open; such a result is shown but not kept.
     """
     if type(number) is not int or not 1 <= number <= REAL_COUNT:
         raise ValueError("unbekanntes Demobild")
@@ -110,7 +112,7 @@ def run_real_demo(number, select, read):
     register, width, whole_boxes, fraction_boxes, _ = select(
         frame, None, REAL_LAYOUT["box"], REAL_LAYOUT["width"], REAL_LAYOUT["rotation"], 5, 3,
         digit_boxes=REAL_LAYOUT["digit_boxes"])
-    deadline = time.monotonic() + DEMO_SECONDS
+    deadline = time.monotonic() + seconds
     reads = [str(read(register, width, whole_boxes, fraction_boxes, False, "auto", profile=profile,
                       whole_digits=5, fraction_digits=REAL_DECIMALS, deadline=deadline, prefer_boxes=True))
              for profile in OCR_PROFILES[:2]]

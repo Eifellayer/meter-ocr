@@ -55,7 +55,8 @@ class RealDemoTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("tesseract"), "needs the OCR engine")
     def test_a_real_picture_is_read_by_the_apps_own_reader(self):
         import run
-        answer = demo.run_real_demo(1, run.select_register, run.read_visible_digits)
+        # Generous time: the build machine is several times slower than a desk computer.
+        answer = demo.run_real_demo(1, run.select_register, run.read_visible_digits, seconds=600)
         self.assertEqual("10501.05", answer["reading"])
 
 

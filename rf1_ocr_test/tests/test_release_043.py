@@ -138,6 +138,29 @@ class NeededRollerTests(unittest.TestCase):
         self.assertLess(none_reads, one_reads)
         self.assertEqual(everything, self.read(3)[0])
 
+    def test_assumed_leading_digits_are_not_read(self):
+        from PIL import Image
+        register = Image.new("RGB", (800, 100), "black")
+        boxes = [(index * 100, 0, index * 100 + 90, 100) for index in range(8)]
+        seen = []
+
+        def recognize(picture, light, digits, **_):
+            seen.append(picture.size)
+            return "7"
+
+        def read(**options):
+            seen.clear()
+            value = run.read_visible_digits(register, 500, boxes[:5], boxes[5:], False, "auto", profile=0,
+                                            prefer_boxes=True, recognize=recognize, glyphs=False, **options)
+            return value, len(seen)
+
+        full, full_reads = read()
+        taken, taken_reads = read(assumed_whole="105")
+        self.assertEqual("10577.777", taken)
+        self.assertLess(taken_reads, full_reads)
+        self.assertEqual(full, read(assumed_whole="")[0])
+        self.assertEqual(full, read(assumed_whole="1x5")[0])
+
 
 class ResetLedgerTests(unittest.TestCase):
     """0.5.0 (support round 21.11.): a reset that keeps statistics must not book volume twice."""

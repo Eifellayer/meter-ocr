@@ -56,6 +56,7 @@ from checks import (without_light, unclear_trailing_decimals, setup_tilt, initia
                     REDUCED_PRECISION_NOTICE, REDUCED_PRECISION2_NOTICE, MOVING_DIGITS_NOTICE, only_last_compared_unclear)
 import debug_log
 import experiments
+import read_plan
 import seven_segment
 import glyph_match
 from layout import (MANUAL_ROW_UNCLEAR, PARTLY_UNCLEAR, RAW_ROW_UNCLEAR, digit_row_tilt, fine_rotation as valid_fine_rotation, crop_coordinates, find_digit_row,
@@ -946,11 +947,13 @@ def read_digits_parallel(tasks):
 
 def read_visible_digits(register, integer_width, whole_boxes, fraction_boxes, light_digits, polarity, *, profile,
                         whole_digits=5, fraction_digits=3, deadline=None, prefer_boxes=False, recognize=None,
-                        whole_range=None, glyphs=True, parallel=None, needed_fraction=None):
+                        whole_range=None, glyphs=True, parallel=None, needed_fraction=None, assumed_whole=""):
     """Read the register digit by digit; unclear digits come back as "?".
 
     ``needed_fraction``: decimal rollers beyond this count are not read at all and stay "?"
     (0.5.0). The routine check does not need them, and the last roller is the slowest to read.
+    ``assumed_whole``: leading digits taken over from the confirmed reading instead of being
+    read (``read_plan``); only used when every digit has its own frame.
     """
     # Real OCR calls are independent processes and may run side by side; a supplied reader
     # only when the caller says it is safe for threads.
@@ -977,13 +980,16 @@ def read_visible_digits(register, integer_width, whole_boxes, fraction_boxes, li
     if whole is not None and glared & set(range(whole_digits)):
         whole = None
     if whole is None:
+        taken = assumed_whole if len(whole_boxes) == whole_digits and assumed_whole.isdigit() else ""
+        glared -= set(range(len(taken)))
         cells = gather([
+            taken[index] if index < len(taken) else
             "?" if index in glared else partial(read_digit, register, box, read, trim_vertical=not prefer_boxes)
             for index, box in enumerate(whole_boxes)])
         scores = []
         if glyphs and len(whole_boxes) == whole_digits:
             scores = [glyph_scores(register, box, polarity, light_digits) for box in whole_boxes]
-            cells = ["?" if index in glared else glyph_match.combine(cell, score)
+            cells = [cell if index < len(taken) else "?" if index in glared else glyph_match.combine(cell, score)
                      for index, (cell, score) in enumerate(zip(cells, scores))]
         whole = "".join(cells).ljust(whole_digits, "?")
         if scores and whole_range is not None:
@@ -1598,6 +1604,7 @@ def main():
     # Tilt of each candidate layout, measured on the setup images: the coarse search finds the
     # digits in whole degrees, this gives the remaining fine angle to save with the layout.
     calibration_tilts = {}
+    read_plan_state = {}
     calibration_next = 0.0
     calibration_worker = None
     setup_retry = {"job": None, "at": 0.0, "count": 0}
@@ -2820,6 +2827,13 @@ def main():
                                       "image_id": image_id, "attempts": 0, "frame_reads": []}
                         live_source = live_deadline is not None
 
+                        # Leading digits confirmed by a complete read are taken over (read_plan).
+                        previous_counter = history.get("consumption")
+                        assumed_whole = "" if manual or not custom_boxes or stationary_partial else read_plan.assumed_prefix(
+                            read_plan_state, active_rules,
+                            previous_counter if isinstance(previous_counter, dict)
+                            and previous_counter.get("source") == source_key else None, time.time())
+
                         def read_layout(layout, profile):
                             return read_visible_digits(
                                 *layout[:4], options["helle_ziffern"],
@@ -2828,6 +2842,7 @@ def main():
                                 # Only the compared decimal places and one more roller (it shows whether
                                 # the last compared roller is turning) are read in routine checks.
                                 needed_fraction=None if manual else min(fraction_digits, decimals + 1),
+                                assumed_whole=assumed_whole,
                                 **({"prefer_boxes": True} if custom_boxes else {}),
                                 whole_range=None if manual else glyph_whole_range(
                                     history, active_rules, zone, read_state["captured"]),
@@ -4031,7 +4046,13 @@ def main():
                 options["helle_ziffern"] if active_rules["polarity"] == "auto" else active_rules["polarity"] == "light",
                 active_rules["polarity"] != "auto")
             library_filled = digit_library.LIBRARY.take_filled()
+            if not manual:
+                taken_over = local.get("assumed_whole") or ""
+                planned = read_plan.after_check(read_plan_state, active_rules, outcome, taken_over, ocr, time.time())
+                read_plan_state.clear()
+                read_plan_state.update(planned)
             debug_log.record(
+                assumed_whole=(local.get("assumed_whole") or None) if not manual else None,
                 library={"filled": library_filled, "learned": local.get("library_learned", 0),
                          "samples": digit_library.LIBRARY.samples()}
                 if (library_filled or local.get("library_learned")) else None,

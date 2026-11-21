@@ -632,7 +632,7 @@ class IngressTests(IngressFixture):
         status = json.loads(self.request("/status?lang=en")[0])
         self.assertEqual("12345.120", status["ocr"])
         self.assertEqual(409, self.submit("/ausschnitt-uebernehmen", checked_at="90.0")[0])
-        self.assertEqual((303, "./?saved=crop&ui=settings"), self.submit(
+        self.assertEqual((303, "./?saved=crop&ui=overview"), self.submit(
             "/ausschnitt-uebernehmen", checked_at=status["crop_id"]))
         self.assertEqual(("manual", "1925,5,2005,390", 220, 90, 0),
                          (self.rules["crop_mode"], self.rules["crop"], self.rules["width"],
@@ -1351,14 +1351,15 @@ class BrowserTests(IngressFixture):
             choices = page.locator('#wizard-crop-options input[type="radio"]')
             self.assertEqual(["learn", "auto", "manual"], choices.evaluate_all("(items) => items.map(item => item.value)"))
             self.assertTrue(page.get_by_role("radio", name="Automatische Selbsteinrichtung (empfohlen)").is_checked())
-            page.locator("#wizard-calibration-options input").fill("18")
             page.locator('#setup-form [name="reflection_estimate_enabled"]').check()
             page.locator('.setup-step[data-step="2"] .setup-next').click()
             page.locator('#setup-form button[type="submit"]').click()
             page.get_by_text("Einrichtung gespeichert.", exact=True).wait_for()
             self.assertEqual("true", page.locator("#tab-overview").get_attribute("aria-selected"))
             page.locator("#calibration-overview .setup-timeline-box").wait_for(state="visible")
-            self.assertEqual(18, self.calibration["limit"])
+            # The image limit is no longer a setting of the wizard (0.5.0); the default applies.
+            from calibration import DEFAULT_LIMIT
+            self.assertEqual(DEFAULT_LIMIT, self.calibration["limit"])
             self.assertTrue(self.rules["reflection_estimate_enabled"])
             self.assertEqual("12345,67", self.rules["fallback_value"])
             self.calibration.update(state="testing", stage="ocr", rotation=-6, variant=2, seconds=880)
@@ -1670,11 +1671,13 @@ class BrowserTests(IngressFixture):
             self.assertEqual(400, frame.locator("#test-preview-image").evaluate(
                 "async image => { await image.decode(); return image.naturalWidth; }"))
             frame.locator("#apply-crop-form button").click()
+            # 0.5.0: the takeover returns to the overview and confirms it there.
+            frame.locator("#view-overview .save-notice").wait_for(state="visible")
             frame.locator("#tab-settings").click()
+            frame.locator("#view-settings").wait_for(state="visible")
             automatic_settings = frame.locator("#automatic-settings")
             if not automatic_settings.evaluate("section => section.open"):
-                automatic_settings.locator("summary").click()
-            frame.locator("#view-settings").wait_for(state="visible")
+                automatic_settings.locator(":scope > summary").click()
             self.assertEqual("manual", self.rules["crop_mode"])
             self.assertEqual(90, self.rules["rotation"])
             frame.get_by_role("checkbox", name="Verdeckte Ziffern ergänzen").wait_for(state="visible")

@@ -629,8 +629,8 @@ EN_UI = {
     "Wähle den Ausschnitt im Originalbild. Die Vorkommabreite gilt nach der Drehung.":
         "Use coordinates from the original image. The whole-digit width applies after rotation.",
     "Maximaler Durchfluss (m³/h)": "Maximum flow (m³/h)",
-    "Qmax steht auf deinem Zähler. Die Vorgabe für einen G4 beträgt 6 m³/h.":
-        "Check the Qmax value printed on your meter. The default for G4 is 6 m³/h.",
+    "Qmax steht auf dem Typenschild deines Zählers. Die App erkennt ihn nicht selbst: Ohne deine Angabe rechnet sie mit 6 m³/h, dem üblichen Wert eines Haushaltszählers (G4).":
+        "Qmax is printed on the type plate of your meter. The app does not detect it: without your entry it assumes 6 m³/h, the usual value of a household meter (G4).",
     "Breite der Vorkommastellen": "Width of whole-number digits",
     "Bildbereich": "Image region",
     "Speichern": "Save",

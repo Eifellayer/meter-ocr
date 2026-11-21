@@ -674,6 +674,7 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 </nav>
 <main>
 <div class="tab-content" id="view-overview" role="tabpanel" aria-labelledby="tab-overview" {overview_hidden}>
+{overview_saved_notice}
 <div class="panel" id="check-overview">
 <div class="meter-hero" id="meter-hero">
 <div class="meter-hero-top">
@@ -1030,8 +1031,7 @@ name: Zählerstand (OCR)</code></pre>
 <input type="hidden" name="lang" value="{language}">
 <input type="hidden" name="mode" value="{language_mode}">
 <input type="hidden" name="csrf" value="{csrf}">
-<label id="calibration-limit-label">Höchstens so viele unterschiedliche Bilder
-<input id="calibration-limit" name="image_limit" type="number" min="{calibration_min}" max="{calibration_max}" value="{calibration_limit}" required></label>
+<input id="calibration-limit" name="image_limit" type="hidden" value="{calibration_limit}">
 <p id="calibration-region-hint" hidden>Mehrere Ziffernfelder gefunden.
 <button type="button" id="calibration-show-choices">Ziffernfelder ansehen</button></p>
 <details class="setup-help" id="calibration-region">
@@ -1132,8 +1132,7 @@ name: Zählerstand (OCR)</code></pre>
 <div class="wizard-crop-choices">{wizard_crop_options}</div>
 </fieldset>
 <div id="wizard-calibration-options" class="setup-help" hidden>
-<label>Höchstens so viele unterschiedliche Bilder
-<input name="image_limit" type="number" min="{calibration_min}" max="{calibration_max}" value="{calibration_limit}" required disabled></label>
+<input name="image_limit" type="hidden" value="{calibration_limit}" disabled>
 <p class="settings-note">Startet nach dem Speichern. Nach drei bestätigten Aufnahmen übernimmt die Automatik die Gegenprüfung.</p>
 </div>
 <div class="setup-help">
@@ -1289,7 +1288,7 @@ name: Zählerstand (OCR)</code></pre>
 <small class="field-help">Ab diesem Wert wechselt die Selbsteinrichtung in die Intensivprüfung. Eine einzelne vermutete Ziffernposition kann sie auch früher gezielt prüfen.</small></label>
 <label class="settings-field"><span class="field-label">Maximaler Durchfluss (m³/h)</span>
 <input name="max_flow" type="text" inputmode="decimal" maxlength="10" value="{max_flow}" required>
-<small class="field-help">Qmax steht auf deinem Zähler. Die Vorgabe für einen G4 beträgt 6 m³/h.</small></label>
+<small class="field-help">Qmax steht auf dem Typenschild deines Zählers. Die App erkennt ihn nicht selbst: Ohne deine Angabe rechnet sie mit 6 m³/h, dem üblichen Wert eines Haushaltszählers (G4).</small></label>
 <label class="settings-field"><span class="field-label">Ziffernfarbe</span>
 <select name="polarity">{auto_polarity_options}</select></label>
 <label class="settings-field"><span class="field-label">Bildbereich</span>
@@ -3037,7 +3036,6 @@ function refreshCalibration(status) {{
     }}
     manualForm.elements.crop_revision.value = status.settings.crop_revision;
   }}
-  document.querySelector('#calibration-limit-label').hidden = active;
   proposedCrop = status.proposal || null;
   calibrationProposal.hidden = !proposedCrop;
   document.querySelector('#calibration-start').hidden = active;
@@ -4516,7 +4514,7 @@ def start_panel(
                 settings_hidden="" if settings_tab_active else "hidden",
                 tools_hidden="" if tools_tab_active else "hidden",
                 language_options=select_options({"auto": automatic, "de": "Deutsch", "en": "English"}, mode),
-                settings_open="open" if saved in ("1", "crop", "crop-reset", "fallback") else "",
+                settings_open="open" if saved in ("1", "crop-reset", "fallback") else "",
                 fallback_saved_notice=auto_saved_notice if saved == "fallback" else "",
                 calibration_preview_html=(translate_page(CALIBRATION_PREVIEW_HTML) if language == "en"
                                           else CALIBRATION_PREVIEW_HTML),
@@ -4656,7 +4654,8 @@ def start_panel(
                 interval_minutes=auto_rules.get("interval_minutes", DEFAULT_INTERVAL_MINUTES),
                 failure_pause_minutes=auto_rules.get("failure_pause_minutes", DEFAULT_FAILURE_PAUSE_MINUTES),
                 auto_rotation_value=editable_rotation(auto_rules),
-                auto_saved_notice=auto_saved_notice if saved in ("1", "crop", "crop-reset") else "",
+                auto_saved_notice=auto_saved_notice if saved in ("1", "crop-reset") else "",
+                overview_saved_notice=auto_saved_notice if saved == "crop" else "",
                 manual_reference=html.escape(str(settings.get("manual_reference", auto_rules["fallback_value"])),
                                              quote=True),
                 test_source_preview=test_source_preview,
@@ -5151,7 +5150,8 @@ def start_panel(
                     problem(503, "Der Ausschnitt konnte nicht gespeichert werden.",
                             "Could not save the image crop.")
                     return
-                self.redirect("?saved=crop&ui=settings" + keep_mode)
+                # The takeover belongs to the overview: that is where the automatic shows its result.
+                self.redirect("?saved=crop&ui=overview" + keep_mode)
                 return
             if path == "/fallback":
                 try:

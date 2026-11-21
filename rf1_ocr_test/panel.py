@@ -628,7 +628,8 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 .experiments-box > summary{{font-weight:650;color:var(--ink)!important}}
 .experiments-box[open]{{padding-bottom:.8rem}}
 .experiments-box > .check-option{{margin:.45rem 0 0;color:var(--ink)}}
-.experiments-box > .experiment-option{{margin-left:1.65rem}}
+.experiments-box > .experiment-option{{display:block;margin:.55rem 0 0 1.65rem;color:var(--ink)}}
+.experiments-box > .experiment-option select{{display:block;margin-top:.25rem;max-width:100%}}
 .experiments-box > p{{margin:.5rem 0 0;color:var(--muted);font-size:.86rem}}
 #auto-form{{grid-template-columns:minmax(0,1fr);align-items:start;gap:1rem}}
 #auto-form > .crop-actions,#auto-form > .crop-draw,#auto-form > .crop-fields{{margin:0}}
@@ -1250,9 +1251,12 @@ name: Zählerstand (OCR)</code></pre>
 <summary>Experimentelle Funktionen (Schattenbetrieb)</summary>
 <input type="hidden" name="experiments_option_present" value="1">
 <label class="check-option"><input type="checkbox" name="experiments_enabled" value="1" {experiments_checked}> Experimentelle Funktionen testen</label>
-<label class="check-option experiment-option"><input type="checkbox" name="experiment_perspective" value="1" {experiment_perspective_checked}> Perspektivkorrektur (Kippung)</label>
-<label class="check-option experiment-option"><input type="checkbox" name="experiment_seven_segment" value="1" {experiment_seven_segment_checked}> Digitalanzeige: Segmente direkt lesen</label>
-<p>Die App liest jedes Bild zusätzlich mit den angehakten Experimenten, aber nur, wenn der Rechner gerade Leistung frei hat. Es zählt weiterhin nur das bewährte Ergebnis; beide stehen im Debug-Protokoll. Die meisten brauchen das nicht.</p>
+<label class="experiment-option">Perspektivkorrektur (Kippung)
+<select name="experiment_perspective">{experiment_perspective_levels}</select></label>
+<label class="experiment-option">Digitalanzeige: Segmente direkt lesen
+<select name="experiment_seven_segment">{experiment_seven_segment_levels}</select></label>
+<p>Schattenmodus: Die App liest jedes Bild zusätzlich mit dem Experiment, aber nur, wenn der Rechner gerade Leistung frei hat. Es zählt weiterhin nur das bewährte Ergebnis. Den Vergleich findest du unter Werkzeuge › Schattenmodus und Arbeit im Hintergrund. Die meisten brauchen das nicht.</p>
+<p>Aktiv testen (das Experiment bestimmt das Ergebnis mit, zeitlich begrenzt) ist in dieser Version noch für kein Experiment freigegeben.</p>
 <p>Du kannst das jederzeit unter Einstellungen › Automatische Prüfung wieder ändern.</p>
 </details>
 <div class="setup-controls"><button type="button" class="setup-back">Zurück</button><span class="setup-count"></span><button type="submit">Speichern und prüfen</button></div>
@@ -1377,9 +1381,12 @@ name: Zählerstand (OCR)</code></pre>
 <details class="help setup-help experiments-box" id="experiments-settings">
 <summary>Experimentelle Funktionen (Schattenbetrieb)</summary>
 <label class="check-option"><input type="checkbox" name="experiments_enabled" value="1" {experiments_checked}> Experimentelle Funktionen testen</label>
-<label class="check-option experiment-option"><input type="checkbox" name="experiment_perspective" value="1" {experiment_perspective_checked}> Perspektivkorrektur (Kippung)</label>
-<label class="check-option experiment-option"><input type="checkbox" name="experiment_seven_segment" value="1" {experiment_seven_segment_checked}> Digitalanzeige: Segmente direkt lesen</label>
-<p>Die App liest jedes Bild zusätzlich mit den angehakten Experimenten, aber nur, wenn der Rechner gerade Leistung frei hat. Es zählt weiterhin nur das bewährte Ergebnis; beide stehen im Debug-Protokoll. Die meisten brauchen das nicht.</p>
+<label class="experiment-option">Perspektivkorrektur (Kippung)
+<select name="experiment_perspective">{experiment_perspective_levels}</select></label>
+<label class="experiment-option">Digitalanzeige: Segmente direkt lesen
+<select name="experiment_seven_segment">{experiment_seven_segment_levels}</select></label>
+<p>Schattenmodus: Die App liest jedes Bild zusätzlich mit dem Experiment, aber nur, wenn der Rechner gerade Leistung frei hat. Es zählt weiterhin nur das bewährte Ergebnis. Den Vergleich findest du unter Werkzeuge › Schattenmodus und Arbeit im Hintergrund. Die meisten brauchen das nicht.</p>
+<p>Aktiv testen (das Experiment bestimmt das Ergebnis mit, zeitlich begrenzt) ist in dieser Version noch für kein Experiment freigegeben.</p>
 </details>
 <div class="reflection-settings setup-help" id="reflection-settings">
 <label class="check-option"><input type="checkbox" name="reflection_estimate_enabled" value="1" {reflection_enabled_checked}> Verdeckte Ziffern ergänzen</label>
@@ -1980,9 +1987,12 @@ document.querySelectorAll('[data-precision-options]').forEach(options => {{
 }});
 // The setup wizard and the settings show the same experiment switches; keep both in step.
 for (const name of ['experiments_enabled', 'experiment_perspective', 'experiment_seven_segment']) {{
-  const boxes = [...document.querySelectorAll('.experiments-box input[name="' + name + '"]')];
+  const boxes = [...document.querySelectorAll('.experiments-box [name="' + name + '"]:not([type="hidden"])')];
   for (const box of boxes) box.addEventListener('change', () => {{
-    for (const other of boxes) other.checked = box.checked;
+    for (const other of boxes) {{
+      if (box.type === 'checkbox') other.checked = box.checked;
+      else other.value = box.value;
+    }}
   }});
 }}
 document.querySelector('#close-manual-test').addEventListener('click', () => {{
@@ -3982,8 +3992,23 @@ def wizard_energy_factors(field, old_rules):
     return values
 
 
+EXPERIMENT_LEVELS = (("off", "Aus", "Off"), ("1", "Schattenmodus", "Shadow mode"),
+                     ("active", "Aktiv testen (noch nicht freigegeben)", "Active testing (not released yet)"))
+
+
+def experiment_level_options(shadow, language="de"):
+    """The three levels of one experiment; "Aktiv testen" is not released for any experiment yet."""
+    chosen = "1" if shadow else "off"
+    return "".join(f'<option value="{value}"{" selected" if value == chosen else ""}'
+                   f'{" disabled" if value == "active" else ""}>{english if language == "en" else german}</option>'
+                   for value, german, english in EXPERIMENT_LEVELS)
+
+
 def experiment_settings(field):
-    """Shadow-mode switches; the setup wizard and the settings send the same two fields."""
+    """Levels of the experiments; the setup wizard and the settings send the same fields.
+
+    Only "off" and shadow mode ("1") are stored; a forged "active" counts as off.
+    """
     return {"experiments_enabled": field("experiments_enabled") == "1",
             "experiments": {"perspective": field("experiment_perspective") == "1",
                             "seven_segment": field("experiment_seven_segment") == "1"}}
@@ -4745,10 +4770,10 @@ def start_panel(
                 fine_alignment_checked="checked" if auto_rules.get("fine_alignment_enabled") else "",
                 adaptive_interval_checked="checked" if auto_rules.get("adaptive_interval_enabled") else "",
                 experiments_checked="checked" if auto_rules.get("experiments_enabled") else "",
-                experiment_seven_segment_checked=("checked" if (auto_rules.get("experiments") or {}).get("seven_segment")
-                                                  else ""),
-                experiment_perspective_checked=("checked" if (auto_rules.get("experiments") or {}).get("perspective")
-                                                else ""),
+                experiment_seven_segment_levels=experiment_level_options(
+                    (auto_rules.get("experiments") or {}).get("seven_segment"), language),
+                experiment_perspective_levels=experiment_level_options(
+                    (auto_rules.get("experiments") or {}).get("perspective"), language),
                 reflection_hide_checked="checked" if auto_rules.get("reflection_suggestion_hidden") else "",
                 quality_hint_checked="checked" if auto_rules.get("quality_hint_hidden") else "",
                 quality_hint_hidden="hidden" if auto_rules.get("quality_hint_hidden") else "",
@@ -4939,7 +4964,7 @@ def start_panel(
                     if not 0 < length <= 4096:
                         raise ValueError("Invalid form length")
                     form = parse_qs(self.rfile.read(length).decode("ascii"), keep_blank_values=True,
-                                    max_num_fields=40)
+                                    max_num_fields=48)  # the wizard sends about 42 fields since the level selects (0.5.0)
                 elif content_type == "multipart/form-data" and path == "/pruefen":
                     if not 0 < length <= MAX_MANUAL_IMAGE_BYTES + MAX_MULTIPART_OVERHEAD:
                         raise ValueError("Invalid upload length")

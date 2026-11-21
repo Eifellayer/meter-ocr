@@ -128,9 +128,9 @@ class ReleaseUi040Test(IngressFixture):
                 self.assertEqual("Experimentelle Funktionen (Schattenbetrieb)", box.locator("summary").inner_text().strip())
                 box.locator("summary").click()
                 box.locator('[name="experiments_enabled"]').check()
-                box.locator('[name="experiment_perspective"]').check()
+                box.locator('[name="experiment_perspective"]').select_option("1")
                 self.assertTrue(page.locator('#auto-form [name="experiments_enabled"]').is_checked())
-                self.assertTrue(page.locator('#auto-form [name="experiment_perspective"]').is_checked())
+                self.assertEqual("1", page.locator('#auto-form [name="experiment_perspective"]').input_value())
                 overflow = page.evaluate("document.querySelector('#setup-dialog').scrollWidth"
                                          " - document.querySelector('#setup-dialog').clientWidth")
                 self.assertLessEqual(overflow, 0)

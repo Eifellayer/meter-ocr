@@ -89,6 +89,10 @@ EN_UI = {
     "Gerader Ausschnitt mit Ziffernrahmen": "Aligned crop with digit boxes",
     "Demo-Bild wird geprüft …": "Reading the demo image …",
     "Für Automatik speichern": "Save for automatic checks",
+    "Schattenmodus: Die App liest jedes Bild zusätzlich mit dem Experiment, aber nur, wenn der Rechner gerade Leistung frei hat. Es zählt weiterhin nur das bewährte Ergebnis. Den Vergleich findest du unter Werkzeuge › Schattenmodus und Arbeit im Hintergrund. Die meisten brauchen das nicht.":
+        "Shadow mode: the app additionally reads every image with the experiment, but only when the device has capacity to spare. Only the proven result counts. You find the comparison under Tools › Shadow mode and background work. Most people do not need this.",
+    "Aktiv testen (das Experiment bestimmt das Ergebnis mit, zeitlich begrenzt) ist in dieser Version noch für kein Experiment freigegeben.":
+        "Active testing (the experiment helps decide the result, for a limited time) is not released for any experiment in this version yet.",
     "Probiere die Erkennung ohne eigene Kamera. Deine echte Einrichtung und Verbrauchsdaten bleiben getrennt.":
         "Try the recognition without a camera of your own. Your real setup and consumption data stay separate.",
     "Echte Kamerabilder eines Gaszählers, gelesen wie bei der automatischen Prüfung. Zu sehen ist nur das Zählwerk; alles andere ist übermalt.":

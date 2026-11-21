@@ -853,13 +853,25 @@ class IngressTests(IngressFixture):
             sections.append(section[:section.index("</details>")])
         return sections
 
+    def test_active_testing_is_shown_but_not_released(self):
+        import panel as module
+        self.assertIn('<option value="active" disabled>', module.experiment_level_options(True))
+        chosen = {"experiments_enabled": "1", "experiment_perspective": "active", "experiment_seven_segment": "1"}
+        self.assertEqual({"experiments_enabled": True, "experiments": {"perspective": False, "seven_segment": True}},
+                         module.experiment_settings(lambda name: chosen.get(name, "")))
+        english = self.request("/", accept="en")[0]
+        self.assertIn('<option value="1">Shadow mode</option>', english)
+        self.assertIn("Active testing (not released yet)", english)
+
     def test_wizard_and_settings_show_and_save_the_same_experiments(self):
         self.rules.update(experiments_enabled=True, experiments={"perspective": True, "seven_segment": False})
         page = self.request("/")[0]
         for section in self.experiment_boxes(page):
             self.assertIn("Experimentelle Funktionen (Schattenbetrieb)", section)
             self.assertIn('name="experiments_enabled" value="1" checked', section)
-            self.assertIn('name="experiment_perspective" value="1" checked', section)
+            self.assertIn('<select name="experiment_perspective"><option value="off">Aus</option>'
+                          '<option value="1" selected>Schattenmodus</option>'
+                          '<option value="active" disabled>', section)
         english = self.request("/", accept="en")[0]
         self.assertIn("Experimental functions (shadow mode)", self.experiment_boxes(english)[0])
         self.assertNotIn("Schattenbetrieb", english)
@@ -890,7 +902,7 @@ class IngressTests(IngressFixture):
         wizard, settings = self.experiment_boxes(self.request("/")[0])
         for section in (wizard, settings):
             self.assertIn('name="experiments_enabled" value="1" checked', section)
-            self.assertNotIn('name="experiment_perspective" value="1" checked', section)
+            self.assertIn('<select name="experiment_perspective"><option value="off" selected>', section)
 
     def test_fallback_can_be_saved_and_cleared_without_rerunning_setup(self):
         original = dict(self.rules)

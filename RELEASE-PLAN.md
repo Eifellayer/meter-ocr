@@ -10,6 +10,7 @@ Stand: 21. November 2026 · Version **0.4.4**
 
 | Aufgabe | Fertig, wenn … |
 | --- | --- |
+| **FREIGABE Stefan 21.11., 14:09, Beginn 17:00; Arbeitsliste 17:03** | Umbau in der geprüften Reihenfolge (A Einstellungen, B Einrichtung, C Prüfschleife, D Anzeige/Texte, E Assistent) und die Arbeitsliste im Abschnitt „Liste Stefan Sa 21.11., 17:03“ am Ende dieser Datei werden zusammen als 0.5.0 (0.5 Beta) umgesetzt. Offene Rückfragen an Stefan: Rücksetzzeitpunkt der Komfort-Überbrückung (Auto), Prozentwerte ja/nein. Hinweis Stefan 15:04: Stromzähler ist ein Smart Meter, Stand kommt über Octopus; zweiter ESP32-S3 für Tests mit Digitalanzeige wird besorgt. |
 | **PRÜFUNG DES PLANS (Stefan 21.11., 14:02: „guck, ob das sinnvoll ist“) – Vorschlag, wartet auf Stefans Ja** | **Bleibt:** Ziel des Umbaus, Regel „kein Funktionswechsel im selben Commit wie ein Umbau“, Schattenmodus für Größeres, Experimente mit drei Stufen, zwei Werte für Kandidaten, Ziffernbibliothek. **Ändern:** (1) Reihenfolge des Modul-Umbaus umdrehen. Schritt 1 „Statusanzeige auslagern“ ist der leichteste, bringt aber am wenigsten. Alle Fehler vom 21.11. (0.4.2–0.4.4) saßen in Einrichtung und Einstellungen: `run.py` ist eine einzige große Funktion mit gemeinsamem Zustand, die Entscheidung „einfache Einrichtung“ war eine Zeile darin und nicht testbar. Neue Reihenfolge: A Einstellungen als ein fester Datensatz mit Schema (bisher Schritt 4), B Einrichtung aus `run.py` lösen, C Prüfschleife nach Aufgaben trennen, D Statusanzeige und Texte (bisher 1 und 5), E Assistent. (2) Es fehlt ein Test mit echten Bildfolgen: Alle 484 Tests waren bei 0.4.2 und 0.4.3 grün, obwohl die Einrichtung auf Stefans Zähler nie bestätigte; gefunden wurde das nur durch Nachstellen mit Kamerabildern. Nötig: aufgezeichnete Ziffernstreifen-Folgen (ohne Seriennummer) als Regressionstest „Einrichtung bestätigt in höchstens N Bildern“. (3) „Aktiv testen“ braucht ein festes Maß, sonst kann es nicht selbst zurückfallen: Anteil sicher gelesener Prüfungen gegen den aktiven Weg über dieselben Bilder. (4) Einstellungen, die den Weg bestimmen, gehören ins Debug-Protokoll (die Vergleichsgenauigkeit war unsichtbar, deshalb zwei Fehlversuche). (5) Eine Version ist vertretbar, weil die neue Erkennung nur im Schattenmodus mitläuft: aktiv bleibt die umgebaute alte Logik. (6) Vision 1.0 (jeder Zähler, ESP-Komponente) bleibt Vision und bestimmt den Umbau nur in einem Punkt: Kernlogik ohne HA-Abhängigkeit. |
 | **AUFTRAG Stefan Sa 21.11., 13:58–14:01: ab jetzt sammeln, dann EINE größere Version 0.5.0 mit Umbau in Bereiche** | **Regeln:** (1) Keine Einzelkorrekturen mehr für Dinge, die beim Umbau ohnehin neu gemacht werden; Befunde hier sammeln. Ausnahme bleibt Kritisches (nichts geht mehr). (2) Größere Änderungen kommen zuerst als **Schattenmodus** (Experiment, liest nur mit) hinein, außer Stefan hat sie ausdrücklich verlangt; sie laufen dann zum Testen mit. (3) Die App wird in derselben Version in Bereiche umgebaut, damit danach nur noch Teilbereiche angefasst werden müssen (Abschnitt „Modul-Umbau“ unten; Termin 26.11. ist damit überholt, Beginn sofort). (4) Ziffernerkennung und Kandidatenbewertung werden dabei neu aufgebaut (Einträge „Zwei Prozentwerte statt einem“, „Experiment 2: Ziffernbibliothek“). **Reihenfolge:** zuerst Umbau ohne Funktionsänderung (eigene Commits, Tests je Bereich), dann die Funktionen. **Direkt aktiv (ausdrücklich verlangt):** Experimente mit drei Stufen Aus / Schattenmodus / Aktiv testen (zeitlich begrenzt, fällt selbst zurück); Hinweis „Je schlechter das Kamerabild, desto länger dauern Einrichtung und Optimierung“ mit Häkchen zum dauerhaften Ausblenden; Treffer- und Bestätigungsanzeige der Einrichtung (Befund unten). **Zuerst als Schattenmodus:** Kandidatenbewertung mit zwei Werten (Ziffern-Fund / Lesegenauigkeit); Ziffernbibliothek als Leseweg; Reihenfolge der Nachprüfung, dauerhafte Optimierung, Zeitbudget; Umgang mit dem Blitzfleck auf Rolle 8. **Zwischenstand:** Branch `umbau-0.5.0`, hier fortschreiben. |
 | **Befund 21.11., 14:40: Digitalanzeigen (7-Segment) werden praktisch nicht gelesen – für 0.5.0 als Schattenmodus** | Test mit 9 künstlichen Bildern (LCD dunkel auf hell, LED rot auf dunkel, LCD schräg mit Blitzfleck, je 3 Bilder, Stand 10501.823): Direktlesung mit bekanntem Ausschnitt erkennt höchstens 1–2 von 8 Stellen, die Selbsteinrichtung bestätigt kein einziges Mal (0 von 3, 105–157 s je Lauf). Ursache: Tesseract liest 7-Segment-Ziffern gar nicht, selbst ein sauber freigestellter Streifen ergibt keine Ausgabe. Die Einstellung „Digitalanzeige“ (`meter_display: digital`) ändert am Leseweg nichts. **Vorschlag:** eigener Leseweg im neuen Bereich Ziffernerkennung: Segmente direkt prüfen (7 Felder je Stelle hell/dunkel, keine Texterkennung), zuerst als Schattenmodus. Danach mit echten Fotos von Digitalzählern testen (bisher nur künstliche Bilder). |
@@ -185,3 +186,70 @@ Gilt vor allen anderen Einträgen dieser Datei, sobald das Guthaben wieder da is
 - Reihenfolge innerhalb dieses einen Releases: zuerst die offenen Support-Punkte aus Issue #210 und RELEASE-PLAN.md, dann Schritt 1 des Umbaus.
 - Der PR #236 (fix-0.4.2) wird Teil dieses Releases und nicht separat gemergt.
 - Der Support-Lauf um 05:47 am 26.11. (eigene Aufgabe) bleibt unverändert; er stellt danach den Zeitplan auf 05:47/17:47 um.
+
+## Liste Stefan Sa 21.11., 17:03 – Arbeitsliste für 0.5 Beta (wörtlich)
+
+Auftrag: „bei Unklarheiten nachfragen, mit den bestehenden Sachen abarbeiten, das Ganze aufs nächste Level bringen“. Erledigtes hier abhaken (`[x]` mit Version). Abschnitt 7 betrifft Home Assistant (Auto-Dashboard), nicht die App.
+
+### 1. Fehlerbehebungen und bestehende Funktionen
+
+- [ ] Ziffernrahmen werden von der Automatik nicht korrekt übernommen. Das letzte Prüfbild zeigt andere Rahmenpositionen als manuell eingestellt. Speicherung, Übernahme und Verwendung alter Rahmen prüfen.
+- [ ] Falsche Weiterleitung nach der Rahmenübernahme. „Getestete Rahmen für Automatik übernehmen“ führt derzeit in die Einstellungen statt zur passenden Übersicht.
+- [ ] Unnötige Ziffernerkennung. Bei einer eingestellten Nachkommastelle sucht die Automatik weiterhin zusätzliche Ziffern und startet vermeidbare Nachprüfungen.
+- [ ] Zähler-Demo lädt nicht zuverlässig. Fehlermeldung beim Laden untersuchen; die Funktion „Spiegelung ausprobieren“ hat dagegen funktioniert.
+- [ ] Verbrauchsstatistik prüfen. Die Zahlen sind vorhanden, aber die Balkendarstellung ist unzureichend beziehungsweise zeigt keine sinnvollen Ausschläge. Wertezuordnung, Skalierung und Beschriftung prüfen.
+- [ ] Qmax-Angabe überprüfen. Herausfinden, warum der Hinweis auf G4 mit 6 m³/h erscheint und ob er von einem früheren Test übernommen wurde. Standardwerte dürfen nicht als erkannte Zählereigenschaften erscheinen.
+- [ ] Veralteten Hinweis entfernen. In der Selbsteinrichtung die Angabe zur maximalen Anzahl unterschiedlicher Bilder entfernen.
+
+### 2. Bedienoberfläche und erweiterte Ansicht
+
+- [ ] Schattenmodus sichtbar machen. In einer erweiterten Ansicht anzeigen, welche Arbeiten und Ergebnisse der Schattenmodus liefert.
+- [ ] Fortschritt notwendiger Hintergrundprüfungen anzeigen. Dezente Fortschrittsanzeige und nachvollziehbarer Prüfstatus.
+- [ ] Systemüberwachung einbauen. CPU-Auslastung, RAM, Temperatur und Ressourcenverbrauch der eigenen Anwendung anzeigen.
+- [ ] Diagnoseinformationen erweitern. Hinweise aus der Selbsteinrichtung auch für die Automatik verfügbar machen, vorzugsweise in der erweiterten Ansicht.
+- [ ] Manuelle Tests transparenter machen. Erkannte Ziffern und Messergebnisse bereits während des Tests live anzeigen. Die Ergebnisse stehen bereits in der anschließenden Zusammenfassung.
+- [ ] Wiederholte manuelle Tests leichter starten. Startmöglichkeit besser sichtbar platzieren, ohne langes Scrollen.
+- [ ] Ziffernrahmen direkt korrigieren. Korrekturwerkzeug beim letzten Testbild eines manuellen Tests anbieten.
+- [ ] Separate Speicheroptionen. „Für manuellen Test speichern“ und „Für Automatik speichern“ mit jeweils passender Weiterleitung. Manuelles Speichern darf keine Automatikprüfung mit alten Rahmen auslösen.
+- [ ] Aktive Rahmenart anzeigen. Auf der Übersichtsseite und unter Einstellungen → Bildbereich eindeutig kennzeichnen, ob manuelle Rahmen oder automatische Erkennung aktiv sind.
+- [ ] Nicht benötigte Ziffern ausblenden. Anzeige und Suche an die eingestellte Erkennungsgenauigkeit anpassen.
+
+### 3. Prüfalgorithmen und Performance – 0.5 Beta
+
+- [ ] Gesamten Prüalgorithmus überarbeiten. Insbesondere die Intensivprüfung und ihre Bewertungslogik neu betrachten.
+- [ ] Adaptive Bewertung. Nur tatsächlich benötigte Ziffern sollen das Prüfergebnis beeinflussen. Ob künftig Prozentwerte verwendet werden, ist ausdrücklich offen.
+- [ ] Pause nach Fehlprüfungen erweitern. Die Regel nach drei Fehlprüfungen soll die beiden zuletzt geprüften Rollen berücksichtigen, nicht nur die letzte.
+- [ ] Bildverarbeitung beschleunigen. Ursachen der mehrsekündigen Verarbeitung einzelner Bilder messen; doppelte Berechnungen und unnötige Verarbeitung vermeiden.
+- [ ] Prüfungen bedarfsgesteuert durchführen. Nur zwingend notwendige Prüfungen sofort ausführen. Zeitunkritische, erforderliche Zusatzprüfungen können zwischen den regulären Zehn-Minuten-Intervallen stattfinden.
+- [ ] Ressourcenadaptive Steuerung. Prüfungen bei hoher Systemlast zurückstellen oder reduzieren, ohne notwendige Kontrollen auszulassen. Freie CPU-Leistung allein ist kein Anlass für weitere Prüfungen.
+- [ ] Hardwareabhängige Optimierung vorbereiten. CPU- und Arbeitsspeicherbedarf berücksichtigen, damit die Architektur später auch leistungsschwächere Geräte unterstützt.
+- [ ] Selbsteinrichtung überprüfen. Möglichst vollständige Ziffernerkennung zur Einrichtung nutzen, im Betrieb nur benötigte Ziffern prüfen. Bestehende Anpassungsmöglichkeiten bei schlechtem Bild und manuellen Rahmen auf Verbesserungsbedarf untersuchen; vieles ist bereits teilweise umgesetzt.
+
+### 4. Zähler-Demo – 0.5 Beta
+
+- [ ] Demo anschaulicher gestalten. Statt überwiegend statischer Grafiken die tatsächliche automatische Zählerprüfung und ihre Ergebnisse vorführen.
+- [ ] Reale Testbilder verwenden. Vorhandene eigene Zählerbilder statt künstlicher Grafiken einsetzen; so zuschneiden und anonymisieren, dass nur das Zählerfeld sichtbar bleibt.
+- [ ] Unterschiedliche Bildsituationen anbieten. Nach Möglichkeit etwa vier alte Testbilder auswählen, beispielsweise mit normalen Bedingungen, schrägem Winkel, Spiegelungen oder schlechter Beleuchtung.
+- [ ] Automatikprüfung über Demobilder laufen lassen. Benutzer sollen ein Beispielbild auswählen und die Verarbeitung einschließlich erkannter Werte und möglicher Probleme beobachten können.
+- [ ] Verfügbare Bildbestände prüfen. Zunächst feststellen, welche geeigneten alten Testbilder noch vorhanden sind.
+
+### 5. Architektur und Dokumentation – 0.5 Beta
+
+- [ ] Modulare Softwarearchitektur. Bilderkennung, Prüfalgorithmus, Automatik, Selbsteinrichtung, Oberfläche und Systemfunktionen sauber voneinander trennen.
+- [ ] Klare Schnittstellen definieren. Änderungen in einem Modul sollen möglichst wenig Anpassungen in anderen Bereichen erfordern. Dieser Punkt gehört ausdrücklich zum Release-Plan.
+- [ ] Neue Bedienungsanleitung vorbereiten. Bereits jetzt die Kapitelstruktur und Einrichtungsschritte grob ausarbeiten.
+- [ ] Praxisbeispiele einplanen. Screenshots und reale Beispiele für Einrichtung, manuelle Rahmen, Automatik, Spiegelungen und typische Fehler aufnehmen.
+- [ ] Dokumentation in zwei Etappen erstellen. Erst eine überprüfbare Grobfassung, danach Überarbeitung anhand der ersten Fehlerkorrekturen und der endgültigen Oberfläche.
+
+### 6. Langfristige Entwicklung – nach 0.5 Beta
+
+- [ ] Standalone-Version entwickeln. Die Zählererkennung soll langfristig eigenständig auf einem Raspberry Pi Zero 2 laufen können, unabhängig von Home Assistant.
+- [ ] Architektur dafür vorbereiten. Die Modularisierung und ressourcenschonende Verarbeitung der 0.5 Beta sollen die spätere Portierung erleichtern.
+- [ ] Pi Zero 2 nicht als 0.5-Beta-Testziel behandeln. Die direkte Umsetzung und Erprobung gehören zu einem späteren Release.
+
+### 7. Home Assistant – Auto-Dashboard
+
+- [ ] Komfortladestand einmalig überbrücken. Ein Häkchen soll die temporäre Übersteuerung für einen Ladevorgang aktivieren. Anschließend ursprünglichen Wert und Häkchen automatisch zurücksetzen.
+- [ ] Rücksetzzeitpunkt festlegen. Noch offen ist, ob die Überbrückung beim Erreichen des Ladeziels oder erst beim vollständigen Ende des Ladevorgangs endet.
+- [ ] Geschätzte Restladezeit anzeigen. Direkt unter dem aktuellen Ladestand die verbleibende Zeit bis zum gültigen Ladeziel darstellen.
+- [ ] Ladezeit laufend aktualisieren. Die Prognose an die tatsächliche Ladeleistung anpassen und auch ein vorübergehend überbrücktes Ladeziel berücksichtigen.

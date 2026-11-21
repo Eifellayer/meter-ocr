@@ -614,6 +614,10 @@ EN_UI = {
     "Kamera erreichbar, aber das Bild hat einen ungültigen Zeitstempel.": "Camera reachable, but the image has an invalid timestamp.",
     "ESP erreichbar. Seit der letzten Prüfung kam kein neues Bild; das vorhandene Bild ist noch nicht veraltet.": "ESP reachable. No new image since the last check; the current image is not stale yet.",
     "Home-Assistant-Kamera erreichbar; dieses Bild wurde bereits geprüft.": "Home Assistant camera reachable; this image was already checked.",
+    "Die gewählte Kamera ist in Home Assistant nicht verfügbar (Gerät aus, ohne WLAN oder ohne Strom). Prüfe das Gerät oder wähle eine andere Bildquelle.":
+        "The selected camera is unavailable in Home Assistant (device off, no Wi-Fi or no power). Check the device or choose another image source.",
+    "Die gewählte Kamera gibt es in Home Assistant nicht mehr. Wähle die Bildquelle neu aus.":
+        "The selected camera no longer exists in Home Assistant. Choose the image source again.",
     "Home-Assistant-Kamera nicht erreichbar oder Bild unlesbar. Prüfe Kamera und Zugriff.": "Home Assistant camera unavailable or image unreadable. Check the camera and access.",
     "ESP nicht erreichbar oder Antwort unvollständig. Prüfe Adresse und Verbindung.": "ESP unavailable or response incomplete. Check its address and connection.",
     "Kamerabild wird aufgenommen.": "Capturing a fresh camera image.",

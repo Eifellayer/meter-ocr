@@ -1,8 +1,30 @@
 """Settings for SLFork, Home Assistant camera verification, and standalone OCR."""
 
+import json
 import re
 from ipaddress import ip_address
+from urllib.error import HTTPError
 from urllib.parse import urlsplit
+
+CAMERA_OFFLINE = ("Die gewählte Kamera ist in Home Assistant nicht verfügbar (Gerät aus, ohne WLAN oder ohne "
+                  "Strom). Prüfe das Gerät oder wähle eine andere Bildquelle.")
+CAMERA_MISSING = "Die gewählte Kamera gibt es in Home Assistant nicht mehr. Wähle die Bildquelle neu aus."
+
+
+class CameraOffline(OSError):
+    """The picture failed because Home Assistant itself reports the camera as gone or unavailable."""
+
+
+def camera_problem(camera, token, fetch):
+    """Concrete reason for a failed picture, or "" when Home Assistant still lists the camera as working."""
+    try:
+        state = json.loads(fetch(f"http://supervisor/core/api/states/{camera}", token, timeout=5)).get("state")
+    except HTTPError as error:
+        error.close()
+        return CAMERA_MISSING if error.code == 404 else ""
+    except (OSError, ValueError, AttributeError):
+        return ""
+    return CAMERA_OFFLINE if state == "unavailable" else ""
 
 ESP_ADDRESS_MODES = ("slfork", "slfork_camera")
 SOURCE_MODES = (*ESP_ADDRESS_MODES, "camera", "esphome")

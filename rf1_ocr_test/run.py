@@ -76,7 +76,7 @@ from setup_store import (SetupStore, geometry_check_key, last_verified_configure
                          saved_layout_rules, setup_attempted_before, SETUP_RETRY_LIMIT, SETUP_RETRY_LONG_SECONDS, SETUP_RETRY_SECONDS, setup_autostart_due, setup_retry_delay,
                          usable_known_good_geometry)
 from auto_rules import frames_locked, changed_rules, default_rules, stored_rules, valid_experiments
-from source_settings import (LIGHT, CAMERA, DISCOVERY_TEMPLATE, ESP_ADDRESS_MODES, REFERENCE,
+from source_settings import (CameraOffline, camera_problem, LIGHT, CAMERA, DISCOVERY_TEMPLATE, ESP_ADDRESS_MODES, REFERENCE,
                              discovered_sources, source_check_key, source_rules)
 from panel import start_panel
 from language import load_preferences
@@ -1100,8 +1100,14 @@ def wizard_camera_preview(source, token, zone, *, full_size=False):
     elif mode == "slfork_camera":
         picture, _, _ = capture_edge_camera(source["url"].rstrip("/"), zone)
     else:
-        picture, _, _ = capture_camera(source["camera"], "", token, zone, timeout=5,
-                                       light=capture_light(source, source["camera"], token))
+        try:
+            picture, _, _ = capture_camera(source["camera"], "", token, zone, timeout=5,
+                                           light=capture_light(source, source["camera"], token))
+        except OSError as error:
+            reason = camera_problem(source["camera"], token, get_bytes)
+            if reason:
+                raise CameraOffline(reason) from error
+            raise
     try:
         with Image.open(io.BytesIO(picture)) as frame:
             if frame.width * frame.height > MAX_IMAGE_PIXELS:
@@ -3899,7 +3905,8 @@ def main():
                 updated["source_connection_status"] = "error"
                 updated["source_connection_detail"] = (
                     SLFORK_RAW_FAILED if raw_fallback else
-                    "Home-Assistant-Kamera nicht erreichbar oder Bild unlesbar. Prüfe Kamera und Zugriff."
+                    (camera_problem(camera, token, get_bytes)
+                     or "Home-Assistant-Kamera nicht erreichbar oder Bild unlesbar. Prüfe Kamera und Zugriff.")
                     if camera else "ESP nicht erreichbar oder Antwort unvollständig. Prüfe Adresse und Verbindung."
                 )
                 outcome = "capture_unavailable"

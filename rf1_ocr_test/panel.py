@@ -48,7 +48,7 @@ from language import MODES, SUPPORTED, USER_ID, browser_locale, profile_script
 from layout import MANUAL_ROW_UNCLEAR, PARTLY_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, fine_rotation, split_rotation, digit_box_settings, scale_digit_boxes, turn_crop
 from meter_learning import suggest_single_digit_box
 from notification_settings import notification_rules
-from source_settings import source_check_key, source_rules
+from source_settings import CameraOffline, source_check_key, source_rules
 
 SUPERVISOR_ADDRESS = "172.30.32.2"
 MAX_MANUAL_IMAGE_BYTES = 3_000_000
@@ -1693,16 +1693,20 @@ wizardImageButton.addEventListener('click', async () => {{
   wizardImageStatus.textContent = 'Kamerabild wird geladen …';
   try {{
     const response = await fetch('einrichtungsbild', {{method: 'POST', body, cache: 'no-store'}});
-    if (!response.ok) throw new Error();
+    if (!response.ok) {{
+      const told = (response.headers.get('Content-Type') || '').startsWith('application/json')
+        ? await response.json().catch(() => null) : null;
+      throw new Error(told && told.reason || '');
+    }}
     const image = await response.blob();
     if (revision !== wizardPreviewRevision) return;
     wizardImageUrl = URL.createObjectURL(image);
     wizardImage.src = wizardImageUrl;
     wizardImage.hidden = false;
     wizardImageStatus.hidden = true;
-  }} catch (_) {{
+  }} catch (error) {{
     if (revision === wizardPreviewRevision)
-      wizardImageStatus.textContent = 'Kein Kamerabild verfügbar. Prüfe die Bildquelle oder lies direkt am Zähler ab.';
+      wizardImageStatus.textContent = error.message || 'Kein Kamerabild verfügbar. Prüfe die Bildquelle oder lies direkt am Zähler ab.';
   }} finally {{
     wizardImageButton.disabled = false;
   }}
@@ -5028,6 +5032,9 @@ def start_panel(
                     if field("preview") == "reflection":
                         preview = reflection_setup_preview(content, int(field("integer_digits")),
                                                            int(field("fraction_digits")), field("polarity"))
+                except CameraOffline as error:
+                    reason = EN_UI.get(str(error), str(error)) if language == "en" else str(error)
+                    self.reply(json.dumps({"reason": reason}).encode("utf-8"), "application/json; charset=utf-8", 503)
                 except (OSError, ValueError):
                     problem(503, "Das Kamerabild konnte nicht geladen werden.", "Could not load the camera image.")
                 else:

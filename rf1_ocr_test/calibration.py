@@ -1130,7 +1130,7 @@ class Calibration:
                 "confirmations": self.confirmations, "required": MIN_IMAGES,
                 "reflected_confirmations": self.reflected_confirmations,
                 "row_found": self.row_found, "agreement_threshold": self.agreement_threshold,
-                "full_hits": self.full_hits,
+                "full_hits": self.full_hits, "partial_hits": self.partial_hits,
                 "image_hints": self.image_hints,
                 "known_good_available": self.known_good_layout is not None and self.region is None,
                 "stress_weak_slots": self.stress_weak_slots,
@@ -2097,7 +2097,16 @@ class Calibration:
                         self.record_intermediate(layout, all_readings, sample, precision, digits,
                                                  rules["fraction_digits"], frame)
             self.confirmed_quality = (self.confirmed_quality if same else [])[-2:] + [crop_quality(frame, layout)]
-            self.confirmations = self.confirmations + 1 if same else 1
+            # A reading below the one counted before proves that earlier image a misread (the meter
+            # never runs backwards): its confirmation does not count for this one (21.11., 10501.84
+            # then twice 10501.82 gave three confirmations).
+            previous_reading = self.counter.get("reading_litres") if same and isinstance(self.counter, dict) else None
+            contradicted = (type(previous_reading) is int and
+                            counter["reading_litres"] + max(counter["step_litres"], self.counter.get("step_litres", 0))
+                            <= previous_reading)
+            if contradicted:
+                self.partial_hits, self.partial_prefix = 0, None
+            self.confirmations = self.confirmations + 1 if same and not contradicted else 1
             self.anchored = (not reference_pending and
                              (((same or recovered_slot) and self.anchored) or has_reference or bool(baseline)))
             self.advanced = not reference_pending and same and (self.advanced or (

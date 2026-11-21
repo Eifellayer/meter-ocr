@@ -1474,7 +1474,7 @@ Bei anhaltenden Problemen benachrichtigen
 </div>
 </main>
 
-<footer class="page-footer"><a class="app-version" href="https://github.com/Eifellayer/meter-ocr/blob/main/rf1_ocr_test/CHANGELOG.md" target="_blank" rel="noopener noreferrer">{app_name} {app_version}</a> · Kostenloses Hobbyprojekt · <a href="https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8" target="_blank" rel="noopener noreferrer">Freiwillig mit PayPal unterstützen</a>
+<footer class="page-footer"><a class="app-version" href="https://github.com/Eifellayer/meter-ocr/blob/main/rf1_ocr_test/CHANGELOG.md" target="_blank" rel="noopener noreferrer">{app_name} {app_version}</a> · Kostenloses Hobbyprojekt · <a href="https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8" target="_blank" rel="noopener noreferrer">Freiwillig mit PayPal unterstützen</a> · <a href="mailto:amr@eifel-layer.de">Kontakt: amr@eifel-layer.de</a>
 <details class="about-project"><summary>Über AI Meter Reader</summary><p><a href="https://github.com/Eifellayer" target="_blank" rel="noopener noreferrer">Projekt von EifelLayer auf GitHub</a></p><p>KI-unterstützt entwickelt. Keine geeichte Messung oder Gewähr für OCR-Ergebnisse. Bitte Zählerstände bei Bedarf direkt am Gerät prüfen.</p><p><a id="roadmap-link" href="https://github.com/Eifellayer/meter-ocr/blob/main/RELEASE-PLAN.md" target="_blank" rel="noopener noreferrer">Roadmap auf GitHub</a></p></details>
 </footer>
 <script>
@@ -2595,6 +2595,8 @@ function setupProgressModel(status) {{
     }}
     if (status.rotation != null) detail.push((en ? 'Rotation ' : 'Drehung ') + String(status.rotation).replace('-', '−') + '°');
     detail.push(confirmations + (en ? ' of ' : ' von ') + required + (en ? ' confirmations' : ' Bestätigungen'));
+    // A reading that fits but leaves the last digit open is shown, not hidden behind "0 of 3".
+    if (status.partial_hits) detail.push(status.partial_hits + (en ? ' partial hit(s), last digit unclear' : (status.partial_hits === 1 ? ' Teiltreffer' : ' Teiltreffer') + ' (letzte Stelle unklar)'));
   }}
   const steps = [
     {{key: 'image', label: en ? 'Get camera image' : 'Kamerabild holen',
@@ -3001,6 +3003,7 @@ function refreshCalibration(status) {{
   const detail = 'Bilder geprüft: ' + status.tested +
     ' · Rahmen getestet: ' + status.attempts +
     confirmationLabel + status.confirmations + '/' + status.required +
+    (status.partial_hits ? ' · Teiltreffer (letzte Stelle unklar): ' + status.partial_hits : '') +
     (active ? (status.intensive && ['verify', 'verify_wait'].includes(status.stage) ?
       ' · Zeit für Gegenprobe: ' : (status.intensive || status.automatic ?
       ' · Rechenzeit übrig: ' : ' · Zeit für die Einrichtung: ')) + clock + ' min' : '');

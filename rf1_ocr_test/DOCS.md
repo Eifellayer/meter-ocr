@@ -209,3 +209,7 @@ After an app update or restart, an open web UI reloads itself. If the app cannot
 ## Bildqualität bestimmt die Dauer
 
 Je schlechter das Kamerabild (Unschärfe, Spiegelungen, schwaches Licht, schräger Blickwinkel), desto länger dauern Einrichtung und Optimierung. Ein scharfes, gerades Bild ohne Lichtfleck auf den Ziffern spart am meisten Zeit. Den Hinweis in der App kannst du mit einem Häkchen dauerhaft ausblenden und in den Einstellungen wieder einschalten.
+
+## Kontakt
+
+Fragen, Fehler und Rückmeldungen: [GitHub](https://github.com/Eifellayer/meter-ocr/issues) oder [amr@eifel-layer.de](mailto:amr@eifel-layer.de).

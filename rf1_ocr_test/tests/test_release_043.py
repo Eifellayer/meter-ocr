@@ -160,5 +160,14 @@ class ResetLedgerTests(unittest.TestCase):
         self.assertEqual(10501820 - 10496290, ledger["total_litres"])
 
 
+class PartialHitStatusTests(unittest.TestCase):
+    """0.5.0: partial hits are part of the setup status instead of hiding behind "0 of 3"."""
+
+    def test_the_status_reports_partial_hits(self):
+        job = Calibration(5, 0, rank_candidates=True, simplified=True)
+        job.partial_hits = 2
+        self.assertEqual(2, job.status(1.0)["partial_hits"])
+
+
 if __name__ == "__main__":
     unittest.main()

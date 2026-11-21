@@ -563,6 +563,7 @@ EN_UI = {
     "Diese Entität erscheint nach dem ersten gültigen Messwert und kann im Energie-Dashboard als Gasverbrauch ausgewählt werden.": "This entity appears after the first valid reading and can be selected as gas consumption in the Energy dashboard.",
     "So fügst du den Zählerstand einer einfachen Dashboard-Karte hinzu:": "To add the meter reading to a simple dashboard card:",
     "Freiwillig mit PayPal unterstützen": "Support the project voluntarily with PayPal",
+    "Kontakt: amr@eifel-layer.de": "Contact: amr@eifel-layer.de",
     "EifelLayer-Projektlogo": "EifelLayer project logo",
     "Ein privates Hobbyprojekt von EifelLayer. KI-unterstützt entwickelt. Keine geeichte Messung oder Gewähr für OCR-Ergebnisse. Bitte Zählerstände bei Bedarf direkt am Gerät prüfen.": "A private hobby project by EifelLayer, developed with AI assistance. Not a certified measurement and no guarantee of OCR results. Check readings on the physical meter when needed.",
     "Unabhängiger Bildabgleich deines Gaszählerstands mit der vorhandenen Messung. Die OCR liest die Ziffern erneut direkt aus dem Kamerabild – ohne den vom ESP erkannten Wert einfach zu übernehmen.":

@@ -48,7 +48,7 @@ class SourceTests(TestCase):
                    "attributes": {"friendly_name": "Meter camera"}, "state": "idle"}]
         with patch.object(run, "open_core", return_value=BytesIO(b'{"cameras": [], "devices": []}')):
             with patch.object(run, "get_bytes", return_value=json.dumps(states).encode()) as fallback:
-                self.assertEqual([{"mode": "esphome", "camera": "camera.meter", "label": "Meter camera"}],
+                self.assertEqual([{"mode": "esphome", "camera": "camera.meter", "label": "Meter camera", "available": True}],
                                  run.discover_ha_sources("test-token"))
         fallback.assert_called_once_with("http://supervisor/core/api/states", "test-token", timeout=5)
 

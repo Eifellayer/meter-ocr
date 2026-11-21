@@ -347,7 +347,8 @@ def discover_ha_sources(token):
         devices = []
         for entity_id, entity in by_id.items():
             if entity_id.startswith("camera."):
-                cameras.append({"camera": entity_id, "label": entity.get("attributes", {}).get("friendly_name")})
+                cameras.append({"camera": entity_id, "label": entity.get("attributes", {}).get("friendly_name"),
+                                "available": entity.get("state") != "unavailable"})
             elif entity_id.startswith("sensor.") and entity_id.endswith("_ip_address"):
                 prefix = entity_id.removesuffix("_ip_address")
                 if prefix + "_process_state" in by_id and prefix + "_main_last_processed" in by_id:
@@ -1289,10 +1290,16 @@ def publish_standalone(history, camera, token):
         counter = history.get("consumption")
         if (isinstance(counter, dict) and isinstance(counter.get("source"), list)
                 and camera in counter["source"] and type(counter.get("anchor_litres")) is int):
-            step = counter.get("anchor_step") or counter.get("step_litres") or 1
-            decimals = {1: 3, 10: 2, 100: 1}.get(step, 0)
-            value = f"{counter['anchor_litres'] / 1000:.{decimals}f}"
+            litres, step = counter["anchor_litres"], counter.get("anchor_step") or counter.get("step_litres") or 1
             captured = counter.get("anchor_time")
+            pending = counter.get("pending_litres")
+            if type(pending) is int and pending > litres:
+                # The newer reading was already shown before the reset; the sensor must not
+                # step back to the older booked value (support round 21.11.).
+                litres, step = pending, counter.get("pending_step") or step
+                captured = counter.get("pending_time") or captured
+            decimals = {1: 3, 10: 2, 100: 1}.get(step, 0)
+            value = f"{litres / 1000:.{decimals}f}"
             is_fallback = True
     payload = {
         "state": value,

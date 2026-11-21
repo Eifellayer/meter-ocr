@@ -13,7 +13,7 @@ LIGHT = re.compile(r"light\.[a-z0-9_]+")
 DISCOVERY_TEMPLATE = """
 {% set found = namespace(cameras=[], devices=[]) %}
 {% for camera in states.camera %}
-  {% set found.cameras = found.cameras + [{'label': camera.name, 'camera': camera.entity_id}] %}
+  {% set found.cameras = found.cameras + [{'label': camera.name, 'camera': camera.entity_id, 'available': camera.state != 'unavailable'}] %}
 {% endfor %}
 {% for item in states.sensor if item.entity_id.endswith('_ip_address') or item.entity_id.endswith('_last_processed') %}
   {% set device = device_id(item.entity_id) %}
@@ -75,7 +75,9 @@ def discovered_sources(data):
         camera = item.get("camera", "")
         if isinstance(camera, str) and CAMERA.fullmatch(camera):
             label = str(item.get("label") or camera)[:120]
-            choices[camera] = {"mode": "esphome", "label": label, "camera": camera}
+            # A camera that is offline in Home Assistant delivers no picture: say so in the list.
+            choices[camera] = {"mode": "esphome", "label": label, "camera": camera,
+                               "available": item.get("available") is not False}
     for item in data.get("devices", []):
         url = str(item.get("url") or "").strip().rstrip("/")
         if not url:
@@ -91,4 +93,4 @@ def discovered_sources(data):
         if len(url) <= 150:
             label = str(item.get("label") or url)[:120]
             choices[url] = {"mode": "slfork", "label": label, "url": url}
-    return sorted(choices.values(), key=discovery_order)[:80]
+    return sorted(choices.values(), key=lambda choice: (choice.get("available") is False, discovery_order(choice)))[:80]

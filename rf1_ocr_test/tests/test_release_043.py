@@ -169,5 +169,36 @@ class PartialHitStatusTests(unittest.TestCase):
         self.assertEqual(2, job.status(1.0)["partial_hits"])
 
 
+class ResetSensorTests(unittest.TestCase):
+    """0.5.0: after a reset the reading sensor does not step back to an older value."""
+
+    def published(self, counter):
+        from unittest.mock import patch
+        with patch.object(run, "publish_state") as publish:
+            run.publish_standalone({"consumption": counter}, "camera.meter", "token")
+        return publish.call_args.args[1]["state"]
+
+    def test_the_newer_unconfirmed_reading_stays_visible(self):
+        counter = {"source": ["camera", "camera.meter"], "anchor_litres": 10497600, "anchor_step": 100,
+                   "anchor_time": 10, "pending_litres": 10499380, "pending_step": 10, "pending_time": 20}
+        self.assertEqual("10499.38", self.published(counter))
+        self.assertEqual("10497.6", self.published({**counter, "pending_litres": None}))
+        self.assertEqual("10497.6", self.published({**counter, "pending_litres": 10490000}))
+
+
+class OfflineCameraTests(unittest.TestCase):
+    """0.5.0: cameras that Home Assistant reports as unavailable are marked and listed last."""
+
+    def test_unavailable_cameras_come_last_and_are_marked(self):
+        from source_settings import discovered_sources
+        sources = discovered_sources({"cameras": [
+            {"camera": "camera.a_offline", "label": "A", "available": False},
+            {"camera": "camera.b_online", "label": "B", "available": True},
+            {"camera": "camera.c_old_format", "label": "C"}]})
+        self.assertEqual(["camera.b_online", "camera.c_old_format", "camera.a_offline"],
+                         [source["camera"] for source in sources])
+        self.assertEqual([True, True, False], [source["available"] for source in sources])
+
+
 if __name__ == "__main__":
     unittest.main()

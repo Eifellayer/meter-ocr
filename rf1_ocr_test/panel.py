@@ -1900,7 +1900,8 @@ function filterWizardSources() {{
   sourceSuggestions.forEach((source, index) => {{
     if (![source.label, source.camera, source.url].join(' ').toLowerCase().includes(term)) return;
     const type = source.mode === 'slfork' ? 'AI on the Edge' : (lang === 'en' ? 'Camera' : 'Kamera');
-    discoveredSource.add(new Option(type + ' · ' + source.label, String(index)));
+    const offline = source.available === false ? (lang === 'en' ? ' (not available in Home Assistant)' : ' (in Home Assistant nicht verfügbar)') : '';
+    discoveredSource.add(new Option(type + ' · ' + source.label + offline, String(index)));
   }});
   const available = discoveredSource.options.length > 1;
   discoveredSource.options[0].textContent = available ?

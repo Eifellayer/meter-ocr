@@ -72,7 +72,7 @@ import setup_flow
 from setup_store import (SetupStore, geometry_check_key, last_verified_configured_geometry, app_build, calibration_source_id, last_setup_unfinished, plain_setup,
                          saved_layout_rules, setup_attempted_before, SETUP_RETRY_LIMIT, SETUP_RETRY_LONG_SECONDS, SETUP_RETRY_SECONDS, setup_autostart_due, setup_retry_delay,
                          usable_known_good_geometry)
-from auto_rules import changed_rules, default_rules, stored_rules, valid_experiments
+from auto_rules import frames_locked, changed_rules, default_rules, stored_rules, valid_experiments
 from source_settings import (LIGHT, CAMERA, DISCOVERY_TEMPLATE, ESP_ADDRESS_MODES, REFERENCE,
                              discovered_sources, source_check_key, source_rules)
 from panel import start_panel
@@ -2347,7 +2347,9 @@ def main():
         source_key = source_check_key(active_source)
         now = datetime.now(zone)
         stabilizing_until, optimization_until = setup_deadlines(active_rules, active_source)
+        # Frames the user placed by hand stay as they are: no fine tuning, no learned shifts.
         optimization_paused = now.timestamp() < optimization_until
+        frames_fixed = frames_locked(active_rules)
         adaptive = active_rules["adaptive_interval_enabled"]
         if adaptive:
             interval_minutes = suggested_interval(interval_minutes, history.get("adaptive_flow", {}), source_key, now.month)
@@ -2745,7 +2747,8 @@ def main():
                         view_rotation = rotation
                         if crop_rules["crop_mode"] == "manual" and not detect_raw:
                             view_rotation = rotation + valid_fine_rotation(crop_rules.get("rotation_fine", 0))
-                            if not manual and custom_boxes:
+                            # Hand-placed frames are read exactly as placed: no learned extra tilt.
+                            if not manual and custom_boxes and not frames_fixed:
                                 # Not tied to the frame revision: re-placing a single frame (e.g. the
                                 # last digit) keeps the learned tilt instead of starting from zero.
                                 skew_key = [crop_rules["crop"], manual_width, rotation,
@@ -2772,7 +2775,8 @@ def main():
                         )
                         tilt_measured, tilt_skip = None, None
                         if skew_key is None:
-                            tilt_skip = "no_frames" if crop_rules["crop_mode"] == "manual" else "auto_crop"
+                            tilt_skip = ("user_frames" if frames_fixed else
+                                         "no_frames" if crop_rules["crop_mode"] == "manual" else "auto_crop")
                         elif base_adjustment:
                             tilt_skip = "learned_rotation"
                         else:
@@ -2870,7 +2874,7 @@ def main():
                         configured_attempts = manual_options["attempts"] if manual else max_attempts
                         if require_consensus:
                             configured_attempts = max(2, configured_attempts)
-                        local_enabled = (not manual and not optimization_paused and not raw_fallback
+                        local_enabled = (not manual and not optimization_paused and not frames_fixed and not raw_fallback
                                          and active_rules["fine_alignment_enabled"] and crop_rules["crop_mode"] == "manual")
                         extra_attempts = (10 if not manual and not local_enabled and not optimization_paused
                                           and history.get("failure_attempts", 0) == 0
@@ -3777,7 +3781,7 @@ def main():
                             automatic_interval_minutes(active_rules["interval_minutes"], mode), flow, source_key, now.month,
                         )
                     local_backup = updated.get("local_geometry_backup", {})
-                    if (not optimization_paused and (active_rules["fine_alignment_enabled"] or local_backup.get("optimizer"))
+                    if (not optimization_paused and not frames_fixed and (active_rules["fine_alignment_enabled"] or local_backup.get("optimizer"))
                             and local_backup.get("revision") == active_rules["crop_revision"]
                             and local_backup.get("source") == source_key and not raw_fallback):
                         if verified and local_trial is None:
@@ -3794,7 +3798,7 @@ def main():
                     optimizer_state = updated.get("optimizer")
                     winner = (optimizer.best_trial(optimizer_state) if isinstance(optimizer_state, dict)
                               and optimizer_state.get("key") == geometry_check_key(active_rules, source_key) else None)
-                    if (winner and fine_update is None and not optimization_paused and not raw_fallback
+                    if (winner and fine_update is None and not optimization_paused and not frames_fixed and not raw_fallback
                             and active_rules.get("digit_boxes") and active_rules["crop_mode"] == "manual"):
                         geometry = optimizer.trial_geometry(
                             winner, active_rules["rotation"], active_rules["digit_boxes"],
@@ -3812,7 +3816,7 @@ def main():
                         # A frame shift that rescued this check is learned under the same rules as the
                         # local fine alignment: three fresh images, two meter readings, rollback on errors.
                         local_trial = shifted_trial
-                    if (not optimization_paused and not raw_fallback and local_trial is not None and verified
+                    if (not optimization_paused and not frames_fixed and not raw_fallback and local_trial is not None and verified
                             and fine_update is None):
                         trial_key, geometry, prefix = local_trial
                         learning = updated.setdefault("local_improvement", {})

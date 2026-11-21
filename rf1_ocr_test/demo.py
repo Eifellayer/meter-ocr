@@ -1,7 +1,6 @@
 """Local OCR demonstration with a generated meter and no live inputs."""
 
 import base64
-from functools import lru_cache
 from io import BytesIO
 import time
 
@@ -12,10 +11,20 @@ from layout import turn_crop
 
 DEMO_READING = "12344.942"
 DEMO_ANGLE = 5
+# The demo shares the processor with the automatic checks and a running setup.
+DEMO_SECONDS = 40
+_complete = {}
 
 
-@lru_cache(maxsize=2)
 def run_demo(reflection=False):
+    """Read the generated meter; only a complete result is kept for the next call.
+
+    A result cut short by a busy machine used to be cached for good and the first
+    request could run into the time limit ("Die Demo konnte nicht geladen werden").
+    """
+    reflection = bool(reflection)
+    if reflection in _complete:
+        return _complete[reflection]
     digits = DEMO_READING.replace(".", "")
     image = Image.new("RGB", (600, 128), "#263844")
     draw = ImageDraw.Draw(image)
@@ -35,7 +44,7 @@ def run_demo(reflection=False):
     dx, dy = (straight.width - image.width) // 2, (straight.height - image.height) // 2
     straight = straight.crop((dx, dy, dx + image.width, dy + image.height))
     reads = []
-    deadline = time.monotonic() + 15
+    deadline = time.monotonic() + DEMO_SECONDS
     for profile in OCR_PROFILES[:2]:
         row = "".join(read_register(straight.crop(box), True, 1, force_polarity=True, profile=profile, deadline=deadline) or "?"
                       for box in boxes)
@@ -54,6 +63,10 @@ def run_demo(reflection=False):
     for index, box in enumerate(boxes):
         overlay.rectangle(box, outline="#e9ac47" if result.replace(".", "")[index] == "?" else "#6ee7ae", width=2)
 
-    return {"image": encode(slanted), "aligned": encode(marked), "reading": result,
-            "angle": -DEMO_ANGLE, "attempts": reads, "expected": DEMO_READING,
-            "estimate": estimate["reading"] if estimate else None}
+    answer = {"image": encode(slanted), "aligned": encode(marked), "reading": result,
+              "angle": -DEMO_ANGLE, "attempts": reads, "expected": DEMO_READING,
+              "estimate": estimate["reading"] if estimate else None}
+    hidden = 1 if reflection else 0
+    if result.count("?") <= hidden and time.monotonic() < deadline:
+        _complete[reflection] = answer
+    return answer

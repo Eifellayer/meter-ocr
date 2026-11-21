@@ -23,6 +23,7 @@ from PIL import Image
 from app_channel import APP_NAME, NAMESPACE
 import bug_report
 import status_view
+from auto_rules import frames_locked, user_frames
 import debug_log
 
 INSTANCE_ID = token_urlsafe(8)
@@ -858,6 +859,7 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 <p>? steht für eine unklare Ziffer.</p>
 <table><thead><tr><th>Versuch</th><th>Erkannter Stand</th></tr></thead><tbody></tbody></table>
 </details>
+<p class="settings-note frames-note" id="frames-note-overview">{frames_note}</p>
 <section class="consumption-panel" aria-labelledby="consumption-title">
 <h2 id="consumption-title">Verbrauch</h2>
 <dl class="consumption-summary">
@@ -1295,6 +1297,7 @@ name: Zählerstand (OCR)</code></pre>
 <label class="settings-field"><span class="field-label">Bildbereich</span>
 <select name="crop_mode" id="auto-crop-mode">{auto_crop_mode_options}</select></label>
 </div>
+<p class="settings-note frames-note" id="frames-note-settings">{frames_note}</p>
 <div class="crop-draw" id="auto-crop-draw" hidden>
 <p class="settings-note">Ziehe mit Maus oder Finger einen Rahmen um die gesamte Ziffernreihe.</p>
 <div class="crop-draw-image" id="auto-crop-draw-area" hidden>
@@ -1583,7 +1586,13 @@ async function checkDemo(reflection) {{
   demoStatus.textContent = 'Demo-Bild wird geprüft …';
   try {{
     const fields = new URLSearchParams({{csrf: '{csrf}', lang, reflection: reflection ? '1' : '0'}});
-    const reply = await fetch('zaehler-demo', {{method: 'POST', body: fields}});
+    let reply = await fetch('zaehler-demo', {{method: 'POST', body: fields}}).catch(() => null);
+    if (!reply || !reply.ok) {{
+      // The machine may be busy with a check or a setup: one quiet second try.
+      demoStatus.textContent = lang === 'en' ? 'The app is busy, trying once more …' : 'Die App ist gerade beschäftigt, zweiter Versuch …';
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      reply = await fetch('zaehler-demo', {{method: 'POST', body: fields}});
+    }}
     if (!reply.ok) throw Error();
     const result = await reply.json();
     document.querySelector('#demo-original').src = 'data:image/jpeg;base64,' + result.image;
@@ -1597,7 +1606,7 @@ async function checkDemo(reflection) {{
     demoStatus.textContent = '';
     demoResults.hidden = false;
   }} catch (_) {{
-    demoStatus.textContent = 'Die Demo konnte nicht geladen werden. Versuche es noch einmal.';
+    demoStatus.textContent = 'Die Demo konnte nicht geladen werden, weil die App gerade ausgelastet ist. Versuche es in einer Minute noch einmal.';
   }} finally {{
     buttons.forEach(button => button.disabled = false);
   }}
@@ -3902,6 +3911,22 @@ def radio_options(name, choices, chosen):
     )
 
 
+FRAME_NOTES = {
+    "user": "Rahmen: von Hand gesetzt. Die Automatik liest genau diese Rahmen und verändert sie nicht.",
+    "setup": "Rahmen: von der Selbsteinrichtung gefunden. Die Automatik darf sie nachjustieren.",
+    "manual": "Rahmen: fest gespeichert. Die Automatik darf sie nachjustieren.",
+    "auto": "Bildbereich: automatische Erkennung ohne feste Rahmen. Die App sucht die Ziffernreihe in jedem Bild neu.",
+}
+
+
+def frames_note(rules, language):
+    """One sentence that says which frames the automatic uses (overview and settings)."""
+    kind = ("auto" if rules.get("crop_mode") != "manual" else
+            rules.get("frames_origin") if rules.get("frames_origin") in ("user", "setup") else "manual")
+    text = FRAME_NOTES[kind]
+    return EN_UI[text] if language == "en" else text
+
+
 def reflection_setup_preview(content, whole, fraction, polarity):
     if not 1 <= whole <= 9 or not 0 <= fraction <= 3 or polarity not in POLARITIES:
         raise ValueError("Invalid meter format")
@@ -3971,6 +3996,12 @@ def start_panel(
     def read_auto_rules():
         return {"integer_digits": 5, "fraction_digits": 3, "meter_display": "rollers",
                 "fallback_value": "", "fallback_time": "", "digit_boxes": [], **get_auto_rules()}
+
+    worker_save_auto_rules = save_auto_rules
+
+    def save_auto_rules(values, **options):
+        # Frames changed in the web interface were placed by the user (auto_rules.user_frames).
+        worker_save_auto_rules(user_frames(read_auto_rules(), values), **options)
 
     def digit_correction_settings(rules, source):
         if rules["crop_mode"] != "manual":
@@ -4528,6 +4559,7 @@ def start_panel(
                 tools_hidden="" if tools_tab_active else "hidden",
                 language_options=select_options({"auto": automatic, "de": "Deutsch", "en": "English"}, mode),
                 settings_open="open" if saved in ("1", "crop-reset", "fallback") else "",
+                frames_note=html.escape(frames_note(auto_rules, language)),
                 fallback_saved_notice=auto_saved_notice if saved == "fallback" else "",
                 calibration_preview_html=(translate_page(CALIBRATION_PREVIEW_HTML) if language == "en"
                                           else CALIBRATION_PREVIEW_HTML),
@@ -4896,7 +4928,8 @@ def start_panel(
                 self.redirect("?ui=overview" + keep_mode)
                 return
             if path == "/zaehler-demo":
-                if not demo_lock.acquire(blocking=False):
+                # A second request waits for the first instead of failing at once.
+                if not demo_lock.acquire(timeout=45):
                     problem(503)
                     return
                 try:

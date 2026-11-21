@@ -91,5 +91,23 @@ class PlainSetupTests(unittest.TestCase):
         self.assertEqual(2, job.precision({"decimals": 0, "fraction_digits": 3}, True))
 
 
+class DemoTests(unittest.TestCase):
+    """0.5.0: an incomplete demo result must not be kept for the next request."""
+
+    def test_only_a_complete_result_is_kept(self):
+        import demo
+        from unittest.mock import patch
+        demo._complete.clear()
+        with patch.object(demo, "read_register", return_value=None):
+            self.assertIn("?", demo.run_demo(False)["reading"])
+        self.assertEqual({}, demo._complete)
+        digits = iter(demo.DEMO_READING.replace(".", "") * 2)
+        with patch.object(demo, "read_register", side_effect=lambda *_, **__: next(digits)):
+            self.assertEqual(demo.DEMO_READING, demo.run_demo(False)["reading"])
+        with patch.object(demo, "read_register", side_effect=AssertionError):
+            self.assertEqual(demo.DEMO_READING, demo.run_demo(False)["reading"])
+        demo._complete.clear()
+
+
 if __name__ == "__main__":
     unittest.main()

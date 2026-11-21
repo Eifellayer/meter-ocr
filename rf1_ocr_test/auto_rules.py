@@ -16,6 +16,26 @@ import experiments
 from layout import crop_coordinates, digit_box_settings, fine_rotation as valid_fine_rotation
 
 
+# Who placed the saved frames: the user by hand ("user") or the self-setup ("setup").
+# Frames placed by hand are never moved by the automatic fine tuning (0.5.0).
+FRAME_ORIGINS = ("user", "setup")
+FRAME_KEYS = ("crop", "width", "rotation", "rotation_fine", "digit_boxes")
+
+
+def user_frames(current, values):
+    """``values`` as saved from the web interface: changed manual frames belong to the user."""
+    if values.get("crop_mode", current.get("crop_mode")) != "manual":
+        return values
+    changed = (current.get("crop_mode") != "manual"
+               or any(key in values and values[key] != current.get(key) for key in FRAME_KEYS))
+    return {**values, "frames_origin": "user"} if changed else values
+
+
+def frames_locked(rules):
+    """Must the automatic leave the saved frames exactly as they are?"""
+    return rules.get("crop_mode") == "manual" and rules.get("frames_origin") == "user"
+
+
 def valid_experiments(value):
     """Only known experiments, each switched on or off."""
     value = value if isinstance(value, dict) else {}
@@ -36,7 +56,7 @@ def default_rules(options):
                   "width": options["vorkomma_breite"], "rotation": 0, "crop_revision": "", "digit_boxes": [],
                   "max_flow_lph": DEFAULT_FLOW_LPH, "interval_minutes": DEFAULT_INTERVAL_MINUTES,
                   "integer_digits": 5, "fraction_digits": 3, "meter_display": "rollers",
-                  "fallback_value": "", "fallback_time": ""}
+                  "fallback_value": "", "fallback_time": "", "frames_origin": ""}
 
 
 def stored_rules(saved_rules, options):
@@ -129,7 +149,9 @@ def stored_rules(saved_rules, options):
                       "setup_pending_started": saved_rules.get("setup_pending_started"),
                       "setup_pending_metrics": saved_rules.get("setup_pending_metrics"),
                       "setup_reflection": saved_rules.get("setup_reflection"),
-                      "stationary_partial_scope": saved_rules.get("stationary_partial_scope"),
+                      "frames_origin": (saved_rules.get("frames_origin") if crop_mode == "manual"
+                                  and saved_rules.get("frames_origin") in FRAME_ORIGINS else ""),
+                "stationary_partial_scope": saved_rules.get("stationary_partial_scope"),
                       "skew_seed": saved_rules.get("skew_seed") if isinstance(saved_rules.get("skew_seed"), dict) else None,
                       "intensive_agreement": intensive_agreement,
                       "fine_alignment_enabled": saved_rules.get("fine_alignment_enabled") is True,
@@ -205,6 +227,8 @@ def changed_rules(auto_rules, values):
                      "reflection_confirmed_id": reflection_confirmed_id,
                      "fallback_value": fallback_value, "fallback_time": fallback_time}
     updated_rules["crop"] = ",".join(str(part) for part in coords)
+    if updated_rules["crop_mode"] != "manual" or updated_rules.get("frames_origin") not in FRAME_ORIGINS:
+        updated_rules["frames_origin"] = ""
     updated_rules["digit_boxes"] = (digit_box_settings(updated_rules.get("digit_boxes"), integer_digits + fraction_digits)
                                     if updated_rules["crop_mode"] == "manual" else [])
     if (updated_rules["crop_revision"] == auto_rules["crop_revision"]

@@ -88,12 +88,21 @@ EN_UI = {
     "Schräges künstliches Zählerbild": "Generated tilted meter image",
     "Gerader Ausschnitt mit Ziffernrahmen": "Aligned crop with digit boxes",
     "Demo-Bild wird geprüft …": "Reading the demo image …",
+    "Rahmen: von Hand gesetzt. Die Automatik liest genau diese Rahmen und verändert sie nicht.":
+        "Frames: placed by hand. The automatic check reads exactly these frames and does not change them.",
+    "Rahmen: von der Selbsteinrichtung gefunden. Die Automatik darf sie nachjustieren.":
+        "Frames: found by the self-setup. The automatic check may fine-tune them.",
+    "Rahmen: fest gespeichert. Die Automatik darf sie nachjustieren.":
+        "Frames: saved. The automatic check may fine-tune them.",
+    "Bildbereich: automatische Erkennung ohne feste Rahmen. Die App sucht die Ziffernreihe in jedem Bild neu.":
+        "Image area: automatic detection without fixed frames. The app looks for the digit row in every image.",
     "Abgelesen ": "Read ",
     " m³ · Drehung ": " m³ · Rotation ",
     "Alle Ziffern erkannt.": "All digits read.",
     "Mindestens eine Ziffer blieb offen.": "At least one digit remained unclear.",
     "Aus einem Beispiel-Referenzwert geschätzt: ": "Estimated from the demo reference: ",
-    "Die Demo konnte nicht geladen werden. Versuche es noch einmal.": "Could not load the demo. Try again.",
+    "Die Demo konnte nicht geladen werden, weil die App gerade ausgelastet ist. Versuche es in einer Minute noch einmal.":
+        "Could not load the demo because the app is busy. Try again in a minute.",
     "Automatik-Nachprüfung: Die App prüft die fehlende Ziffer mit leicht verschobenem Rahmen.":
         "Automatic recheck: reading the missing digit with a slightly shifted box.",
     "Frische Aufnahme für den erwarteten Rollenwechsel eingeplant.":

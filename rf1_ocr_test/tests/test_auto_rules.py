@@ -56,5 +56,22 @@ class AutoRulesTests(unittest.TestCase):
         self.assertEqual("abc", auto_rules.changed_rules(current, dict(current, attempts=6))["crop_revision"])
 
 
+    def test_frames_changed_in_the_web_interface_belong_to_the_user(self):
+        manual = dict(self.rules, crop_mode="manual", crop="60,60,560,130", width=300)
+        marked = auto_rules.user_frames(self.rules, manual)
+        self.assertEqual("user", marked["frames_origin"])
+        saved = auto_rules.changed_rules(self.rules, marked)
+        self.assertTrue(auto_rules.frames_locked(saved))
+        # Saving other settings later does not change who placed the frames ...
+        self.assertNotIn("frames_origin", auto_rules.user_frames(saved, {"crop_mode": "manual", "attempts": 6}))
+        self.assertEqual("user", auto_rules.user_frames(saved, dict(saved, attempts=6))["frames_origin"])
+        # ... a self-setup takes them over, and the automatic crop has no owner.
+        by_setup = auto_rules.changed_rules(saved, dict(saved, frames_origin="setup"))
+        self.assertFalse(auto_rules.frames_locked(by_setup))
+        self.assertEqual("", auto_rules.changed_rules(saved, dict(saved, crop_mode="auto"))["frames_origin"])
+        self.assertEqual("user", auto_rules.stored_rules(saved, self.options)["frames_origin"])
+        self.assertEqual("", auto_rules.stored_rules(dict(saved, frames_origin="alien"), self.options)["frames_origin"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -164,7 +164,7 @@ def saved_layout_rules(rules, source, attempt, layout, tilts, *, provisional=Fal
                          valid_fine_rotation(fine)], "offset": seed}
     relocated = {"last_frame_relocated_at": time.time()} if attempt.purpose == "relocate" and not provisional else {}
     return {**rules, **layout.settings(), **relocated, "rotation_fine": valid_fine_rotation(fine),
-                     "crop_revision": revision, "skew_seed": skew_seed,
+                     "crop_revision": revision, "skew_seed": skew_seed, "frames_origin": "setup",
                      "setup_input_source": setup_source_id(source),
                      "calibration_reference": reference, "stationary_partial_scope": partial_scope,
                      "setup_completed": completed, "setup_success": success,

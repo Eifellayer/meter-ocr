@@ -70,5 +70,26 @@ class SetupLogTests(unittest.TestCase):
         self.assertEqual(0, entry["partial_hits"])
 
 
+class PlainSetupTests(unittest.TestCase):
+    """0.4.4: the routine comparison precision must not make the setup stricter."""
+
+    def test_every_setup_of_a_three_decimal_meter_is_the_plain_setup(self):
+        for decimals in (0, 1, 2, 3):
+            for action in ("setup", "start", "repair"):
+                with self.subTest(decimals=decimals, action=action):
+                    self.assertTrue(run.plain_setup({"decimals": decimals, "fraction_digits": 3}, action))
+
+    def test_last_digit_jobs_and_short_displays_keep_their_own_rules(self):
+        self.assertFalse(run.plain_setup({"decimals": 3, "fraction_digits": 3}, "intensive"))
+        self.assertFalse(run.plain_setup({"decimals": 3, "fraction_digits": 3}, "relocate_last"))
+        self.assertFalse(run.plain_setup({"decimals": 1, "fraction_digits": 1}, "setup"))
+        self.assertTrue(run.plain_setup({"decimals": 2, "fraction_digits": 2}, "setup"))
+
+    def test_whole_cubic_metres_confirm_with_two_decimals(self):
+        job = Calibration(5, 0, rank_candidates=True, simplified=True)
+        self.assertEqual(2, job.precision({"decimals": 0, "fraction_digits": 3}, False))
+        self.assertEqual(2, job.precision({"decimals": 0, "fraction_digits": 3}, True))
+
+
 if __name__ == "__main__":
     unittest.main()

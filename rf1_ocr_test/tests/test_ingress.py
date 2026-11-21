@@ -321,6 +321,27 @@ class IngressTests(IngressFixture):
         status = json.loads(self.request("/automatic")[0])
         self.assertIn("seit mindestens 40 Minuten nicht sicher erkannt", status["geometry_warning"])
 
+    def test_frames_saved_for_the_manual_test_leave_the_automatic_alone(self):
+        self.source_selected = True
+        self.setup_pending = False
+        self.rules.update(crop_mode="manual", crop="5,5,405,95", width=250, crop_revision="known", rotation=0)
+        boxes = [[i * 125, 100, (i + 1) * 125, 900] for i in range(8)]
+        self.rules["digit_boxes"] = boxes
+        Image.new("RGB", (460, 120), "gray").save(self.root / "current.jpg")
+        job = json.loads(self.request("/status")[0])
+        moved = [*boxes[:-1], [880, 80, 995, 900]]
+        before = json.loads(json.dumps(self.rules))
+        self.assertEqual((303, "./?saved=manual-crop&ui=tools"), self.submit(
+            "/ziffernrahmen", token=job["digit_correction"]["token"], index="7", image_kind="current",
+            image_version=job["digit_correction_image"], digit_boxes=json.dumps(moved), action="save_manual"))
+        self.assertEqual(before, json.loads(json.dumps(self.rules)))
+        stored = json.loads(next(self.root.glob("manual-test-settings*.json")).read_text())
+        self.assertEqual((moved, "manual", "5,5,405,95", "known"),
+                         tuple(stored[key] for key in ("digit_boxes", "crop_mode", "crop", "crop_revision")))
+        page = self.request("/")[0]
+        self.assertIn("Für manuellen Test speichern", page)
+        self.assertIn("Für Automatik speichern", page)
+
     def test_one_digit_search_proposes_and_save_updates_only_boxes(self):
         self.source_selected = True
         self.setup_pending = False

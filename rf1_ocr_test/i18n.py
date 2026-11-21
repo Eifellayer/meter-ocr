@@ -88,6 +88,10 @@ EN_UI = {
     "Schräges künstliches Zählerbild": "Generated tilted meter image",
     "Gerader Ausschnitt mit Ziffernrahmen": "Aligned crop with digit boxes",
     "Demo-Bild wird geprüft …": "Reading the demo image …",
+    "Für Automatik speichern": "Save for automatic checks",
+    "Für manuellen Test speichern": "Save for the manual test",
+    "„Für Automatik“ gilt ab der nächsten automatischen Prüfung. „Für manuellen Test“ ändert nur den Test unter Werkzeuge; die Automatik behält ihre Rahmen und startet keine Prüfung.":
+        "“For automatic checks” applies from the next automatic check. “For the manual test” only changes the test under Tools; the automatic check keeps its frames and starts no check.",
     "Digitalanzeige: Segmente direkt lesen": "Digital display: read the segments directly",
     "Je schlechter das Kamerabild (Unschärfe, Spiegelungen, schwaches Licht, schräger Blickwinkel), desto länger dauern Einrichtung und Optimierung. Ein scharfes, gerades Bild ohne Lichtfleck auf den Ziffern spart am meisten Zeit.":
         "The worse the camera image (blur, reflections, low light, slanted view), the longer setup and optimization take. A sharp, straight image without a light spot on the digits saves the most time.",

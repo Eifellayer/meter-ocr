@@ -746,8 +746,10 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 </figure>
 <p class="settings-note" id="digit-correction-status" role="status"></p>
 <div class="crop-actions">
-<button type="button" id="save-digit-correction" disabled>Ziffernrahmen speichern</button>
+<button type="button" id="save-digit-correction" disabled>Für Automatik speichern</button>
+<button type="button" id="save-digit-correction-manual" disabled>Für manuellen Test speichern</button>
 </div>
+<p class="settings-note">„Für Automatik“ gilt ab der nächsten automatischen Prüfung. „Für manuellen Test“ ändert nur den Test unter Werkzeuge; die Automatik behält ihre Rahmen und startet keine Prüfung.</p>
 </dialog>
 <div id="calibration-overview" class="calibration-live" hidden>
 <form method="post" action="bildqualitaet-hinweis-ausblenden" class="quality-hint settings-note" {quality_hint_hidden}>
@@ -3087,6 +3089,7 @@ const correctionStatus = document.querySelector('#digit-correction-status');
 const correctionOpen = document.querySelector('#open-digit-correction');
 const correctionSearch = document.querySelector('#search-one-digit');
 const correctionSave = document.querySelector('#save-digit-correction');
+const correctionSaveManual = document.querySelector('#save-digit-correction-manual');
 const correctionUndo = document.querySelector('#undo-one-digit');
 const correctionBoxes = {{value: '[]'}};
 const correctionWidth = {{value: ''}};
@@ -3101,6 +3104,7 @@ function updateCorrectionControls() {{
   const index = Number(correctionPosition.value);
   const changed = correctionBoxes.value !== JSON.stringify(originalCorrection);
   correctionSave.disabled = correctionBusy || !changed || correctionPreview.hidden;
+  correctionSaveManual.disabled = correctionBusy || correctionPreview.hidden;
   correctionSearch.disabled = correctionBusy || correctionPreview.hidden;
   correctionUndo.disabled = correctionPreview.hidden || JSON.stringify(correctionEditor.current()[index]) ===
     JSON.stringify(originalCorrection[index]);
@@ -3111,6 +3115,7 @@ async function openDigitCorrection(last = false) {{
   correctionDialog.showModal();
   correctionPreview.hidden = true;
   correctionSave.disabled = true;
+  correctionSaveManual.disabled = true;
   correctionStatus.textContent = 'Kamerabild wird geladen …';
   correctionBusy = true;
   try {{
@@ -3195,7 +3200,7 @@ async function submitDigitCorrection(action) {{
   const index = Number(correctionPosition.value);
   const sent = correctionBoxes.value;
   correctionBusy = true;
-  correctionPreview.inert = action === 'save';
+  correctionPreview.inert = action !== 'search';
   updateCorrectionControls();
   correctionStatus.textContent = action === 'search' ? 'Die ausgewählte Ziffer wird gesucht …' : '';
   const fields = new URLSearchParams({{
@@ -3206,7 +3211,7 @@ async function submitDigitCorrection(action) {{
   }});
   try {{
     const response = await fetch('ziffernrahmen', {{method: 'POST', body: fields}});
-    if (response.redirected && action === 'save') {{
+    if (response.redirected && action !== 'search') {{
       location.assign(response.url);
       return;
     }}
@@ -3232,6 +3237,7 @@ async function submitDigitCorrection(action) {{
 }}
 correctionSearch.addEventListener('click', () => submitDigitCorrection('search'));
 correctionSave.addEventListener('click', () => submitDigitCorrection('save'));
+correctionSaveManual.addEventListener('click', () => submitDigitCorrection('save_manual'));
 function renderOcrCandidates(list, candidates) {{
   const evidence = {{
     accepted: 'Zwei Leseprofile stimmen überein – Kandidat übernommen',
@@ -5342,7 +5348,7 @@ def start_panel(
             if path == "/ziffernrahmen":
                 action = field("action")
                 try:
-                    if action not in ("save", "search"):
+                    if action not in ("save", "save_manual", "search"):
                         raise ValueError("Invalid digit action")
                     with rules_lock:
                         rules = read_auto_rules()
@@ -5367,8 +5373,20 @@ def start_panel(
                                 values["stationary_partial_scope"] = setup_source_id([source, revision])
                             if boxes != rules["digit_boxes"]:
                                 save_auto_rules(values)
+                        elif action == "save_manual":
+                            # Only the manual test gets these frames: the automatic keeps its own
+                            # and no automatic check is started (0.5.0).
+                            save_manual_settings({
+                                **load_manual_settings(), "polarity": rules["polarity"], "decimals": rules["decimals"],
+                                "attempts": rules["attempts"], "crop_mode": "manual", "crop": layout["crop"],
+                                "width": layout["width"], "rotation": layout["rotation"],
+                                "rotation_fine": fine_rotation(rules.get("rotation_fine", 0)),
+                                "digit_boxes": boxes, "crop_revision": rules.get("crop_revision", "")})
                     if action == "save":
                         self.redirect("?saved=digit-frames&ui=overview" + keep_mode)
+                        return
+                    if action == "save_manual":
+                        self.redirect("?saved=manual-crop&ui=tools" + keep_mode)
                         return
                     index = int(field("index"))
                     if not 0 <= index < count:

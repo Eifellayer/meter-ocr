@@ -729,7 +729,7 @@ class StateTests(TestCase):
         self.assertIsNone(access["image"]("frame", str(preview["frame"])))
         access["control"]("cancel", 0)
         access["control"]("repair", 20)
-        self.assertEqual(240, access["status"]()["duration"])
+        self.assertEqual(600, access["status"]()["duration"])
         self.assertTrue(access["status"]()["automatic"])
         backup = json.loads(files["HISTORY"].with_name("geometry-backup.json").read_text())
         self.assertEqual(backup["rules"], access["rules"]())

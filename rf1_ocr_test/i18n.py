@@ -215,10 +215,10 @@ EN_UI = {
     MANUAL_ROW_UNCLEAR: "The digits are hard to read. Check the image rotation, camera angle, focus and lighting.",
     PARTLY_UNCLEAR: "Some digits could not be read clearly. The app keeps trying automatically.",
     "Selbstreparatur bei wiederholten Fehlmessungen": "Self-repair after repeated failed readings",
-    "Die App sucht frühestens nach zwei Stunden anhaltender Erkennungsprobleme einen besseren Rahmen. Probleme nur an der letzten Rolle zählen dabei nicht mit. Der bisherige Rahmen gilt bis zur erfolgreichen Gegenprobe.":
-        "The app looks for a better crop after at least two hours of persistent recognition problems. Problems with the last digit alone do not count. The current crop stays in use until a replacement passes verification.",
+    "Die App sucht nach etwa 40 Minuten anhaltender Erkennungsprobleme einen besseren Rahmen und versucht es danach alle zwei Stunden erneut. Probleme nur an der letzten Rolle zählen dabei nicht mit. Der bisherige Rahmen gilt bis zur erfolgreichen Gegenprobe.":
+        "The app looks for a better crop after about 40 minutes of persistent recognition problems and tries again every two hours. Problems with the last digit alone do not count. The current crop stays in use until a replacement passes verification.",
     "Die App beobachtet, ob die Erkennungsprobleme anhalten.": "The app is checking whether the recognition problems persist.",
-    "Die Ziffern werden seit mindestens zwei Stunden nicht sicher erkannt. Prüfe Bildausschnitt, Fokus und Beleuchtung.": "Digits have not been read reliably for at least two hours. Check the crop, focus and lighting.",
+    "Die Ziffern werden seit mindestens 40 Minuten nicht sicher erkannt. Prüfe Bildausschnitt, Fokus und Beleuchtung.": "Digits have not been read reliably for at least 40 minutes. Check the crop, focus and lighting.",
     "Gesicherten Ausschnitt wiederherstellen": "Restore the backed-up crop",
     "Gesicherter Ausschnitt wiederhergestellt.": "The backed-up crop has been restored.",
     "Automatische Neukalibrierung ist ausgeschaltet.": "Automatic recalibration is disabled.",
@@ -344,8 +344,8 @@ EN_UI = {
     "Gefundenen Rahmen mit der normalen Prüfung gegenprüfen …": "Cross-checking the crop with the regular OCR check …",
     "Selbsteinrichtung fehlgeschlagen. Prüfe Bildausschnitt, Kamerawinkel und Beleuchtung.":
         "Automatic setup failed. Check the crop, camera angle and lighting.",
-    "Nachjustierung nach vier Minuten beendet. Der bisherige Rahmen bleibt gültig.":
-        "Automatic realignment ended after four minutes. The previous crop stays in use.",
+    "Nachjustierung nach zehn Minuten beendet. Der bisherige Rahmen bleibt gültig.":
+        "Automatic realignment ended after ten minutes. The previous crop stays in use.",
     "Selbsteinrichtung nach 15 Minuten beendet. Keine Einstellung sicher bestätigt.":
         "Automatic setup ended after 15 minutes without finding a reliable crop and rotation.",
     "Selbsteinrichtung gestoppt.": "Automatic setup stopped.",

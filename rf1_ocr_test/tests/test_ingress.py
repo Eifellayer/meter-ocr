@@ -303,7 +303,7 @@ class IngressTests(IngressFixture):
         self.assertEqual("Die App beobachtet, ob die Erkennungsprobleme anhalten.", status["geometry_warning"])
         self.history.write_text(json.dumps({"geometry_recovery": {"failures": 3, "first_failure_at": 100, "scheduled_at": 7300}}))
         status = json.loads(self.request("/automatic")[0])
-        self.assertIn("seit mindestens zwei Stunden nicht sicher erkannt", status["geometry_warning"])
+        self.assertIn("seit mindestens 40 Minuten nicht sicher erkannt", status["geometry_warning"])
 
     def test_one_digit_search_proposes_and_save_updates_only_boxes(self):
         self.source_selected = True

@@ -2,8 +2,20 @@
 
 ## 0.4.2
 
+Ausgelöst am 21.11.2026: Nach einem Werksreset lief die Einrichtung in den Timeout, die Automatik las nichts mehr. Nachgestellt mit echten Kamerabildern.
+
+- **Rahmen folgen dem Zähler statt einem gleichmäßigen Raster:** Die roten Nachkommarollen stehen weiter auseinander als die schwarzen, und eine schräg hängende Kamera vergrößert den Abstand zusätzlich. Die Rahmen bekommen jetzt ein eigenes Raster mit wachsendem Ziffernabstand, werden nach rechts breiter und folgen einer leicht ansteigenden Zeile. Rollen ohne lesbare Ziffer (Spiegelung, Rolle dreht gerade) setzt das Raster, nicht mehr ein gleichmäßiger Abstand.
+- **Letzte Rolle nicht mehr am Bildrand:** Der Ausschnitt des Zählwerks endete genau an der letzten Rolle, ihr Rahmen saß auf der Kante. Der Ausschnitt lässt jetzt links und rechts Platz.
+- **Rahmen sitzen in der Höhe auf den Ziffern:** Ein zu hoch sitzender Rahmen zeigte die helle Fensterkante über einer unten abgeschnittenen Ziffer. Die Texterkennung las dann eine 1 als 4 („40501“ statt „10501“, im Protokoll der Nacht vielfach zu sehen). Die Höhe jedes Rahmens wird jetzt an den Ziffernstrichen ausgerichtet.
+- **Einrichtung, während eine Rolle dreht oder zwischen zwei Ziffern steht:** Fließt Gas (oder bleibt die zweite Nachkommarolle genau zwischen zwei Ziffern stehen), zählt ein Bild trotzdem, wenn alle anderen Stellen übereinstimmen. Nach vier solchen Bildern wird der Ausschnitt vorläufig gespeichert, statt nach 20 Minuten abzubrechen.
+- **Kein verschobener Rahmen mehr durch drehende Rollen:** Las die Einrichtung eine Stelle erst in einem leicht verschobenen Rahmen, wurde dieser verschobene Rahmen gespeichert. Bei einer drehenden Rolle zeigte er die nächste Ziffer und saß danach dauerhaft daneben. Die gelesene Ziffer zählt weiter, der Rahmen bleibt an seinem Platz.
+- **Einrichtung deutlich schneller:** Die Ziffern einer Zeile werden nebeneinander gelesen (je Prozessorkern eine, höchstens vier). Liest das gefundene Zählwerk vollständig, entfallen die übrigen Kandidaten und der Winkelvergleich für dieses Bild (vorher 18 Lesungen je Bild, jetzt 5).
+- **Zählwerk wird auch gefunden, wenn zwei oder drei Nachkommarollen gerade drehen.**
+- **Unmögliche führende Ziffer wird nicht mehr geglaubt:** Zwischen dem letzten bestätigten Stand und dem höchstmöglichen Stand stehen die vorderen Ziffern fest. Liest die Texterkennung dort genau eine andere Ziffer und stimmen mindestens zwei weitere, wird die Stelle aus dem möglichen Bereich ergänzt.
+- **Selbstreparatur, die auf kleinen Rechnern wirklich fertig wird:** Sie startet nach 40 Minuten fehlgeschlagener Lesungen (vorher zwei Stunden), hat zehn Minuten und 40 Versuche (vorher vier Minuten und 20, das waren zwei Bilder), bestätigt wie die Einrichtung mit zwei Nachkommastellen und versucht es alle zwei Stunden erneut, solange die Lesungen scheitern.
 - **Ein besserer Rahmen behält seinen besten Wert:** Las derselbe Rahmen auf einem späteren Bild schlechter, wurde sein früherer, besserer Prozentwert überschrieben (z. B. auf 75 %) und er rutschte in der Kandidatenliste nach hinten oder fiel heraus. Jetzt zählt der beste Wert über alle Bilder; nur die Zusatzprüfung mit weiteren Leseprofilen auf demselben Bild darf ihn noch senken.
-- **Treffer auch mit einer Nachkommastelle weniger:** Läuft Gas, dreht die zweite Nachkommastelle oft gerade. Lesen beide Leseprofile alle Vorkommastellen und eine Nachkommastelle gleich (z. B. 10494,2), zählt das jetzt als Treffer für das Zählwerk in der Kandidatenliste und bei der Wahl des besten Rahmens. Die Bestätigung der Einrichtung bleibt vorerst bei der bisherigen Regel.
+- **Treffer auch mit einer Nachkommastelle weniger:** Lesen beide Leseprofile alle Vorkommastellen und eine Nachkommastelle gleich (z. B. 10494,2), zählt das als Treffer für das Zählwerk in der Kandidatenliste und bei der Wahl des besten Rahmens.
+- **Kein Dauer-Warnhinweis im 7-Ziffern-Betrieb:** Solange die 8. Ziffer im Hintergrund gesucht wird, gilt der Vergleich von zwei der drei Nachkommastellen als Normalbetrieb.
 
 ## 0.4.1
 

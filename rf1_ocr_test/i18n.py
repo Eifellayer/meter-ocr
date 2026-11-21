@@ -89,6 +89,18 @@ EN_UI = {
     "Gerader Ausschnitt mit Ziffernrahmen": "Aligned crop with digit boxes",
     "Demo-Bild wird geprüft …": "Reading the demo image …",
     "Für Automatik speichern": "Save for automatic checks",
+    "Probiere die Erkennung ohne eigene Kamera. Deine echte Einrichtung und Verbrauchsdaten bleiben getrennt.":
+        "Try the recognition without a camera of your own. Your real setup and consumption data stay separate.",
+    "Echte Kamerabilder eines Gaszählers, gelesen wie bei der automatischen Prüfung. Zu sehen ist nur das Zählwerk; alles andere ist übermalt.":
+        "Real camera pictures of a gas meter, read the way the automatic check does. Only the register is visible; everything else is painted over.",
+    "Echtes Bild 1": "Real picture 1", "Echtes Bild 2": "Real picture 2",
+    "Echtes Bild 3": "Real picture 3", "Echtes Bild 4": "Real picture 4",
+    "Künstliches Zählerbild:": "Generated meter picture:",
+    "Zählerbild der Demo": "Meter picture of the demo",
+    "Alle geprüften Ziffern erkannt. ": "All checked digits recognised. ",
+    "Mindestens eine Ziffer blieb offen. ": "At least one digit stayed open. ",
+    "Die letzte Rolle dreht sich ständig und wird wie im Betrieb nicht gelesen (grauer Rahmen).":
+        "The last roller turns all the time and, as in operation, is not read (grey frame).",
     "Ziffernrahmen an diesem Bild korrigieren": "Correct digit boxes on this image",
     "Bisher gelesen: ": "Read so far: ",
     "Für manuellen Test speichern": "Save for the manual test",
@@ -100,6 +112,9 @@ EN_UI = {
     "Diesen Hinweis dauerhaft ausblenden": "Hide this note permanently",
     "Hinweis „Bildqualität bestimmt die Dauer“ ausblenden": "Hide the note “image quality determines the duration”",
     "Systemauslastung": "System load",
+    "Schattenmodus und Arbeit im Hintergrund": "Shadow mode and background work",
+    "Was Experimente im Schattenmodus und die Arbeit in der Wartezeit geliefert haben. Beides ändert nie den Zählerstand. Gezählt wird aus dem Debug-Protokoll.":
+        "What experiments in shadow mode and the work in the waiting time delivered. Neither ever changes the meter reading. Counted from the debug log.",
     "Auslastung des Geräts und Anteil dieser App. Die Texterkennung zählt zur App. Die Werte gelten für die letzten Sekunden.":
         "Load of the device and the share of this app. Text recognition counts towards the app. The values cover the last few seconds.",
     "Prozessor gesamt": "Processor, total",

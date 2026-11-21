@@ -321,6 +321,25 @@ class IngressTests(IngressFixture):
         status = json.loads(self.request("/automatic")[0])
         self.assertIn("seit mindestens 40 Minuten nicht sicher erkannt", status["geometry_warning"])
 
+    def test_demo_offers_real_pictures_and_needs_the_worker_for_them(self):
+        page = self.request("/")[0]
+        self.assertEqual(4, page.count('class="run-demo-real"'))
+        # This test panel has no worker behind it: the real pictures are refused, not faked.
+        self.assertEqual(503, self.submit("/zaehler-demo", picture="1")[0])
+
+    def test_extended_view_reports_shadow_mode_and_background_work(self):
+        page = self.request("/")[0]
+        self.assertIn('id="background-work"', page)
+        with patch.object(panel.debug_log, "read_text", return_value=json.dumps(
+                {"kind": "automatic", "time": "t", "experiment": {
+                    "stable": "12.3", "seven_segment": {"reading": "123", "seconds": 0.1}}})):
+            overview = json.loads(self.request("/hintergrund")[0])
+            english = json.loads(self.request("/hintergrund?lang=en")[0])
+        self.assertEqual((1, 1), (overview["checks"], overview["experiments"]["seven_segment"]["same"]))
+        self.assertEqual("Digitalanzeige: Segmente direkt lesen", overview["experiments"]["seven_segment"]["label"])
+        self.assertNotEqual(overview["experiments"]["seven_segment"]["label"],
+                            english["experiments"]["seven_segment"]["label"])
+
     def test_manual_test_can_be_started_at_the_top_and_shows_digits_while_reading(self):
         page = self.request("/")[0]
         top = page.index('id="start-check-top"')

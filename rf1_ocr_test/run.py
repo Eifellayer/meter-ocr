@@ -56,6 +56,7 @@ from checks import (without_light, unclear_trailing_decimals, last_two_compared_
                     REDUCED_PRECISION_NOTICE, REDUCED_PRECISION2_NOTICE, MOVING_DIGITS_NOTICE, only_last_compared_unclear)
 import debug_log
 import experiments
+import demo
 import idle_work
 import system_monitor
 import read_plan
@@ -2341,6 +2342,7 @@ def main():
         skip_setup=skip_setup,
         discover_sources=partial(discover_ha_sources, token),
         get_wizard_image=partial(wizard_camera_preview, token=token, zone=zone),
+        real_demo=partial(demo.run_real_demo, select=select_register, read=read_visible_digits),
         get_activity=get_automatic_activity,
         get_auto_paused=get_auto_paused, save_auto_paused=save_auto_paused,
         settings_lock=settings_lock, get_calibration=calibration_status, control_calibration=control_calibration,

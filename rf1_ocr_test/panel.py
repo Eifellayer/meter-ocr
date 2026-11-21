@@ -24,6 +24,7 @@ from app_channel import APP_NAME, NAMESPACE
 import bug_report
 import status_view
 import system_monitor
+import background_view
 from auto_rules import frames_locked, user_frames
 import debug_log
 
@@ -928,6 +929,11 @@ name: Zählerstand (OCR)</code></pre>
 <div><dt>Temperatur</dt><dd id="system-temperature">–</dd></div>
 </dl>
 </details>
+<details id="background-work">
+<summary>Schattenmodus und Arbeit im Hintergrund</summary>
+<p class="settings-note">Was Experimente im Schattenmodus und die Arbeit in der Wartezeit geliefert haben. Beides ändert nie den Zählerstand. Gezählt wird aus dem Debug-Protokoll.</p>
+<ul class="background-work" id="background-work-list"><li>–</li></ul>
+</details>
 <div class="manual-test-area" id="manual-test-area" {manual_area_hidden}>
 <div class="manual-test-heading"><h2>Manueller Test</h2>
 <button type="submit" form="manual-form" id="start-check-top">Jetzt prüfen</button>
@@ -1451,7 +1457,15 @@ Bei anhaltenden Problemen benachrichtigen
 </div>
 <dialog class="setup-dialog" id="demo-dialog" aria-labelledby="demo-title">
 <div class="dialog-heading"><h2 id="demo-title">Zähler-Demo</h2><button type="button" id="close-demo">Schließen</button></div>
-<p>Probiere die Erkennung mit einem künstlichen Gaszählerbild. Deine echte Einrichtung und Verbrauchsdaten bleiben getrennt.</p>
+<p>Probiere die Erkennung ohne eigene Kamera. Deine echte Einrichtung und Verbrauchsdaten bleiben getrennt.</p>
+<p class="settings-note">Echte Kamerabilder eines Gaszählers, gelesen wie bei der automatischen Prüfung. Zu sehen ist nur das Zählwerk; alles andere ist übermalt.</p>
+<div class="crop-actions">
+<button type="button" class="run-demo-real" data-picture="1">Echtes Bild 1</button>
+<button type="button" class="run-demo-real" data-picture="2">Echtes Bild 2</button>
+<button type="button" class="run-demo-real" data-picture="3">Echtes Bild 3</button>
+<button type="button" class="run-demo-real" data-picture="4">Echtes Bild 4</button>
+</div>
+<p class="settings-note">Künstliches Zählerbild:</p>
 <div class="crop-actions">
 <button type="button" id="run-demo-clear">Schräges Bild prüfen</button>
 <button type="button" id="run-demo-glare">Spiegelung ausprobieren</button>
@@ -1460,7 +1474,7 @@ Bei anhaltenden Problemen benachrichtigen
 <div id="demo-results" hidden>
 <p id="demo-reading"></p><p id="demo-estimate"></p>
 <div class="demo-grid">
-<figure><img id="demo-original" alt="Schräges künstliches Zählerbild"><figcaption>Originalbild</figcaption></figure>
+<figure><img id="demo-original" alt="Zählerbild der Demo"><figcaption>Originalbild</figcaption></figure>
 <figure><img id="demo-aligned" alt="Gerader Ausschnitt mit Ziffernrahmen"><figcaption>Ausgerichteter Ausschnitt</figcaption></figure>
 </div>
 </div>
@@ -1607,13 +1621,13 @@ document.querySelector('#close-demo').addEventListener('click', () => demoDialog
 demoDialog.addEventListener('close', () => {{
   if (closeDemoToSetup) document.querySelector('#open-demo-setup').focus();
 }});
-async function checkDemo(reflection) {{
+async function checkDemo(reflection, picture = '') {{
   const buttons = demoDialog.querySelectorAll('.crop-actions button');
   buttons.forEach(button => button.disabled = true);
   demoResults.hidden = true;
   demoStatus.textContent = 'Demo-Bild wird geprüft …';
   try {{
-    const fields = new URLSearchParams({{csrf: '{csrf}', lang, reflection: reflection ? '1' : '0'}});
+    const fields = new URLSearchParams({{csrf: '{csrf}', lang, reflection: reflection ? '1' : '0', picture}});
     let reply = await fetch('zaehler-demo', {{method: 'POST', body: fields}}).catch(() => null);
     if (!reply || !reply.ok) {{
       // The machine may be busy with a check or a setup: one quiet second try.
@@ -1627,7 +1641,9 @@ async function checkDemo(reflection) {{
     document.querySelector('#demo-aligned').src = 'data:image/jpeg;base64,' + result.aligned;
     document.querySelector('#demo-reading').textContent =
       'Abgelesen ' + result.reading + ' m³ · Drehung ' + result.angle + '° · ' +
-      (result.reading === result.expected ? 'Alle Ziffern erkannt.' :
+      (result.real ? (result.complete ? 'Alle geprüften Ziffern erkannt. ' : 'Mindestens eine Ziffer blieb offen. ') +
+         'Die letzte Rolle dreht sich ständig und wird wie im Betrieb nicht gelesen (grauer Rahmen).' :
+       result.reading === result.expected ? 'Alle Ziffern erkannt.' :
        'Mindestens eine Ziffer blieb offen.');
     document.querySelector('#demo-estimate').textContent = result.estimate ?
       'Aus einem Beispiel-Referenzwert geschätzt: ' + result.estimate + ' m³.' : '';
@@ -1640,6 +1656,8 @@ async function checkDemo(reflection) {{
   }}
 }}
 document.querySelector('#run-demo-clear').addEventListener('click', () => checkDemo(false));
+for (const button of document.querySelectorAll('.run-demo-real'))
+  button.addEventListener('click', () => checkDemo(false, button.dataset.picture));
 document.querySelector('#run-demo-glare').addEventListener('click', () => checkDemo(true));
 const resetDialog = document.querySelector('#reset-dialog');
 const resetForm = document.querySelector('#reset-form');
@@ -3732,6 +3750,45 @@ async function refreshSystemMonitor() {{
     set('#system-cpu', lang === 'en' ? 'Could not be loaded.' : 'Konnte nicht geladen werden.');
   }}
 }}
+async function refreshBackgroundWork() {{
+  const list = document.querySelector('#background-work-list');
+  const en = lang === 'en';
+  const rows = [];
+  try {{
+    const response = await fetch('hintergrund?lang=' + lang, {{cache: 'no-store'}});
+    if (!response.ok) throw Error();
+    const data = await response.json();
+    rows.push((en ? 'Automatic checks in the log: ' : 'Automatische Prüfungen im Protokoll: ') + data.checks);
+    for (const tested of Object.values(data.experiments)) {{
+      rows.push(tested.label + ': ' + (!tested.runs
+        ? (en ? 'no run yet (switch it on under Settings)' : 'noch kein Lauf (unter Einstellungen einschalten)')
+        : tested.runs + (en ? ' runs · same as the check: ' : ' Läufe · gleich wie die Prüfung: ') + tested.same +
+          (en ? ' · different: ' : ' · anders: ') + tested.different +
+          (en ? ' · unclear: ' : ' · unklar: ') + tested.unclear +
+          (en ? ' · no result: ' : ' · ohne Ergebnis: ') + tested.no_result +
+          (tested.errors ? (en ? ' · errors: ' : ' · Fehler: ') + tested.errors : '') +
+          (tested.seconds == null ? '' : (en ? ' · on average ' : ' · im Schnitt ') +
+            String(tested.seconds).replace('.', en ? '.' : ',') + ' s')));
+    }}
+    if (data.skipped_busy) rows.push((en ? 'Skipped because the device was busy: ' : 'Wegen Auslastung übersprungen: ') + data.skipped_busy);
+    const idle = data.idle;
+    rows.push(!idle.runs
+      ? (en ? 'Waiting time: nothing to do so far.' : 'Wartezeit: bisher nichts zu tun.')
+      : (en ? 'Waiting time: ' : 'Wartezeit: ') + idle.runs + (en ? ' jobs · unclear digits read again: ' : ' Arbeiten · unklare Ziffern nochmals gelesen: ') +
+        idle.reread + (en ? ', readable: ' : ', davon lesbar: ') + idle.resolved +
+        (en ? ' · experiments caught up: ' : ' · Experimente nachgeholt: ') + idle.experiments);
+  }} catch (_) {{
+    rows.push(en ? 'Could not be loaded.' : 'Konnte nicht geladen werden.');
+  }}
+  list.replaceChildren(...rows.map(text => {{
+    const item = document.createElement('li');
+    item.textContent = text;
+    return item;
+  }}));
+}}
+document.querySelector('#background-work').addEventListener('toggle', event => {{
+  if (event.target.open) refreshBackgroundWork();
+}});
 document.querySelector('#system-monitor').addEventListener('toggle', event => {{
   clearInterval(systemMonitorTimer);
   if (!event.target.open) return;
@@ -4055,7 +4112,7 @@ def start_panel(
     request_factory_reset=None, get_reset_status=None, skip_setup=None, get_activity=None,
     get_auto_paused=None, save_auto_paused=None, discover_sources=None,
     settings_lock=None, get_calibration=None, control_calibration=None, get_calibration_image=None,
-    has_calibration_backup=None, get_wizard_image=None, statistics_zone=timezone.utc,
+    has_calibration_backup=None, get_wizard_image=None, real_demo=None, statistics_zone=timezone.utc,
     can_start_automatic=None, start_automatic_check=None,
 ):
     images = {"/aktuell.jpg": current_image, "/treffer.jpg": good_image,
@@ -4407,6 +4464,13 @@ def start_panel(
                     self.send_error(404)
                 else:
                     self.reply(content, "image/jpeg")
+                return
+            if path == "/hintergrund":
+                overview = background_view.summary(debug_log.read_text())
+                if language == "en":
+                    for tested in overview["experiments"].values():
+                        tested["label"] = EN_UI.get(tested["label"], tested["label"])
+                self.reply(json.dumps(overview).encode("utf-8"), "application/json")
                 return
             if path == "/systemstatus":
                 self.reply(json.dumps(system_monitor.snapshot()).encode("utf-8"), "application/json")
@@ -5020,7 +5084,12 @@ def start_panel(
                     problem(503)
                     return
                 try:
-                    result = run_demo(field("reflection") == "1")
+                    picture = field("picture")
+                    if picture and real_demo is None:
+                        problem(503)
+                        return
+                    result = (real_demo(int(picture)) if picture.isdigit()
+                              else run_demo(field("reflection") == "1"))
                     self.reply(json.dumps(result).encode("utf-8"), "application/json")
                 except (OSError, ValueError, subprocess.SubprocessError):
                     problem(503)

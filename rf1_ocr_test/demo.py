@@ -1,6 +1,7 @@
 """Local OCR demonstration with a generated meter and no live inputs."""
 
 import base64
+from pathlib import Path
 from io import BytesIO
 import time
 
@@ -69,4 +70,61 @@ def run_demo(reflection=False):
     hidden = 1 if reflection else 0
     if result.count("?") <= hidden and time.monotonic() < deadline:
         _complete[reflection] = answer
+    return answer
+
+
+# --- Real camera pictures (0.5.0) -------------------------------------------------------
+# Four pictures of a real gas meter. Only the register window is left; serial number, bar
+# code and the rest of the meter are painted over. The frames below are what the app's own
+# setup found on these pictures.
+REAL_IMAGES = Path(__file__).parent / "demo_images"
+REAL_COUNT = 4
+REAL_LAYOUT = {"box": (195, 190, 666, 369), "width": 286, "rotation": -11,
+               "digit_boxes": [[50, 375, 127, 603], [155, 378, 231, 603], [268, 378, 348, 599],
+                               [372, 378, 453, 599], [473, 386, 557, 599], [594, 386, 684, 596],
+                               [718, 386, 805, 596], [853, 390, 944, 592]]}
+REAL_DECIMALS = 2  # the last roller turns all the time; the routine check does not read it either
+_real_complete = {}
+
+
+def _jpeg(picture):
+    with BytesIO() as buffer:
+        picture.save(buffer, "JPEG", quality=90)
+        return base64.b64encode(buffer.getvalue()).decode()
+
+
+def run_real_demo(number, select, read):
+    """Read one of the real pictures the way the automatic check does.
+
+    ``select`` and ``read`` are the app's own ``select_register`` and ``read_visible_digits``
+    (handed in by the worker; this module must not import it).
+    """
+    if type(number) is not int or not 1 <= number <= REAL_COUNT:
+        raise ValueError("unbekanntes Demobild")
+    if number in _real_complete:
+        return _real_complete[number]
+    with Image.open(REAL_IMAGES / f"gas-{number}.png") as stored:
+        strip = stored.convert("RGB")
+    frame = Image.new("RGB", (800, 600), (188, 190, 196))
+    frame.paste(strip, (150, 150))
+    register, width, whole_boxes, fraction_boxes, _ = select(
+        frame, None, REAL_LAYOUT["box"], REAL_LAYOUT["width"], REAL_LAYOUT["rotation"], 5, 3,
+        digit_boxes=REAL_LAYOUT["digit_boxes"])
+    deadline = time.monotonic() + DEMO_SECONDS
+    reads = [str(read(register, width, whole_boxes, fraction_boxes, False, "auto", profile=profile,
+                      whole_digits=5, fraction_digits=REAL_DECIMALS, deadline=deadline, prefer_boxes=True))
+             for profile in OCR_PROFILES[:2]]
+    result = "".join(a if a == b else "?" for a, b in zip(*reads)) if len(set(map(len, reads))) == 1 else reads[0]
+    digits = result.replace(".", "")
+    marked = register.copy()
+    overlay = ImageDraw.Draw(marked)
+    for index, box in enumerate([*whole_boxes, *fraction_boxes]):
+        skipped = index >= len(digits)
+        overlay.rectangle(tuple(box), width=2, outline="#8a97a0" if skipped else
+                          "#e9ac47" if digits[index] == "?" else "#6ee7ae")
+    answer = {"image": _jpeg(strip), "aligned": _jpeg(marked), "reading": result, "attempts": reads,
+              "angle": REAL_LAYOUT["rotation"], "expected": None, "estimate": None, "real": True,
+              "complete": "?" not in result}
+    if answer["complete"] and time.monotonic() < deadline:
+        _real_complete[number] = answer
     return answer

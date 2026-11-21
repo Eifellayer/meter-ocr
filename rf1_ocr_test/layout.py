@@ -193,6 +193,58 @@ def find_raw_digit_row(frame, whole_digits, fraction_digits):
     return rows[0][0]
 
 
+def slot_positions(slots, centers, limit=.045):
+    """Fit roller centres with a pitch that may grow or shrink evenly along the row.
+
+    A camera that looks at the register from the side (and the wider red decimal rollers)
+    makes the digit distance change from one end to the other. A uniform grid then misses
+    the outer rollers by a fifth of a digit. Returns ``position(slot)`` and ``pitch(slot)``;
+    the change per slot is limited to ``limit`` of the mean pitch.
+    """
+    count = len(slots)
+    if count < 2 or slots[-1] == slots[0]:
+        raise ValueError("at least two different slots are required")
+    mean = (centers[-1] - centers[0]) / (slots[-1] - slots[0])
+    growth = 0.0
+    if count >= 4:
+        # Least squares for centre = a + b * slot + c * slot²; c is half the pitch change per slot.
+        n = float(count)
+        sx = sum(slots); sx2 = sum(k ** 2 for k in slots); sx3 = sum(k ** 3 for k in slots)
+        sx4 = sum(k ** 4 for k in slots)
+        sy = sum(centers); sxy = sum(k * y for k, y in zip(slots, centers))
+        sx2y = sum(k * k * y for k, y in zip(slots, centers))
+        rows = [[n, sx, sx2, sy], [sx, sx2, sx3, sxy], [sx2, sx3, sx4, sx2y]]
+        try:
+            for i in range(3):
+                pivot = max(range(i, 3), key=lambda r: abs(rows[r][i]))
+                if abs(rows[pivot][i]) < 1e-9:
+                    raise ZeroDivisionError
+                rows[i], rows[pivot] = rows[pivot], rows[i]
+                for r in range(3):
+                    if r != i:
+                        factor = rows[r][i] / rows[i][i]
+                        rows[r] = [a - factor * b for a, b in zip(rows[r], rows[i])]
+            growth = 2 * rows[2][3] / rows[2][2]
+        except ZeroDivisionError:
+            growth = 0.0
+        growth = max(-limit * mean, min(limit * mean, growth))
+    # With the (limited) growth fixed, fit offset and base pitch linearly.
+    reduced = [y - growth * k * k / 2 for k, y in zip(slots, centers)]
+    mk = sum(slots) / count
+    my = sum(reduced) / count
+    spread = sum((k - mk) ** 2 for k in slots)
+    base = sum((k - mk) * (y - my) for k, y in zip(slots, reduced)) / spread
+    offset = my - base * mk
+
+    def position(slot):
+        return offset + base * slot + growth * slot * slot / 2
+
+    def pitch(slot):
+        return max(.6 * mean, min(1.5 * mean, base + growth * slot))
+
+    return position, pitch
+
+
 def bright_glyphs(gray, stroke):
     """White top-hat: glyph strokes brighter than their local surroundings, independent of uneven light."""
     from PIL import ImageChops, ImageFilter
@@ -266,26 +318,37 @@ def find_glyph_register(frame, count, with_tilt=False):
             slots.append(slots[-1] + step)
             centers = [(b[0] + b[2]) / 2 for b in chain]
             pitch = (centers[-1] - centers[0]) / slots[-1]
-        if pitch is None or len(chain) < max(3, count - 2) or slots[-1] < count - 2:
+        # Up to three end rollers may be missing (glare, decimal rollers turning while gas flows),
+        # as long as most of the row is visible.
+        allowed = 3 if count >= 7 else 2
+        if pitch is None or len(chain) < max(3, count - allowed) or slots[-1] < count - 1 - allowed:
             continue
         missing = count - 1 - slots[-1]
-        first = (chain[0][0] + chain[0][2]) / 2
-        last = (chain[-1][0] + chain[-1][2]) / 2
+        position, local_pitch = slot_positions(slots, [(b[0] + b[2]) / 2 for b in chain])
+        first_slot, last_slot = 0, slots[-1]
         # A slot missing at an end (glare, half-turned roller): extend towards the darker side.
         for _ in range(missing):
-            left_cell = (round(first - 1.5 * pitch), chain[0][1], round(first - .5 * pitch), chain[0][3])
-            right_cell = (round(last + .5 * pitch), chain[-1][1], round(last + 1.5 * pitch), chain[-1][3])
+            first, last = position(first_slot), position(last_slot)
+            before, after = local_pitch(first_slot - 1), local_pitch(last_slot + 1)
+            left_cell = (round(first - 1.5 * before), chain[0][1], round(first - .5 * before), chain[0][3])
+            right_cell = (round(last + .5 * after), chain[-1][1], round(last + 1.5 * after), chain[-1][3])
             if darkness(left_cell) < darkness(right_cell):
-                first -= pitch
+                first_slot -= 1
             else:
-                last += pitch
+                last_slot += 1
+        first, last = position(first_slot), position(last_slot)
         top = min(box[1] for box in chain)
         bottom = max(box[3] for box in chain)
         glyph = median(box[3] - box[1] for box in chain)
         margin = .35 * glyph
-        bounds = (first - .5 * pitch, top - margin, last + .5 * pitch, bottom + margin)
-        if bounds[0] < 0 or bounds[2] > width or bounds[1] < 0 or bounds[3] > height:
+        # The outer rollers need room: with the local digit distance and a little reserve the
+        # last frame no longer sits on the edge of the cut-out (0.5.0).
+        left_edge = first - .62 * local_pitch(first_slot)
+        right_edge = last + .62 * local_pitch(last_slot)
+        if (first - .4 * local_pitch(first_slot) < 0 or last + .4 * local_pitch(last_slot) > width
+                or top - margin < 0 or bottom + margin > height):
             continue
+        bounds = (max(0, left_edge), top - margin, min(width, right_edge), bottom + margin)
         # Bright digits sit in a dark window: reject bright gaps between dark print on a light label.
         contrasts = []
         for box in chain:
@@ -419,23 +482,153 @@ def dark_register_cells(register, count):
                         if best is not None and score <= best[0]:
                             continue
                         glyph_height = median(glyphs[index][3] - glyphs[index][1] for _, index in matched)
-                        boxes = []
-                        matched_centers = dict(matched)
-                        for slot, x in enumerate(grid):
-                            if slot in matched_centers:
-                                x = centers[matched_centers[slot]]
-                            top = max(0, round(middle - .73 * glyph_height))
-                            bottom = min(h, round(middle + .73 * glyph_height))
-                            boxes.append((max(0, round(x - pitch * .36)), top,
-                                          min(w, round(x + pitch * .36)), bottom))
-                        best = score, boxes
+                        best = score, cell_frames(
+                            [slot for slot, _ in matched], [centers[index] for _, index in matched],
+                            vertical, glyph_height, count, pitch, (w, h))
     if best is None:
         return ()
-    return normalize_digit_boxes(recenter_on_glyphs(image, best[1]), image.size)
+    boxes, supported = best[1]
+    # A grid carried by most rollers is more reliable than the stroke mass of a single frame
+    # (comma, glare, half-turned roller): then a frame may only move a little.
+    boxes = recenter_on_glyphs(image, boxes, .1 if supported else .3)
+    return normalize_digit_boxes(level_on_glyphs(image, boxes), image.size)
 
 
-def recenter_on_glyphs(image, boxes):
-    """Move each frame sideways onto the bright glyph it covers.
+def cell_frames(slots, centers, vertical, glyph_height, count, pitch, size):
+    """Frames for all rollers from the matched glyphs: own grid with a changing digit distance.
+
+    Returns the frames and whether the grid is carried by enough rollers. Rollers without a
+    readable glyph (glare, digit turning) are placed by the grid instead of a uniform pitch,
+    frames grow with the local digit distance and follow a slightly rising row.
+    """
+    w, h = size
+    slots, centers, vertical = list(slots), list(centers), list(vertical)
+    try:
+        position, local_pitch = slot_positions(slots, centers)
+        # One or two glyphs merged with a comma or glare pull the fit: drop the worst and fit again.
+        for _ in range(2):
+            if len(slots) < 6:
+                break
+            errors = [abs(center - position(slot)) for slot, center in zip(slots, centers)]
+            worst = max(range(len(errors)), key=errors.__getitem__)
+            if errors[worst] <= .1 * local_pitch(slots[worst]):
+                break
+            trial_slots = slots[:worst] + slots[worst + 1:]
+            trial_centers = centers[:worst] + centers[worst + 1:]
+            if trial_slots[-1] == trial_slots[0]:
+                break
+            position, local_pitch = slot_positions(trial_slots, trial_centers)
+            slots, centers = trial_slots, trial_centers
+            vertical = vertical[:worst] + vertical[worst + 1:]
+    except ValueError:
+        position, local_pitch = (lambda slot: centers[0] + (slot - slots[0]) * pitch), (lambda slot: pitch)
+    supported = len(slots) >= max(4, count - 3)
+    middle = median(vertical)
+    rise = 0.0
+    if len(slots) >= 4:
+        mk = sum(slots) / len(slots)
+        spread = sum((slot - mk) ** 2 for slot in slots)
+        if spread:
+            rise = sum((slot - mk) * (y - middle) for slot, y in zip(slots, vertical)) / spread
+            rise = max(-.03 * h, min(.03 * h, rise))
+            middle_slot = mk
+    known = dict(zip(slots, centers))
+    mean = sum(local_pitch(slot) for slot in range(count)) / count
+    boxes = []
+    for slot in range(count):
+        step = local_pitch(slot)
+        x = position(slot)
+        if slot in known:
+            x += max(-.08 * step, min(.08 * step, known[slot] - x))
+        y = middle + (rise * (slot - middle_slot) if rise else 0)
+        tall = glyph_height * max(1.0, min(1.25, step / mean))
+        boxes.append((max(0, round(x - step * .36)), max(0, round(y - .78 * tall)),
+                      min(w, round(x + step * .36)), min(h, round(y + .78 * tall))))
+    return boxes, supported
+
+
+def robust_line(values):
+    """Line through (slot, value) pairs that ignores a few outliers (median of pairwise slopes)."""
+    slopes = [(b - a) / (j - i) for (i, a), (j, b) in ((p, q) for n, p in enumerate(values) for q in values[n + 1:])]
+    slope = median(slopes) if slopes else 0.0
+    offset = median(value - slope * slot for slot, value in values)
+    return lambda slot: offset + slope * slot
+
+
+def level_on_glyphs(image, boxes):
+    """Set the height of every frame onto the glyph row it covers.
+
+    A frame that sits too high shows the bright window edge above a cut digit: the OCR then
+    reads a 1 as a 4. The digit strokes of each frame give the top and bottom of its glyph; a
+    line through all rollers carries rollers that are turning or hidden by glare (0.5.0).
+    """
+    if len(boxes) < 4:
+        return boxes
+    w, h = image.size
+    first, last = boxes[0], boxes[-1]
+    pitch = (last[0] + last[2] - first[0] - first[2]) / 2 / (len(boxes) - 1)
+    if pitch <= 4:
+        return boxes
+    strokes = bright_glyphs(image.convert("L"), max(3, round(h * .15)))
+    # Rows that are bright nearly everywhere along the register are window edges, not digits.
+    left_end, right_end = max(0, first[0]), min(w, last[2])
+    if right_end - left_end < 8:
+        return boxes
+    band = strokes.crop((left_end, 0, right_end, h)).point(lambda value: 255 if value >= 96 else 0)
+    width = band.width
+    data = band.tobytes()
+    bright_rows = [y for y in range(h) if sum(data[y * width:(y + 1) * width]) >= .45 * 255 * width]
+    edge_rows = {y + offset for y in bright_rows for offset in (-2, -1, 0, 1, 2)}
+    measured = []
+    for slot, (left, top, right, bottom) in enumerate(boxes):
+        tall = bottom - top
+        if tall < 6 or right - left < 4:
+            continue
+        start, stop = max(0, round(top - .45 * tall)), min(h, round(bottom + .45 * tall))
+        cell = strokes.crop((left, start, right, stop))
+        raw = cell.tobytes()
+        rows = [0 if start + y in edge_rows else sum(raw[y * cell.width:(y + 1) * cell.width])
+                for y in range(cell.height)]
+        peak = max(rows, default=0)
+        if peak <= 0:
+            continue
+        level = .22 * peak
+        best = max(range(len(rows)), key=rows.__getitem__)
+        low = high = best
+        gap = max(1, round(tall * .06))
+        while True:
+            below = next((y for y in range(low - 1, max(-1, low - 2 - gap), -1) if rows[y] >= level), None)
+            if below is None:
+                break
+            low = below
+        while True:
+            above = next((y for y in range(high + 1, min(len(rows), high + 2 + gap)) if rows[y] >= level), None)
+            if above is None:
+                break
+            high = above
+        length = high - low + 1
+        if .45 * tall <= length <= 1.05 * tall and low > 0 and high < len(rows) - 1:
+            measured.append((slot, start + low, start + high + 1))
+    if len(measured) < max(4, len(boxes) // 2):
+        return boxes
+    top_line = robust_line([(slot, top) for slot, top, _ in measured])
+    bottom_line = robust_line([(slot, bottom) for slot, _, bottom in measured])
+    levelled = []
+    for slot, (left, top, right, bottom) in enumerate(boxes):
+        glyph_top, glyph_bottom = top_line(slot), bottom_line(slot)
+        tall = glyph_bottom - glyph_top
+        if tall < 6:
+            return boxes
+        margin = max(2, .16 * tall)
+        new_top, new_bottom = max(0, round(glyph_top - margin)), min(h, round(glyph_bottom + margin))
+        if new_bottom - new_top < 6:
+            return boxes
+        levelled.append((left, new_top, right, new_bottom))
+    return levelled
+
+
+def recenter_on_glyphs(image, boxes, limit=.3):
+    """Move each frame sideways onto the bright glyph it covers (at most ``limit`` of the pitch).
 
     Blurred glyphs merge with glare or the roller edge into one component whose centre is off;
     the column profile of the local-contrast image finds the stroke mass instead.
@@ -464,7 +657,7 @@ def recenter_on_glyphs(image, boxes):
             moved.append((left, top, right, bottom))
             continue
         shift = start + best + span / 2 - center
-        shift = round(max(-pitch * .3, min(pitch * .3, shift)))
+        shift = round(max(-pitch * limit, min(pitch * limit, shift)))
         shift = max(-left, min(w - right, shift))
         moved.append((left + shift, top, right + shift, bottom))
     return moved

@@ -1,7 +1,7 @@
 """Bridge the latest matched SLFork picture and reading to Home Assistant."""
 
 import base64
-from concurrent.futures import Future
+from concurrent.futures import Future, ThreadPoolExecutor
 from copy import deepcopy
 from datetime import datetime
 from email.parser import BytesHeaderParser
@@ -897,10 +897,51 @@ def glyph_scores(register, box, polarity, light_digits):
         return {}
 
 
+_digit_pool = None
+_digit_pool_lock = Lock()
+
+
+def digit_workers():
+    """Parallel single-digit reads: one per usable CPU core, at most four."""
+    cores = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count() or 1
+    try:
+        quota, period = Path("/sys/fs/cgroup/cpu.max").read_text().split()
+        if quota != "max":
+            cores = min(cores, max(1, int(quota) // int(period)))
+    except (OSError, ValueError):
+        pass
+    return max(1, min(4, cores))
+
+
+def read_digits_parallel(tasks):
+    """Run the single-digit reads of one row side by side and keep their order.
+
+    Every digit costs several Tesseract starts; on a small machine a row took ten seconds and
+    more. The reads are independent processes, so the cores can share them (0.5.0).
+    ``tasks`` holds callables, or a ready result for a skipped digit.
+    """
+    global _digit_pool
+    pending = [task for task in tasks if callable(task)]
+    workers = digit_workers()
+    if workers < 2 or len(pending) < 2:
+        return [task() if callable(task) else task for task in tasks]
+    with _digit_pool_lock:
+        if _digit_pool is None:
+            _digit_pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="digit")
+        pool = _digit_pool
+    futures = [pool.submit(task) if callable(task) else task for task in tasks]
+    return [item.result() if isinstance(item, Future) else item for item in futures]
+
+
 def read_visible_digits(register, integer_width, whole_boxes, fraction_boxes, light_digits, polarity, *, profile,
                         whole_digits=5, fraction_digits=3, deadline=None, prefer_boxes=False, recognize=None,
-                        whole_range=None, glyphs=True):
+                        whole_range=None, glyphs=True, parallel=None):
+    # Real OCR calls are independent processes and may run side by side; a supplied reader
+    # only when the caller says it is safe for threads.
+    side_by_side = recognize is None if parallel is None else parallel
     recognize = recognize or read_register
+    gather = read_digits_parallel if side_by_side else (
+        lambda tasks: [task() if callable(task) else task for task in tasks])
     if polarity != "auto":
         light_digits = polarity == "light"
 
@@ -920,15 +961,16 @@ def read_visible_digits(register, integer_width, whole_boxes, fraction_boxes, li
     if whole is not None and glared & set(range(whole_digits)):
         whole = None
     if whole is None:
-        cells = ["?" if index in glared else read_digit(register, box, read, trim_vertical=not prefer_boxes)
-                 for index, box in enumerate(whole_boxes)]
+        cells = gather([
+            "?" if index in glared else partial(read_digit, register, box, read, trim_vertical=not prefer_boxes)
+            for index, box in enumerate(whole_boxes)])
         scores = []
         if glyphs and len(whole_boxes) == whole_digits:
             scores = [glyph_scores(register, box, polarity, light_digits) for box in whole_boxes]
             cells = ["?" if index in glared else glyph_match.combine(cell, score)
                      for index, (cell, score) in enumerate(zip(cells, scores))]
         whole = "".join(cells).ljust(whole_digits, "?")
-        if scores and whole_range is not None and "?" in whole:
+        if scores and whole_range is not None:
             whole = glyph_match.anchored_whole(whole, scores, *whole_range)
         if (prefer_boxes and whole_digits >= 4 and whole.count("?") == 1 and len(whole_boxes) == whole_digits
                 and not glared & set(range(whole_digits))):
@@ -948,8 +990,9 @@ def read_visible_digits(register, integer_width, whole_boxes, fraction_boxes, li
                 row = None
             if row and len(row) == whole_digits and all(a == b or a == "?" for a, b in zip(whole, row)):
                 whole = row
-    fraction_cells = ["?" if whole_digits + index in glared else read_digit(register, box, read)
-                      for index, box in enumerate(fraction_boxes[:fraction_digits])]
+    fraction_cells = gather([
+        "?" if whole_digits + index in glared else partial(read_digit, register, box, read)
+        for index, box in enumerate(fraction_boxes[:fraction_digits])])
     if glyphs:
         fraction_cells = ["?" if whole_digits + index in glared
                           else glyph_match.combine(cell, glyph_scores(register, box, polarity, light_digits))
@@ -1996,7 +2039,9 @@ def main():
                 now = time.monotonic()
                 configuration = calibration_configuration_now()
                 rules = configuration[0]
-                simplified = rules["decimals"] == 3 and action in ("setup", "start")
+                # A repair confirms the frames with two decimals like a plain setup: the third
+                # roller (glare, always turning) must not keep a moved camera from being found again.
+                simplified = rules["decimals"] == 3 and action in ("setup", "start", "repair")
                 intensive = action in ("intensive", "relocate_last")
                 if intensive and (rules["fraction_digits"] != 3 or rules["decimals"] != 3):
                     raise ValueError("The meter must display three decimal digits")
@@ -2363,7 +2408,7 @@ def main():
                                 whole_digits=whole, fraction_digits=2 if reduced else fraction,
                                 deadline=deadline if ocr_deadline is None else ocr_deadline,
                                 prefer_boxes=bool(layout.digit_boxes), recognize=cached_digit,
-                                whole_range=glyph_range,
+                                whole_range=glyph_range, parallel=True,
                             )
                             return two_decimal_reading(value) if reduced else value
 

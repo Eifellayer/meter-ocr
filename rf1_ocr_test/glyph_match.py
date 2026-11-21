@@ -230,6 +230,29 @@ def combine(tesseract, scores):
     return tesseract
 
 
+def without_impossible_digit(whole, low, high):
+    """Open one leading digit that no reading between ``low`` and ``high`` can show (0.5.0).
+
+    The leading digits of a meter are fixed for months: between the last confirmed reading and
+    the highest possible one they are the same. A dim, slanted 1 read as 4 ("40501" after
+    "10501") is an OCR error, not a reading. Only a single such digit is opened, and only when
+    at least two other fixed leading digits were read correctly: frames that show something
+    else entirely stay unreadable.
+    """
+    digits = len(whole)
+    first, last = str(max(0, low)).zfill(digits), str(high).zfill(digits)
+    if len(first) != digits or len(last) != digits:
+        return whole
+    fixed = 0
+    while fixed < digits and first[fixed] == last[fixed]:
+        fixed += 1
+    wrong = [index for index in range(fixed) if whole[index] not in ("?", first[index])]
+    right = sum(whole[index] == first[index] for index in range(fixed))
+    if len(wrong) != 1 or right < 2:
+        return whole
+    return whole[:wrong[0]] + "?" + whole[wrong[0] + 1:]
+
+
 def anchored_whole(whole, scores, low, high):
     """Fill unclear whole digits from the only plausible meter readings between ``low`` and ``high``.
 
@@ -239,9 +262,10 @@ def anchored_whole(whole, scores, low, high):
     with several, the template evidence at the unclear positions must clearly favour one.
     Returns the completed string or ``whole`` unchanged.
     """
-    if "?" not in whole or low is None or high is None or high < low:
+    if low is None or high is None or high < low or high - low > 100000:
         return whole
-    if high - low > 100000:
+    whole = without_impossible_digit(whole, low, high)
+    if "?" not in whole:
         return whole
     digits = len(whole)
     open_positions = [index for index, char in enumerate(whole) if char == "?"]

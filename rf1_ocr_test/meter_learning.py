@@ -304,9 +304,13 @@ def suggested_interval(configured, state, source, month):
 
 
 GEOMETRY_REPAIR_FAILURES = 3
-GEOMETRY_REPAIR_SECONDS = 4 * 60
-GEOMETRY_REPAIR_LIMIT = 20
-GEOMETRY_FAILURE_DURATION = 2 * 60 * 60
+# 0.5.0: four minutes and twenty attempts were two images on a small machine and never enough.
+GEOMETRY_REPAIR_SECONDS = 10 * 60
+GEOMETRY_REPAIR_LIMIT = 40
+# A moved camera is searched again after 40 minutes of failed readings (before: two hours),
+# and once more every two hours while the readings keep failing.
+GEOMETRY_FAILURE_DURATION = 40 * 60
+GEOMETRY_REPAIR_REPEAT = 2 * 60 * 60
 
 
 def observe_geometry_failures(state, key, stamp, outcome, *, reading_problem):
@@ -326,7 +330,9 @@ def observe_geometry_failures(state, key, stamp, outcome, *, reading_problem):
         state.update(first_failure_at=stamp, failures=0)
         state.pop("scheduled_at", None)
     state["failures"] = min(GEOMETRY_REPAIR_FAILURES, state["failures"] + 1)
-    if (state["failures"] < GEOMETRY_REPAIR_FAILURES or state.get("scheduled_at")
+    scheduled = state.get("scheduled_at")
+    if (state["failures"] < GEOMETRY_REPAIR_FAILURES
+            or (scheduled and stamp - scheduled < GEOMETRY_REPAIR_REPEAT)
             or stamp - state["first_failure_at"] < GEOMETRY_FAILURE_DURATION):
         return False
     state["scheduled_at"] = stamp

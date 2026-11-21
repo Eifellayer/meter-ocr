@@ -982,7 +982,10 @@ class CalibrationTests(TestCase):
         self.assertEqual(1, len(job.seen))
         self.assertEqual(1, job.confirmations)
         self.assertEqual("10462.84?", job.reference_reading)
-        self.assertEqual(calls[-1], job.candidate.digit_boxes[6])
+        # 0.4.2: the digit read from the nudged frame counts, the frame itself stays where it
+        # was: a turning roller shows the next digit in a moved frame.
+        self.assertEqual((boxes[6][0] + 5, *boxes[6][1:3][:1], boxes[6][2] + 5, boxes[6][3]), calls[-1])
+        self.assertEqual(boxes[6], job.candidate.digit_boxes[6])
 
     def test_marked_interior_reflection_can_confirm_geometry_without_reading(self):
         self.candidates.return_value = [LAYOUT]

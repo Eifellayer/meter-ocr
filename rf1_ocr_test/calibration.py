@@ -52,6 +52,21 @@ HOPELESS_DIGITS = 3
 
 
 
+def agreeing_prefixes(readings, precision, digits):
+    """Precision at which two OCR readings agree: the requested one, or one decimal less (min. 1).
+
+    Returns None if they do not agree. Used for setup hits only: the whole digits and at least
+    one decimal must be sure and identical in both readings (Stefan 20.11., 21:23).
+    """
+    if len(readings) < 2:
+        return None
+    for decimals in (precision, precision - 1) if precision >= 2 else (precision,):
+        first, second = (meter_prefix(value, decimals, digits) for value in readings[:2])
+        if first is not None and first == second:
+            return decimals
+    return None
+
+
 def last_digit_candidates(layout, roll_center=None):
     """Frames for the last roller: settle its horizontal centre first, then move only vertically.
 
@@ -785,6 +800,12 @@ class Calibration:
     # 0.4.0: frames of the same register (±2°, ≥ 80 % overlap) are one group: hits are counted
     # per image for the group, the list shows one entry per group, the best frame is saved.
     groups: list = field(default_factory=list)
+    score_stamps: dict = field(default_factory=dict)
+    # 0.5.0: images on which every required digit but the last one agreed (roller turning or
+    # standing between two digits). They count towards a provisional seven-digit setup.
+    partial_hits: int = 0
+    partial_prefix: int | None = None
+    partial_stamp: float = 0
     rejected: list = field(default_factory=list)
     skews: list = field(default_factory=list)
     current_stamp: float = 0
@@ -900,8 +921,43 @@ class Calibration:
         return self.remaining(now) <= 0
 
     def stationary_crop_ready(self):
-        return (self.simplified and not self.automatic and self.candidate is not None
-                and self.confirmations >= MIN_IMAGES and not (self.anchored or self.advanced))
+        if not self.simplified or self.automatic or self.candidate is None:
+            return False
+        if self.confirmations >= MIN_IMAGES and not (self.anchored or self.advanced):
+            return True
+        # The last required roller stayed between two digits on every image (no gas flowing):
+        # the frames are proven by all other digits, the setup is saved provisionally.
+        return self.partial_hits > 0 and self.confirmations + self.partial_hits >= MIN_IMAGES + 1
+
+    def partial_hit(self, layout, rows, stamp, flow):
+        """Count an image whose required digits all agree except the last one (0.5.0).
+
+        ``rows`` are both readings without the decimal point, cut to the required slots. The
+        partial reading must fit the candidate and may neither fall nor jump implausibly.
+        """
+        if self.candidate is not None and not same_register(layout, self.candidate):
+            return False
+        try:
+            prefix = int(rows[0][:-1])
+        except ValueError:
+            return False
+        litres = prefix * 100  # one decimal less than the two compared decimals: 0.1 m³
+        earlier = None
+        if self.partial_prefix is not None:
+            earlier = self.partial_prefix * 100, self.partial_stamp
+        if "reading_litres" in self.counter:
+            known = self.counter["reading_litres"] // 100 * 100, self.counter.get("timestamp", stamp)
+            earlier = known if earlier is None or known[0] > earlier[0] else earlier
+        if earlier is not None:
+            hours = max(0.0, stamp - earlier[1]) / 3600
+            if litres < earlier[0] or litres - earlier[0] > flow * hours + 200:
+                return False
+        if self.candidate is None:
+            self.candidate = layout
+        self.partial_hits += 1
+        self.partial_prefix, self.partial_stamp = prefix, stamp
+        self.unclear_frames = 0
+        return True
 
     def note_auto_glare(self, frame, coarse, required_rows, required_slots, digits, reference_digits, on_selected):
         """Recognise a digit hidden by a reflection of the light without the user marking it.
@@ -1261,8 +1317,13 @@ class Calibration:
         return None
 
     def retry_digit_slots(self, layout, readings, rules, weak, read_slot, stop,
-                          on_attempt, frame_ceiling, expected=None, *, fine_first=False):
-        """Retry only the designated cells and preserve all other readings."""
+                          on_attempt, frame_ceiling, expected=None, *, fine_first=False, keep_frames=()):
+        """Retry only the designated cells and preserve all other readings.
+
+        A digit read from a nudged frame counts for this image; the frame itself is only adopted
+        for slots outside ``keep_frames``. A roller that is turning shows the next digit in a
+        moved frame: adopting that frame saved a displaced last frame with the setup (0.5.0).
+        """
         whole = rules["integer_digits"]
         rows = [list(str(value).replace(".", "").replace(",", "")) for value in readings]
 
@@ -1314,7 +1375,8 @@ class Calibration:
                     self.attempts += 1
                     digit = read_pair(trial, index, OCR_PROFILES[:2])
                     if digit is not None:
-                        adjusted = trial
+                        if index not in keep_frames:
+                            adjusted = trial
                         break
             if digit is None:
                 return None
@@ -1479,13 +1541,19 @@ class Calibration:
         required_agreement = agreement_percent(readings, sample, precision, digits)
         readable_agreement = agreement_percent(readings, {"reference_required": False}, fraction, digits)
         percentage = min(required_agreement, readable_agreement)
-        prefixes = [meter_prefix(value, precision, digits) for value in readings[:2]]
-        group = self.note_group(layout, readings, prefixes[0] is not None and len(set(prefixes)) == 1,
-                                digits + fraction)
+        prefixes = agreeing_prefixes(readings[:2], precision, digits)
+        group = self.note_group(layout, readings, prefixes is not None, digits + fraction)
         if group is not None:
             group["percent"] = max(group.get("percent", 0), percentage)
         if required_agreement:
-            self.shortlist[layout] = (percentage, round(crop_quality(frame, layout), 2), required_agreement)
+            score = (percentage, round(crop_quality(frame, layout), 2), required_agreement)
+            # Stefan (20.11., 21:24): a frame that read better on an earlier image must keep that score;
+            # a later, worse image of the same frame no longer pushes it down (e.g. to 75 %).
+            previous = self.shortlist.get(layout)
+            if previous is not None and self.score_stamps.get(layout) != self.current_stamp:
+                score = max(score, previous)
+            self.score_stamps[layout] = self.current_stamp
+            self.shortlist[layout] = score
             ranked = sorted(self.shortlist.items(), key=lambda pair: pair[1], reverse=True)
             # Keep every register group with hits in the list (Stefan 20.11., 18:48: a −13° frame with
             # seven hits was pushed out by near-duplicates); near-duplicates only fill free places.
@@ -1562,8 +1630,9 @@ class Calibration:
 
         confirming_followup = self.followup and self.confirmations > 0
         committed = self.confirmations >= 2 or confirming_followup
-        preferred = (self.confirmations == 1 and self.rank_candidates
-                     and (self.full_hits > 0 or self.simplified))
+        partial_only = self.simplified and not self.confirmations and self.partial_hits > 0
+        preferred = ((self.confirmations == 1 or partial_only) and self.candidate is not None
+                     and self.rank_candidates and (self.full_hits > 0 or self.simplified))
         collecting = self.rank_candidates and not (committed or preferred or self.optimizing
                                                     or self.full_hits >= MIN_IMAGES)
         if committed or preferred or self.focused:
@@ -1663,9 +1732,17 @@ class Calibration:
                 continue
             score = score_layout(layout, readings)
             coarse.append((score, layout, readings))
+            # A plain setup reads two decimals: there the row is complete without the third one.
+            # Before 0.5.0 the missing third decimal kept every image from this shortcut, and
+            # each image paid for all other candidates and a full angle comparison.
+            # Only for the meter window found by its row of bright digits: a small label that
+            # happens to read completely must not win against the larger display.
+            short = self.simplified and layout.method == "register_window"
+            shown = precision if short else rules["fraction_digits"]
             if (self.rank_candidates and reliable(score)
-                    and agreement_percent(readings, sample, rules["fraction_digits"], digits) == 100
-                    and not uncertain_slots(readings, digits + rules["fraction_digits"])):
+                    and agreement_percent(readings, sample, shown, digits) == 100
+                    and not uncertain_slots(required_rows(readings) if short else readings,
+                                            digits + shown)):
                 perfect = layout
                 break
             if reliable(score) and layout in (self.known_good_layout, self.candidate):
@@ -1867,6 +1944,7 @@ class Calibration:
                         recovery = self.retry_digit_slots(
                             layout, readings, rules, weak, read_slot, stop, on_refine,
                             frame_ceiling, reference_digits, fine_first=True,
+                            keep_frames=(required_slots - 1,) if self.simplified else (),
                         )
                         if recovery is None and angle_read is not None and not stop():
                             angle_sample = sample if has_reference else {**sample, "reference_required": False}
@@ -1877,6 +1955,14 @@ class Calibration:
                             if trial != layout and reliable(score_layout(trial, values)):
                                 recovery = trial, values
                         if recovery is None:
+                            if (self.simplified and not (self.automatic or self.intensive or self.followup)
+                                    and precision == 2 and weak == [required_slots - 1]
+                                    and self.partial_hit(layout, required_rows(readings), stamp, flow)):
+                                self.note_group(layout, readings, True, digits + rules["fraction_digits"])
+                                if on_selected is not None:
+                                    on_selected(layout, readings)
+                                on_decision("accepted_partial")
+                                return None
                             on_decision("unclear")
                             continue
                         layout, readings = recovery
@@ -1916,6 +2002,7 @@ class Calibration:
                 if stop():
                     return None
                 prefixes = [meter_prefix(value, precision, digits) for value in readings]
+                image_precision = precision
                 if None in prefixes:
                     on_decision("unclear")
                     continue
@@ -1923,9 +2010,10 @@ class Calibration:
                     on_decision("disagree")
                     continue
                 if has_reference:
-                    status, _ = compare_sample(sample, readings[0], precision, integer_digits=digits)
+                    status, _ = compare_sample(sample, readings[0], image_precision, integer_digits=digits)
                     reason = reference_rejection(sample, status)
-                    if reason == "reference_mismatch" and position_error(readings[0], sample, precision, digits):
+                    if reason == "reference_mismatch" and position_error(readings[0], sample, image_precision,
+                                                                         digits):
                         self.reject_region(layout)
                         on_decision("position_error")
                         continue
@@ -1967,7 +2055,7 @@ class Calibration:
                     # the readings of this image.
                     layout = self.candidate
                 anchor = self.counter if same or recovered_slot else baseline or {}
-                counter = accumulate_consumption(anchor, "calibration", stamp, readings[0], precision,
+                counter = accumulate_consumption(anchor, "calibration", stamp, readings[0], image_precision,
                                                 flow, digits)
             except (OSError, ValueError, subprocess.SubprocessError):
                 on_decision(rejection)
@@ -1977,6 +2065,7 @@ class Calibration:
                 self.record_intermediate(layout, readings, sample, precision, digits, rules["fraction_digits"], frame)
             if not same:
                 self.full_hits = 0
+                self.partial_hits, self.partial_prefix = 0, None
                 if layout != perfect:
                     self.stress_weak_slots = []
             digits_read = digits + rules["fraction_digits"]
@@ -2030,7 +2119,7 @@ class Calibration:
             # Preserve a reproducible candidate and test it on the next photograph.
             return None
         if not committed and not stop():
-            if self.simplified and self.candidate is not None and self.confirmations:
+            if self.simplified and self.candidate is not None and (self.confirmations or self.partial_hits):
                 # The seventh roller may be unreadable during a transition.
                 # Hold a once-confirmed crop for up to three fresh images.
                 # An unreadable frame never increases the confirmation count.
@@ -2045,6 +2134,7 @@ class Calibration:
             self.focused = False
             self.confirmations, self.anchored, self.advanced = 0, False, False
             self.full_hits = 0
+            self.partial_hits, self.partial_prefix = 0, None
             if self.rank_candidates and self.optimizing and self.coarse_attempts < COARSE_LIMIT:
                 self.optimizing = False
         return None

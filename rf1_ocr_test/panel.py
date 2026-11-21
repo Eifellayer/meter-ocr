@@ -1139,7 +1139,7 @@ name: Zählerstand (OCR)</code></pre>
 <input type="hidden" name="fine_alignment_option_present" value="1">
 <label class="check-option"><input type="checkbox" name="fine_alignment_enabled" value="1" {wizard_fine_alignment_checked}> Ziffernrahmen langfristig feinjustieren</label>
 <label class="check-option"><input type="checkbox" name="self_repair_enabled" value="1" {wizard_self_repair_checked}> Selbstreparatur bei wiederholten Fehlmessungen</label>
-<p class="settings-note">Die App sucht frühestens nach zwei Stunden anhaltender Erkennungsprobleme einen besseren Rahmen. Probleme nur an der letzten Rolle zählen dabei nicht mit. Der bisherige Rahmen gilt bis zur erfolgreichen Gegenprobe.</p>
+<p class="settings-note">Die App sucht nach etwa 40 Minuten anhaltender Erkennungsprobleme einen besseren Rahmen und versucht es danach alle zwei Stunden erneut. Probleme nur an der letzten Rolle zählen dabei nicht mit. Der bisherige Rahmen gilt bis zur erfolgreichen Gegenprobe.</p>
 </div>
 <div class="setup-help">
 <input type="hidden" name="reflection_option_present" value="1">
@@ -1335,7 +1335,7 @@ name: Zählerstand (OCR)</code></pre>
 <summary>ⓘ Automatik im Hintergrund verbessern</summary>
 <label class="check-option"><input type="checkbox" name="fine_alignment_enabled" value="1" {fine_alignment_checked}> Ziffernrahmen langfristig feinjustieren</label>
 <label class="check-option"><input type="checkbox" name="self_repair_enabled" value="1" {self_repair_checked}> Selbstreparatur bei wiederholten Fehlmessungen</label>
-<p>Die App sucht frühestens nach zwei Stunden anhaltender Erkennungsprobleme einen besseren Rahmen. Probleme nur an der letzten Rolle zählen dabei nicht mit. Der bisherige Rahmen gilt bis zur erfolgreichen Gegenprobe.</p>
+<p>Die App sucht nach etwa 40 Minuten anhaltender Erkennungsprobleme einen besseren Rahmen und versucht es danach alle zwei Stunden erneut. Probleme nur an der letzten Rolle zählen dabei nicht mit. Der bisherige Rahmen gilt bis zur erfolgreichen Gegenprobe.</p>
 <label class="check-option"><input type="checkbox" name="adaptive_interval_enabled" value="1" {adaptive_interval_checked}> Prüfintervall an den Verbrauch anpassen (früher prüfen, wenn eine Rolle bald umspringt)</label>
 </details>
 <details class="help setup-help experiments-box" id="experiments-settings">
@@ -2852,7 +2852,7 @@ function refreshCalibration(status) {{
     saved_without_verification: 'Rahmen ohne Gegenprobe übernommen. Spätere Ablesungen können ungenauer sein.',
     failed: 'Selbsteinrichtung fehlgeschlagen. Prüfe Bildausschnitt, Kamerawinkel und Beleuchtung.',
     image_timeout: 'Kein neues Kamerabild erhalten. Prüfe die Bildquelle.',
-    timeout: status.automatic ? 'Nachjustierung nach vier Minuten beendet. Der bisherige Rahmen bleibt gültig.' :
+    timeout: status.automatic ? 'Nachjustierung nach zehn Minuten beendet. Der bisherige Rahmen bleibt gültig.' :
       'Selbsteinrichtung nach 20 Minuten beendet, ohne dass ein Rahmen sicher bestätigt wurde.',
     cancelled: 'Selbsteinrichtung gestoppt.',
     save_failed: 'Ausschnitt und Drehung konnten nicht gespeichert werden.',
@@ -4078,7 +4078,7 @@ def start_panel(
     def geometry_warning(history, auto_rules, language):
         recovery = history.get("geometry_recovery", {})
         if recovery.get("scheduled_at") and recovery.get("first_failure_at"):
-            message = "Die Ziffern werden seit mindestens zwei Stunden nicht sicher erkannt. Prüfe Bildausschnitt, Fokus und Beleuchtung."
+            message = "Die Ziffern werden seit mindestens 40 Minuten nicht sicher erkannt. Prüfe Bildausschnitt, Fokus und Beleuchtung."
             return EN_UI[message] if language == "en" else message
         failures = recovery.get("failures", 0)
         if not failures:
@@ -4230,11 +4230,17 @@ def start_panel(
                        "Erste automatische Prüfung noch unklar")
             detail = ("The app will try again with a fresh image." if language == "en" else
                       "Die App prüft mit einem frischen Bild erneut.")
-        routine_ok = (tone == "ok" and not paused and not setup_pending
+        # In the seven-digit mode the third decimal is compared only as far as it is
+        # stable; the eighth digit is searched in the background for days. That is
+        # normal operation, so the last-digit hint is not a warning there.
+        last_digit_only = (partial_eighth_digit and not precision_pending
+                           and history.get("check_detail") in (LAST_DIGIT_NOTICE, LAST_DIGIT_PASS))
+        routine_ok = ((tone == "ok" or last_digit_only) and not paused and not setup_pending
                       and history.get("source_connection_status") != "error")
         if routine_ok and partial_eighth_digit:
             # Normal operation in the seven-digit mode: no warning. The hero note
             # above the reading already explains the eighth digit.
+            tone, icon, incident = "ok", "✓", ""
             heading = ("All good. The 8th digit is still being confirmed." if language == "en"
                        else "Alles OK. Die 8. Ziffer wird noch abgesichert.")
             detail = ""

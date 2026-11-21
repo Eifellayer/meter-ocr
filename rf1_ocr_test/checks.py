@@ -543,6 +543,19 @@ def unclear_trailing_decimals(ocr, decimals, integer_digits=5):
             return drop
     return 0
 
+def last_two_compared_unclear(ocr, decimals, integer_digits=5):
+    """Are exactly the last two compared decimals unreadable while every digit before is certain?
+
+    Unlike ``unclear_trailing_decimals`` this also holds when only two decimals are compared:
+    the reading is then not accepted coarser, but the check is no failure that counts towards
+    the pause after three failed checks (0.5.0, both turning rollers instead of only the last).
+    """
+    text = str(ocr or "")
+    compared = integer_digits + (decimals + 1 if decimals else 0)
+    shown = text[:compared]
+    return (decimals >= 2 and len(shown) == compared and shown.endswith("??")
+            and "?" not in shown[:-2] and shown[:integer_digits].isdigit())
+
 
 LAST_DIGIT_PASS = "Die ersten zwei Nachkommastellen stimmen überein. Die dritte ist bei dieser Prüfung noch nicht bestätigt."
 LAST_DIGIT_RETRIES = 3

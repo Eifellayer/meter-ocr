@@ -969,6 +969,73 @@ class StateTests(TestCase):
     def test_requested_automatic_run_uses_regular_checks_and_keeps_the_next_deadline(self):
         self.check_interactive_automatic_run(on_demand=True)
 
+    def test_leading_digits_are_taken_over_after_a_complete_confirmed_check(self):
+        class StopLoop(Exception):
+            pass
+
+        class NoWait(run.Event):
+            def wait(self, timeout=None):
+                raise AssertionError(f"Worker waited {timeout}s instead of checking")
+
+        folder = Path(self.enterContext(TemporaryDirectory()))
+        files = {name: folder / name for name in (
+            "OPTIONS", "HISTORY", "EFFECTIVE_OPTIONS", "AUTO_RULES", "AUTO_PAUSED",
+            "LANGUAGE_MODES", "SOURCE_SETTINGS", "NOTIFICATIONS", "DESTINATION",
+            "GOOD_IMAGE", "TEST_IMAGE", "AUTOMATIC_PREVIEW",
+        )}
+        files["OPTIONS"].write_text(json.dumps({
+            "esp_url": "http://meter", "ausschnitt": "0,0,500,100", "vorkomma_breite": 350,
+        }))
+        boxes = [[index * 120 + 10, 100, index * 120 + 110, 900] for index in range(8)]
+        files["AUTO_RULES"].write_text(json.dumps({
+            "decimals": 2, "attempts": 3, "crop_mode": "manual", "crop": "0,0,500,100", "width": 350,
+            "rotation": 0, "digit_boxes": boxes, "crop_revision": "r1"}))
+        self.enterContext(patch.multiple(run, **files, Event=NoWait))
+        self.enterContext(patch.object(run.debug_log, "DEBUG_LOG", folder / "debug.jsonl"))
+        self.enterContext(patch.dict(os.environ, {"SUPERVISOR_TOKEN": "stub"}))
+        with BytesIO() as stream:
+            synthetic_meter().save(stream, "JPEG")
+            photo = stream.getvalue()
+        panel = {}
+
+        def fake_panel(*args, **kwargs):
+            panel.update(start=kwargs["start_automatic_check"])
+            return None, None, None
+
+        self.enterContext(patch.object(run, "start_panel", fake_panel))
+        start = datetime.now(timezone.utc) - timedelta(seconds=30)
+        self.enterContext(patch.object(run, "capture", side_effect=[
+            (photo, None, sample(start + timedelta(seconds=10 * index))) for index in range(3)]))
+        taken = []
+
+        def read(*_, **options):
+            taken.append(options.get("assumed_whole"))
+            return "12345.170"
+
+        self.enterContext(patch.object(run, "read_visible_digits", side_effect=read))
+        self.enterContext(patch.object(run, "publish_state"))
+        checks = []
+
+        def publish(history, _):
+            checks.append(history.get("check_status"))
+            if len(checks) == 3:
+                raise StopLoop
+            self.assertTrue(panel["start"]())
+
+        self.enterContext(patch.object(run, "publish_consumption", side_effect=publish))
+        with self.assertRaises(StopLoop):
+            run.main()
+        self.assertEqual(["match"] * 3, checks)
+        # The first check after a start reads everything; the following ones take over "123".
+        self.assertEqual("", taken[0])
+        self.assertEqual("123", taken[-1])
+        logged = [json.loads(line) for line in (folder / "debug.jsonl").read_text().splitlines()]
+        automatic = [entry for entry in logged if entry.get("kind") == "automatic"]
+        self.assertIsNone(automatic[0].get("assumed_whole"))
+        self.assertEqual("123", automatic[-1]["assumed_whole"])
+        # The picture of the check is kept for work between the checks (the same picture only once).
+        self.assertEqual([photo], run.idle_work.kept_images(folder))
+
     def check_interactive_automatic_run(self, *, on_demand):
         class StopLoop(Exception):
             pass

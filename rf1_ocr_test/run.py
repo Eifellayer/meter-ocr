@@ -52,10 +52,11 @@ from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, LOWER_PENDING, LOWER_R
                          CALORIFIC_RANGE, CONVERSION_RANGE, STATE_FACTOR_RANGE, ImplausibleReading, energy_kwh, plausible_lower_drop, track_lower_series,
                          valid_energy_factor,
                          accumulate_consumption, fallback_detail, format_cubic_metres, record_consumption_sample)
-from checks import (without_light, unclear_trailing_decimals, setup_tilt, initial_skew_state, FRAME_OFF_NOTICE, FRAME_OFF_STREAK, FRAME_OFF_WAIT_NOTICE, MOVING_DIGIT_NOTICE,
+from checks import (without_light, unclear_trailing_decimals, last_two_compared_unclear, setup_tilt, initial_skew_state, FRAME_OFF_NOTICE, FRAME_OFF_STREAK, FRAME_OFF_WAIT_NOTICE, MOVING_DIGIT_NOTICE,
                     REDUCED_PRECISION_NOTICE, REDUCED_PRECISION2_NOTICE, MOVING_DIGITS_NOTICE, only_last_compared_unclear)
 import debug_log
 import experiments
+import idle_work
 import read_plan
 import seven_segment
 import glyph_match
@@ -2326,6 +2327,7 @@ def main():
                     continue
                 path.unlink(missing_ok=True)
             digit_library.LIBRARY.clear()
+            idle_work.forget_images(HISTORY.parent)
             # Left over from the removed "Experimentell · Mehrere Zähler" field (≤ 0.3.2).
             HISTORY.with_name("experimental-meters.json").unlink(missing_ok=True)
             history = retained_history
@@ -3683,9 +3685,9 @@ def main():
                                 ocr, comparison_decimals if "comparison_decimals" in locals() else decimals,
                                 integer_digits):
                             unclear_detail = MOVING_DIGIT_NOTICE
-                        elif (not validation_detail and not ocr_error and unclear_trailing_decimals(
+                        elif (not validation_detail and not ocr_error and last_two_compared_unclear(
                                 ocr, comparison_decimals if "comparison_decimals" in locals() else decimals,
-                                integer_digits) == 2):
+                                integer_digits)):
                             unclear_detail = MOVING_DIGITS_NOTICE
                         updated["check_detail"] = (validation_detail or ocr_error or unclear_detail
                                                    or explain_uncertain_positions(ocr_readings, decimals, integer_digits))
@@ -4047,6 +4049,9 @@ def main():
                 active_rules["polarity"] != "auto")
             library_filled = digit_library.LIBRARY.take_filled()
             if not manual:
+                # Kept for work between the checks; never fetched specially for it (idle_work).
+                idle_work.remember_check_image(HISTORY.parent, local.get("picture"),
+                                               lambda *arguments: atomic_write(*arguments))
                 taken_over = local.get("assumed_whole") or ""
                 planned = read_plan.after_check(read_plan_state, active_rules, outcome, taken_over, ocr, time.time())
                 read_plan_state.clear()

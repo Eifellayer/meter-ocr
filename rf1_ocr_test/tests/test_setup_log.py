@@ -76,6 +76,19 @@ class TrailingDecimalsTest(unittest.TestCase):
         self.assertEqual(1, unclear_trailing_decimals("10482.81?", 3))
         self.assertEqual(1, unclear_trailing_decimals("10482.8?", 2))
 
+    def test_two_turning_rollers_are_no_failed_check_also_with_two_compared_decimals(self):
+        from checks import MOVING_DIGITS_NOTICE, last_two_compared_unclear, schedule_next_check
+        self.assertTrue(last_two_compared_unclear("10482.??", 2))
+        self.assertTrue(last_two_compared_unclear("10482.8??", 3))
+        self.assertTrue(last_two_compared_unclear("10482.??7", 2))  # the third decimal is not compared
+        for reading, decimals in (("10482.?1", 2), ("1048?.??", 2), ("10482.???", 3), ("10482.?", 1), ("10482", 0)):
+            self.assertFalse(last_two_compared_unclear(reading, decimals), reading)
+        history = {"check_detail": MOVING_DIGITS_NOTICE}
+        for stamp in (100, 200, 300, 400):
+            schedule_next_check(history, "ocr_unclear", stamp)
+        self.assertNotIn("retry_suppressed", history)
+        self.assertNotIn("failure_attempts", history)
+
     def test_no_coarser_check_without_a_safe_first_decimal(self):
         from checks import unclear_trailing_decimals
         self.assertEqual(0, unclear_trailing_decimals("10482.??", 2))

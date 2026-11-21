@@ -1,6 +1,6 @@
 # Roadmap
 
-Stand: 20. November 2026 · Version **0.4.2**
+Stand: 20. November 2026 · Version **0.4.3**
 
 **Update-Takt (Stefan 20.11., ca. 08:45):** Kritische Korrekturen sofort veröffentlichen; freigegebene unkritische Punkte (Komfort, Anzeige, Vorschläge) gesammelt höchstens einmal pro Woche als Update. Versionen ab 19.11.2026: kleine Korrekturen erhöhen die letzte Stelle (0.1.x), größere Funktionen die mittlere (0.2.0, Experimentiermodus). Arbeitsweise ab 19.11.2026: Kritische Änderungen (Genauigkeit, Ausfälle, falsche Werte, stehende Automatik) sofort; unkritische Funktionen, die nicht zur Genauigkeit beitragen, in der Support-Runde (bis 25.11. alle 12 Stunden, danach wöchentlich).
 
@@ -10,6 +10,7 @@ Stand: 20. November 2026 · Version **0.4.2**
 
 | Aufgabe | Fertig, wenn … |
 | --- | --- |
+| **ERLEDIGT in 0.4.3 (21.11., 13:30): Einrichtung mit zwei Vergleichs-Nachkommastellen, alte gespeicherte Rahmen, Winkel der Rahmen** | Nach 0.4.2 bestätigte die Einrichtung auf Stefans HA nicht (`simplified: False`, weil `decimals` nach Werksreset 2 ist). Jetzt gilt die einfache Einrichtung für 2 und 3; gespeicherte Kandidaten werden bei „setup“ nicht geladen und hängen an der App-Version; `sweep_angles` behält den Winkel eingepasster Rahmen; `setup_image` protokolliert die einzelnen Lesungen. Stefan 13:25: „wenn schon gespeicherte Rahmen da waren, baut er bei erneuter Einrichtung und Reparatur nur Mist“. |
 | **STAND Sa 21.11.2026, 12:05 (Stefan): Sparbetrieb BEENDET, sofort Normalbetrieb** | Die Einträge „Ablauf am Do 26.11.“ und „Sparbetrieb“ weiter unten sind überholt: alles Verschobene wird ab sofort umgesetzt, Support wieder zweimal täglich (5:47/17:47). Reihenfolge: (1) 0.4.2 als kritische Korrektur sofort (App las nach Werksreset nichts mehr), (2) danach gebündelt 0.5.0 mit den verschobenen Funktionen (Experimente Aus/Schatten/Aktiv testen, Hinweis Bildqualität ausblendbar, Schattenmodus im Assistenten, Zwei-Werte-Bewertung, Modul-Umbau Schritt 1 …). |
 | **ERLEDIGT in 0.4.2 (21.11.): Eigenes Raster für rote Nachkommastellen, Rahmenhöhe, Platz an der letzten Rolle** | Direkt als Standard statt als Schattenmodus-Experiment umgesetzt, weil die Einrichtung ohne die Korrektur gar nicht mehr fertig wurde (kritisch) und der Vergleich an echten Kamerabildern eindeutig war (1 wurde als 4 gelesen, weil der Rahmen zu hoch saß). `layout.slot_positions`, `cell_frames`, `level_on_glyphs`, Tests `tests/test_release_042.py`. |
 | **BEFUND 21.11.: Blitz spiegelt genau auf der letzten Rolle (8. Stelle)** | In der aktuellen Kameraposition liegt die Spiegelung der LED auf der dritten Nachkommarolle; die 8. Stelle ist dort physisch nicht lesbar. Für 0.5.0: Blitzhelligkeit bzw. Belichtung für die letzte Rolle automatisch variieren (zweites Bild mit schwächerem Licht nur für die 8. Stelle), Hinweis in der Statusanzeige „Spiegelung auf Rolle 8“. |

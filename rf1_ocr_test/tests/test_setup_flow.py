@@ -56,5 +56,22 @@ class SetupFlowTests(unittest.TestCase):
             self.job("intensive", dict(RULES, decimals=3))
 
 
+    def test_the_baseline_prefers_confirmed_consumption_then_handover_then_typed_value(self):
+        from zoneinfo import ZoneInfo
+        zone = ZoneInfo("Europe/Berlin")
+        rules = dict(RULES, fallback_value="", fallback_time="", max_flow_lph=6000)
+        confirmed = {"consumption": {"source": "cam", "timestamp": 50, "reading_litres": 1}}
+        self.assertEqual("calibration",
+                         setup_flow.reading_baseline(confirmed, "cam", 100, {"x": 1}, rules, 2, zone)["source"])
+        # A reading newer than the image, or of another camera, is no baseline.
+        self.assertEqual({"x": 1}, setup_flow.reading_baseline(confirmed, "cam", 40, {"x": 1}, rules, 2, zone))
+        self.assertEqual({"x": 1}, setup_flow.reading_baseline(confirmed, "other", 100, {"x": 1}, rules, 2, zone))
+        self.assertIsNone(setup_flow.reading_baseline({}, "cam", 100, None, rules, 2, zone))
+        typed = dict(rules, fallback_value="10501.80", fallback_time="2026-11-21T12:00:00")
+        late = 1795300000.0
+        self.assertIsNotNone(setup_flow.reading_baseline({}, "cam", late, None, typed, 2, zone))
+        self.assertIsNone(setup_flow.reading_baseline({}, "cam", 1000.0, None, typed, 2, zone))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -5,7 +5,8 @@ camera; this module only turns "start a setup" into a prepared ``Calibration``.
 """
 
 from calibration import Calibration, MAX_ATTEMPTS, TIME_LIMIT
-from checks import setup_source_id, stationary_partial_active
+from checks import setup_source_id, stationary_partial_active, timestamp_epoch
+from consumption import accumulate_consumption
 from source_settings import source_check_key
 from meter_learning import GEOMETRY_REPAIR_LIMIT, GEOMETRY_REPAIR_SECONDS
 from setup_store import last_verified_configured_geometry, plain_setup
@@ -78,3 +79,26 @@ def new_job(action, limit, region, configuration, history, store, previous, now,
                       known_good_layout=reflected_layout or known_good,
                       reflected_layout=reflected_layout, reflected_positions=reflected_positions)
     return job, known_good
+
+
+def reading_baseline(history, source_key, captured, followup, active_rules, precision, zone):
+    """The last known meter reading a setup image must not fall below, or None.
+
+    In this order: the confirmed consumption of this source, the reading an earlier part of
+    the same setup handed over, the reading the user typed in.
+    """
+    baseline = history.get("consumption", {})
+    if baseline.get("source") == source_key and baseline.get("timestamp", 0) < captured:
+        baseline = {**baseline, "source": "calibration"}
+    else:
+        baseline = None
+    if baseline is None and followup:
+        baseline = followup
+    if baseline is None and active_rules["fallback_value"] and active_rules["fallback_time"]:
+        stamp = timestamp_epoch(active_rules["fallback_time"], zone)
+        if stamp < captured:
+            baseline = accumulate_consumption(
+                {}, "calibration", stamp, active_rules["fallback_value"], precision,
+                active_rules["max_flow_lph"], active_rules["integer_digits"], confirmed=True,
+            )
+    return baseline

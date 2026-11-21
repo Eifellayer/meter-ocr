@@ -1856,20 +1856,9 @@ def main():
                         sample = {**sample, **{key: two_decimal_reading(sample[key])
                                               for key in ("raw_value", "actual_value") if key in sample}}
                     precision = attempt.precision(active_rules, sample.get("reference_required") is not False)
-                    baseline = history.get("consumption", {})
-                    if baseline.get("source") == source_key and baseline.get("timestamp", 0) < captured:
-                        baseline = {**baseline, "source": "calibration"}
-                    else:
-                        baseline = None
-                    if baseline is None and attempt.followup_baseline:
-                        baseline = attempt.followup_baseline
-                    if baseline is None and active_rules["fallback_value"] and active_rules["fallback_time"]:
-                        stamp = timestamp_epoch(active_rules["fallback_time"], zone)
-                        if stamp < captured:
-                            baseline = accumulate_consumption(
-                                {}, "calibration", stamp, active_rules["fallback_value"], min(precision, configured_rules["decimals"]),
-                                active_rules["max_flow_lph"], active_rules["integer_digits"], confirmed=True,
-                            )
+                    baseline = setup_flow.reading_baseline(
+                        history, source_key, captured, attempt.followup_baseline, active_rules,
+                        min(precision, configured_rules["decimals"]), zone)
                     glyph_range = glyph_whole_range(history, active_rules, zone, captured)
                     with Image.open(io.BytesIO(picture)) as frame:
                         if frame.width * frame.height > MAX_IMAGE_PIXELS:

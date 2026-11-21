@@ -238,3 +238,26 @@ def changed_rules(auto_rules, values):
             and any(updated_rules[key] != auto_rules[key] for key in ("crop_mode", "crop", "rotation", "width", "digit_boxes"))):
         updated_rules["crop_revision"] = ""
     return updated_rules
+
+
+# Settings that only change what the page shows. They never restart a check and must not
+# cancel a running setup (0.5.1: hiding the picture-quality hint during a setup cancelled it).
+VIEW_PREFERENCES = ("reflection_suggestion_hidden", "reflection_confirmed_id", "quality_hint_hidden")
+
+
+def only_view_changed(before, after):
+    """True when the two rule sets differ in nothing but view preferences."""
+    keys = set(before) | set(after)
+    return all(before.get(key) == after.get(key) for key in keys if key not in VIEW_PREFERENCES)
+
+
+def carry_view_preferences(configuration, rules):
+    """The remembered setup configuration ``(rules, source)`` with the current view preferences.
+
+    A running setup compares its configuration with the current one and stops when they
+    differ. View preferences are taken over so that changing one is not a difference.
+    """
+    if configuration is None:
+        return None
+    remembered, source = configuration
+    return {**remembered, **{key: rules[key] for key in VIEW_PREFERENCES if key in rules}}, source

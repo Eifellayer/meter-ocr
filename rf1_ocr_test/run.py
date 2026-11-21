@@ -77,7 +77,7 @@ import setup_flow
 from setup_store import (SetupStore, geometry_check_key, last_verified_configured_geometry, app_build, calibration_source_id, last_setup_unfinished, plain_setup,
                          saved_layout_rules, setup_attempted_before, SETUP_RETRY_LIMIT, SETUP_RETRY_LONG_SECONDS, SETUP_RETRY_SECONDS, setup_autostart_due, setup_retry_delay,
                          usable_known_good_geometry)
-from auto_rules import frames_locked, changed_rules, default_rules, stored_rules, valid_experiments
+from auto_rules import VIEW_PREFERENCES, carry_view_preferences, only_view_changed, frames_locked, changed_rules, default_rules, stored_rules, valid_experiments
 from source_settings import (CameraOffline, camera_problem, LIGHT, CAMERA, DISCOVERY_TEMPLATE, ESP_ADDRESS_MODES, REFERENCE,
                              discovered_sources, source_check_key, source_rules)
 from panel import start_panel
@@ -1546,10 +1546,13 @@ def main():
         return dict(auto_rules)
 
     def save_auto_rules(values, *, request_check=True):
-        nonlocal auto_rules
+        nonlocal auto_rules, calibration_configuration
         updated_rules = changed_rules(auto_rules, values)
         atomic_write(AUTO_RULES, json.dumps(updated_rules, indent=2).encode("utf-8"), 0o600)
-        view_preferences = ("reflection_suggestion_hidden", "reflection_confirmed_id", "quality_hint_hidden")
+        view_preferences = VIEW_PREFERENCES
+        if only_view_changed(auto_rules, updated_rules):
+            # Hiding a hint must not look like a changed configuration to a running setup.
+            calibration_configuration = carry_view_preferences(calibration_configuration, updated_rules)
         needs_check = any(updated_rules[key] != auto_rules.get(key) for key in updated_rules
                           if key not in view_preferences)
         view_changed = any(updated_rules[key] != auto_rules.get(key) for key in view_preferences)

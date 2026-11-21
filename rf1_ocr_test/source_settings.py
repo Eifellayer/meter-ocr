@@ -1,8 +1,30 @@
 """Settings for SLFork, Home Assistant camera verification, and standalone OCR."""
 
+import json
 import re
 from ipaddress import ip_address
+from urllib.error import HTTPError
 from urllib.parse import urlsplit
+
+CAMERA_OFFLINE = ("Die gewählte Kamera ist in Home Assistant nicht verfügbar (Gerät aus, ohne WLAN oder ohne "
+                  "Strom). Prüfe das Gerät oder wähle eine andere Bildquelle.")
+CAMERA_MISSING = "Die gewählte Kamera gibt es in Home Assistant nicht mehr. Wähle die Bildquelle neu aus."
+
+
+class CameraOffline(OSError):
+    """The picture failed because Home Assistant itself reports the camera as gone or unavailable."""
+
+
+def camera_problem(camera, token, fetch):
+    """Concrete reason for a failed picture, or "" when Home Assistant still lists the camera as working."""
+    try:
+        state = json.loads(fetch(f"http://supervisor/core/api/states/{camera}", token, timeout=5)).get("state")
+    except HTTPError as error:
+        error.close()
+        return CAMERA_MISSING if error.code == 404 else ""
+    except (OSError, ValueError, AttributeError):
+        return ""
+    return CAMERA_OFFLINE if state == "unavailable" else ""
 
 ESP_ADDRESS_MODES = ("slfork", "slfork_camera")
 SOURCE_MODES = (*ESP_ADDRESS_MODES, "camera", "esphome")
@@ -13,7 +35,7 @@ LIGHT = re.compile(r"light\.[a-z0-9_]+")
 DISCOVERY_TEMPLATE = """
 {% set found = namespace(cameras=[], devices=[]) %}
 {% for camera in states.camera %}
-  {% set found.cameras = found.cameras + [{'label': camera.name, 'camera': camera.entity_id}] %}
+  {% set found.cameras = found.cameras + [{'label': camera.name, 'camera': camera.entity_id, 'available': camera.state != 'unavailable'}] %}
 {% endfor %}
 {% for item in states.sensor if item.entity_id.endswith('_ip_address') or item.entity_id.endswith('_last_processed') %}
   {% set device = device_id(item.entity_id) %}
@@ -75,7 +97,9 @@ def discovered_sources(data):
         camera = item.get("camera", "")
         if isinstance(camera, str) and CAMERA.fullmatch(camera):
             label = str(item.get("label") or camera)[:120]
-            choices[camera] = {"mode": "esphome", "label": label, "camera": camera}
+            # A camera that is offline in Home Assistant delivers no picture: say so in the list.
+            choices[camera] = {"mode": "esphome", "label": label, "camera": camera,
+                               "available": item.get("available") is not False}
     for item in data.get("devices", []):
         url = str(item.get("url") or "").strip().rstrip("/")
         if not url:
@@ -91,4 +115,4 @@ def discovered_sources(data):
         if len(url) <= 150:
             label = str(item.get("label") or url)[:120]
             choices[url] = {"mode": "slfork", "label": label, "url": url}
-    return sorted(choices.values(), key=discovery_order)[:80]
+    return sorted(choices.values(), key=lambda choice: (choice.get("available") is False, discovery_order(choice)))[:80]

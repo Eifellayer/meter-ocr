@@ -87,7 +87,7 @@ class ExperimentTests(TestCase):
         self.assertEqual([], experiments.enabled_experiments({"experiments": {"perspective": True}}))
         self.assertEqual(["perspective"], experiments.enabled_experiments(
             {"experiments_enabled": True, "experiments": {"perspective": True}}))
-        self.assertEqual({"perspective": False}, run.valid_experiments({"unknown": True}))
+        self.assertEqual({"perspective": False, "seven_segment": False}, run.valid_experiments({"unknown": True}))
 
     def test_keystone_is_measured_and_levelled(self):
         strip, boxes = roller_strip(keystone=1.15)

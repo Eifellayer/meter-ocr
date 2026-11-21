@@ -4,7 +4,7 @@
 
 ## Deutsch
 
-**Version 0.4.4.** Die App liest deinen Zähler lokal aus dem Kamerabild. Sie ist keine geeichte Messung.
+**Version 0.5.0.** Die App liest deinen Zähler lokal aus dem Kamerabild. Sie ist keine geeichte Messung.
 
 ### Einrichtung
 
@@ -104,7 +104,7 @@ Nach einem App-Update oder Neustart lädt die geöffnete Weboberfläche selbst n
 
 ## English
 
-**Version 0.4.4.** The app reads your meter locally from a camera image. It is not a certified measurement.
+**Version 0.5.0.** The app reads your meter locally from a camera image. It is not a certified measurement.
 
 ### Setup
 
@@ -205,3 +205,29 @@ After an app update or restart, an open web UI reloads itself. If the app cannot
 ---
 
 [GNU GPLv3 or later](../LICENSE) · [Issues](https://github.com/Eifellayer/meter-ocr/issues)
+
+## Bildqualität bestimmt die Dauer
+
+Je schlechter das Kamerabild (Unschärfe, Spiegelungen, schwaches Licht, schräger Blickwinkel), desto länger dauern Einrichtung und Optimierung. Ein scharfes, gerades Bild ohne Lichtfleck auf den Ziffern spart am meisten Zeit. Den Hinweis in der App kannst du mit einem Häkchen dauerhaft ausblenden und in den Einstellungen wieder einschalten.
+
+## Kontakt
+
+Fragen, Fehler und Rückmeldungen: [GitHub](https://github.com/Eifellayer/meter-ocr/issues) oder [amr@eifel-layer.de](mailto:amr@eifel-layer.de).
+
+## Gliederung der neuen Anleitung (Grobfassung für 0.5 Beta)
+
+Diese Gliederung ist der Bauplan der überarbeiteten Anleitung. Die Kapitel werden mit Bildschirmfotos und echten Beispielen gefüllt, sobald die Oberfläche von 0.5 feststeht.
+
+1. **Was die App macht und was nicht** – lokale Ablesung, keine geeichte Messung, welche Zähler und Kameras getestet sind.
+2. **Kamera anbringen** – Abstand, gerader Blick, Licht und Blitz, Spiegelungen vermeiden; Bildqualität bestimmt die Dauer.
+3. **Erste Einrichtung in fünf Schritten** – Bildquelle, Anzeige (Stellen, Rollen oder Digitalanzeige), Ausschnitt, Startwert, Fertig. Was die Selbsteinrichtung tut und woran man erkennt, dass sie fertig ist.
+4. **Die Übersicht lesen** – Zählerstand, Prüfstatus, „Die letzten Leseversuche“, Verbrauch, welche Rahmenart aktiv ist.
+5. **Wenn die Automatik nicht liest** – typische Ursachen mit Bild: Rahmen daneben, drehende Rolle, Spiegelung, dunkles Bild, verrutschte Kamera. Was die App selbst repariert und wann man eingreift.
+6. **Rahmen von Hand setzen** – Ziffernrahmen korrigieren, manueller Test, Speichern für den Test oder für die Automatik; von Hand gesetzte Rahmen bleiben unverändert.
+7. **Vergleichsgenauigkeit und Tempo** – volle Kubikmeter bis drei Nachkommastellen, was im Betrieb gelesen wird, Prüfabstand, Pause nach Fehlprüfungen.
+8. **Spiegelungen und verdeckte Ziffern** – ergänzte Ziffern, Markieren im Assistenten.
+9. **Experimente** – Aus, Schattenmodus, Aktiv testen; was im Debug-Protokoll steht.
+10. **Verbrauch und Energie** – Statistik, Umrechnung in kWh, Sensoren in Home Assistant.
+11. **Werkzeuge** – Zähler-Demo, Debug-Protokoll, Systemauslastung, Fehler melden.
+12. **Werksreset und Umzug** – was gelöscht wird, was die Statistik behält.
+13. **Kontakt und Mitmachen** – GitHub, E-Mail, Beta-Tester.

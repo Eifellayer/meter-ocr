@@ -88,12 +88,59 @@ EN_UI = {
     "Schräges künstliches Zählerbild": "Generated tilted meter image",
     "Gerader Ausschnitt mit Ziffernrahmen": "Aligned crop with digit boxes",
     "Demo-Bild wird geprüft …": "Reading the demo image …",
+    "Für Automatik speichern": "Save for automatic checks",
+    "Schattenmodus: Die App liest jedes Bild zusätzlich mit dem Experiment, aber nur, wenn der Rechner gerade Leistung frei hat. Es zählt weiterhin nur das bewährte Ergebnis. Den Vergleich findest du unter Werkzeuge › Schattenmodus und Arbeit im Hintergrund. Die meisten brauchen das nicht.":
+        "Shadow mode: the app additionally reads every image with the experiment, but only when the device has capacity to spare. Only the proven result counts. You find the comparison under Tools › Shadow mode and background work. Most people do not need this.",
+    "Aktiv testen (das Experiment bestimmt das Ergebnis mit, zeitlich begrenzt) ist in dieser Version noch für kein Experiment freigegeben.":
+        "Active testing (the experiment helps decide the result, for a limited time) is not released for any experiment in this version yet.",
+    "Probiere die Erkennung ohne eigene Kamera. Deine echte Einrichtung und Verbrauchsdaten bleiben getrennt.":
+        "Try the recognition without a camera of your own. Your real setup and consumption data stay separate.",
+    "Echte Kamerabilder eines Gaszählers, gelesen wie bei der automatischen Prüfung. Zu sehen ist nur das Zählwerk; alles andere ist übermalt.":
+        "Real camera pictures of a gas meter, read the way the automatic check does. Only the register is visible; everything else is painted over.",
+    "Echtes Bild 1": "Real picture 1", "Echtes Bild 2": "Real picture 2",
+    "Echtes Bild 3": "Real picture 3", "Echtes Bild 4": "Real picture 4",
+    "Künstliches Zählerbild:": "Generated meter picture:",
+    "Zählerbild der Demo": "Meter picture of the demo",
+    "Alle geprüften Ziffern erkannt. ": "All checked digits recognised. ",
+    "Mindestens eine Ziffer blieb offen. ": "At least one digit stayed open. ",
+    "Die letzte Rolle dreht sich ständig und wird wie im Betrieb nicht gelesen (grauer Rahmen).":
+        "The last roller turns all the time and, as in operation, is not read (grey frame).",
+    "Ziffernrahmen an diesem Bild korrigieren": "Correct digit boxes on this image",
+    "Bisher gelesen: ": "Read so far: ",
+    "Für manuellen Test speichern": "Save for the manual test",
+    "„Für Automatik“ gilt ab der nächsten automatischen Prüfung. „Für manuellen Test“ ändert nur den Test unter Werkzeuge; die Automatik behält ihre Rahmen und startet keine Prüfung.":
+        "“For automatic checks” applies from the next automatic check. “For the manual test” only changes the test under Tools; the automatic check keeps its frames and starts no check.",
+    "Digitalanzeige: Segmente direkt lesen": "Digital display: read the segments directly",
+    "Je schlechter das Kamerabild (Unschärfe, Spiegelungen, schwaches Licht, schräger Blickwinkel), desto länger dauern Einrichtung und Optimierung. Ein scharfes, gerades Bild ohne Lichtfleck auf den Ziffern spart am meisten Zeit.":
+        "The worse the camera image (blur, reflections, low light, slanted view), the longer setup and optimization take. A sharp, straight image without a light spot on the digits saves the most time.",
+    "Diesen Hinweis dauerhaft ausblenden": "Hide this note permanently",
+    "Hinweis „Bildqualität bestimmt die Dauer“ ausblenden": "Hide the note “image quality determines the duration”",
+    "Systemauslastung": "System load",
+    "Schattenmodus und Arbeit im Hintergrund": "Shadow mode and background work",
+    "Was Experimente im Schattenmodus und die Arbeit in der Wartezeit geliefert haben. Beides ändert nie den Zählerstand. Gezählt wird aus dem Debug-Protokoll.":
+        "What experiments in shadow mode and the work in the waiting time delivered. Neither ever changes the meter reading. Counted from the debug log.",
+    "Auslastung des Geräts und Anteil dieser App. Die Texterkennung zählt zur App. Die Werte gelten für die letzten Sekunden.":
+        "Load of the device and the share of this app. Text recognition counts towards the app. The values cover the last few seconds.",
+    "Prozessor gesamt": "Processor, total",
+    "Prozessor durch die App": "Processor used by the app",
+    "Arbeitsspeicher belegt": "Memory in use",
+    "Arbeitsspeicher der App": "Memory of the app",
+    "Temperatur": "Temperature",
+    "Rahmen: von Hand gesetzt. Die Automatik liest genau diese Rahmen und verändert sie nicht.":
+        "Frames: placed by hand. The automatic check reads exactly these frames and does not change them.",
+    "Rahmen: von der Selbsteinrichtung gefunden. Die Automatik darf sie nachjustieren.":
+        "Frames: found by the self-setup. The automatic check may fine-tune them.",
+    "Rahmen: fest gespeichert. Die Automatik darf sie nachjustieren.":
+        "Frames: saved. The automatic check may fine-tune them.",
+    "Bildbereich: automatische Erkennung ohne feste Rahmen. Die App sucht die Ziffernreihe in jedem Bild neu.":
+        "Image area: automatic detection without fixed frames. The app looks for the digit row in every image.",
     "Abgelesen ": "Read ",
     " m³ · Drehung ": " m³ · Rotation ",
     "Alle Ziffern erkannt.": "All digits read.",
     "Mindestens eine Ziffer blieb offen.": "At least one digit remained unclear.",
     "Aus einem Beispiel-Referenzwert geschätzt: ": "Estimated from the demo reference: ",
-    "Die Demo konnte nicht geladen werden. Versuche es noch einmal.": "Could not load the demo. Try again.",
+    "Die Demo konnte nicht geladen werden, weil die App gerade ausgelastet ist. Versuche es in einer Minute noch einmal.":
+        "Could not load the demo because the app is busy. Try again in a minute.",
     "Automatik-Nachprüfung: Die App prüft die fehlende Ziffer mit leicht verschobenem Rahmen.":
         "Automatic recheck: reading the missing digit with a slightly shifted box.",
     "Frische Aufnahme für den erwarteten Rollenwechsel eingeplant.":
@@ -542,6 +589,7 @@ EN_UI = {
     "Diese Entität erscheint nach dem ersten gültigen Messwert und kann im Energie-Dashboard als Gasverbrauch ausgewählt werden.": "This entity appears after the first valid reading and can be selected as gas consumption in the Energy dashboard.",
     "So fügst du den Zählerstand einer einfachen Dashboard-Karte hinzu:": "To add the meter reading to a simple dashboard card:",
     "Freiwillig mit PayPal unterstützen": "Support the project voluntarily with PayPal",
+    "Kontakt: amr@eifel-layer.de": "Contact: amr@eifel-layer.de",
     "EifelLayer-Projektlogo": "EifelLayer project logo",
     "Ein privates Hobbyprojekt von EifelLayer. KI-unterstützt entwickelt. Keine geeichte Messung oder Gewähr für OCR-Ergebnisse. Bitte Zählerstände bei Bedarf direkt am Gerät prüfen.": "A private hobby project by EifelLayer, developed with AI assistance. Not a certified measurement and no guarantee of OCR results. Check readings on the physical meter when needed.",
     "Unabhängiger Bildabgleich deines Gaszählerstands mit der vorhandenen Messung. Die OCR liest die Ziffern erneut direkt aus dem Kamerabild – ohne den vom ESP erkannten Wert einfach zu übernehmen.":
@@ -566,6 +614,8 @@ EN_UI = {
     "Nach einer fehlgeschlagenen automatischen Prüfung folgen bis zu zwei weitere Bildprüfungen im Abstand von fünf Minuten. Bleiben alle drei Prüfungen erfolglos, pausiert AI Meter Reader für die eingestellte Zeit (Standard: 30 Minuten) und versucht es dann erneut. Prüfe Beleuchtung, Abstand und Fokus.": "After a failed automatic check, up to two more image checks follow at five-minute intervals. If all three fail, AI Meter Reader pauses for the configured time (default: 30 minutes), then tries again. Check lighting, distance, and focus.",
     "Wartet auf die nächste automatische Prüfung.": "Waiting for the next automatic check.",
     "App läuft. Wartet auf die nächste automatische Prüfung.": "App is running and waiting for the next automatic check.",
+    "App läuft. Wartet auf die nächste automatische Prüfung. Im Hintergrund ist noch eine Nacharbeit offen.":
+        "App is running and waiting for the next automatic check. One background job is still open.",
     "Automatik:": "Automatic checks:",
     "Einrichtung erforderlich: Lege zuerst die Bildquelle fest.": "Setup required. Choose an image source.",
     "Automatik pausiert. Manuelle Tests bleiben verfügbar.": "Automatic checks are paused. Manual tests are still available.",
@@ -587,6 +637,10 @@ EN_UI = {
     "Kamera erreichbar, aber das Bild hat einen ungültigen Zeitstempel.": "Camera reachable, but the image has an invalid timestamp.",
     "ESP erreichbar. Seit der letzten Prüfung kam kein neues Bild; das vorhandene Bild ist noch nicht veraltet.": "ESP reachable. No new image since the last check; the current image is not stale yet.",
     "Home-Assistant-Kamera erreichbar; dieses Bild wurde bereits geprüft.": "Home Assistant camera reachable; this image was already checked.",
+    "Die gewählte Kamera ist in Home Assistant nicht verfügbar (Gerät aus, ohne WLAN oder ohne Strom). Prüfe das Gerät oder wähle eine andere Bildquelle.":
+        "The selected camera is unavailable in Home Assistant (device off, no Wi-Fi or no power). Check the device or choose another image source.",
+    "Die gewählte Kamera gibt es in Home Assistant nicht mehr. Wähle die Bildquelle neu aus.":
+        "The selected camera no longer exists in Home Assistant. Choose the image source again.",
     "Home-Assistant-Kamera nicht erreichbar oder Bild unlesbar. Prüfe Kamera und Zugriff.": "Home Assistant camera unavailable or image unreadable. Check the camera and access.",
     "ESP nicht erreichbar oder Antwort unvollständig. Prüfe Adresse und Verbindung.": "ESP unavailable or response incomplete. Check its address and connection.",
     "Kamerabild wird aufgenommen.": "Capturing a fresh camera image.",
@@ -629,8 +683,8 @@ EN_UI = {
     "Wähle den Ausschnitt im Originalbild. Die Vorkommabreite gilt nach der Drehung.":
         "Use coordinates from the original image. The whole-digit width applies after rotation.",
     "Maximaler Durchfluss (m³/h)": "Maximum flow (m³/h)",
-    "Qmax steht auf deinem Zähler. Die Vorgabe für einen G4 beträgt 6 m³/h.":
-        "Check the Qmax value printed on your meter. The default for G4 is 6 m³/h.",
+    "Qmax steht auf dem Typenschild deines Zählers. Die App erkennt ihn nicht selbst: Ohne deine Angabe rechnet sie mit 6 m³/h, dem üblichen Wert eines Haushaltszählers (G4).":
+        "Qmax is printed on the type plate of your meter. The app does not detect it: without your entry it assumes 6 m³/h, the usual value of a household meter (G4).",
     "Breite der Vorkommastellen": "Width of whole-number digits",
     "Bildbereich": "Image region",
     "Speichern": "Save",

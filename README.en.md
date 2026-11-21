@@ -1,6 +1,6 @@
 # AI Meter Reader
 
-**Version 0.4.4** · [Deutsch](README.md) · [Guide](rf1_ocr_test/DOCS.md) · [Changelog](rf1_ocr_test/CHANGELOG.md) · [Roadmap](RELEASE-PLAN.md)
+**Version 0.5.0** · [Deutsch](README.md) · [Guide](rf1_ocr_test/DOCS.md) · [Changelog](rf1_ocr_test/CHANGELOG.md) · [Roadmap](RELEASE-PLAN.md)
 
 <img src="assets/project-logo.png" alt="AI Meter Reader" width="110">
 
@@ -38,6 +38,6 @@ So far the app has only been tried in practice on **one gas meter** (roller coun
 
 ## Notes
 
-OCR is not a certified measurement; the physical meter counts for billing. Report bugs and ideas as a [GitHub issue](https://github.com/Eifellayer/meter-ocr/issues) (no credentials or private photos). License: [GNU GPLv3 or later](LICENSE), third-party software in [SOURCES.md](SOURCES.md). How the project came about: [history](docs/HISTORY.md).
+OCR is not a certified measurement; the physical meter counts for billing. Report bugs and ideas as a [GitHub issue](https://github.com/Eifellayer/meter-ocr/issues) (no credentials or private photos) or by e-mail to [amr@eifel-layer.de](mailto:amr@eifel-layer.de). Beta testers with other meters are welcome. License: [GNU GPLv3 or later](LICENSE), third-party software in [SOURCES.md](SOURCES.md). How the project came about: [history](docs/HISTORY.md).
 
 [Support the project](https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8) (optional)

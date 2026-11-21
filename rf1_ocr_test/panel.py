@@ -22,6 +22,10 @@ from PIL import Image
 
 from app_channel import APP_NAME, NAMESPACE
 import bug_report
+import status_view
+import system_monitor
+import background_view
+from auto_rules import frames_locked, user_frames
 import debug_log
 
 INSTANCE_ID = token_urlsafe(8)
@@ -33,7 +37,7 @@ from checks import (DEFAULT_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, WARNING_DETA
                     OCR_PROFILES, crop_register, read_register, LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, REFLECTION_SUGGEST_AFTER, STANDALONE_PENDING, STANDALONE_REJECTED_NOTICE,
                     STANDALONE_VERIFIED_NOTICE, last_check_at, recommended_comparison_decimals, reschedule_next_check,
                     setup_deadlines, setup_source_id, stabilization_interval, stationary_partial_active, valid_interval_minutes)
-QUIET_FAILURES = 3
+QUIET_FAILURES = status_view.QUIET_FAILURES
 from checks import (DEFAULT_FAILURE_PAUSE_MINUTES, MAX_FAILURE_PAUSE_MINUTES, MIN_FAILURE_PAUSE_MINUTES,
                     FRAME_OFF_NOTICE, FRAME_OFF_WAIT_NOTICE, MOVING_DIGIT_NOTICE, MOVING_NOTICES)
 from consumption import (DEFAULT_FLOW_LPH, EXCESSIVE_INCREASE, LOWER_PENDING, LOWER_READING,
@@ -45,7 +49,7 @@ from language import MODES, SUPPORTED, USER_ID, browser_locale, profile_script
 from layout import MANUAL_ROW_UNCLEAR, PARTLY_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, fine_rotation, split_rotation, digit_box_settings, scale_digit_boxes, turn_crop
 from meter_learning import suggest_single_digit_box
 from notification_settings import notification_rules
-from source_settings import source_check_key, source_rules
+from source_settings import CameraOffline, source_check_key, source_rules
 
 SUPERVISOR_ADDRESS = "172.30.32.2"
 MAX_MANUAL_IMAGE_BYTES = 3_000_000
@@ -422,8 +426,8 @@ transition:background .15s,transform .05s,box-shadow .15s}}
 button:not(:disabled):hover{{background:light-dark(#e8edf1,#22303c)}}
 button:not(:disabled):active{{transform:translateY(1px)}}
 button:disabled{{opacity:.5;cursor:not-allowed}}
-#start-automatic,#start-check-with-options,#save-digit-correction,form button[type="submit"]:not(.crop-reset){{background:var(--accent);border-color:transparent;color:var(--accent-ink)}}
-#start-automatic:not(:disabled):hover,#start-check-with-options:not(:disabled):hover,form button[type="submit"]:not(.crop-reset):not(:disabled):hover{{background:light-dark(#097a6a,#5fd8c3)}}
+#start-automatic,#start-check-with-options,#start-check-top,#save-digit-correction,form button[type="submit"]:not(.crop-reset){{background:var(--accent);border-color:transparent;color:var(--accent-ink)}}
+#start-automatic:not(:disabled):hover,#start-check-with-options:not(:disabled):hover,#start-check-top:not(:disabled):hover,form button[type="submit"]:not(.crop-reset):not(:disabled):hover{{background:light-dark(#097a6a,#5fd8c3)}}
 select,input{{border-radius:var(--radius-sm);background:var(--surface);border:1px solid var(--edge)}}
 /* Compact form fields (0.1.7): smaller selects and inputs, less visual weight in settings, tools and setup. */
 form select,form input:not([type="checkbox"]):not([type="radio"]):not([type="file"]){{min-height:2.25rem;padding:.4rem .65rem;font-size:.92rem}}
@@ -624,7 +628,8 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 .experiments-box > summary{{font-weight:650;color:var(--ink)!important}}
 .experiments-box[open]{{padding-bottom:.8rem}}
 .experiments-box > .check-option{{margin:.45rem 0 0;color:var(--ink)}}
-.experiments-box > .experiment-option{{margin-left:1.65rem}}
+.experiments-box > .experiment-option{{display:block;margin:.55rem 0 0 1.65rem;color:var(--ink)}}
+.experiments-box > .experiment-option select{{display:block;margin-top:.25rem;max-width:100%}}
 .experiments-box > p{{margin:.5rem 0 0;color:var(--muted);font-size:.86rem}}
 #auto-form{{grid-template-columns:minmax(0,1fr);align-items:start;gap:1rem}}
 #auto-form > .crop-actions,#auto-form > .crop-draw,#auto-form > .crop-fields{{margin:0}}
@@ -673,6 +678,7 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 </nav>
 <main>
 <div class="tab-content" id="view-overview" role="tabpanel" aria-labelledby="tab-overview" {overview_hidden}>
+{overview_saved_notice}
 <div class="panel" id="check-overview">
 <div class="meter-hero" id="meter-hero">
 <div class="meter-hero-top">
@@ -742,10 +748,19 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 </figure>
 <p class="settings-note" id="digit-correction-status" role="status"></p>
 <div class="crop-actions">
-<button type="button" id="save-digit-correction" disabled>Ziffernrahmen speichern</button>
+<button type="button" id="save-digit-correction" disabled>Für Automatik speichern</button>
+<button type="button" id="save-digit-correction-manual" disabled>Für manuellen Test speichern</button>
 </div>
+<p class="settings-note">„Für Automatik“ gilt ab der nächsten automatischen Prüfung. „Für manuellen Test“ ändert nur den Test unter Werkzeuge; die Automatik behält ihre Rahmen und startet keine Prüfung.</p>
 </dialog>
 <div id="calibration-overview" class="calibration-live" hidden>
+<form method="post" action="bildqualitaet-hinweis-ausblenden" class="quality-hint settings-note" {quality_hint_hidden}>
+<input type="hidden" name="lang" value="{language}"><input type="hidden" name="mode" value="{language_mode}">
+<input type="hidden" name="csrf" value="{csrf}">
+<p>Je schlechter das Kamerabild (Unschärfe, Spiegelungen, schwaches Licht, schräger Blickwinkel), desto länger dauern Einrichtung und Optimierung. Ein scharfes, gerades Bild ohne Lichtfleck auf den Ziffern spart am meisten Zeit.</p>
+<label class="check-option"><input type="checkbox" name="hide" value="1" onchange="this.form.submit()"> Diesen Hinweis dauerhaft ausblenden</label>
+<noscript><button type="submit">Speichern</button></noscript>
+</form>
 <p id="calibration-overview-state" role="status"></p>
 <p class="calibration-last-digit-note settings-note" hidden></p>
 <div class="setup-timeline-box" role="group" aria-labelledby="setup-timeline-title" hidden>
@@ -856,6 +871,7 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 <p>? steht für eine unklare Ziffer.</p>
 <table><thead><tr><th>Versuch</th><th>Erkannter Stand</th></tr></thead><tbody></tbody></table>
 </details>
+<p class="settings-note frames-note" id="frames-note-overview">{frames_note}</p>
 <section class="consumption-panel" aria-labelledby="consumption-title">
 <h2 id="consumption-title">Verbrauch</h2>
 <dl class="consumption-summary">
@@ -863,7 +879,8 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 <div><dt>Heute</dt><dd id="consumption-day">–</dd></div>
 </dl>
 <div class="consumption-chart" id="consumption-chart" role="img" aria-label="Verbrauch je Stunde, letzte 24 Stunden" hidden></div>
-<p class="consumption-chart-axis" id="consumption-chart-axis" hidden><span>vor 24 h</span><span>jetzt</span></p>
+<p class="consumption-chart-axis" id="consumption-chart-axis" hidden><span>vor 24 h</span><span id="consumption-chart-peak"></span><span>jetzt</span></p>
+<p id="consumption-resolution" class="settings-note" hidden></p>
 <p id="consumption-empty" class="settings-note">Die Statistik füllt sich mit bestätigten Ablesungen.</p>
 <details id="consumption-details" hidden>
 <summary>Verlauf nach Stunde und Tag</summary>
@@ -902,20 +919,39 @@ name: Zählerstand (OCR)</code></pre>
 <p class="settings-note" id="report-bug-note">Öffnet auf GitHub ein vorausgefülltes Fehlerformular mit App-Version, Art der Bildquelle und Fehlquote. Es wird nichts automatisch gesendet; hänge das heruntergeladene Protokoll selbst an.</p>
 <pre id="debug-log-text" class="debug-log-text">–</pre>
 </details>
+<details id="system-monitor">
+<summary>Systemauslastung</summary>
+<p class="settings-note">Auslastung des Geräts und Anteil dieser App. Die Texterkennung zählt zur App. Die Werte gelten für die letzten Sekunden.</p>
+<dl class="consumption-summary" id="system-monitor-values">
+<div><dt>Prozessor gesamt</dt><dd id="system-cpu">–</dd></div>
+<div><dt>Prozessor durch die App</dt><dd id="system-app-cpu">–</dd></div>
+<div><dt>Arbeitsspeicher belegt</dt><dd id="system-memory">–</dd></div>
+<div><dt>Arbeitsspeicher der App</dt><dd id="system-app-memory">–</dd></div>
+<div><dt>Temperatur</dt><dd id="system-temperature">–</dd></div>
+</dl>
+</details>
+<details id="background-work">
+<summary>Schattenmodus und Arbeit im Hintergrund</summary>
+<p class="settings-note">Was Experimente im Schattenmodus und die Arbeit in der Wartezeit geliefert haben. Beides ändert nie den Zählerstand. Gezählt wird aus dem Debug-Protokoll.</p>
+<ul class="background-work" id="background-work-list"><li>–</li></ul>
+</details>
 <div class="manual-test-area" id="manual-test-area" {manual_area_hidden}>
 <div class="manual-test-heading"><h2>Manueller Test</h2>
+<button type="submit" form="manual-form" id="start-check-top">Jetzt prüfen</button>
 <button type="button" id="close-manual-test">Schließen</button></div>
 <div class="test-box" id="test-box" data-phase="idle" data-result="neutral" tabindex="-1" {test_hidden} role="status" aria-live="polite">
 <strong id="test-head">Aktueller Schritt: Bereit</strong>
 <p id="test-status">{request_status}</p>
 <progress id="test-progress" max="{default_attempts}" value="0" aria-label="OCR-Versuche" hidden></progress>
 <small id="test-meta">Bereit für den manuellen Test.</small>
+<p id="test-live" class="test-live" hidden></p>
 <div class="test-result" id="test-result" hidden>
 <p id="test-result-detail"></p>
 <dl id="manual-readings" hidden><dt>Erkannter Stand</dt><dd id="manual-ocr"></dd>
 <dt>Referenz</dt><dd><span id="manual-reference"></span><small id="manual-reference-note" class="reference-note" hidden></small></dd>
 <dt>Bildzeit</dt><dd id="manual-image-time">–</dd></dl>
 <small id="test-result-stamp"></small>
+<p><button type="button" id="correct-after-test" hidden>Ziffernrahmen an diesem Bild korrigieren</button></p>
 <details class="ocr-details" id="ocr-details" hidden>
 <summary>Mehr Infos: Was wurde bei den OCR-Versuchen gelesen?</summary>
 <p class="ocr-scope"></p>
@@ -1029,8 +1065,7 @@ name: Zählerstand (OCR)</code></pre>
 <input type="hidden" name="lang" value="{language}">
 <input type="hidden" name="mode" value="{language_mode}">
 <input type="hidden" name="csrf" value="{csrf}">
-<label id="calibration-limit-label">Höchstens so viele unterschiedliche Bilder
-<input id="calibration-limit" name="image_limit" type="number" min="{calibration_min}" max="{calibration_max}" value="{calibration_limit}" required></label>
+<input id="calibration-limit" name="image_limit" type="hidden" value="{calibration_limit}">
 <p id="calibration-region-hint" hidden>Mehrere Ziffernfelder gefunden.
 <button type="button" id="calibration-show-choices">Ziffernfelder ansehen</button></p>
 <details class="setup-help" id="calibration-region">
@@ -1078,6 +1113,7 @@ name: Zählerstand (OCR)</code></pre>
 <input type="hidden" name="csrf" value="{csrf}">
 <ol class="setup-stepper" id="setup-stepper" aria-label="Schritte"><li data-step="0" data-state="current">Bildquelle</li><li data-step="1">Anzeige</li><li data-step="2">Ausschnitt</li><li data-step="3">Hinweise</li></ol>
 <fieldset class="setup-step active" data-step="0"><legend>1. Bildquelle</legend>
+<p class="settings-note quality-hint" {quality_hint_hidden}>Je schlechter das Kamerabild (Unschärfe, Spiegelungen, schwaches Licht, schräger Blickwinkel), desto länger dauern Einrichtung und Optimierung. Ein scharfes, gerades Bild ohne Lichtfleck auf den Ziffern spart am meisten Zeit.</p>
 <div class="source-mode-guide">
 <label>Woher kommt das Zählerbild?<select name="source_mode" id="wizard-source-mode" required>{wizard_source_options}</select></label>
 <ul class="settings-note" aria-label="Erklärung der Bildquellen">
@@ -1131,8 +1167,7 @@ name: Zählerstand (OCR)</code></pre>
 <div class="wizard-crop-choices">{wizard_crop_options}</div>
 </fieldset>
 <div id="wizard-calibration-options" class="setup-help" hidden>
-<label>Höchstens so viele unterschiedliche Bilder
-<input name="image_limit" type="number" min="{calibration_min}" max="{calibration_max}" value="{calibration_limit}" required disabled></label>
+<input name="image_limit" type="hidden" value="{calibration_limit}" disabled>
 <p class="settings-note">Startet nach dem Speichern. Nach drei bestätigten Aufnahmen übernimmt die Automatik die Gegenprüfung.</p>
 </div>
 <div class="setup-help">
@@ -1216,8 +1251,12 @@ name: Zählerstand (OCR)</code></pre>
 <summary>Experimentelle Funktionen (Schattenbetrieb)</summary>
 <input type="hidden" name="experiments_option_present" value="1">
 <label class="check-option"><input type="checkbox" name="experiments_enabled" value="1" {experiments_checked}> Experimentelle Funktionen testen</label>
-<label class="check-option experiment-option"><input type="checkbox" name="experiment_perspective" value="1" {experiment_perspective_checked}> Perspektivkorrektur (Kippung)</label>
-<p>Die App liest jedes Bild zusätzlich mit den angehakten Experimenten, aber nur, wenn der Rechner gerade Leistung frei hat. Es zählt weiterhin nur das bewährte Ergebnis; beide stehen im Debug-Protokoll. Die meisten brauchen das nicht.</p>
+<label class="experiment-option">Perspektivkorrektur (Kippung)
+<select name="experiment_perspective">{experiment_perspective_levels}</select></label>
+<label class="experiment-option">Digitalanzeige: Segmente direkt lesen
+<select name="experiment_seven_segment">{experiment_seven_segment_levels}</select></label>
+<p>Schattenmodus: Die App liest jedes Bild zusätzlich mit dem Experiment, aber nur, wenn der Rechner gerade Leistung frei hat. Es zählt weiterhin nur das bewährte Ergebnis. Den Vergleich findest du unter Werkzeuge › Schattenmodus und Arbeit im Hintergrund. Die meisten brauchen das nicht.</p>
+<p>Aktiv testen (das Experiment bestimmt das Ergebnis mit, zeitlich begrenzt) ist in dieser Version noch für kein Experiment freigegeben.</p>
 <p>Du kannst das jederzeit unter Einstellungen › Automatische Prüfung wieder ändern.</p>
 </details>
 <div class="setup-controls"><button type="button" class="setup-back">Zurück</button><span class="setup-count"></span><button type="submit">Speichern und prüfen</button></div>
@@ -1288,12 +1327,13 @@ name: Zählerstand (OCR)</code></pre>
 <small class="field-help">Ab diesem Wert wechselt die Selbsteinrichtung in die Intensivprüfung. Eine einzelne vermutete Ziffernposition kann sie auch früher gezielt prüfen.</small></label>
 <label class="settings-field"><span class="field-label">Maximaler Durchfluss (m³/h)</span>
 <input name="max_flow" type="text" inputmode="decimal" maxlength="10" value="{max_flow}" required>
-<small class="field-help">Qmax steht auf deinem Zähler. Die Vorgabe für einen G4 beträgt 6 m³/h.</small></label>
+<small class="field-help">Qmax steht auf dem Typenschild deines Zählers. Die App erkennt ihn nicht selbst: Ohne deine Angabe rechnet sie mit 6 m³/h, dem üblichen Wert eines Haushaltszählers (G4).</small></label>
 <label class="settings-field"><span class="field-label">Ziffernfarbe</span>
 <select name="polarity">{auto_polarity_options}</select></label>
 <label class="settings-field"><span class="field-label">Bildbereich</span>
 <select name="crop_mode" id="auto-crop-mode">{auto_crop_mode_options}</select></label>
 </div>
+<p class="settings-note frames-note" id="frames-note-settings">{frames_note}</p>
 <div class="crop-draw" id="auto-crop-draw" hidden>
 <p class="settings-note">Ziehe mit Maus oder Finger einen Rahmen um die gesamte Ziffernreihe.</p>
 <div class="crop-draw-image" id="auto-crop-draw-area" hidden>
@@ -1341,8 +1381,12 @@ name: Zählerstand (OCR)</code></pre>
 <details class="help setup-help experiments-box" id="experiments-settings">
 <summary>Experimentelle Funktionen (Schattenbetrieb)</summary>
 <label class="check-option"><input type="checkbox" name="experiments_enabled" value="1" {experiments_checked}> Experimentelle Funktionen testen</label>
-<label class="check-option experiment-option"><input type="checkbox" name="experiment_perspective" value="1" {experiment_perspective_checked}> Perspektivkorrektur (Kippung)</label>
-<p>Die App liest jedes Bild zusätzlich mit den angehakten Experimenten, aber nur, wenn der Rechner gerade Leistung frei hat. Es zählt weiterhin nur das bewährte Ergebnis; beide stehen im Debug-Protokoll. Die meisten brauchen das nicht.</p>
+<label class="experiment-option">Perspektivkorrektur (Kippung)
+<select name="experiment_perspective">{experiment_perspective_levels}</select></label>
+<label class="experiment-option">Digitalanzeige: Segmente direkt lesen
+<select name="experiment_seven_segment">{experiment_seven_segment_levels}</select></label>
+<p>Schattenmodus: Die App liest jedes Bild zusätzlich mit dem Experiment, aber nur, wenn der Rechner gerade Leistung frei hat. Es zählt weiterhin nur das bewährte Ergebnis. Den Vergleich findest du unter Werkzeuge › Schattenmodus und Arbeit im Hintergrund. Die meisten brauchen das nicht.</p>
+<p>Aktiv testen (das Experiment bestimmt das Ergebnis mit, zeitlich begrenzt) ist in dieser Version noch für kein Experiment freigegeben.</p>
 </details>
 <div class="reflection-settings setup-help" id="reflection-settings">
 <label class="check-option"><input type="checkbox" name="reflection_estimate_enabled" value="1" {reflection_enabled_checked}> Verdeckte Ziffern ergänzen</label>
@@ -1350,6 +1394,7 @@ name: Zählerstand (OCR)</code></pre>
 <summary>ⓘ Spiegelungen und verdeckte Ziffern</summary>
 <p>Die App kann je eine verdeckte Stelle vor und nach dem Komma ergänzen, wenn nur ein Ergebnis zum bisherigen Stand und zum maximalen Durchfluss passt. Berechnete Ziffern bleiben gelb. Ein datierter Startwert kann als erster Vergleichswert dienen.</p>
 <label class="check-option"><input type="checkbox" name="reflection_suggestion_hidden" value="1" {reflection_hide_checked}> Vorschlag bei wiederholt unlesbarer Ziffer ausblenden</label>
+<label class="check-option"><input type="checkbox" name="quality_hint_hidden" value="1" {quality_hint_checked}> Hinweis „Bildqualität bestimmt die Dauer“ ausblenden</label>
 </details>
 </div>
 </div>
@@ -1419,7 +1464,15 @@ Bei anhaltenden Problemen benachrichtigen
 </div>
 <dialog class="setup-dialog" id="demo-dialog" aria-labelledby="demo-title">
 <div class="dialog-heading"><h2 id="demo-title">Zähler-Demo</h2><button type="button" id="close-demo">Schließen</button></div>
-<p>Probiere die Erkennung mit einem künstlichen Gaszählerbild. Deine echte Einrichtung und Verbrauchsdaten bleiben getrennt.</p>
+<p>Probiere die Erkennung ohne eigene Kamera. Deine echte Einrichtung und Verbrauchsdaten bleiben getrennt.</p>
+<p class="settings-note">Echte Kamerabilder eines Gaszählers, gelesen wie bei der automatischen Prüfung. Zu sehen ist nur das Zählwerk; alles andere ist übermalt.</p>
+<div class="crop-actions">
+<button type="button" class="run-demo-real" data-picture="1">Echtes Bild 1</button>
+<button type="button" class="run-demo-real" data-picture="2">Echtes Bild 2</button>
+<button type="button" class="run-demo-real" data-picture="3">Echtes Bild 3</button>
+<button type="button" class="run-demo-real" data-picture="4">Echtes Bild 4</button>
+</div>
+<p class="settings-note">Künstliches Zählerbild:</p>
 <div class="crop-actions">
 <button type="button" id="run-demo-clear">Schräges Bild prüfen</button>
 <button type="button" id="run-demo-glare">Spiegelung ausprobieren</button>
@@ -1428,7 +1481,7 @@ Bei anhaltenden Problemen benachrichtigen
 <div id="demo-results" hidden>
 <p id="demo-reading"></p><p id="demo-estimate"></p>
 <div class="demo-grid">
-<figure><img id="demo-original" alt="Schräges künstliches Zählerbild"><figcaption>Originalbild</figcaption></figure>
+<figure><img id="demo-original" alt="Zählerbild der Demo"><figcaption>Originalbild</figcaption></figure>
 <figure><img id="demo-aligned" alt="Gerader Ausschnitt mit Ziffernrahmen"><figcaption>Ausgerichteter Ausschnitt</figcaption></figure>
 </div>
 </div>
@@ -1449,7 +1502,7 @@ Bei anhaltenden Problemen benachrichtigen
 </div>
 </main>
 
-<footer class="page-footer"><a class="app-version" href="https://github.com/Eifellayer/meter-ocr/blob/main/rf1_ocr_test/CHANGELOG.md" target="_blank" rel="noopener noreferrer">{app_name} {app_version}</a> · Kostenloses Hobbyprojekt · <a href="https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8" target="_blank" rel="noopener noreferrer">Freiwillig mit PayPal unterstützen</a>
+<footer class="page-footer"><a class="app-version" href="https://github.com/Eifellayer/meter-ocr/blob/main/rf1_ocr_test/CHANGELOG.md" target="_blank" rel="noopener noreferrer">{app_name} {app_version}</a> · Kostenloses Hobbyprojekt · <a href="https://www.paypal.com/donate/?hosted_button_id=FG4Q7VKQJ9BW8" target="_blank" rel="noopener noreferrer">Freiwillig mit PayPal unterstützen</a> · <a href="mailto:amr@eifel-layer.de">Kontakt: amr@eifel-layer.de</a>
 <details class="about-project"><summary>Über AI Meter Reader</summary><p><a href="https://github.com/Eifellayer" target="_blank" rel="noopener noreferrer">Projekt von EifelLayer auf GitHub</a></p><p>KI-unterstützt entwickelt. Keine geeichte Messung oder Gewähr für OCR-Ergebnisse. Bitte Zählerstände bei Bedarf direkt am Gerät prüfen.</p><p><a id="roadmap-link" href="https://github.com/Eifellayer/meter-ocr/blob/main/RELEASE-PLAN.md" target="_blank" rel="noopener noreferrer">Roadmap auf GitHub</a></p></details>
 </footer>
 <script>
@@ -1575,33 +1628,43 @@ document.querySelector('#close-demo').addEventListener('click', () => demoDialog
 demoDialog.addEventListener('close', () => {{
   if (closeDemoToSetup) document.querySelector('#open-demo-setup').focus();
 }});
-async function checkDemo(reflection) {{
+async function checkDemo(reflection, picture = '') {{
   const buttons = demoDialog.querySelectorAll('.crop-actions button');
   buttons.forEach(button => button.disabled = true);
   demoResults.hidden = true;
   demoStatus.textContent = 'Demo-Bild wird geprüft …';
   try {{
-    const fields = new URLSearchParams({{csrf: '{csrf}', lang, reflection: reflection ? '1' : '0'}});
-    const reply = await fetch('zaehler-demo', {{method: 'POST', body: fields}});
+    const fields = new URLSearchParams({{csrf: '{csrf}', lang, reflection: reflection ? '1' : '0', picture}});
+    let reply = await fetch('zaehler-demo', {{method: 'POST', body: fields}}).catch(() => null);
+    if (!reply || !reply.ok) {{
+      // The machine may be busy with a check or a setup: one quiet second try.
+      demoStatus.textContent = lang === 'en' ? 'The app is busy, trying once more …' : 'Die App ist gerade beschäftigt, zweiter Versuch …';
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      reply = await fetch('zaehler-demo', {{method: 'POST', body: fields}});
+    }}
     if (!reply.ok) throw Error();
     const result = await reply.json();
     document.querySelector('#demo-original').src = 'data:image/jpeg;base64,' + result.image;
     document.querySelector('#demo-aligned').src = 'data:image/jpeg;base64,' + result.aligned;
     document.querySelector('#demo-reading').textContent =
       'Abgelesen ' + result.reading + ' m³ · Drehung ' + result.angle + '° · ' +
-      (result.reading === result.expected ? 'Alle Ziffern erkannt.' :
+      (result.real ? (result.complete ? 'Alle geprüften Ziffern erkannt. ' : 'Mindestens eine Ziffer blieb offen. ') +
+         'Die letzte Rolle dreht sich ständig und wird wie im Betrieb nicht gelesen (grauer Rahmen).' :
+       result.reading === result.expected ? 'Alle Ziffern erkannt.' :
        'Mindestens eine Ziffer blieb offen.');
     document.querySelector('#demo-estimate').textContent = result.estimate ?
       'Aus einem Beispiel-Referenzwert geschätzt: ' + result.estimate + ' m³.' : '';
     demoStatus.textContent = '';
     demoResults.hidden = false;
   }} catch (_) {{
-    demoStatus.textContent = 'Die Demo konnte nicht geladen werden. Versuche es noch einmal.';
+    demoStatus.textContent = 'Die Demo konnte nicht geladen werden, weil die App gerade ausgelastet ist. Versuche es in einer Minute noch einmal.';
   }} finally {{
     buttons.forEach(button => button.disabled = false);
   }}
 }}
 document.querySelector('#run-demo-clear').addEventListener('click', () => checkDemo(false));
+for (const button of document.querySelectorAll('.run-demo-real'))
+  button.addEventListener('click', () => checkDemo(false, button.dataset.picture));
 document.querySelector('#run-demo-glare').addEventListener('click', () => checkDemo(true));
 const resetDialog = document.querySelector('#reset-dialog');
 const resetForm = document.querySelector('#reset-form');
@@ -1658,16 +1721,20 @@ wizardImageButton.addEventListener('click', async () => {{
   wizardImageStatus.textContent = 'Kamerabild wird geladen …';
   try {{
     const response = await fetch('einrichtungsbild', {{method: 'POST', body, cache: 'no-store'}});
-    if (!response.ok) throw new Error();
+    if (!response.ok) {{
+      const told = (response.headers.get('Content-Type') || '').startsWith('application/json')
+        ? await response.json().catch(() => null) : null;
+      throw new Error(told && told.reason || '');
+    }}
     const image = await response.blob();
     if (revision !== wizardPreviewRevision) return;
     wizardImageUrl = URL.createObjectURL(image);
     wizardImage.src = wizardImageUrl;
     wizardImage.hidden = false;
     wizardImageStatus.hidden = true;
-  }} catch (_) {{
+  }} catch (error) {{
     if (revision === wizardPreviewRevision)
-      wizardImageStatus.textContent = 'Kein Kamerabild verfügbar. Prüfe die Bildquelle oder lies direkt am Zähler ab.';
+      wizardImageStatus.textContent = error.message || 'Kein Kamerabild verfügbar. Prüfe die Bildquelle oder lies direkt am Zähler ab.';
   }} finally {{
     wizardImageButton.disabled = false;
   }}
@@ -1867,7 +1934,8 @@ function filterWizardSources() {{
   sourceSuggestions.forEach((source, index) => {{
     if (![source.label, source.camera, source.url].join(' ').toLowerCase().includes(term)) return;
     const type = source.mode === 'slfork' ? 'AI on the Edge' : (lang === 'en' ? 'Camera' : 'Kamera');
-    discoveredSource.add(new Option(type + ' · ' + source.label, String(index)));
+    const offline = source.available === false ? (lang === 'en' ? ' (not available in Home Assistant)' : ' (in Home Assistant nicht verfügbar)') : '';
+    discoveredSource.add(new Option(type + ' · ' + source.label + offline, String(index)));
   }});
   const available = discoveredSource.options.length > 1;
   discoveredSource.options[0].textContent = available ?
@@ -1918,10 +1986,13 @@ document.querySelectorAll('[data-precision-options]').forEach(options => {{
   showPrecisionOptions();
 }});
 // The setup wizard and the settings show the same experiment switches; keep both in step.
-for (const name of ['experiments_enabled', 'experiment_perspective']) {{
-  const boxes = [...document.querySelectorAll('.experiments-box input[name="' + name + '"]')];
+for (const name of ['experiments_enabled', 'experiment_perspective', 'experiment_seven_segment']) {{
+  const boxes = [...document.querySelectorAll('.experiments-box [name="' + name + '"]:not([type="hidden"])')];
   for (const box of boxes) box.addEventListener('change', () => {{
-    for (const other of boxes) other.checked = box.checked;
+    for (const other of boxes) {{
+      if (box.type === 'checkbox') other.checked = box.checked;
+      else other.value = box.value;
+    }}
   }});
 }}
 document.querySelector('#close-manual-test').addEventListener('click', () => {{
@@ -1941,7 +2012,7 @@ let statusPending = false;
 const manualPanel = document.querySelector('#manual-panel');
 const manualForm = document.querySelector('#manual-form');
 const testBox = document.querySelector('#test-box');
-const testButtons = [document.querySelector('#start-check-with-options')];
+const testButtons = [document.querySelector('#start-check-with-options'), document.querySelector('#start-check-top')];
 function setTestActive(active) {{
   for (const [index, button] of testButtons.entries()) {{
     button.disabled = active;
@@ -2564,6 +2635,8 @@ function setupProgressModel(status) {{
     }}
     if (status.rotation != null) detail.push((en ? 'Rotation ' : 'Drehung ') + String(status.rotation).replace('-', '−') + '°');
     detail.push(confirmations + (en ? ' of ' : ' von ') + required + (en ? ' confirmations' : ' Bestätigungen'));
+    // A reading that fits but leaves the last digit open is shown, not hidden behind "0 of 3".
+    if (status.partial_hits) detail.push(status.partial_hits + (en ? ' partial hit(s), last digit unclear' : (status.partial_hits === 1 ? ' Teiltreffer' : ' Teiltreffer') + ' (letzte Stelle unklar)'));
   }}
   const steps = [
     {{key: 'image', label: en ? 'Get camera image' : 'Kamerabild holen',
@@ -2970,6 +3043,7 @@ function refreshCalibration(status) {{
   const detail = 'Bilder geprüft: ' + status.tested +
     ' · Rahmen getestet: ' + status.attempts +
     confirmationLabel + status.confirmations + '/' + status.required +
+    (status.partial_hits ? ' · Teiltreffer (letzte Stelle unklar): ' + status.partial_hits : '') +
     (active ? (status.intensive && ['verify', 'verify_wait'].includes(status.stage) ?
       ' · Zeit für Gegenprobe: ' : (status.intensive || status.automatic ?
       ' · Rechenzeit übrig: ' : ' · Zeit für die Einrichtung: ')) + clock + ' min' : '');
@@ -3036,7 +3110,6 @@ function refreshCalibration(status) {{
     }}
     manualForm.elements.crop_revision.value = status.settings.crop_revision;
   }}
-  document.querySelector('#calibration-limit-label').hidden = active;
   proposedCrop = status.proposal || null;
   calibrationProposal.hidden = !proposedCrop;
   document.querySelector('#calibration-start').hidden = active;
@@ -3051,6 +3124,7 @@ const correctionStatus = document.querySelector('#digit-correction-status');
 const correctionOpen = document.querySelector('#open-digit-correction');
 const correctionSearch = document.querySelector('#search-one-digit');
 const correctionSave = document.querySelector('#save-digit-correction');
+const correctionSaveManual = document.querySelector('#save-digit-correction-manual');
 const correctionUndo = document.querySelector('#undo-one-digit');
 const correctionBoxes = {{value: '[]'}};
 const correctionWidth = {{value: ''}};
@@ -3060,11 +3134,13 @@ let correctionLayout = null;
 let correctionSource = null;
 let originalCorrection = [];
 let correctionBusy = false;
+let correctionPreferTest = false;
 
 function updateCorrectionControls() {{
   const index = Number(correctionPosition.value);
   const changed = correctionBoxes.value !== JSON.stringify(originalCorrection);
   correctionSave.disabled = correctionBusy || !changed || correctionPreview.hidden;
+  correctionSaveManual.disabled = correctionBusy || correctionPreview.hidden;
   correctionSearch.disabled = correctionBusy || correctionPreview.hidden;
   correctionUndo.disabled = correctionPreview.hidden || JSON.stringify(correctionEditor.current()[index]) ===
     JSON.stringify(originalCorrection[index]);
@@ -3075,6 +3151,7 @@ async function openDigitCorrection(last = false) {{
   correctionDialog.showModal();
   correctionPreview.hidden = true;
   correctionSave.disabled = true;
+  correctionSaveManual.disabled = true;
   correctionStatus.textContent = 'Kamerabild wird geladen …';
   correctionBusy = true;
   try {{
@@ -3085,11 +3162,14 @@ async function openDigitCorrection(last = false) {{
     if (!layout || layout.integer_digits + layout.fraction_digits !== {crop_digit_count} ||
         ['waiting', 'testing'].includes(job.calibration?.state)) throw new Error();
     const images = [];
+    // Opened from a finished manual test: its own picture first (also an uploaded one).
+    if (correctionPreferTest && job.phase === 'done' && job.checked_at) images.push({{kind: 'test', version: String(job.checked_at)}});
+    correctionPreferTest = false;
     if (job.digit_correction_image) images.push({{kind: 'current', version: job.digit_correction_image}});
     if (job.calibration?.preview?.frame) images.push({{kind: 'calibration', version: job.calibration.preview.frame}});
     if (!images.length) throw new Error();
     for (const source of images) {{
-      const url = (source.kind === 'current' ? 'aktuell.jpg?v=' : 'lernvorschau.jpg?bild=frame&v=') +
+      const url = (source.kind === 'test' ? 'testbild.jpg?v=' : source.kind === 'current' ? 'aktuell.jpg?v=' : 'lernvorschau.jpg?bild=frame&v=') +
         encodeURIComponent(source.version);
       correctionImage.src = url;
       try {{
@@ -3159,7 +3239,7 @@ async function submitDigitCorrection(action) {{
   const index = Number(correctionPosition.value);
   const sent = correctionBoxes.value;
   correctionBusy = true;
-  correctionPreview.inert = action === 'save';
+  correctionPreview.inert = action !== 'search';
   updateCorrectionControls();
   correctionStatus.textContent = action === 'search' ? 'Die ausgewählte Ziffer wird gesucht …' : '';
   const fields = new URLSearchParams({{
@@ -3170,7 +3250,7 @@ async function submitDigitCorrection(action) {{
   }});
   try {{
     const response = await fetch('ziffernrahmen', {{method: 'POST', body: fields}});
-    if (response.redirected && action === 'save') {{
+    if (response.redirected && action !== 'search') {{
       location.assign(response.url);
       return;
     }}
@@ -3196,6 +3276,11 @@ async function submitDigitCorrection(action) {{
 }}
 correctionSearch.addEventListener('click', () => submitDigitCorrection('search'));
 correctionSave.addEventListener('click', () => submitDigitCorrection('save'));
+document.querySelector('#correct-after-test').addEventListener('click', () => {{
+  correctionPreferTest = true;
+  correctionOpen.click();
+}});
+correctionSaveManual.addEventListener('click', () => submitDigitCorrection('save_manual'));
 function renderOcrCandidates(list, candidates) {{
   const evidence = {{
     accepted: 'Zwei Leseprofile stimmen überein – Kandidat übernommen',
@@ -3283,6 +3368,14 @@ async function refreshTestStatus() {{
       'Versuche abgeschlossen: ' + done :
       active ? 'Prüfung läuft …' :
       job.phase === 'done' ? (done === 1 ? '1 OCR-Versuch' : done + ' OCR-Versuche') : 'Bereit für den manuellen Test.';
+
+    const live = document.querySelector('#test-live');
+    const seen = active && job.phase === 'ocr' ? (job.readings || []) : [];
+    live.hidden = !seen.length;
+    live.textContent = seen.length ? 'Bisher gelesen: ' + seen.join(' · ') : '';
+    const correctAfter = document.querySelector('#correct-after-test');
+    correctAfter.hidden = job.phase !== 'done' || !job.digit_correction;
+    correctAfter.disabled = calibrating;
 
     if (job.phase === 'done') {{
       sourcePreview.hidden = false;
@@ -3420,8 +3513,11 @@ const automaticBanner = document.querySelector('#automatic-banner');
 function renderOdometer(reading) {{
   const box = document.querySelector('#meter-odometer');
   const text = String(reading || '').trim();
-  if (box.dataset.rendered === text) return;
-  box.dataset.rendered = text;
+  // Rollers beyond the compared decimal places are not needed and not shown (0.5.0).
+  const shown = Number.isInteger(configuredDecimals) ? configuredDecimals : 9;
+  const key = text + '|' + shown;
+  if (box.dataset.rendered === key) return;
+  box.dataset.rendered = key;
   box.setAttribute('aria-label', (lang === 'en' ? 'Meter reading ' : 'Zählerstand ') + (text || '–'));
   if (!/[0-9?]/.test(text)) {{
     const empty = document.createElement('span');
@@ -3430,7 +3526,8 @@ function renderOdometer(reading) {{
     box.replaceChildren(empty);
     return;
   }}
-  const [whole, fraction = ''] = text.replace(',', '.').split('.');
+  const [whole, allFraction = ''] = text.replace(',', '.').split('.');
+  const fraction = allFraction.slice(0, shown);
   const roller = (char, isFraction) => {{
     const cell = document.createElement('span');
     cell.className = 'roller' + (isFraction ? ' fraction' : '') + (/[0-9]/.test(char) ? '' : ' unclear');
@@ -3580,6 +3677,18 @@ function renderConsumption(data) {{
       return bar;
     }}));
     chart.dataset.values = chartKey;
+    const top = Math.max(0, ...hours.map(bucket => bucket.litres || 0));
+    document.querySelector('#consumption-chart-peak').textContent = top
+      ? (lang === 'en' ? 'highest hour: ' : 'höchste Stunde: ') + consumptionFormat.format(top / 1000) + ' m³' : '';
+  }}
+  const coarse = document.querySelector('#consumption-resolution');
+  const step = Number(data.resolution_litres) || 0;
+  coarse.hidden = chart.hidden || step < 100;
+  if (!coarse.hidden) {{
+    const size = consumptionFormat.format(step / 1000) + ' m³';
+    coarse.textContent = lang === 'en'
+      ? 'The meter is read in steps of ' + size + '. Hourly values are therefore only rough; compare more decimal places for a finer chart.'
+      : 'Der Zähler wird in Schritten von ' + size + ' abgelesen. Die Stundenwerte sind deshalb nur grob; mit mehr verglichenen Nachkommastellen wird die Anzeige feiner.';
   }}
   document.querySelector('#consumption-empty').hidden = available;
   document.querySelector('#consumption-details').hidden = !available;
@@ -3637,6 +3746,76 @@ document.querySelector('#debug-log').addEventListener('toggle', async (event) =>
   }} catch (_) {{
     target.textContent = lang === 'en' ? 'Log could not be loaded.' : 'Protokoll konnte nicht geladen werden.';
   }}
+}});
+let systemMonitorTimer = null;
+async function refreshSystemMonitor() {{
+  const set = (id, text) => {{ document.querySelector(id).textContent = text; }};
+  const percent = value => value == null ? '–' : value + ' %';
+  try {{
+    const response = await fetch('systemstatus', {{cache: 'no-store'}});
+    if (!response.ok) throw Error();
+    const data = await response.json();
+    set('#system-cpu', percent(data.cpu_percent) + (data.cores ? ' · ' + data.cores + (lang === 'en' ? ' cores' : ' Kerne') : ''));
+    set('#system-app-cpu', percent(data.app_cpu_percent));
+    set('#system-memory', data.memory_total_mb == null ? '–'
+      : percent(data.memory_used_percent) + ' · ' + (data.memory_total_mb - data.memory_available_mb) + ' / ' + data.memory_total_mb + ' MB');
+    set('#system-app-memory', data.app_memory_mb == null ? '–' : data.app_memory_mb + ' MB');
+    set('#system-temperature', data.temperature_c == null
+      ? (lang === 'en' ? 'not available on this device' : 'auf diesem Gerät nicht verfügbar')
+      : String(data.temperature_c).replace('.', lang === 'en' ? '.' : ',') + ' °C');
+  }} catch (_) {{
+    set('#system-cpu', lang === 'en' ? 'Could not be loaded.' : 'Konnte nicht geladen werden.');
+  }}
+}}
+async function refreshBackgroundWork() {{
+  const list = document.querySelector('#background-work-list');
+  const en = lang === 'en';
+  const rows = [];
+  try {{
+    const response = await fetch('hintergrund?lang=' + lang, {{cache: 'no-store'}});
+    if (!response.ok) throw Error();
+    const data = await response.json();
+    rows.push((en ? 'Automatic checks in the log: ' : 'Automatische Prüfungen im Protokoll: ') + data.checks);
+    for (const tested of Object.values(data.experiments)) {{
+      rows.push(tested.label + ': ' + (!tested.runs
+        ? (en ? 'no run yet (switch it on under Settings)' : 'noch kein Lauf (unter Einstellungen einschalten)')
+        : tested.runs + (en ? ' runs · same as the check: ' : ' Läufe · gleich wie die Prüfung: ') + tested.same +
+          (en ? ' · different: ' : ' · anders: ') + tested.different +
+          (en ? ' · unclear: ' : ' · unklar: ') + tested.unclear +
+          (en ? ' · no result: ' : ' · ohne Ergebnis: ') + tested.no_result +
+          (tested.errors ? (en ? ' · errors: ' : ' · Fehler: ') + tested.errors : '') +
+          (tested.seconds == null ? '' : (en ? ' · on average ' : ' · im Schnitt ') +
+            String(tested.seconds).replace('.', en ? '.' : ',') + ' s')));
+    }}
+    const hintNames = en ? {{dark: 'too dark', bright: 'too bright', low_contrast: 'low contrast'}}
+      : {{dark: 'zu dunkel', bright: 'zu hell', low_contrast: 'wenig Kontrast'}};
+    const hints = Object.entries(data.image_hints || {{}}).map(([name, count]) => hintNames[name] + ' ' + count + '×');
+    rows.push((en ? 'Picture hints in these checks: ' : 'Bildhinweise in diesen Prüfungen: ') +
+      (hints.length ? hints.join(' · ') : (en ? 'none' : 'keine')));
+    if (data.skipped_busy) rows.push((en ? 'Skipped because the device was busy: ' : 'Wegen Auslastung übersprungen: ') + data.skipped_busy);
+    const idle = data.idle;
+    rows.push(!idle.runs
+      ? (en ? 'Waiting time: nothing to do so far.' : 'Wartezeit: bisher nichts zu tun.')
+      : (en ? 'Waiting time: ' : 'Wartezeit: ') + idle.runs + (en ? ' jobs · unclear digits read again: ' : ' Arbeiten · unklare Ziffern nochmals gelesen: ') +
+        idle.reread + (en ? ', readable: ' : ', davon lesbar: ') + idle.resolved +
+        (en ? ' · experiments caught up: ' : ' · Experimente nachgeholt: ') + idle.experiments);
+  }} catch (_) {{
+    rows.push(en ? 'Could not be loaded.' : 'Konnte nicht geladen werden.');
+  }}
+  list.replaceChildren(...rows.map(text => {{
+    const item = document.createElement('li');
+    item.textContent = text;
+    return item;
+  }}));
+}}
+document.querySelector('#background-work').addEventListener('toggle', event => {{
+  if (event.target.open) refreshBackgroundWork();
+}});
+document.querySelector('#system-monitor').addEventListener('toggle', event => {{
+  clearInterval(systemMonitorTimer);
+  if (!event.target.open) return;
+  refreshSystemMonitor();
+  systemMonitorTimer = setInterval(refreshSystemMonitor, 5000);
 }});
 async function refreshAutomatic() {{
   let refreshDelay = 15000;
@@ -3825,10 +4004,26 @@ def wizard_energy_factors(field, old_rules):
     return values
 
 
+EXPERIMENT_LEVELS = (("off", "Aus", "Off"), ("1", "Schattenmodus", "Shadow mode"),
+                     ("active", "Aktiv testen (noch nicht freigegeben)", "Active testing (not released yet)"))
+
+
+def experiment_level_options(shadow, language="de"):
+    """The three levels of one experiment; "Aktiv testen" is not released for any experiment yet."""
+    chosen = "1" if shadow else "off"
+    return "".join(f'<option value="{value}"{" selected" if value == chosen else ""}'
+                   f'{" disabled" if value == "active" else ""}>{english if language == "en" else german}</option>'
+                   for value, german, english in EXPERIMENT_LEVELS)
+
+
 def experiment_settings(field):
-    """Shadow-mode switches; the setup wizard and the settings send the same two fields."""
+    """Levels of the experiments; the setup wizard and the settings send the same fields.
+
+    Only "off" and shadow mode ("1") are stored; a forged "active" counts as off.
+    """
     return {"experiments_enabled": field("experiments_enabled") == "1",
-            "experiments": {"perspective": field("experiment_perspective") == "1"}}
+            "experiments": {"perspective": field("experiment_perspective") == "1",
+                            "seven_segment": field("experiment_seven_segment") == "1"}}
 
 
 def parse_failure_pause(text):
@@ -3890,6 +4085,22 @@ def radio_options(name, choices, chosen):
     )
 
 
+FRAME_NOTES = {
+    "user": "Rahmen: von Hand gesetzt. Die Automatik liest genau diese Rahmen und verändert sie nicht.",
+    "setup": "Rahmen: von der Selbsteinrichtung gefunden. Die Automatik darf sie nachjustieren.",
+    "manual": "Rahmen: fest gespeichert. Die Automatik darf sie nachjustieren.",
+    "auto": "Bildbereich: automatische Erkennung ohne feste Rahmen. Die App sucht die Ziffernreihe in jedem Bild neu.",
+}
+
+
+def frames_note(rules, language):
+    """One sentence that says which frames the automatic uses (overview and settings)."""
+    kind = ("auto" if rules.get("crop_mode") != "manual" else
+            rules.get("frames_origin") if rules.get("frames_origin") in ("user", "setup") else "manual")
+    text = FRAME_NOTES[kind]
+    return EN_UI[text] if language == "en" else text
+
+
 def reflection_setup_preview(content, whole, fraction, polarity):
     if not 1 <= whole <= 9 or not 0 <= fraction <= 3 or polarity not in POLARITIES:
         raise ValueError("Invalid meter format")
@@ -3938,7 +4149,7 @@ def start_panel(
     request_factory_reset=None, get_reset_status=None, skip_setup=None, get_activity=None,
     get_auto_paused=None, save_auto_paused=None, discover_sources=None,
     settings_lock=None, get_calibration=None, control_calibration=None, get_calibration_image=None,
-    has_calibration_backup=None, get_wizard_image=None, statistics_zone=timezone.utc,
+    has_calibration_backup=None, get_wizard_image=None, real_demo=None, statistics_zone=timezone.utc,
     can_start_automatic=None, start_automatic_check=None,
 ):
     images = {"/aktuell.jpg": current_image, "/treffer.jpg": good_image,
@@ -3959,6 +4170,12 @@ def start_panel(
     def read_auto_rules():
         return {"integer_digits": 5, "fraction_digits": 3, "meter_display": "rollers",
                 "fallback_value": "", "fallback_time": "", "digit_boxes": [], **get_auto_rules()}
+
+    worker_save_auto_rules = save_auto_rules
+
+    def save_auto_rules(values, **options):
+        # Frames changed in the web interface were placed by the user (auto_rules.user_frames).
+        worker_save_auto_rules(user_frames(read_auto_rules(), values), **options)
 
     def digit_correction_settings(rules, source):
         if rules["crop_mode"] != "manual":
@@ -4142,139 +4359,13 @@ def start_panel(
                 history.get("comparison_decimals", default_decimals), history.get("ocr_readings"),
             )
         status = history.get("check_status") or history.get("status")
-        tone = "neutral"
-        heading = "Automatischer Prüfstatus"
-        icon = ""
-        incident = ""
-        show_attempts = False
-        if not precision_pending and status == "match":
-            tone, heading, icon = "ok", "Zählerstand bestätigt", "✓"
-        elif not precision_pending and status == STANDALONE_PENDING:
-            heading = "Zweite Aufnahme steht aus"
-        elif (not precision_pending and status == "ocr_only"
-              and history.get("check_detail") == STANDALONE_VERIFIED_NOTICE):
-            tone, heading, icon = "ok", "Zählerstand gegengeprüft", "✓"
-        elif not precision_pending and status == "match_with_warning":
-            tone, heading, icon = "notice", "Prüfung bestanden mit Hinweis", ""
-            if history.get("check_detail") == LAST_DIGIT_PASS:
-                explanation = "Für den Verbrauch verwendet die App den plausiblen Vergleichswert."
-                detail = f"{detail} {EN_UI[explanation] if language == 'en' else explanation}"
-        elif not precision_pending and status in (
-            "difference", "ocr_unclear", "slfork_unclear", "stale_sample", "capture_unavailable",
-        ):
-            now = time.time()
-            failure_since = history.get("failure_since")
-            prolonged = failure_since is not None and now - failure_since >= WARNING_DETAIL_AFTER
-            tone, heading, icon = "warning", "Letzte Prüfung fehlgeschlagen", "!"
-            if not prolonged and history.get("failure_attempts", 0) < QUIET_FAILURES:
-                # A single failed check usually resolves itself with the next roller position.
-                # Show it quietly; only repeated failures get the prominent warning.
-                tone, icon = "notice", ""
-            if prolonged:
-                heading = "Zählerstand bitte prüfen"
-                capture_failure_since = history.get("capture_failure_since", failure_since)
-                if (status == "capture_unavailable" and capture_failure_since is not None
-                        and now - capture_failure_since >= WARNING_DETAIL_AFTER):
-                    tone = "problem"
-                incident = str(failure_since) if tone == "warning" else f"critical-{failure_since}"
-                show_attempts = status == "ocr_unclear"
-            elif status in ("stale_sample", "capture_unavailable") and not history.get("last_epoch"):
-                heading = "Noch kein aktuelles Zählerbild"
-                detail = ("The app retries automatically as soon as the image source delivers a new image."
-                          if language == "en" else
-                          "Die App versucht es automatisch erneut, sobald die Bildquelle ein neues Bild liefert.")
-            else:
-                detail = ""
-            if str(history.get("check_detail", "")).startswith(STANDALONE_REJECTED_NOTICE):
-                heading = "Aufnahmen stimmen nicht plausibel überein"
-                detail = (history["check_detail"] if language == "de" else
-                          english_result(history["check_detail"], status))
-            elif history.get("check_detail") in (RAW_ROW_UNCLEAR, MANUAL_ROW_UNCLEAR, PARTLY_UNCLEAR):
-                detail = history["check_detail"] if language == "de" else EN_UI[history["check_detail"]]
-            elif history.get("check_detail") in MOVING_NOTICES:
-                heading = "Rolle drehte sich gerade" if history.get("check_detail") == MOVING_DIGIT_NOTICE else "Rollen drehten sich gerade"
-                detail = history["check_detail"] if language == "de" else english_result(history["check_detail"], status)
-                # Everything but the turning last roller was read: no reason for "Bitte prüfen".
-                tone, icon = "notice", ""
-            elif history.get("check_detail") in (LOWER_PENDING, LOWER_READING, EXCESSIVE_INCREASE):
-                heading = "Ablesung passt nicht zum letzten Stand"
-                detail = history["check_detail"] if language == "de" else english_result(history["check_detail"], status)
-            elif history.get("check_detail") == LAST_DIGIT_NOTICE:
-                heading = "Letzte Nachkommastelle unsicher"
-                detail = LAST_DIGIT_NOTICE if language == "de" else EN_UI[LAST_DIGIT_NOTICE]
-            elif status == "difference":
-                heading = "Ablesung und Vergleichswert weichen ab" if not prolonged else heading
-                instructions = ("Vergleiche beide Werte mit dem Stand direkt am Zähler."
-                                if prolonged or paused else
-                                "Die App prüft automatisch erneut. Bleibt der Unterschied, vergleiche beide Werte mit dem Stand direkt am Zähler.")
-                detail = instructions if language == "de" else EN_UI[instructions]
-        if not precision_pending and history.get("check_detail") in (FRAME_OFF_NOTICE, FRAME_OFF_WAIT_NOTICE):
-            heading = "Rahmen der letzten Stelle sitzt daneben"
-            detail = (history["check_detail"] if language == "de"
-                      else english_result(history["check_detail"], status))
-            # The app handles this itself; no reason for "Bitte prüfen".
-            if tone in ("ok", "warning", "notice"):
-                tone, icon = ("neutral", icon) if tone == "ok" else ("notice", "")
-        if language == "en":
-            heading = EN_UI[heading]
-        adjustment = history.get("ocr_rotation_adjustment", 0)
-        if not precision_pending and status in ("match", "ocr_only") and type(adjustment) is int and adjustment:
-            rotation_note = (f"Read with an image rotation of {adjustment:+d}°."
-                             if language == "en" else f"Mit Bilddrehung von {adjustment:+d}° gelesen.")
-            detail = " ".join(part for part in (detail, rotation_note) if part)
-        grace = (not precision_pending and history.get("setup_first_check_unclear")
-                 and history.get("failure_attempts") == 1 and tone in ("warning", "notice"))
-        if grace:
-            tone, icon, incident = "neutral", "", ""
-            heading = ("First automatic check still unclear" if language == "en" else
-                       "Erste automatische Prüfung noch unklar")
-            detail = ("The app will try again with a fresh image." if language == "en" else
-                      "Die App prüft mit einem frischen Bild erneut.")
-        # In the seven-digit mode the third decimal is compared only as far as it is
-        # stable; the eighth digit is searched in the background for days. That is
-        # normal operation, so the last-digit hint is not a warning there.
-        last_digit_only = (partial_eighth_digit and not precision_pending
-                           and history.get("check_detail") in (LAST_DIGIT_NOTICE, LAST_DIGIT_PASS))
-        routine_ok = ((tone == "ok" or last_digit_only) and not paused and not setup_pending
-                      and history.get("source_connection_status") != "error")
-        if routine_ok and partial_eighth_digit:
-            # Normal operation in the seven-digit mode: no warning. The hero note
-            # above the reading already explains the eighth digit.
-            tone, icon, incident = "ok", "✓", ""
-            heading = ("All good. The 8th digit is still being confirmed." if language == "en"
-                       else "Alles OK. Die 8. Ziffer wird noch abgesichert.")
-            detail = ""
-        elif routine_ok:
-            heading = "All good. Automatic checks running." if language == "en" else "Alles OK. Automatik läuft."
-            detail = ""
-        try:
-            failure_attempts = max(0, int(history.get("failure_attempts", 0) or 0))
-        except (TypeError, ValueError):
-            failure_attempts = 0
-        retry_suppressed = bool(history.get("retry_suppressed"))
-        if failure_attempts and paused:
-            recovery_notice = (f"Previous failed checks: {failure_attempts}. Automatic checks are paused."
-                               if language == "en" else
-                               f"Bisherige Fehlprüfungen: {failure_attempts}. Die Automatik ist pausiert.")
-        elif failure_attempts and retry_suppressed:
-            next_at = history.get("next_check_at")
-            clock = (datetime.fromtimestamp(next_at, statistics_zone).strftime("%H:%M")
-                     if type(next_at) in (int, float) and next_at > 0 else "")
-            recovery_notice = (
-                f"{failure_attempts} automatic checks failed. The app pauses briefly and then tries again."
-                + (f" Next attempt at about {clock}." if clock else "")
-                if language == "en" else
-                f"{failure_attempts} automatische Prüfungen fehlgeschlagen. Die App pausiert kurz "
-                "und versucht es dann erneut." + (f" Nächster Versuch gegen {clock} Uhr." if clock else "")
-            )
-        elif failure_attempts:
-            recovery_notice = (
-                f"Failed checks: {failure_attempts} of 3. The app will check again automatically."
-                if language == "en" else
-                f"Fehlprüfungen: {failure_attempts} von 3. Die App prüft automatisch erneut."
-            )
-        else:
-            recovery_notice = ""
+        view = status_view.verdict(history, language, detail=detail, precision_pending=precision_pending,
+                                   paused=paused, setup_pending=setup_pending,
+                                   partial_eighth_digit=partial_eighth_digit, now=now)
+        tone, heading, icon, incident = view["tone"], view["heading"], view["icon"], view["incident"]
+        show_attempts, detail, routine_ok = view["show_attempts"], view["detail"], view["routine_ok"]
+        failure_attempts, retry_suppressed, recovery_notice = status_view.recovery(
+            history, language, paused, statistics_zone)
         activity = get_activity() if get_activity else {"detail": "Wartet auf die nächste automatische Prüfung."}
         if activity.get("state") == "setup_wait":
             tone, icon, incident, routine_ok = "neutral", "", "", False
@@ -4410,6 +4501,16 @@ def start_panel(
                     self.send_error(404)
                 else:
                     self.reply(content, "image/jpeg")
+                return
+            if path == "/hintergrund":
+                overview = background_view.summary(debug_log.read_text())
+                if language == "en":
+                    for tested in overview["experiments"].values():
+                        tested["label"] = EN_UI.get(tested["label"], tested["label"])
+                self.reply(json.dumps(overview).encode("utf-8"), "application/json")
+                return
+            if path == "/systemstatus":
+                self.reply(json.dumps(system_monitor.snapshot()).encode("utf-8"), "application/json")
                 return
             if path == "/debug-protokoll":
                 try:
@@ -4641,7 +4742,8 @@ def start_panel(
                 settings_hidden="" if settings_tab_active else "hidden",
                 tools_hidden="" if tools_tab_active else "hidden",
                 language_options=select_options({"auto": automatic, "de": "Deutsch", "en": "English"}, mode),
-                settings_open="open" if saved in ("1", "crop", "crop-reset", "fallback") else "",
+                settings_open="open" if saved in ("1", "crop-reset", "fallback") else "",
+                frames_note=html.escape(frames_note(auto_rules, language)),
                 fallback_saved_notice=auto_saved_notice if saved == "fallback" else "",
                 calibration_preview_html=(translate_page(CALIBRATION_PREVIEW_HTML) if language == "en"
                                           else CALIBRATION_PREVIEW_HTML),
@@ -4680,9 +4782,13 @@ def start_panel(
                 fine_alignment_checked="checked" if auto_rules.get("fine_alignment_enabled") else "",
                 adaptive_interval_checked="checked" if auto_rules.get("adaptive_interval_enabled") else "",
                 experiments_checked="checked" if auto_rules.get("experiments_enabled") else "",
-                experiment_perspective_checked=("checked" if (auto_rules.get("experiments") or {}).get("perspective")
-                                                else ""),
+                experiment_seven_segment_levels=experiment_level_options(
+                    (auto_rules.get("experiments") or {}).get("seven_segment"), language),
+                experiment_perspective_levels=experiment_level_options(
+                    (auto_rules.get("experiments") or {}).get("perspective"), language),
                 reflection_hide_checked="checked" if auto_rules.get("reflection_suggestion_hidden") else "",
+                quality_hint_checked="checked" if auto_rules.get("quality_hint_hidden") else "",
+                quality_hint_hidden="hidden" if auto_rules.get("quality_hint_hidden") else "",
                 reflection_suggestion_hidden="" if summary["reflection_suggestion"] else "hidden",
                 reflection_estimate_hidden="" if estimate.get("confirmed") else "hidden",
                 reflection_approval_hidden="" if pending_estimate else "hidden",
@@ -4781,7 +4887,8 @@ def start_panel(
                 interval_minutes=auto_rules.get("interval_minutes", DEFAULT_INTERVAL_MINUTES),
                 failure_pause_minutes=auto_rules.get("failure_pause_minutes", DEFAULT_FAILURE_PAUSE_MINUTES),
                 auto_rotation_value=editable_rotation(auto_rules),
-                auto_saved_notice=auto_saved_notice if saved in ("1", "crop", "crop-reset") else "",
+                auto_saved_notice=auto_saved_notice if saved in ("1", "crop-reset") else "",
+                overview_saved_notice=auto_saved_notice if saved == "crop" else "",
                 manual_reference=html.escape(str(settings.get("manual_reference", auto_rules["fallback_value"])),
                                              quote=True),
                 test_source_preview=test_source_preview,
@@ -4833,7 +4940,7 @@ def start_panel(
             if path not in ("/pruefen", "/automatik", "/ausschnitt-uebernehmen", "/sprache",
                             "/benachrichtigungen", "/bildquelle", "/einrichtung", "/einrichtungsbild",
                             "/einrichtung-ueberspringen", "/werkreset", "/automatik-pause",
-                            "/spiegelungs-hinweis-ausblenden", "/ergaenzte-ziffer-bestaetigen", "/selbsteinrichtung", "/fallback", "/ziffernrahmen", "/zaehler-demo", "/automatik-jetzt", "/vergleichsgenauigkeit"):
+                            "/spiegelungs-hinweis-ausblenden", "/bildqualitaet-hinweis-ausblenden", "/ergaenzte-ziffer-bestaetigen", "/selbsteinrichtung", "/fallback", "/ziffernrahmen", "/zaehler-demo", "/automatik-jetzt", "/vergleichsgenauigkeit"):
                 self.send_error(404)
                 return
             fallback = browser_locale(self.headers.get("Accept-Language", ""))
@@ -4869,7 +4976,7 @@ def start_panel(
                     if not 0 < length <= 4096:
                         raise ValueError("Invalid form length")
                     form = parse_qs(self.rfile.read(length).decode("ascii"), keep_blank_values=True,
-                                    max_num_fields=40)
+                                    max_num_fields=48)  # the wizard sends about 42 fields since the level selects (0.5.0)
                 elif content_type == "multipart/form-data" and path == "/pruefen":
                     if not 0 < length <= MAX_MANUAL_IMAGE_BYTES + MAX_MULTIPART_OVERHEAD:
                         raise ValueError("Invalid upload length")
@@ -5009,11 +5116,17 @@ def start_panel(
                 self.redirect("?ui=overview" + keep_mode)
                 return
             if path == "/zaehler-demo":
-                if not demo_lock.acquire(blocking=False):
+                # A second request waits for the first instead of failing at once.
+                if not demo_lock.acquire(timeout=45):
                     problem(503)
                     return
                 try:
-                    result = run_demo(field("reflection") == "1")
+                    picture = field("picture")
+                    if picture and real_demo is None:
+                        problem(503)
+                        return
+                    result = (real_demo(int(picture)) if picture.isdigit()
+                              else run_demo(field("reflection") == "1"))
                     self.reply(json.dumps(result).encode("utf-8"), "application/json")
                 except (OSError, ValueError, subprocess.SubprocessError):
                     problem(503)
@@ -5037,6 +5150,9 @@ def start_panel(
                     if field("preview") == "reflection":
                         preview = reflection_setup_preview(content, int(field("integer_digits")),
                                                            int(field("fraction_digits")), field("polarity"))
+                except CameraOffline as error:
+                    reason = EN_UI.get(str(error), str(error)) if language == "en" else str(error)
+                    self.reply(json.dumps({"reason": reason}).encode("utf-8"), "application/json; charset=utf-8", 503)
                 except (OSError, ValueError):
                     problem(503, "Das Kamerabild konnte nicht geladen werden.", "Could not load the camera image.")
                 else:
@@ -5048,6 +5164,15 @@ def start_panel(
                     wizard_image_lock.release()
                 return
 
+            if path == "/bildqualitaet-hinweis-ausblenden":
+                try:
+                    with rules_lock:
+                        save_auto_rules({**read_auto_rules(), "quality_hint_hidden": True}, request_check=False)
+                except (OSError, ValueError):
+                    problem(503)
+                    return
+                self.redirect("?ui=overview" + keep_mode)
+                return
             if path == "/spiegelungs-hinweis-ausblenden":
                 try:
                     with rules_lock:
@@ -5276,7 +5401,8 @@ def start_panel(
                     problem(503, "Der Ausschnitt konnte nicht gespeichert werden.",
                             "Could not save the image crop.")
                     return
-                self.redirect("?saved=crop&ui=settings" + keep_mode)
+                # The takeover belongs to the overview: that is where the automatic shows its result.
+                self.redirect("?saved=crop&ui=overview" + keep_mode)
                 return
             if path == "/fallback":
                 try:
@@ -5347,7 +5473,7 @@ def start_panel(
             if path == "/ziffernrahmen":
                 action = field("action")
                 try:
-                    if action not in ("save", "search"):
+                    if action not in ("save", "save_manual", "search"):
                         raise ValueError("Invalid digit action")
                     with rules_lock:
                         rules = read_auto_rules()
@@ -5372,8 +5498,20 @@ def start_panel(
                                 values["stationary_partial_scope"] = setup_source_id([source, revision])
                             if boxes != rules["digit_boxes"]:
                                 save_auto_rules(values)
+                        elif action == "save_manual":
+                            # Only the manual test gets these frames: the automatic keeps its own
+                            # and no automatic check is started (0.5.0).
+                            save_manual_settings({
+                                **load_manual_settings(), "polarity": rules["polarity"], "decimals": rules["decimals"],
+                                "attempts": rules["attempts"], "crop_mode": "manual", "crop": layout["crop"],
+                                "width": layout["width"], "rotation": layout["rotation"],
+                                "rotation_fine": fine_rotation(rules.get("rotation_fine", 0)),
+                                "digit_boxes": boxes, "crop_revision": rules.get("crop_revision", "")})
                     if action == "save":
                         self.redirect("?saved=digit-frames&ui=overview" + keep_mode)
+                        return
+                    if action == "save_manual":
+                        self.redirect("?saved=manual-crop&ui=tools" + keep_mode)
                         return
                     index = int(field("index"))
                     if not 0 <= index < count:
@@ -5381,6 +5519,12 @@ def start_panel(
                     version = field("image_version")
                     if field("image_kind") == "calibration":
                         content = get_calibration_image("frame", version) if get_calibration_image else None
+                    elif field("image_kind") == "test":
+                        # The picture of the last manual test (also an uploaded one); it only
+                        # changes with the next manual test.
+                        manual_picture = images.get("/testbild.jpg")
+                        content = (manual_picture.read_bytes()
+                                   if manual_picture is not None and manual_picture.exists() else None)
                     else:
                         with current_image.open("rb") as stream:
                             content = stream.read() if str(os.fstat(stream.fileno()).st_mtime_ns) == version else None
@@ -5471,6 +5615,7 @@ def start_panel(
                                          "adaptive_interval_enabled": field("adaptive_interval_enabled") == "1",
                                          **experiment_settings(field),
                                          "reflection_suggestion_hidden": field("reflection_suggestion_hidden") == "1",
+                                         "quality_hint_hidden": field("quality_hint_hidden") == "1",
                                          "polarity": polarity[0], "crop_mode": crop_mode[0],
                                          "crop": crop, "width": width, "rotation": rotation, "rotation_fine": rotation_fine, "digit_boxes": boxes,
                                          "max_flow_lph": max_flow, "interval_minutes": interval_minutes,

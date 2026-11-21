@@ -324,14 +324,18 @@ def consumption_statistics(series, source, now, zone):
             first, previous, step = left
             last, current, next_step = right
             overlap = min(end, last) - max(start, first)
-            if overlap <= 0 or step != next_step or current < previous:
+            mixed = step != next_step
+            # A changed reading precision (say whole cubic metres, then two decimals) does not
+            # make a counted volume wrong, only coarser: count it and mark it as estimated.
+            # Without a counted volume the interval stays unknown, not "measured zero".
+            if overlap <= 0 or current < previous or (mixed and current == previous):
                 continue
             duration = last - first
             if overlap < duration and duration > MAX_STATISTICS_GAP:
                 continue
             covered += overlap
             litres += (current - previous) * overlap / duration
-            estimated |= overlap < duration and current > previous
+            estimated |= mixed or (overlap < duration and current > previous)
         return {"label": label, "litres": round(litres) if covered else None,
                 "partial": 0 < covered < end - start - .001, "estimated": estimated}
 
@@ -343,4 +347,7 @@ def consumption_statistics(series, source, now, zone):
     days = [summarize(stamp, day_starts[index - 1] if index else now,
                       datetime.fromtimestamp(stamp, zone).strftime("%d.%m.%Y"))
             for index, stamp in enumerate(day_starts)]
-    return {"hours": hours, "days": days}
+    # The coarsest reading step of the shown day: with whole cubic metres an hourly bar can
+    # only be 0 or 1 m³, which the page says instead of showing a meaningless chart.
+    recent = [sample[2] for sample in samples if sample[0] >= hour_starts[-1]]
+    return {"hours": hours, "days": days, "resolution_litres": max(recent) if recent else None}

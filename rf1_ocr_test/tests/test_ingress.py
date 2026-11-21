@@ -127,6 +127,7 @@ class IngressFixture(TestCase):
             automatic_preview=self.automatic_preview, get_activity=lambda: dict(self.activity),
             discover_sources=lambda: self.suggestions,
             get_wizard_image=wizard_image,
+            test_source_image=getattr(self, "test_source", None),
             get_calibration=lambda: self.calibration, control_calibration=self.control_calibration,
             get_calibration_image=lambda kind, version: self.calibration_images.get((kind, version)),
             get_auto_paused=lambda: self.paused,
@@ -167,6 +168,22 @@ class IngressTests(IngressFixture):
         self.assertNotIn("camera.", target)
         page, _ = self.request("/", accept="en")
         self.assertIn(">Report a problem<", page)
+
+    def test_the_image_quality_note_can_be_hidden_for_good(self):
+        page = self.request("/")[0]
+        self.assertIn("desto länger dauern Einrichtung und Optimierung", page)
+        self.assertIn('class="quality-hint settings-note" >', page)
+        self.assertEqual(303, self.submit("/bildqualitaet-hinweis-ausblenden", hide="1")[0])
+        self.assertTrue(self.rules["quality_hint_hidden"])
+        self.assertIn('class="quality-hint settings-note" hidden>', self.request("/")[0])
+
+    def test_system_load_is_served_as_json(self):
+        sample = json.loads(self.request("/systemstatus")[0])
+        self.assertGreaterEqual(sample["cores"], 1)
+        self.assertIn("app_memory_mb", sample)
+        page = self.request("/")[0].decode() if isinstance(self.request("/")[0], bytes) else self.request("/")[0]
+        self.assertIn('id="system-monitor"', page)
+        self.assertIn('id="frames-note-overview"', page)
 
     def test_demo_post_is_separate_from_the_main_meter(self):
         values = {"csrf": self.csrf, "lang": "de", "reflection": "0"}
@@ -304,6 +321,77 @@ class IngressTests(IngressFixture):
         self.history.write_text(json.dumps({"geometry_recovery": {"failures": 3, "first_failure_at": 100, "scheduled_at": 7300}}))
         status = json.loads(self.request("/automatic")[0])
         self.assertIn("seit mindestens 40 Minuten nicht sicher erkannt", status["geometry_warning"])
+
+    def test_demo_offers_real_pictures_and_needs_the_worker_for_them(self):
+        page = self.request("/")[0]
+        self.assertEqual(4, page.count('class="run-demo-real"'))
+        # This test panel has no worker behind it: the real pictures are refused, not faked.
+        self.assertEqual(503, self.submit("/zaehler-demo", picture="1")[0])
+
+    def test_extended_view_reports_shadow_mode_and_background_work(self):
+        page = self.request("/")[0]
+        self.assertIn('id="background-work"', page)
+        with patch.object(panel.debug_log, "read_text", return_value=json.dumps(
+                {"kind": "automatic", "time": "t", "experiment": {
+                    "stable": "12.3", "seven_segment": {"reading": "123", "seconds": 0.1}}})):
+            overview = json.loads(self.request("/hintergrund")[0])
+            english = json.loads(self.request("/hintergrund?lang=en")[0])
+        self.assertEqual((1, 1), (overview["checks"], overview["experiments"]["seven_segment"]["same"]))
+        self.assertEqual("Digitalanzeige: Segmente direkt lesen", overview["experiments"]["seven_segment"]["label"])
+        self.assertNotEqual(overview["experiments"]["seven_segment"]["label"],
+                            english["experiments"]["seven_segment"]["label"])
+
+    def test_manual_test_can_be_started_at_the_top_and_shows_digits_while_reading(self):
+        page = self.request("/")[0]
+        top = page.index('id="start-check-top"')
+        self.assertLess(page.index('id="manual-test-area"'), top)
+        self.assertLess(top, page.index('id="manual-panel"'))
+        self.assertIn('form="manual-form" id="start-check-top"', page)
+        self.assertIn('id="test-live"', page)
+        self.assertIn('id="correct-after-test"', page)
+        self.assertIn("job.readings || []", page)
+
+    def test_frame_editor_can_search_on_the_picture_of_the_last_manual_test(self):
+        self.server.shutdown()
+        self.test_source = self.root / "testbild.jpg"
+        self.start_panel()
+        self.source_selected = True
+        self.setup_pending = False
+        self.rules.update(crop_mode="manual", crop="5,5,405,95", width=250, crop_revision="known", rotation=0)
+        boxes = [[i * 125, 100, (i + 1) * 125, 900] for i in range(8)]
+        self.rules["digit_boxes"] = boxes
+        Image.new("RGB", (460, 120), "gray").save(self.root / "current.jpg")
+        job = json.loads(self.request("/status")[0])
+        args = dict(csrf=self.csrf, token=job["digit_correction"]["token"], index="7", image_kind="test",
+                    image_version="123", digit_boxes=json.dumps(boxes), action="search")
+        # No manual test yet: nothing to search on.
+        self.assertEqual(409, self.submit("/ziffernrahmen", **{k: v for k, v in args.items() if k != "csrf"})[0])
+        Image.new("RGB", (460, 120), "white").save(self.root / "testbild.jpg", "JPEG")
+        with patch.object(panel, "suggest_single_digit_box", return_value={"box": [880, 80, 995, 900], "digit": "8"}) as search:
+            proposal, status = self.request("/ziffernrahmen", data=args)
+        self.assertEqual((200, [880, 80, 995, 900]), (status, json.loads(proposal)["box"]))
+        self.assertGreater(search.call_args.args[0].getpixel((5, 5))[0], 200)  # the white test picture, not the gray camera one
+
+    def test_frames_saved_for_the_manual_test_leave_the_automatic_alone(self):
+        self.source_selected = True
+        self.setup_pending = False
+        self.rules.update(crop_mode="manual", crop="5,5,405,95", width=250, crop_revision="known", rotation=0)
+        boxes = [[i * 125, 100, (i + 1) * 125, 900] for i in range(8)]
+        self.rules["digit_boxes"] = boxes
+        Image.new("RGB", (460, 120), "gray").save(self.root / "current.jpg")
+        job = json.loads(self.request("/status")[0])
+        moved = [*boxes[:-1], [880, 80, 995, 900]]
+        before = json.loads(json.dumps(self.rules))
+        self.assertEqual((303, "./?saved=manual-crop&ui=tools"), self.submit(
+            "/ziffernrahmen", token=job["digit_correction"]["token"], index="7", image_kind="current",
+            image_version=job["digit_correction_image"], digit_boxes=json.dumps(moved), action="save_manual"))
+        self.assertEqual(before, json.loads(json.dumps(self.rules)))
+        stored = json.loads(next(self.root.glob("manual-test-settings*.json")).read_text())
+        self.assertEqual((moved, "manual", "5,5,405,95", "known"),
+                         tuple(stored[key] for key in ("digit_boxes", "crop_mode", "crop", "crop_revision")))
+        page = self.request("/")[0]
+        self.assertIn("Für manuellen Test speichern", page)
+        self.assertIn("Für Automatik speichern", page)
 
     def test_one_digit_search_proposes_and_save_updates_only_boxes(self):
         self.source_selected = True
@@ -632,7 +720,7 @@ class IngressTests(IngressFixture):
         status = json.loads(self.request("/status?lang=en")[0])
         self.assertEqual("12345.120", status["ocr"])
         self.assertEqual(409, self.submit("/ausschnitt-uebernehmen", checked_at="90.0")[0])
-        self.assertEqual((303, "./?saved=crop&ui=settings"), self.submit(
+        self.assertEqual((303, "./?saved=crop&ui=overview"), self.submit(
             "/ausschnitt-uebernehmen", checked_at=status["crop_id"]))
         self.assertEqual(("manual", "1925,5,2005,390", 220, 90, 0),
                          (self.rules["crop_mode"], self.rules["crop"], self.rules["width"],
@@ -787,13 +875,25 @@ class IngressTests(IngressFixture):
             sections.append(section[:section.index("</details>")])
         return sections
 
+    def test_active_testing_is_shown_but_not_released(self):
+        import panel as module
+        self.assertIn('<option value="active" disabled>', module.experiment_level_options(True))
+        chosen = {"experiments_enabled": "1", "experiment_perspective": "active", "experiment_seven_segment": "1"}
+        self.assertEqual({"experiments_enabled": True, "experiments": {"perspective": False, "seven_segment": True}},
+                         module.experiment_settings(lambda name: chosen.get(name, "")))
+        english = self.request("/", accept="en")[0]
+        self.assertIn('<option value="1">Shadow mode</option>', english)
+        self.assertIn("Active testing (not released yet)", english)
+
     def test_wizard_and_settings_show_and_save_the_same_experiments(self):
-        self.rules.update(experiments_enabled=True, experiments={"perspective": True})
+        self.rules.update(experiments_enabled=True, experiments={"perspective": True, "seven_segment": False})
         page = self.request("/")[0]
         for section in self.experiment_boxes(page):
             self.assertIn("Experimentelle Funktionen (Schattenbetrieb)", section)
             self.assertIn('name="experiments_enabled" value="1" checked', section)
-            self.assertIn('name="experiment_perspective" value="1" checked', section)
+            self.assertIn('<select name="experiment_perspective"><option value="off">Aus</option>'
+                          '<option value="1" selected>Schattenmodus</option>'
+                          '<option value="active" disabled>', section)
         english = self.request("/", accept="en")[0]
         self.assertIn("Experimental functions (shadow mode)", self.experiment_boxes(english)[0])
         self.assertNotIn("Schattenbetrieb", english)
@@ -806,25 +906,25 @@ class IngressTests(IngressFixture):
         }
         # An older wizard form without the experiments box keeps the saved switches.
         self.assertEqual((303, "./?saved=setup&ui=overview"), self.submit("/einrichtung", **values))
-        self.assertEqual((True, {"perspective": True}), (self.rules["experiments_enabled"], self.rules["experiments"]))
+        self.assertEqual((True, {"perspective": True, "seven_segment": False}), (self.rules["experiments_enabled"], self.rules["experiments"]))
         # The wizard box switches both off, the settings show the same values afterwards.
         self.assertEqual((303, "./?saved=setup&ui=overview"),
                          self.submit("/einrichtung", experiments_option_present=1, **values))
-        self.assertEqual((False, {"perspective": False}), (self.rules["experiments_enabled"], self.rules["experiments"]))
+        self.assertEqual((False, {"perspective": False, "seven_segment": False}), (self.rules["experiments_enabled"], self.rules["experiments"]))
         for section in self.experiment_boxes(self.request("/")[0]):
             self.assertNotIn("checked", section)
         self.assertEqual((303, "./?saved=setup&ui=overview"),
                          self.submit("/einrichtung", experiments_option_present=1, experiments_enabled=1,
                                      experiment_perspective=1, **values))
-        self.assertEqual((True, {"perspective": True}), (self.rules["experiments_enabled"], self.rules["experiments"]))
+        self.assertEqual((True, {"perspective": True, "seven_segment": False}), (self.rules["experiments_enabled"], self.rules["experiments"]))
         # The settings save the same fields with the same logic.
         form = dict(decimals=0, attempts=3, crop_mode="auto", polarity="auto", experiments_enabled=1)
         self.assertEqual((303, "./?saved=1"), self.submit("/automatik", **form))
-        self.assertEqual((True, {"perspective": False}), (self.rules["experiments_enabled"], self.rules["experiments"]))
+        self.assertEqual((True, {"perspective": False, "seven_segment": False}), (self.rules["experiments_enabled"], self.rules["experiments"]))
         wizard, settings = self.experiment_boxes(self.request("/")[0])
         for section in (wizard, settings):
             self.assertIn('name="experiments_enabled" value="1" checked', section)
-            self.assertNotIn('name="experiment_perspective" value="1" checked', section)
+            self.assertIn('<select name="experiment_perspective"><option value="off" selected>', section)
 
     def test_fallback_can_be_saved_and_cleared_without_rerunning_setup(self):
         original = dict(self.rules)
@@ -1351,14 +1451,15 @@ class BrowserTests(IngressFixture):
             choices = page.locator('#wizard-crop-options input[type="radio"]')
             self.assertEqual(["learn", "auto", "manual"], choices.evaluate_all("(items) => items.map(item => item.value)"))
             self.assertTrue(page.get_by_role("radio", name="Automatische Selbsteinrichtung (empfohlen)").is_checked())
-            page.locator("#wizard-calibration-options input").fill("18")
             page.locator('#setup-form [name="reflection_estimate_enabled"]').check()
             page.locator('.setup-step[data-step="2"] .setup-next').click()
             page.locator('#setup-form button[type="submit"]').click()
             page.get_by_text("Einrichtung gespeichert.", exact=True).wait_for()
             self.assertEqual("true", page.locator("#tab-overview").get_attribute("aria-selected"))
             page.locator("#calibration-overview .setup-timeline-box").wait_for(state="visible")
-            self.assertEqual(18, self.calibration["limit"])
+            # The image limit is no longer a setting of the wizard (0.5.0); the default applies.
+            from calibration import DEFAULT_LIMIT
+            self.assertEqual(DEFAULT_LIMIT, self.calibration["limit"])
             self.assertTrue(self.rules["reflection_estimate_enabled"])
             self.assertEqual("12345,67", self.rules["fallback_value"])
             self.calibration.update(state="testing", stage="ocr", rotation=-6, variant=2, seconds=880)
@@ -1670,11 +1771,13 @@ class BrowserTests(IngressFixture):
             self.assertEqual(400, frame.locator("#test-preview-image").evaluate(
                 "async image => { await image.decode(); return image.naturalWidth; }"))
             frame.locator("#apply-crop-form button").click()
+            # 0.5.0: the takeover returns to the overview and confirms it there.
+            frame.locator("#view-overview .save-notice").wait_for(state="visible")
             frame.locator("#tab-settings").click()
+            frame.locator("#view-settings").wait_for(state="visible")
             automatic_settings = frame.locator("#automatic-settings")
             if not automatic_settings.evaluate("section => section.open"):
-                automatic_settings.locator("summary").click()
-            frame.locator("#view-settings").wait_for(state="visible")
+                automatic_settings.locator(":scope > summary").click()
             self.assertEqual("manual", self.rules["crop_mode"])
             self.assertEqual(90, self.rules["rotation"])
             frame.get_by_role("checkbox", name="Verdeckte Ziffern ergänzen").wait_for(state="visible")

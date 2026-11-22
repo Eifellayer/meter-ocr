@@ -79,7 +79,8 @@ class BackgroundWorkTest(unittest.TestCase):
         self.assertIn("Last 0.73", entries[1]["result"])
         self.assertEqual((4, 10), (entries[2]["completed"], entries[2]["total"]))
         running = background_live.entries(state, None, None, True)
-        self.assertEqual("running", running[1]["state"])
+        # 0.5.17: shadow mode no longer claims to run alongside the check; it shows its last result.
+        self.assertNotEqual("running", running[1]["state"])
         english = background_live.entries(state, None, {"reason": "unclear_check", "image": None}, False, "en")
         self.assertEqual("waiting", english[0]["state"])
         self.assertIn("Re-reading", english[0]["step"])

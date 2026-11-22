@@ -537,6 +537,8 @@ def only_known_hidden_unclear(ocr, decimals, integer_digits, hidden_slots):
     if not hidden_slots or len(shown) != integer_digits + decimals or "?" not in shown:
         return False
     unclear = {index for index, char in enumerate(shown) if char == "?"}
+    # A turning last compared roller is allowed as well: it is not rechecked during the check, but
+    # re-read in the pause between two checks (0.5.17, Stefan 22.11., 15:31/15:33).
     turning = {len(shown) - 1} if decimals >= 2 else set()
     return bool(unclear & set(hidden_slots)) and unclear <= set(hidden_slots) | turning
 

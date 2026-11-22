@@ -174,6 +174,9 @@ label.check-option input[type="checkbox"]:disabled{{cursor:not-allowed}}
 .demo-grid{{display:grid;gap:.8rem;grid-template-columns:repeat(auto-fit,minmax(min(100%,13rem),1fr))}}
 .demo-grid figure{{margin:0}}
 .demo-grid img{{width:100%;background:#101b23;border-radius:.6rem}}
+.setup-success{{position:relative}}
+.setup-success-close{{position:absolute;top:.5rem;right:.5rem;min-height:2.4rem;width:2.4rem;padding:0;border-radius:50%;background:transparent;border-color:transparent;color:inherit;font-size:1rem;line-height:1}}
+.setup-success-close:hover{{background:light-dark(#d6efdf,#24503a)}}
 .setup-success-icon{{font-size:1.5rem;font-weight:750;line-height:1.25}}
 .setup-success strong{{font-size:clamp(1.15rem,4vw,1.4rem)}}
 .setup-success p{{margin:.35rem 0 0}}
@@ -757,6 +760,7 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 <div><strong>Zähler erfolgreich eingerichtet</strong>
 <p id="setup-duration" {setup_duration_hidden}>{setup_duration}</p>
 <p>Die Automatik läuft. Rahmen und Winkel verbessert die App automatisch im Hintergrund mit den normalen Prüfbildern weiter.</p></div>
+<button type="button" class="setup-success-close" id="setup-success-close" aria-label="Hinweis ausblenden" title="Ausblenden">✕</button>
 </div>
 <div class="reflection-suggestion action-needed" id="hidden-digit-prompt" hidden>
 <p><strong>Ziffer verdeckt.</strong> <span id="hidden-digit-text">Eine Stelle ist durch eine Spiegelung verdeckt.</span> Trag einmal den aktuellen Zählerstand ein. Danach ergänzt die App die verdeckte Stelle selbst, solange nur ein Wert zum Verbrauch passt.</p>
@@ -766,6 +770,7 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 <input type="hidden" name="fallback_time" id="hidden-digit-time" value="">
 <figure class="hidden-digit-figure" id="hidden-digit-figure" hidden><img id="hidden-digit-image" alt="Ausschnitt des Zählwerks aus der letzten Aufnahme"><figcaption>Zählwerk in der letzten Aufnahme<span id="hidden-digit-image-time"></span>. Lies den Stand hier ab; die verdeckte Stelle bitte am Zähler nachsehen.</figcaption></figure>
 <label>Aktueller Zählerstand<input name="fallback_value" inputmode="decimal" maxlength="16" placeholder="z. B. 10486,16" required></label>
+<label class="check-option"><input type="checkbox" name="hide_prompt" value="1"> Zählerstand speichern und diese Frage dauerhaft ausblenden</label>
 <button type="submit">Zählerstand übernehmen</button>
 </form></div>
 <div class="activity-status" data-state="{automatic_activity_state}" data-routine-ok="{automatic_routine_ok}">
@@ -847,6 +852,14 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 </div>
 <details class="setup-help calibration-candidate-panel" open hidden><summary>Gefundene Rahmen (Kandidaten)</summary><ol class="calibration-candidates"></ol></details>
 {calibration_skip_html}
+<div class="reflection-suggestion action-needed glare-confirm" hidden>
+<p><strong>Spiegelung erkannt.</strong> <span class="glare-confirm-text"></span> Bitte bestätige das und trag den aktuellen Zählerstand ein. Die App übernimmt dann den Rahmen und nutzt den Stand in den weiteren Prüfungen, um die verdeckte Stelle zu ergänzen.</p>
+<form method="post" action="selbsteinrichtung" class="reflection-actions">
+<input type="hidden" name="lang" value="{language}"><input type="hidden" name="mode" value="{language_mode}">
+<input type="hidden" name="csrf" value="{csrf}"><input type="hidden" name="glare_id" value="">
+<label>Aktueller Zählerstand<input name="fallback_value" inputmode="decimal" maxlength="16" placeholder="z. B. 10512,345" required></label>
+<button type="submit" name="action" value="confirm-reflection">Bestätigen und übernehmen</button>
+</form></div>
 <p class="calibration-image-hint settings-note" hidden></p>
 <button type="button" id="calibration-open-region">Ziffernfeld manuell markieren</button>
 <progress id="calibration-overview-progress" aria-label="Verstrichene Zeit der Selbsteinrichtung"></progress>
@@ -1135,6 +1148,14 @@ name: Zählerstand (OCR)</code></pre>
 {calibration_preview_html}
 </details>
 {calibration_skip_html}
+<div class="reflection-suggestion action-needed glare-confirm" hidden>
+<p><strong>Spiegelung erkannt.</strong> <span class="glare-confirm-text"></span> Bitte bestätige das und trag den aktuellen Zählerstand ein. Die App übernimmt dann den Rahmen und nutzt den Stand in den weiteren Prüfungen, um die verdeckte Stelle zu ergänzen.</p>
+<form method="post" action="selbsteinrichtung" class="reflection-actions">
+<input type="hidden" name="lang" value="{language}"><input type="hidden" name="mode" value="{language_mode}">
+<input type="hidden" name="csrf" value="{csrf}"><input type="hidden" name="glare_id" value="">
+<label>Aktueller Zählerstand<input name="fallback_value" inputmode="decimal" maxlength="16" placeholder="z. B. 10512,345" required></label>
+<button type="submit" name="action" value="confirm-reflection">Bestätigen und übernehmen</button>
+</form></div>
 <p class="calibration-image-hint settings-note" hidden></p>
 <button type="button" id="calibration-proposal" hidden>Gefundenen Rahmen im Test prüfen</button>
 <progress id="calibration-progress" aria-label="Verstrichene Zeit der Selbsteinrichtung" hidden></progress>
@@ -1639,6 +1660,14 @@ tabs.forEach((tab, index) => {{
     tabs[next].focus();
     tabs[next].click();
   }});
+}});
+function setupSuccessClosed() {{
+  try {{ return localStorage.getItem('setupSuccessClosed'); }} catch (_) {{ return null; }}
+}}
+document.querySelector('#setup-success-close')?.addEventListener('click', () => {{
+  const box = document.querySelector('#setup-success');
+  try {{ localStorage.setItem('setupSuccessClosed', document.querySelector('#setup-duration').textContent || ''); }} catch (_) {{}}
+  box.hidden = true;
 }});
 const settingsSections = ['#source-settings', '#automatic-settings', '#notification-settings'];
 const readingEnteredAt = searchPrefs.get('saved') === 'reading' ? Date.now() / 1000 : 0;
@@ -2972,6 +3001,21 @@ function renderSetupTimeline(box, model) {{
     }}
   }}
 }}
+function renderGlareConfirm(status, active, background) {{
+  const prompt = active && !background && status && status.glare_prompt;
+  for (const box of document.querySelectorAll('.glare-confirm')) {{
+    box.hidden = !prompt;
+    if (!prompt) continue;
+    const en = lang === 'en';
+    box.querySelector('[name="glare_id"]').value = prompt.id;
+    const visible = String(prompt.visible || '');
+    const text = (en ? 'Digit ' : 'Stelle ') + prompt.positions.join(en ? ' and ' : ' und ') +
+      (en ? ' looks hidden by a reflection' : ' sieht durch eine Spiegelung verdeckt aus') +
+      (visible ? (en ? ' (read so far: ' : ' (bisher gelesen: ') + visible + ')' : '') + '.';
+    const out = box.querySelector('.glare-confirm-text');
+    if (out.textContent !== text) out.textContent = text;
+  }}
+}}
 function renderSetupCandidates(list, candidates) {{
   const en = lang === 'en';
   const key = JSON.stringify(candidates);
@@ -2983,8 +3027,8 @@ function renderSetupCandidates(list, candidates) {{
     if (candidate.number) parts.push((en ? 'Frame ' : 'Rahmen ') + candidate.number);
     if (candidate.rotation != null) parts.push(String(candidate.rotation).replace('-', '−') + '°');
     // 0.5.11: two percentages – glyph found in the digit fields / agreement of the readings.
-    if (candidate.found != null) parts.push((en ? 'digits found ' : 'Ziffern gefunden ') + candidate.found + ' %');
-    if (candidate.percent != null) parts.push((candidate.found != null ? (en ? 'read ' : 'gelesen ') : '') + candidate.percent + ' %');
+    if (candidate.found != null) parts.push((en ? 'fields with a digit ' : 'Felder mit Ziffer ') + candidate.found + ' %');
+    if (candidate.percent != null) parts.push((candidate.found != null ? (en ? 'reading agreement ' : 'Lese-Übereinstimmung ') : '') + candidate.percent + ' %');
     parts.push(candidate.reading || '–');
     // 0.4.0 status fields; older status data has none of them.
     const hits = Number(candidate.hits);
@@ -2995,6 +3039,10 @@ function renderSetupCandidates(list, candidates) {{
     if (Number.isFinite(merged) && merged > 0) {{
       parts.push(merged + (en ? (merged === 1 ? ' similar frame merged' : ' similar frames merged') :
         (merged === 1 ? ' ähnlicher Rahmen zusammengefasst' : ' ähnliche Rahmen zusammengefasst')));
+    }}
+    if (Array.isArray(candidate.reflected) && candidate.reflected.length) {{
+      parts.push((en ? 'digit ' : 'Stelle ') + candidate.reflected.join(en ? ' and ' : ' und ') +
+        (en ? ' hidden (reflection)' : ' verdeckt (Spiegelung)'));
     }}
     if (candidate.selected) parts.push(en ? 'being checked' : 'wird geprüft');
     row.textContent = parts.join(' · ');
@@ -3240,6 +3288,7 @@ function refreshCalibration(status) {{
       (status.intensive ? 'Ergebnis anzeigen' : 'Rahmen speichern und Automatik starten');
   }}
   const reason = status.preview?.reason;
+  renderGlareConfirm(status, active, background);
   for (const list of document.querySelectorAll('.calibration-candidates')) {{
     renderSetupCandidates(list, status.candidates || []);
     const rejectedCount = renderRejectedCandidates(list, status.rejected);
@@ -3589,7 +3638,9 @@ async function refreshTestStatus() {{
     showRegionPhoto();
     showRegionChoices(job.calibration?.preview?.regions);
     const success = document.querySelector('#setup-success');
-    success.hidden = !job.setup_success;
+    // 0.5.17 (Stefan 22.11., 15:28): "for the impatient" the notice can be closed; it stays
+    // closed for this setup only.
+    success.hidden = !job.setup_success || setupSuccessClosed() === (job.setup_success?.duration || '');
     const duration = document.querySelector('#setup-duration');
     duration.textContent = job.setup_success?.duration || '';
     duration.hidden = !duration.textContent;
@@ -4774,6 +4825,12 @@ def start_panel(
         if (type(finished_check) in (int, float) and finished_check > completed["time"]
                 and time.time() - completed["time"] >= 5):
             return None
+        # 0.5.17 (Stefan 22.11., 15:26): a setup saved with a reflection (or a still meter) only
+        # counts as completed with its first passed automatic check; the notice then stays a
+        # minute instead of until the next check.
+        if (type(finished_check) in (int, float) and abs(finished_check - completed["time"]) < 5
+                and time.time() - completed["time"] >= 60):
+            return None
         elapsed = completed["duration_seconds"]
         details = []
         if type(elapsed) is int and elapsed >= 0:
@@ -4885,7 +4942,8 @@ def start_panel(
             "reflection_estimate": reflection_estimate,
             "filled_slots": [slot for slot in history.get("filled_slots") or [] if type(slot) is int],
             "hidden_digit_prompt": (history.get("hidden_digit_prompt")
-                                    if auto_rules.get("reflection_estimate_enabled") else None),
+                                    if auto_rules.get("reflection_estimate_enabled")
+                                    and not auto_rules.get("hidden_digit_prompt_hidden") else None),
             "reflection_live_estimate": (history.get("reflection_live_estimate")
                                         if auto_rules.get("reflection_estimate_enabled") else None),
             "reflection_suggestion": reflection_suggestion,
@@ -5147,6 +5205,8 @@ def start_panel(
                 "Gesicherter Ausschnitt wiederhergestellt." if saved == "crop-restored" else
                 "Fallback-Wert gespeichert." if saved == "fallback" else
                 "Zählerstand übernommen. Die nächste Prüfung startet jetzt." if saved == "reading" else
+                ("Gerade läuft schon eine Prüfung oder Einrichtung, oder die Automatik ist pausiert. "
+                 "Eine weitere Prüfung startet danach automatisch.") if saved == "check-busy" else
                 "Automatische Prüfregeln gespeichert." if saved == "1" else
                 "Getesteten Bildausschnitt für die Automatik übernommen." if saved == "crop" else
                 "Ausschnitt zurückgesetzt. Die Automatik sucht die Ziffernreihe wieder selbst." if saved == "crop-reset" else
@@ -5352,7 +5412,7 @@ def start_panel(
                 failure_pause_minutes=auto_rules.get("failure_pause_minutes", DEFAULT_FAILURE_PAUSE_MINUTES),
                 auto_rotation_value=editable_rotation(auto_rules),
                 auto_saved_notice=auto_saved_notice if saved in ("1", "crop-reset") else "",
-                overview_saved_notice=auto_saved_notice if saved in ("crop", "reading") else "",
+                overview_saved_notice=auto_saved_notice if saved in ("crop", "reading", "check-busy") else "",
                 manual_reference=html.escape(str(settings.get("manual_reference", auto_rules["fallback_value"])),
                                              quote=True),
                 test_source_preview=test_source_preview,
@@ -5559,8 +5619,9 @@ def start_panel(
 
             if path == "/automatik-jetzt":
                 if not start_automatic_check or not start_automatic_check():
-                    problem(409, "Die automatische Prüfung kann gerade nicht gestartet werden.",
-                            "An automatic check cannot be started right now.")
+                    # 0.5.17 (Stefan 22.11., 15:30): no bare error page – usually a check is already
+                    # running or requested. Back to the overview with a short note.
+                    self.redirect("?ui=overview&saved=check-busy" + keep_mode)
                     return
                 self.redirect("?ui=overview" + keep_mode)
                 return
@@ -5881,7 +5942,8 @@ def start_panel(
                             rules["integer_digits"], rules["fraction_digits"],
                         )
                         save_auto_rules({**rules, "fallback_value": value, "fallback_time": stamp,
-                                         "setup_input_source": setup_source_id(get_source()[0])})
+                                         "setup_input_source": setup_source_id(get_source()[0]),
+                                         **({"hidden_digit_prompt_hidden": True} if field("hide_prompt") == "1" else {})})
                 except ValueError:
                     problem(400, "Bitte Zählerstand und Ablesezeit prüfen.", "Check the meter reading and its time.")
                     return
@@ -5900,14 +5962,20 @@ def start_panel(
                     return
                 action = field("action")
                 try:
-                    if action not in ("start", "intensive", "cancel", "restore", "skip-verification"):
+                    if action not in ("start", "intensive", "cancel", "restore", "skip-verification", "confirm-reflection"):
                         raise ValueError("Invalid calibration action")
                     starting = action in ("start", "intensive")
                     limit = int(field("image_limit", str(DEFAULT_LIMIT))) if starting else 0
                     if starting and not MIN_IMAGE_LIMIT <= limit <= MAX_IMAGES:
                         raise ValueError("Invalid calibration image limit")
                     region = search_region(field("region")) if action == "start" else None
-                    if action == "skip-verification":
+                    if action == "confirm-reflection":
+                        rules = read_auto_rules()
+                        reading = fallback_options(field("fallback_value"),
+                                                   datetime.now(statistics_zone).strftime("%Y-%m-%dT%H:%M"),
+                                                   rules["decimals"], rules["integer_digits"], rules["fraction_digits"])
+                        control_calibration(action, 0, verification_id=field("glare_id"), reading=reading)
+                    elif action == "skip-verification":
                         verification_id = field("verification_id")
                         if not verification_id:
                             raise ValueError("Missing verification ID")
@@ -5917,6 +5985,10 @@ def start_panel(
                     else:
                         control_calibration(action, limit)
                 except ValueError:
+                    if action == "confirm-reflection":
+                        problem(400, "Bitte den Zählerstand prüfen. Die Spiegelung wartet nicht mehr auf eine Bestätigung, wenn die Einrichtung inzwischen weiter ist.",
+                                "Check the meter reading. The reflection no longer waits for a confirmation if the setup has moved on.")
+                        return
                     if action == "skip-verification":
                         problem(409, "Die Gegenprobe für diesen Rahmen ist nicht mehr offen.",
                                 "Verification for this crop is no longer pending.")
@@ -5932,7 +6004,7 @@ def start_panel(
                     problem(503)
                     return
                 saved = "crop-restored" if action == "restore" else "calibration"
-                view = "overview" if action in ("start", "intensive", "skip-verification") else "settings"
+                view = "overview" if action in ("start", "intensive", "skip-verification", "confirm-reflection") else "settings"
                 self.redirect(f"?saved={saved}&ui={view}" + keep_mode)
                 return
             if path == "/ziffernrahmen":

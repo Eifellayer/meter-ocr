@@ -198,7 +198,7 @@ class IngressTests(IngressFixture):
         self.automatic_available = True
         self.assertTrue(json.loads(self.request("/automatic")[0])["can_start_automatic"])
         self.assertEqual((303, "./?ui=overview"), self.submit("/automatik-jetzt"))
-        self.assertEqual(409, self.submit("/automatik-jetzt")[0])
+        self.assertEqual((303, "./?ui=overview&saved=check-busy"), self.submit("/automatik-jetzt"))
         self.assertEqual(1, self.automatic_requests)
         self.assertTrue(self.requested.empty())
 

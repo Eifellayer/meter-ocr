@@ -1115,10 +1115,13 @@ def digit_presence(register, boxes, skip=()):
     First of the two percentages (0.5.11): "is there a digit in every field?". Frames in
     ``skip`` (hidden by a reflection) are left out. Returns None when no frame can be judged.
     """
+    # 0.5.17 (Stefan 22.11., 15:21: "Ziffern gefunden 0 %" next to a good reading): the shape test
+    # rejected real digits whose frame touches the dark gaps between the rollers. Only the middle
+    # of a frame is judged now, like for the empty-field check.
     gray = register.convert("L")
-    judged = [_field_holds_glyph(gray, box) for index, box in enumerate(boxes) if index not in skip]
-    judged = [value for value in judged if value is not None]
-    return round(100 * sum(judged) / len(judged)) if judged else None
+    blank = [_field_center_blank(gray, box) for index, box in enumerate(boxes) if index not in skip]
+    judged = [value for value in blank if value is not None]
+    return round(100 * judged.count(False) / len(judged)) if judged else None
 
 
 def empty_digit_slots(register, boxes, skip=()):

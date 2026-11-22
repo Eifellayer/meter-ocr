@@ -792,6 +792,8 @@ EN_UI = {
         "Digit varied across OCR attempts or was composed from multiple attempts",
     "Ziffer gelesen": "Digit read",
     "Ziffer weiterhin unklar": "Digit still unclear",
+    ">Grau:<": ">Grey:<",
+    " Stelle wurde nicht verglichen (z. B. drehende letzte Rolle).": " digit was not compared (e.g. turning last roller).",
     "Ziffer unklar": "Digit unclear",
     "Die Farben zeigen OCR-Sicherheit, nicht die Übereinstimmung mit dem Referenzstand.":
         "The colors show OCR confidence, not whether the reading matches the reference.",

@@ -123,10 +123,19 @@ header{{display:flex;align-items:baseline;justify-content:space-between;gap:.5re
 .dialog-heading h2{{margin:0}}
 .tab-content[hidden]{{display:none}}
 .automatic-images{{margin:1rem 0}}
-.check-option{{display:flex;align-items:center;gap:.5rem;grid-column:1/-1}}
-.check-option input{{min-height:1.15rem;width:1.15rem;margin:0}}
+/* 0.5.15 (Stefan 22.11., 14:45/14:46): options to tick are soft tiles with a slide switch, like
+   the settings of a current smartphone. The real checkbox stays: keyboard and screen readers work. */
+.check-option{{display:flex;align-items:center;justify-content:space-between;gap:.9rem;grid-column:1/-1;min-height:2.9rem;padding:.6rem .9rem;border:1px solid var(--edge);border-radius:.95rem;background:light-dark(#f6f9fb,#1f2b35);color:inherit;font-size:.95rem;font-weight:550;cursor:pointer;transition:background .2s ease,border-color .2s ease,box-shadow .2s ease}}
+.check-option:hover{{border-color:light-dark(#b9c9d4,#4d6170)}}
+.check-option:has(input:checked){{background:light-dark(#e6f6f1,#17352f);border-color:light-dark(#8fd0bf,#2f7868)}}
+.check-option:has(input:disabled){{opacity:.6;cursor:not-allowed}}
+label.check-option input[type="checkbox"]{{appearance:none;-webkit-appearance:none;order:2;flex:0 0 auto;position:relative;width:2.9rem;min-width:2.9rem;height:1.7rem;min-height:1.7rem;margin:0;padding:0;border:0;border-radius:99px;background:light-dark(#c3cfd8,#4a5a66);cursor:pointer;transition:background .2s ease}}
+label.check-option input[type="checkbox"]::before{{content:"";position:absolute;top:.15rem;left:.15rem;width:1.4rem;height:1.4rem;border-radius:50%;background:#fff;box-shadow:0 1px 3px #0005;transition:transform .2s ease}}
+label.check-option input[type="checkbox"]:checked{{background:light-dark(#12a38b,#2ec4a6)}}
+label.check-option input[type="checkbox"]:checked::before{{transform:translateX(1.2rem)}}
+label.check-option input[type="checkbox"]:disabled{{cursor:not-allowed}}
+@media(prefers-reduced-motion:reduce){{.check-option,label.check-option input[type="checkbox"],label.check-option input[type="checkbox"]::before{{transition:none}}}}
 .notification-form input{{width:100%}}
-.notification-form .check-option input{{width:1.15rem}}
 .automatic-banner{{display:flex;align-items:flex-start;gap:.6rem;margin:0 0 1rem;padding:.8rem .9rem;border:1px solid var(--edge);border-radius:.75rem}}
 .automatic-banner[data-tone="ok"]{{border-color:#65a986;background:light-dark(#edf8f0,#183a2a);color:light-dark(#155d39,#a2e5bc)}}
 .automatic-banner[data-tone="warning"], .test-box[data-result="warning"]{{border-color:#b58b38;background:light-dark(#fff8df,#3b311d);color:light-dark(#704c08,#ffdf8a)}}
@@ -380,6 +389,7 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .green-key{{color:light-dark(#13824c,#7bcfa3);font-weight:700}}
 .yellow-key{{color:light-dark(#916509,#f1b836);font-weight:700}}
 .red-key{{color:light-dark(#b43c44,#eda2a8);font-weight:700}}
+.grey-key{{color:light-dark(#6b7782,#a3afb9);font-weight:700}}
 .apply-crop{{margin-top:.8rem}}
 .ocr-details{{margin:.7rem 0;font-size:.9rem}}
 .ocr-details summary{{cursor:pointer;color:var(--muted);font-weight:600;padding:.35rem 0}}
@@ -424,8 +434,9 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 .meter-hero-wait{{margin:.35rem 0 0;font-size:.88rem;color:var(--muted)}}
 .meter-hero-action{{margin:.5rem 0 0}}
 .meter-hero-action a{{display:inline-block;padding:.4rem .8rem;border-radius:.6rem;border:2px solid light-dark(#b26a00,#ffb74d);font-weight:700;color:inherit;text-decoration:none}}
-.background-work-box{{margin:.5rem 0 .75rem}}
-.background-work-toggle{{display:inline-flex;gap:.45rem;align-items:center;font-size:.92rem;cursor:pointer}}
+.background-work-box{{margin:1rem 0 .5rem}}
+/* Decent: a small, quiet row at the end of the card. */
+.check-option.background-work-toggle{{min-height:2.4rem;padding:.35rem .75rem;font-size:.86rem;font-weight:500;color:var(--muted);background:transparent}}
 .background-live{{margin-top:.5rem}}
 .background-job{{margin:0 0 .6rem;padding:.6rem .85rem;border:1px solid var(--edge);border-radius:.75rem}}
 .background-job[data-state="running"]{{border-color:var(--accent)}}
@@ -772,14 +783,6 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 <div class="digit-grid-wrap" id="automatic-last-digit-grid" hidden><table class="digit-grid" aria-label="Gelesene Ziffern je Versuch und Stelle"><thead></thead><tbody></tbody></table></div>
 </details>
 </div>
-<div class="background-work-box">
-<label class="background-work-toggle"><input type="checkbox" id="show-background-work"> Hintergrundaufgaben anzeigen</label>
-<section id="background-live" class="background-live" aria-label="Hintergrundaufgaben" hidden>
-<p class="settings-note">Hier siehst du, was die App zwischen den regulären Prüfungen selbstständig erledigt: die letzte Nachkommastelle genauer bestimmen, unklare Ergebnisse nachprüfen und neue Leseverfahren testen. Nur zur Information – du musst nichts tun.</p>
-<div id="background-live-list"></div>
-<p class="settings-note background-load" id="background-load" role="status"></p>
-</section>
-</div>
 <div class="crop-actions" id="setup-start-actions" {resume_setup_hidden}>
 <button type="button" id="resume-setup">Einrichtung fortsetzen</button>
 </div>
@@ -888,9 +891,17 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 <summary>Beste Kandidaten der Rahmen-Nachprüfung</summary>
 <ol id="ocr-candidates"></ol>
 </details>
-<p class="legend" id="preview-legend" {preview_legend_hidden}><span class="green-key">Grün:</span> Ziffer gelesen · <span class="yellow-key">Gelb:</span> Ziffer schwankte zwischen OCR-Versuchen oder wurde aus mehreren Versuchen zusammengesetzt · <span class="red-key">Rot:</span> Ziffer weiterhin unklar. Die Farben zeigen OCR-Sicherheit, nicht die Übereinstimmung mit dem Referenzstand. Ohne automatisch erkannte Ziffernrahmen sind die Bereiche nur näherungsweise aufgeteilt.</p>
+<p class="legend" id="preview-legend" {preview_legend_hidden}><span class="green-key">Grün:</span> Ziffer gelesen · <span class="yellow-key">Gelb:</span> Ziffer schwankte zwischen OCR-Versuchen oder wurde aus mehreren Versuchen zusammengesetzt · <span class="red-key">Rot:</span> Ziffer weiterhin unklar · <span class="grey-key">Grau:</span> Stelle wurde nicht verglichen (z. B. drehende letzte Rolle). Die Farben zeigen OCR-Sicherheit, nicht die Übereinstimmung mit dem Referenzstand. Ohne automatisch erkannte Ziffernrahmen sind die Bereiche nur näherungsweise aufgeteilt.</p>
 </div>
 </details>
+<div class="background-work-box">
+<label class="check-option background-work-toggle"><input type="checkbox" id="show-background-work"> Hintergrundaufgaben anzeigen</label>
+<section id="background-live" class="background-live" aria-label="Hintergrundaufgaben" hidden>
+<p class="settings-note">Hier siehst du, was die App zwischen den regulären Prüfungen selbstständig erledigt: die letzte Nachkommastelle genauer bestimmen, unklare Ergebnisse nachprüfen und neue Leseverfahren testen. Nur zur Information – du musst nichts tun.</p>
+<div id="background-live-list"></div>
+<p class="settings-note background-load" id="background-load" role="status"></p>
+</section>
+</div>
 <p class="connection-status" id="source-connection" data-state="{source_connection_state}">Quelle: {source_connection}</p>
 <dl class="fact-grid"><div><dt>Erkannter Stand</dt><dd id="automatic-ocr">{ocr}</dd></div>
 <div><dt title="Stand aus der ersten Aufnahme oder aus einer externen Quelle">Vergleichswert</dt><dd><span id="automatic-reference">{reference}</span>
@@ -3894,12 +3905,13 @@ manualForm.addEventListener('invalid', () => {{
 }}, true);
 tick(); setInterval(tick, 1000);
 const automaticBanner = document.querySelector('#automatic-banner');
+let filledSlots = [];
 function renderOdometer(reading) {{
   const box = document.querySelector('#meter-odometer');
   const text = String(reading || '').trim();
   // Rollers beyond the compared decimal places are not needed and not shown (0.5.0).
   const shown = Number.isInteger(configuredDecimals) ? configuredDecimals : 9;
-  const key = text + '|' + shown;
+  const key = text + '|' + shown + '|' + filledSlots.join(',');
   if (box.dataset.rendered === key) return;
   box.dataset.rendered = key;
   box.setAttribute('aria-label', (lang === 'en' ? 'Meter reading ' : 'Zählerstand ') + (text || '–'));
@@ -3912,9 +3924,13 @@ function renderOdometer(reading) {{
   }}
   const [whole, allFraction = ''] = text.replace(',', '.').split('.');
   const fraction = allFraction.slice(0, shown);
+  let slot = 0;
   const roller = (char, isFraction) => {{
     const cell = document.createElement('span');
-    cell.className = 'roller' + (isFraction ? ' fraction' : '') + (/[0-9]/.test(char) ? '' : ' unclear');
+    const filled = filledSlots.includes(slot++) && /[0-9]/.test(char);
+    cell.className = 'roller' + (isFraction ? ' fraction' : '') + (/[0-9]/.test(char) && !filled ? '' : ' unclear');
+    if (filled) cell.title = lang === 'en' ? 'Filled in from the meter reading (hidden by a reflection)' :
+      'Aus dem Zählerstand ergänzt (durch Spiegelung verdeckt)';
     cell.textContent = char;
     return cell;
   }};
@@ -4332,6 +4348,7 @@ async function refreshAutomatic() {{
     recovery.textContent = sample.recovery_notice;
     // 0.5.12 (Stefan 13:43): once the reading was entered the request disappears; it only comes
     // back when a check after the entry could not fill the digit again.
+    filledSlots = Array.isArray(sample.filled_slots) ? sample.filled_slots : [];
     const hiddenPrompt = sample.hidden_digit_prompt && !(readingEnteredAt && Number(sample.hidden_digit_prompt.image_time || sample.hidden_digit_prompt.time) <= readingEnteredAt)
       ? sample.hidden_digit_prompt : null;
     document.querySelector('#hidden-digit-prompt').hidden = !hiddenPrompt;
@@ -4866,6 +4883,7 @@ def start_panel(
                                      if decimals < auto_rules["decimals"] and not last_digit_given_up else None),
             "last_digit_given_up": last_digit_given_up,
             "reflection_estimate": reflection_estimate,
+            "filled_slots": [slot for slot in history.get("filled_slots") or [] if type(slot) is int],
             "hidden_digit_prompt": (history.get("hidden_digit_prompt")
                                     if auto_rules.get("reflection_estimate_enabled") else None),
             "reflection_live_estimate": (history.get("reflection_live_estimate")

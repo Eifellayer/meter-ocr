@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.15
+
+- **Schalter wie auf dem Smartphone.** Alle Optionen zum Anhaken sind jetzt weiche, abgerundete Kacheln mit Schiebeschalter; eingeschaltete Kacheln sind farbig hinterlegt. Die ganze Kachel ist Tippfläche, Tastatur und Bildschirmleser funktionieren weiter.
+- **„Hintergrundaufgaben anzeigen“ dezenter.** Der Schalter steht nicht mehr oben links, sondern klein am Ende der automatischen Kontrolle.
+- **Ruhigeres Testbild.** Eine Rolle, die für das Ergebnis nicht verglichen wurde (z. B. die drehende letzte Rolle), ist grau statt rot. Eine aus dem Zählerstand ergänzte verdeckte Stelle ist gelb – im Testbild und in der großen Zählerstandsanzeige.
+- **Hintergrundaufgaben reihum.** Sind mehrere Aufgaben fällig, erledigt die App je Pause zwischen zwei Prüfungen eine davon und wechselt ab, statt alles in eine Pause zu quetschen. Eine als verdeckt bekannte Stelle wird auch im Hintergrund nicht mehr nachgelesen.
+- *English:* All options are now soft tiles with a slide switch, like on a smartphone. “Show background tasks” sits quietly at the end of the automatic check. In the test picture an uncompared (turning) roller is grey instead of red, and a hidden digit filled in from the meter reading is yellow, also in the big meter reading. Background tasks take turns, one per pause between the checks; a digit known to be hidden is not re-read in the background.
+
 ## 0.5.14
 
 - **Bestandene Prüfung wird als bestanden gezeigt.** Wurde eine verdeckte Stelle aus dem Zählerstand ergänzt oder drehte sich die letzte Rolle, stand das bisher wie ein Problem da. Jetzt meldet die Übersicht „Alles OK“ mit Haken; die Einschränkung steht nur noch als Anmerkung darunter. Die Bildunterschrift nennt die ergänzte verdeckte Stelle richtig.

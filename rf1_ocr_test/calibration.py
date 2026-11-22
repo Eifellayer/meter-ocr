@@ -16,7 +16,7 @@ from checks import OCR_PROFILES, compare_sample, crop_register, meter_prefix, re
 from consumption import accumulate_consumption
 from layout import (crop_coordinates, digit_box_settings, find_digit_row, find_neighbour_digit_rows,
                     dark_register_cells, find_dark_register, find_dark_strip, find_glyph_register, find_raw_digit_rows, normalize_digit_boxes,
-                    rotated_width, same_digit_region, scale_digit_boxes, turn_crop, glare_slots)
+                    rotated_width, same_digit_region, scale_digit_boxes, turn_crop, glare_slots, digit_presence)
 
 from meter_learning import propose_digit_boxes
 
@@ -41,6 +41,11 @@ MAX_LAYOUTS_PER_IMAGE = 5
 COARSE_LIMIT = 50
 SHORTLIST_LIMIT = 5
 DEFAULT_INTENSIVE_AGREEMENT = 80
+# 0.5.11, two percentages (Stefan 22.11., 12:51): the 80 % were a rough guess. When a glyph sits
+# in (nearly) every digit field, the frame itself is right; a lower reading agreement is then
+# enough to keep working with it. The reading is still confirmed image by image.
+COARSE_AGREEMENT = 60
+DIGIT_FOUND_COARSE = 85
 MIN_VERIFICATION_QUALITY = .65
 FRAME_ATTEMPT_LIMIT = 30
 MAX_GROUPS = 12
@@ -783,6 +788,7 @@ class Calibration:
     shortlist: dict = field(default_factory=dict)
     candidate_readings: dict = field(default_factory=dict)
     row_found: int = 0
+    digit_found: dict = field(default_factory=dict)
     agreement_threshold: int = DEFAULT_INTENSIVE_AGREEMENT
     confirmed_quality: list = field(default_factory=list)
     fine_evidence: tuple | None = None
@@ -1147,6 +1153,7 @@ class Calibration:
                 "confirmations": self.confirmations, "required": MIN_IMAGES,
                 "reflected_confirmations": self.reflected_confirmations,
                 "row_found": self.row_found, "agreement_threshold": self.agreement_threshold,
+                "coarse_threshold": COARSE_AGREEMENT, "digit_found_threshold": DIGIT_FOUND_COARSE,
                 "full_hits": self.full_hits, "partial_hits": self.partial_hits,
                 "image_hints": self.image_hints,
                 "rounds": list(self.rounds),
@@ -1162,6 +1169,29 @@ class Calibration:
                 "rejected": list(self.rejected),
                 "candidate_agreement": selected_score[0] if len(selected_score) == 3 else None,
                 "seconds": max(0, ceil(self.remaining(now)))}
+
+    def threshold_for(self, layout):
+        """Reading agreement a frame needs: lower once a glyph was found in its digit fields."""
+        found = self.digit_found.get(layout)
+        if found is not None and found >= DIGIT_FOUND_COARSE:
+            return min(self.agreement_threshold, COARSE_AGREEMENT)
+        return self.agreement_threshold
+
+    def passes(self, layout):
+        return self.shortlist.get(layout, (0,))[0] >= self.threshold_for(layout)
+
+    def note_digit_found(self, frame, layout):
+        if not layout.digit_boxes:
+            return
+        try:
+            left, top, right, bottom = layout.box
+            register = turn_crop(frame.crop((left, top, right, bottom)), layout.rotation)
+            boxes = scale_digit_boxes(layout.digit_boxes, register.size)
+            found = digit_presence(register, boxes, skip=glare_slots(register, boxes))
+        except (ValueError, TypeError, AttributeError):
+            return
+        if found is not None:
+            self.digit_found[layout] = max(found, self.digit_found.get(layout, 0))
 
     def candidate_rows(self):
         """One row per register group: best frame, hits over all images, merged near-duplicates."""
@@ -1180,8 +1210,8 @@ class Calibration:
                          "rotation": layout.rotation, "box": list(layout.box),
                          "selected": self.candidate in members if self.candidate is not None else False,
                          "hits": len(group["hits"]) if group is not None else 0,
-                         "merged": max(0, len(members) - 1),
-                         "role": "confirm" if score[0] >= self.agreement_threshold else "hint"})
+                         "merged": max(0, len(members) - 1), "found": self.digit_found.get(layout),
+                         "role": "confirm" if score[0] >= self.threshold_for(layout) else "hint"})
         candidate = self.candidate
         if candidate is not None and not any(row["selected"] for row in rows):
             # The frame being confirmed is always listed, also when its score fell out of the list.
@@ -1191,7 +1221,7 @@ class Calibration:
                          "rotation": candidate.rotation, "box": list(candidate.box), "selected": True,
                          "hits": len(group["hits"]) if group is not None else self.confirmations,
                          "merged": max(0, len(group["layouts"]) - 1) if group is not None else 0,
-                         "role": "confirm"})
+                         "found": self.digit_found.get(candidate), "role": "confirm"})
         # Stefan (20.11., 18:48/20:55): registers with hits are always listed, also when their frames were
         # pushed out of the five-place shortlist by frames with a higher percentage but no hits.
         listed = [self.group_of(row_layout) for row_layout in self.shortlist] + [self.group_of(candidate)
@@ -1206,7 +1236,8 @@ class Calibration:
                          "rotation": layout.rotation, "box": list(layout.box),
                          "selected": self.candidate in group["layouts"] if self.candidate is not None else False,
                          "hits": len(group["hits"]), "merged": max(0, len(group["layouts"]) - 1),
-                         "role": "hint" if percent is not None and percent < self.agreement_threshold else "confirm"})
+                         "found": self.digit_found.get(layout),
+                         "role": "hint" if percent is not None and percent < self.threshold_for(layout) else "confirm"})
         # Registers with hits first, then by percentage; numbers follow the shown order.
         rows.sort(key=lambda row: (-(row["hits"] or 0), -(row["percent"] or 0)))
         for number, row in enumerate(rows, 1):
@@ -1563,6 +1594,7 @@ class Calibration:
         required_agreement = agreement_percent(readings, sample, precision, digits)
         readable_agreement = agreement_percent(readings, {"reference_required": False}, fraction, digits)
         percentage = min(required_agreement, readable_agreement)
+        self.note_digit_found(frame, layout)
         prefixes = agreeing_prefixes(readings[:2], precision, digits)
         group = self.note_group(layout, readings, prefixes is not None, digits + fraction)
         if group is not None:
@@ -1849,8 +1881,10 @@ class Calibration:
             coarse.sort(key=lambda item: self.shortlist.get(item[1], (0, 0)), reverse=True)
             self.agreement_threshold = rules.get("intensive_agreement", DEFAULT_INTENSIVE_AGREEMENT)
             found_percent = max((self.shortlist.get(layout, (0,))[0] for _, layout, _ in coarse), default=0)
-            if found_percent >= self.agreement_threshold:
-                self.row_found = max(self.row_found, found_percent)
+            passing = [layout for _, layout, _ in coarse if self.passes(layout)]
+            if passing:
+                self.row_found = max(self.row_found, max(self.shortlist[layout][0] for layout in passing))
+            run_threshold = min((self.threshold_for(layout) for layout in passing), default=self.agreement_threshold)
             stable = [item for item in coarse if item[0][4]]
             if collecting:
                 found = any(reliable(score) for score, _, _ in coarse)
@@ -1859,7 +1893,7 @@ class Calibration:
 
                 def promising_candidate(layout, values):
                     score = self.shortlist.get(layout, (0, 0, 0))
-                    if score[0] >= threshold:
+                    if score[0] >= min(threshold, self.threshold_for(layout)):
                         return True
                     if required_slots < 2 or score[-1] < almost_complete:
                         return False
@@ -1873,7 +1907,7 @@ class Calibration:
             # Read stable crops immediately, including when this image has no usable reference.
             intensive = ([item for item in coarse if item[1] == perfect] if perfect is not None
                          else coarse if self.optimizing else stable)
-            intensive = worth_intensive(intensive, self.shortlist, found_percent, self.agreement_threshold)
+            intensive = worth_intensive(intensive, self.shortlist, found_percent, run_threshold)
             for index, (score, layout, readings) in enumerate(intensive[:SHORTLIST_LIMIT], start=1):
                 if stop() or self.attempts >= min(self.attempt_limit, frame_ceiling):
                     return None
@@ -1919,7 +1953,7 @@ class Calibration:
         refined = False
         threshold = self.agreement_threshold
         confirmable = self.rank_candidates and not (committed or preferred) and any(
-            self.shortlist.get(item[1], (0,))[0] >= threshold for item in coarse)
+            self.passes(item[1]) for item in coarse)
         for score, layout, readings in coarse:
             readings = additional_readings.get(layout, readings)
             if stop():
@@ -1927,7 +1961,7 @@ class Calibration:
             if self.region_rejected(layout):
                 continue
             if (confirmable and layout != self.candidate and not reliable(score)
-                    and self.shortlist.get(layout, (0,))[0] < threshold):
+                    and not self.passes(layout)):
                 # Only a search aid: its angle and place already steer the fine search.
                 continue
             if (not self.rank_candidates and not score[0] and not self.confirmations

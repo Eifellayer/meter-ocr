@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.11
+
+- **Eingetragener Zählerstand wird jetzt wirklich übernommen.** Ist eine Stelle durch eine Spiegelung verdeckt und dreht sich gleichzeitig die letzte Rolle (bei laufendem Gas der Normalfall, z. B. „10511.?3?“), blieb die Prüfung trotz eingetragenem Zählerstand „unklar“. Die App ergänzt die verdeckte Stelle nun auch dann und bestätigt diese Prüfung mit einer Nachkommastelle weniger.
+- **Nach der Eingabe bleibt man auf der Übersicht.** Bisher sprang die Seite in die Einstellungen. Jetzt steht oben „Zählerstand übernommen. Die nächste Prüfung startet jetzt.“
+- **Die Eingabe „Ziffer verdeckt“ ist nicht mehr zu übersehen.** Sie steht hervorgehoben ganz oben in der automatischen Kontrolle; direkt am Zählerstand weist „Eingabe nötig“ darauf hin.
+- **Schrittliste der Einrichtung springt nicht mehr zurück.** Ein einmal erreichter Schritt bleibt abgehakt. Unter dem laufenden Schritt steht der Ablauf des aktuellen Bildes. Rechts daneben (auf breiten Bildschirmen) zeigt „Bilder bisher“ je Bild ✓, ✗ oder ○ mit Grund, gelesenem Wert und Dauer.
+- **Zwei Prozentwerte statt einem.** Je Rahmen zeigt die Einrichtung jetzt „Ziffern gefunden“ (sitzt in jedem Feld eine Ziffer? – ohne Texterkennung) und „gelesen“ (wie einheitlich die Ziffern gelesen wurden). Sitzt in mindestens 85 % der Felder eine Ziffer, reicht für die Grobeinrichtung eine Lese-Übereinstimmung von 60 % statt 80 %. Der Zählerstand selbst wird weiterhin Bild für Bild bestätigt.
+- *English:* An entered meter reading is now really used when a digit is hidden by a reflection while the last roller is turning; the check is confirmed one decimal coarser. After entering the reading you stay on the overview and get a confirmation. The “digit hidden” input sits highlighted at the top. The setup step list no longer jumps back; it shows the cycle of the current picture and a checklist of the pictures so far. Each frame now shows two percentages (digits found / read); with digits found in at least 85 % of the fields, 60 % reading agreement is enough for the coarse setup instead of 80 %.
+
 ## 0.5.10
 
 - **Der Rahmen der Einrichtung liegt immer auf dem Bild, zu dem er gehört.** Kam ein neues Kamerabild, blieb das vorige noch sichtbar, bis das neue geladen war – der Rahmen der neuen Aufnahme lag so lange auf dem alten Bild. Jetzt verschwindet das alte Bild sofort, und der Rahmen erscheint erst zusammen mit seinem Bild.

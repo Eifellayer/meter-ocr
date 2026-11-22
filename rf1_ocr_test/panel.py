@@ -2941,7 +2941,9 @@ function renderSetupCandidates(list, candidates) {{
     const parts = [];
     if (candidate.number) parts.push((en ? 'Frame ' : 'Rahmen ') + candidate.number);
     if (candidate.rotation != null) parts.push(String(candidate.rotation).replace('-', '−') + '°');
-    if (candidate.percent != null) parts.push(candidate.percent + ' %');
+    // 0.5.11: two percentages – glyph found in the digit fields / agreement of the readings.
+    if (candidate.found != null) parts.push((en ? 'digits found ' : 'Ziffern gefunden ') + candidate.found + ' %');
+    if (candidate.percent != null) parts.push((candidate.found != null ? (en ? 'read ' : 'gelesen ') : '') + candidate.percent + ' %');
     parts.push(candidate.reading || '–');
     // 0.4.0 status fields; older status data has none of them.
     const hits = Number(candidate.hits);
@@ -3237,8 +3239,10 @@ function refreshCalibration(status) {{
     }}
   }}
   if (active && ['shortlist', 'refine', 'waiting'].includes(status.stage) && status.row_found) {{
-    message = 'Ziffernzeile gefunden · ' + status.row_found + ' % (' +
-      'Schwelle ' + status.agreement_threshold + ' %). ' + message;
+    const lowered = status.coarse_threshold && status.row_found < status.agreement_threshold;
+    message = 'Ziffernzeile gefunden · gelesen ' + status.row_found + ' % (' +
+      'Schwelle ' + (lowered ? status.coarse_threshold + ' %, weil in den Feldern Ziffern erkannt wurden' :
+        status.agreement_threshold + ' %') + '). ' + message;
   }}
   if (active && reason === 'reflected_geometry') {{
     message = 'Markierter Rahmen mit sichtbaren Ziffern geprüft. Verdeckte Stellen bleiben offen.' +
@@ -5003,6 +5007,7 @@ def start_panel(
                 "Einrichtung gespeichert." if saved in ("setup", "setup-calibration") else
                 "Gesicherter Ausschnitt wiederhergestellt." if saved == "crop-restored" else
                 "Fallback-Wert gespeichert." if saved == "fallback" else
+                "Zählerstand übernommen. Die nächste Prüfung startet jetzt." if saved == "reading" else
                 "Automatische Prüfregeln gespeichert." if saved == "1" else
                 "Getesteten Bildausschnitt für die Automatik übernommen." if saved == "crop" else
                 "Ausschnitt zurückgesetzt. Die Automatik sucht die Ziffernreihe wieder selbst." if saved == "crop-reset" else
@@ -5207,7 +5212,7 @@ def start_panel(
                 failure_pause_minutes=auto_rules.get("failure_pause_minutes", DEFAULT_FAILURE_PAUSE_MINUTES),
                 auto_rotation_value=editable_rotation(auto_rules),
                 auto_saved_notice=auto_saved_notice if saved in ("1", "crop-reset") else "",
-                overview_saved_notice=auto_saved_notice if saved == "crop" else "",
+                overview_saved_notice=auto_saved_notice if saved in ("crop", "reading") else "",
                 manual_reference=html.escape(str(settings.get("manual_reference", auto_rules["fallback_value"])),
                                              quote=True),
                 test_source_preview=test_source_preview,
@@ -5744,7 +5749,8 @@ def start_panel(
                     problem(503)
                     return
                 if field("return_to") == "overview":
-                    self.redirect("?saved=fallback" + keep_mode)
+                    # Stefan 22.11., 13:28: stay on the overview and say that the value was taken over.
+                    self.redirect("?saved=reading&ui=overview" + keep_mode)
                     return
                 self.redirect("?saved=fallback&ui=settings" + keep_mode + "#fallback-form")
                 return

@@ -794,6 +794,25 @@ def anchored_hidden_digits(readings, anchor, stamp, decimals, integer_digits, ma
     return [match] * len(rows), slots
 
 
+def hidden_fill_with_turning_roller(readings, anchor, stamp, decimals, integer_digits, max_flow_lph, positions):
+    """Fill a hidden digit while the last one or two compared rollers are turning.
+
+    0.5.11 (live 22.11.2026: "10511.?3?"): the fill is done with fewer compared decimals; the
+    turning rollers stay open ("10511.53?"), so the check is confirmed that much coarser.
+    Returns the filled reading or None.
+    """
+    if not positions:
+        return None
+    for drop in (1, 2):
+        fewer = decimals - drop
+        if fewer < 1 or max(positions) >= integer_digits + fewer:
+            return None
+        filled = anchored_hidden_digits(readings, anchor, stamp, fewer, integer_digits, max_flow_lph, positions)
+        if filled:
+            return filled[0][0] + "?" * drop
+    return None
+
+
 def within_anchor_bounds(ocr, anchor, stamp, decimals, integer_digits, max_flow_lph):
     """Accept an anchored result only inside the physically reachable range."""
     bounds = anchor_bounds(anchor, stamp, decimals, max_flow_lph)

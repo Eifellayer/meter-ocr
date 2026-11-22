@@ -1284,6 +1284,23 @@ class StateTests(TestCase):
         self.assertEqual(12346353, marginal["consumption"]["reading_litres"])
         self.assertEqual(recovered["consumption"]["total_litres"] + 2, marginal["consumption"]["total_litres"])
         self.assertEqual(recovered["confirmations"], marginal["confirmations"])
+    def test_coarser_check_does_not_step_shown_reading_back(self):
+        # Support round 22.11.: 10507.86 then a one-decimal 10507.8 showed a falling meter.
+        fine = {"camera": "camera.meter", "reading": "10507.86?", "decimals": 2,
+                "integer_digits": 5, "image_time": "05:20"}
+        coarse = {**fine, "reading": "10507.8??", "decimals": 1, "image_time": "05:32"}
+        kept = run.keep_finer_reading(fine, coarse)
+        self.assertEqual(("10507.86?", 2, "05:32"), (kept["reading"], kept["decimals"], kept["image_time"]))
+        higher = {**coarse, "reading": "10507.9??"}
+        self.assertIs(higher, run.keep_finer_reading(fine, higher))
+        finer = {**fine, "reading": "10507.88?", "image_time": "05:40"}
+        self.assertIs(finer, run.keep_finer_reading(fine, finer))
+        self.assertIs(coarse, run.keep_finer_reading(None, coarse))
+        self.assertIs(coarse, run.keep_finer_reading({**fine, "camera": "camera.other"}, coarse))
+        with patch.object(run, "publish_state") as publish:
+            run.publish_standalone({"standalone_reading": kept, "check_status": "ocr_only"}, "camera.meter", "stub")
+            self.assertEqual("10507.86", publish.call_args.args[1]["state"])
+
     def test_standalone_sensor_retains_exact_precision_and_rejects_lower_readings(self):
         data = sample(datetime.now(timezone.utc))
         latest = run.standalone_reading("camera.meter", data, "12345.170", 2, None)

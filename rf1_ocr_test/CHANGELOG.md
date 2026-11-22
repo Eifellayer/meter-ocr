@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.4
+
+- **Der Zählerstand springt nicht mehr kurz zurück.** Dreht sich gerade die hintere Rolle, prüft die App eine Runde lang mit einer Nachkommastelle weniger. Der Sensor zeigte dann z. B. 10507.8 nach 10507.86 – scheinbar weniger als vorher. Jetzt bleibt der genauere letzte Wert stehen, solange der gröbere dazu passt. Die Verbrauchsbuchung war davon nicht betroffen.
+- *English:* The meter reading no longer steps back briefly when one check has to use one decimal fewer (e.g. 10507.8 after 10507.86); the more precise previous value is kept as long as the coarser one agrees with it.
+
 ## 0.5.3
 
 - **Das Licht bleibt an, bis wirklich ein helles Bild da ist.** Ein Bild zu verwerfen (0.5.2) reichte nicht: Die Kamera gab nach dem Einschalten teils mehrere Sekunden lang noch Bilder von vorher heraus. Die App lässt das Licht jetzt an und holt im Sekundentakt weitere Bilder (bis zu sechs), bis eines hell ist. Nach einem Neustart der App, wenn sie die übliche Helligkeit noch nicht kennt, endet das Warten, sobald ein Bild deutlich heller ist als das erste.

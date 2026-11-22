@@ -497,6 +497,43 @@ def raise_camera_gain(light, brightness, token, *, fetch, post, now=time.monoton
     return target
 
 
+LIGHT_SETTLE_FRAMES = 6
+LIGHT_SETTLE_STEP = 1.0
+
+
+def settled_picture(light, picture, brightness, take, *, sleep=time.sleep):
+    """Keep the light on and fetch further frames until one really shows the light (0.5.3).
+
+    Seen live on 22.11.2026: the camera kept handing out frames from before the light for
+    several seconds (it only stores a new frame every few seconds when idle), so dropping one
+    frame was not enough. With a known brightness the wait ends at the first bright frame;
+    without one (after a restart) it ends when a frame is clearly brighter than the first.
+    """
+    first = brightness
+    frames = 0
+    for _ in range(LIGHT_SETTLE_FRAMES):
+        if brightness is None:
+            break
+        if LIT_BRIGHTNESS.get(light) is not None:
+            if not dark_picture(light, brightness):
+                break
+        elif brightness >= max(first * 1.5, first + 15):
+            break
+        sleep(LIGHT_SETTLE_STEP)
+        try:
+            newer = take()
+        except (OSError, ValueError):
+            break
+        frames += 1
+        newer_brightness = picture_brightness(newer)
+        if newer_brightness is not None and newer_brightness > brightness:
+            picture, brightness = newer, newer_brightness
+    if frames and brightness is not None and first is not None and brightness > first:
+        debug_log.record(kind="light_settle", frames=frames, first=round(first), brightness=round(brightness),
+                         expected=round(LIT_BRIGHTNESS.get(light) or 0))
+    return picture, brightness
+
+
 def lit_picture(light, take, token, *, fetch, post, delay=LIGHT_DELAY, sleep=time.sleep):
     """Switch a Home Assistant light on for one picture, like AI on the Edge's flash.
 
@@ -529,6 +566,8 @@ def lit_picture(light, take, token, *, fetch, post, delay=LIGHT_DELAY, sleep=tim
                     pass
         picture = take()
         brightness = picture_brightness(picture)
+        if switched:
+            picture, brightness = settled_picture(light, picture, brightness, take, sleep=sleep)
         if dark_picture(light, brightness):
             # Light not (yet) on, or switched off externally just before the picture
             # (e.g. by a "keep the flash on" switch on the ESP): switch on, wait, take again.

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.26
+
+- **Zusätze der Zählerkamera per Schalter.** Die Firmware bringt Zusätze mit, die nicht jeder braucht, etwa den WLAN-Kanal oder den WLAN-Zugangspunkt. Sie sind ab Werk aus. Ist die Zählerkamera gefunden, zeigt der Einrichtungsassistent dafür Schalter. Ein Klick schaltet einen Zusatz ein oder aus, ohne neu zu flashen. Home Assistant übernimmt das nach etwa 30 Sekunden.
+- *English:* Extras of the meter camera as switches: the firmware brings extras not everyone needs, such as the Wi-Fi channel or access point, off by default. Once the meter camera has been found, the setup wizard shows switches for them; one click turns an extra on or off without flashing again, and Home Assistant applies it after about 30 seconds.
+
 ## 0.5.25
 
 - **Neue Zählerkamera mit einem Klick in Home Assistant.** Hat Home Assistant eine frisch installierte Zählerkamera im Netz gefunden, zeigt der Einrichtungsassistent sie unter „Zählerkamera bauen“ an. Ein Klick auf „In Home Assistant hinzufügen“ übernimmt sie, danach wählt der Assistent die Kamera von selbst aus. Der Umweg über Einstellungen → Geräte & Dienste entfällt. Braucht Home Assistant für die Kamera noch eine Angabe, sagt der Assistent das und verweist dorthin.

@@ -2531,6 +2531,8 @@ def main():
         discover_sources=partial(discover_ha_sources, token),
         find_kit_cameras=partial(kit_camera.safe_pending, token),
         confirm_kit_camera=lambda flow_id: kit_camera.safe_add(token, flow_id, post=post_json),
+        get_kit_extras=partial(kit_camera.safe_extras, token),
+        set_kit_extra=partial(kit_camera.safe_set_extra, token),
         get_wizard_image=partial(wizard_camera_preview, token=token, zone=zone),
         real_demo=partial(demo.run_real_demo, select=select_register, read=read_visible_digits),
         get_activity=get_automatic_activity, get_background_work=get_background_work,

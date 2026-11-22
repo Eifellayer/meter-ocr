@@ -1479,7 +1479,9 @@ def factory_reset_history(history, keep_statistics=False):
     """Discard setup and checks while optionally retaining the verified consumption ledger."""
     if not keep_statistics:
         return {}
-    retained = {key: deepcopy(history[key]) for key in ("consumption", "consumption_statistics")
+    # 0.5.29: the learned flow belongs to the meter, not to the setup: it stays as well.
+    retained = {key: deepcopy(history[key]) for key in ("consumption", "consumption_statistics",
+                                                       "flow_peaks", "flow_peak_samples")
                 if key in history}
     retained["statistics_preserved_after_reset"] = True
     return retained
@@ -2403,7 +2405,10 @@ def main():
                         else:
                             report_calibration("search")
                             candidate = attempt.examine(
-                                frame, overlay, sample, captured, active_rules, read, stopped, baseline,
+                                frame, overlay, sample, captured,
+                                {**active_rules, "learned_flow_lph": learned_flow_limit(
+                                    history, active_rules["max_flow_lph"])},
+                                read, stopped, baseline,
                                 on_attempt=lambda variant, rotation: report_calibration("ocr", variant, rotation),
                                 on_image=on_image, on_decision=report_decision,
                                 refine_read=lambda layout, profile: recognize(

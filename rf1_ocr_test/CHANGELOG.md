@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.20
+
+- **Übersicht bleibt nicht mehr leer.** War die Oberfläche auf Englisch eingestellt und meldete die letzte Prüfung zwei gerade drehende Rollen, ließ sich die Übersicht nicht mehr öffnen. Die Überschrift dafür hatte an dieser Stelle keine englische Fassung. Sie ist ergänzt, und eine fehlende Übersetzung kann die Seite künftig nicht mehr abbrechen – notfalls erscheint die deutsche Überschrift.
+- *English:* The overview no longer stays blank: with the interface in English and a last check that reported two turning rollers, the page could not be opened because that heading had no English wording there. It has been added, and a missing translation can no longer break the page – the German heading is shown instead.
+
 ## 0.5.19
 
 - **Spiegelung nur mit passenden Ziffern übernehmen.** Ohne Vergleichssensor prüfte die Bestätigung einer Spiegelung die sichtbaren Stellen gegen nichts. So konnte ein Rahmen übernommen werden, der eine volle Kubikmeter-Stelle falsch las (z. B. 5 statt 2). Jetzt müssen die gelesenen vollen Kubikmeter zum eingetragenen Zählerstand passen – mit dem, was der Zähler seitdem höchstens weitergelaufen sein kann. Passt es nicht, übernimmt die App den Rahmen nicht, sagt das in der Einrichtung und sucht weiter. Ein kürzlich eingetragener Zählerstand prüft die Rahmen von Anfang an mit.

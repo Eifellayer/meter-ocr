@@ -102,7 +102,8 @@ def verdict(history, language, *, detail, precision_pending, paused, setup_pendi
         if tone in ("ok", "warning", "notice"):
             tone, icon = ("neutral", icon) if tone == "ok" else ("notice", "")
     if language == "en":
-        heading = EN_UI[heading]
+        # A heading without a translation must never break the overview.
+        heading = EN_UI.get(heading, heading)
     adjustment = history.get("ocr_rotation_adjustment", 0)
     if not precision_pending and status in ("match", "ocr_only") and type(adjustment) is int and adjustment:
         rotation_note = (f"Read with an image rotation of {adjustment:+d}°."

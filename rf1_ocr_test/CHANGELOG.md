@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.5
+
+- **Keine falsche Fehlermeldung mehr während der Feinsuche im Hintergrund.** Sucht die App im Hintergrund noch die dritte Nachkommastelle, bekommt sie nur die Bilder der normalen Prüfungen (etwa alle 11 Minuten). Der Einrichtungsstatus meldete dazwischen „Kein neues Kamerabild“ (rot), obwohl die Suche ganz normal weiterlief. Jetzt steht dort „Optimierung läuft“ mit der restlichen Rechenzeit.
+- *English:* The setup status no longer shows a red “no new camera image” while the background search for the third decimal waits for the next routine check; it shows “optimisation running” instead.
+
 ## 0.5.4
 
 - **Der Zählerstand springt nicht mehr kurz zurück.** Dreht sich gerade die hintere Rolle, prüft die App eine Runde lang mit einer Nachkommastelle weniger. Der Sensor zeigte dann z. B. 10507.8 nach 10507.86 – scheinbar weniger als vorher. Jetzt bleibt der genauere letzte Wert stehen, solange der gröbere dazu passt. Die Verbrauchsbuchung war davon nicht betroffen.

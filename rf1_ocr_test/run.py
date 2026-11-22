@@ -1868,7 +1868,10 @@ def main():
                 status["relocated_at"] = relocated_at
             if not status["seconds"] and status["state"] in ("waiting", "testing"):
                 status["state"] = "timeout"
-            elif status["state"] == "waiting" and calibration.image_wait_expired(time.monotonic()):
+            elif (status["state"] == "waiting" and not calibration.background
+                  and calibration.image_wait_expired(time.monotonic())):
+                # A background fine search only gets the pictures of the routine checks
+                # (about every 11 minutes) and keeps running; it is not an image timeout.
                 status["state"] = "image_timeout"
             same_configuration = calibration_configuration_now() == calibration_configuration
             saved = status["state"] in ("saved", "saved_without_verification", "saved_stationary", "saved_reflection")

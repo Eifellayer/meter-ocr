@@ -1,7 +1,7 @@
 from zoneinfo import ZoneInfo
 import unittest
 
-from checks import LAST_DIGIT_NOTICE, MOVING_DIGIT_NOTICE, WARNING_DETAIL_AFTER
+from checks import LAST_DIGIT_NOTICE, MOVING_DIGIT_NOTICE, MOVING_DIGITS_NOTICE, WARNING_DETAIL_AFTER
 import status_view
 
 NOW = 1_800_000_000.0
@@ -43,6 +43,14 @@ class StatusViewTests(unittest.TestCase):
         view = verdict({"check_status": "ocr_unclear", "check_detail": MOVING_DIGIT_NOTICE, "failure_attempts": 5,
                         "failure_since": NOW - 60})
         self.assertEqual(("notice", "Rolle drehte sich gerade"), (view["tone"], view["heading"]))
+
+    def test_turning_rollers_have_an_english_heading(self):
+        for notice, german, english in ((MOVING_DIGIT_NOTICE, "Rolle drehte sich gerade", "Roller was turning"),
+                                        (MOVING_DIGITS_NOTICE, "Rollen drehten sich gerade", "Rollers were turning")):
+            history = {"check_status": "ocr_unclear", "check_detail": notice, "failure_attempts": 1,
+                       "failure_since": NOW - 60}
+            self.assertEqual(german, verdict(history)["heading"])
+            self.assertEqual(english, verdict(history, "en")["heading"])
 
     def test_the_eighth_digit_search_is_normal_operation(self):
         view = verdict({"check_status": "match_with_warning", "check_detail": LAST_DIGIT_NOTICE},

@@ -733,6 +733,7 @@ EN_UI = {
     '<summary>Debug-Protokoll</summary>': '<summary>Debug log</summary>',
     '<summary>Erweitert</summary>': '<summary>Advanced</summary>',
     "Rolle drehte sich gerade": "Roller was turning",
+    "Rollen drehten sich gerade": "Rollers were turning",
     "Rahmen der letzten Stelle sitzt daneben": "Frame of the last digit is off",
     "Ablesung passt nicht zum letzten Stand": "Reading does not fit the last value",
     "Die App sucht die letzte Stelle selbst im Hintergrund. Nur nötig, wenn das dauerhaft nicht klappt.":
@@ -979,7 +980,6 @@ EN_DETAILS = {
     ("Die letzten zwei verglichenen Rollen waren unklar, vermutlich drehten sie sich gerade. Diese Prüfung "
      "wurde deshalb mit zwei Nachkommastellen weniger bestätigt. Die nächste Prüfung vergleicht wieder alle Stellen."):
         "The last two compared rollers were unclear, probably turning. This check was therefore confirmed with two decimal places less. The next check compares all digits again.",
-    "Rollen drehten sich gerade": "Rollers were turning",
     "Licht für die Aufnahme (optional)": "Light for the picture (optional)",
     "leer = Blitz der Kamera, z. B. light.lampe_keller": "empty = camera flash, e.g. light.cellar_lamp",
     "Blitz der Kamera verwenden": "Use the camera's flash",

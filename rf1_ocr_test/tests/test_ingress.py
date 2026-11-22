@@ -1284,7 +1284,10 @@ class BrowserTests(IngressFixture):
                     candidates=[{"number": 1, "percent": 62, "reading": "1049?.3?", "rotation": -12,
                                  "box": [1, 2, 3, 4], "selected": False},
                                 {"number": 2, "percent": 88, "reading": "10491.33?", "rotation": -13,
-                                 "box": [5, 6, 7, 8], "selected": True}])
+                                 "box": [5, 6, 7, 8], "selected": True}],
+                    rounds=[{"image": 1, "reason": "unclear", "reading": "1049?.3??", "seconds": 61.2, "confirmations": 0},
+                            {"image": 2, "reason": "accepted_partial", "reading": "10491.33?", "seconds": 47.0,
+                             "confirmations": 1}])
                 current = timeline.locator('li[data-state="current"]')
                 current.filter(has_text="(1/3)").wait_for()
                 self.assertEqual("confirm", current.get_attribute("data-step"))
@@ -1303,9 +1306,24 @@ class BrowserTests(IngressFixture):
                 self.assertTrue(page.locator("#calibration-overview .calibration-candidate-panel").is_visible())
                 self.assertEqual("true", candidates.nth(1).get_attribute("data-selected"))
                 self.assertIn("−13°", candidates.nth(1).inner_text())
+                # 0.5.11: checklist of the pictures so far, newest first, with tick or cross.
+                rounds = page.locator("#calibration-overview .setup-rounds li")
+                self.assertEqual(2, rounds.count())
+                self.assertEqual(["ok", "fail"], rounds.evaluate_all("items => items.map(item => item.dataset.result)"))
+                self.assertIn("(1/3)", rounds.nth(0).inner_text())
+                self.assertIn("Bild 1: Nicht eindeutig gelesen" if language == "de" else "Picture 1: Not read clearly",
+                              rounds.nth(1).inner_text())
+                # The running step shows the cycle of the current picture.
+                self.assertIn("Aktuelles Bild (Nr. 2)" if language == "de" else "Current picture (no. 2)",
+                              current.locator("details.setup-substeps summary").inner_text())
                 overflow = page.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth")
                 self.assertLessEqual(overflow, 0)
                 page.screenshot(path=f"/tmp/setup-timeline-{width}-{language}.png", full_page=True)
+                # A new picture that confirms nothing no longer throws the list back to the start.
+                self.calibration.update(state="testing", stage="search", tested=3, confirmations=0, candidates=[])
+                timeline.locator('li[data-state="current"]').filter(has_text="(0/3)").wait_for()
+                self.assertEqual("confirm", timeline.locator('li[data-state="current"]').get_attribute("data-step"))
+                self.assertEqual(3, timeline.locator('li[data-state="done"]').count())
                 self.calibration.update(state="saved")
                 page.locator("#calibration-overview").wait_for(state="hidden")
                 page.close()

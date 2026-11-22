@@ -789,6 +789,8 @@ class Calibration:
     # Image fetch statistics for the debug log, reset after each logged image.
     image_stats: dict = field(default_factory=dict)
     image_hints: list | None = None
+    # 0.5.11: one line per evaluated picture for the checklist of the setup (newest last).
+    rounds: list = field(default_factory=list)
     full_hits: int = 0
     stress_weak_slots: list = field(default_factory=list)
     duration: int = TIME_LIMIT
@@ -1147,6 +1149,7 @@ class Calibration:
                 "row_found": self.row_found, "agreement_threshold": self.agreement_threshold,
                 "full_hits": self.full_hits, "partial_hits": self.partial_hits,
                 "image_hints": self.image_hints,
+                "rounds": list(self.rounds),
                 "known_good_available": self.known_good_layout is not None and self.region is None,
                 "stress_weak_slots": self.stress_weak_slots,
                 "coarse_complete": self.full_hits >= MIN_IMAGES,

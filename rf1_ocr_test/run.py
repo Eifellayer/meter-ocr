@@ -2379,6 +2379,11 @@ def main():
             for entry in setup_entries:
                 entry["reason"] = calibration_preview.get("reason")
                 entry["reading"] = calibration_preview.get("reading")
+                if entry.get("kind") == "setup_image":
+                    attempt.rounds.append({"image": entry["images"], "reason": entry["reason"],
+                                           "reading": entry["reading"], "seconds": entry["round_s"],
+                                           "confirmations": max(attempt.confirmations, attempt.reflected_confirmations)})
+                    del attempt.rounds[:-12]
             if attempt.searching_since is not None:
                 attempt.spent += now - attempt.searching_since
                 attempt.searching_since = None

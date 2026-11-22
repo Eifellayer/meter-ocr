@@ -19,6 +19,7 @@ EN_UI = {
     "Hier siehst du, was die App zwischen den regulären Prüfungen selbstständig erledigt: die letzte Nachkommastelle genauer bestimmen, unklare Ergebnisse nachprüfen und neue Leseverfahren testen. Nur zur Information – du musst nichts tun.":
         "What the app takes care of on its own between the regular checks: pinning down the last decimal, re-checking unclear results and testing new reading methods. For information only – no action needed.",
     ">So weit ist die Einrichtung<": ">Setup progress<",
+    ">Bilder bisher<": ">Pictures so far<",
     "<summary>Gefundene Rahmen (Kandidaten)</summary>": "<summary>Frames found (candidates)</summary>",
     'aria-label="Gelesene Ziffern je Versuch und Stelle"': 'aria-label="Digits read per attempt and position"',
     "Klappt es dauerhaft nicht? <a": "Still not working? <a",

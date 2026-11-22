@@ -672,6 +672,15 @@ def meter_like(readings, minimum=5):
     return any(sum(char.isdigit() for char in str(value)) >= minimum for value in readings)
 
 
+def upright_layout(layout):
+    """A frame turned less than 45°: only its reading shows that the picture is upright (0.5.22).
+
+    A frame saved earlier at a right angle that reads the whole digits says nothing about
+    whether a better frame at a right angle (with the measured tilt) exists.
+    """
+    return abs(getattr(layout, "rotation", 0) or 0) < 45
+
+
 def skip_small_labels(candidates):
     """Skip small rows separated vertically from a detected register window."""
     windows = [layout.box for layout in candidates if layout.method == "register_window"]
@@ -1850,12 +1859,16 @@ class Calibration:
                     if layout not in kept:
                         self.note_rejection(layout, "small_label")
                 yield from self.prefilter(kept)
-                if (len(self.seen) == 1 and not self.automatic and not self.intensive
+                # 0.5.22: a meter already set up sideways or upside down may also be searched at right
+                # angles by the automatic repair; it is the only way to widen a frame that cuts off the
+                # decimals of a counter hanging a few degrees askew.
+                sideways_setup = "crop" in rules and abs(rules.get("rotation") or 0) >= 45
+                if (len(self.seen) == 1 and not self.intensive and (not self.automatic or sideways_setup)
                         and self.size_reference() is None
                         and not stop() and not any(reliable(score) for score, _, _ in coarse)
                         and (has_reference or not any(
                             meter_like(readings, max(4, digits + rules["fraction_digits"] - 3))
-                            for _, _, readings in coarse))):
+                            for _, tried, readings in coarse if upright_layout(tried)))):
                     # Search the complete photo at right angles before asking for another image.
                     yield from quarter_turn_layouts(frame, rules, self.region)
 

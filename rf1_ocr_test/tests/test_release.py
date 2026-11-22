@@ -32,11 +32,17 @@ class AppIdentityTests(unittest.TestCase):
     def test_release_metadata_preserves_stable_app_identity(self):
         config = yaml.safe_load((APP / "config.yaml").read_text(encoding="utf-8"))
         repository = yaml.safe_load((APP.parent / "repository.yaml").read_text(encoding="utf-8"))
-        self.assertEqual("0.5.17", config["version"])
+        self.assertEqual("0.5.18", config["version"])
         self.assertEqual("rf1_ocr_test", config["slug"])
         self.assertEqual("AI Meter Reader", config["name"])
         self.assertNotIn("stage", config)
-        self.assertIn("esp_url", config["options"])
+        # 0.5.18: only the time zone is a visible option; the legacy fields stay optional in the schema.
+        self.assertEqual({"zeitzone"}, set(config["options"]))
+        self.assertIn("esp_url", config["schema"])
+        self.assertTrue(all(str(kind).endswith("?") for key, kind in config["schema"].items() if key != "zeitzone"))
+        for language in ("de", "en"):
+            names = yaml.safe_load((APP / "translations" / f"{language}.yaml").read_text(encoding="utf-8"))
+            self.assertEqual(set(config["schema"]), set(names["configuration"]))
         self.assertEqual("https://github.com/Eifellayer/meter-ocr", repository["url"])
 
     def test_app_keeps_existing_home_assistant_entities_and_media_path(self):
@@ -74,7 +80,7 @@ class DocumentationTests(unittest.TestCase):
                 self.assertLess(len(page), 4000)
                 self.assertIn(title, page)
                 self.assertIn("](rf1_ocr_test/DOCS.md)", page)
-                self.assertIn("Version 0.5.17", page)
+                self.assertIn("Version 0.5.18", page)
                 self.assertIn("supervisor_add_addon_repository", page)
                 self.assertIn("repository_url=https%3A%2F%2Fgithub.com%2FEifellayer%2Fmeter-ocr", page)
                 self.assertIn("](docs/HISTORY.md)", page)
@@ -87,10 +93,10 @@ class DocumentationTests(unittest.TestCase):
             self.assertIn(text, de)
         for text in ("10 minutes by default", "5 minutes", "30 minutes by default", "ESP as camera only"):
             self.assertIn(text, en)
-        self.assertIn("Version 0.5.17", app_docs)
+        self.assertIn("Version 0.5.18", app_docs)
         self.assertIn("sensor.rf1_verbrauch_gesamt", app_docs)
         changelog = (APP / "CHANGELOG.md").read_text(encoding="utf-8")
-        self.assertIn("## 0.5.17", changelog)
+        self.assertIn("## 0.5.18", changelog)
         self.assertIn("## 0.1.0", changelog)
         self.assertNotIn("## 0.6", changelog)
 

@@ -123,7 +123,7 @@ header{{display:flex;align-items:baseline;justify-content:space-between;gap:.5re
 .dialog-heading h2{{margin:0}}
 .tab-content[hidden]{{display:none}}
 .automatic-images{{margin:1rem 0}}
-/* 0.5.15 (Stefan 22.11., 14:45/14:46): options to tick are soft tiles with a slide switch, like
+/* 0.5.15: options to tick are soft tiles with a slide switch, like
    the settings of a current smartphone. The real checkbox stays: keyboard and screen readers work. */
 .check-option{{display:flex;align-items:center;justify-content:space-between;gap:.9rem;grid-column:1/-1;min-height:2.9rem;padding:.6rem .9rem;border:1px solid var(--edge);border-radius:.95rem;background:light-dark(#f6f9fb,#1f2b35);color:inherit;font-size:.95rem;font-weight:550;cursor:pointer;transition:background .2s ease,border-color .2s ease,box-shadow .2s ease}}
 .check-option:hover{{border-color:light-dark(#b9c9d4,#4d6170)}}
@@ -2112,7 +2112,7 @@ document.querySelectorAll('[data-precision-options]').forEach(options => {{
   fraction.addEventListener('change', showPrecisionOptions);
   showPrecisionOptions();
 }});
-// Precision mode needs a second, explicit confirmation (Stefan 22.11.).
+// Precision mode needs a second, explicit confirmation.
 document.querySelectorAll('input[name="precision_mode"]').forEach(box => {{
   box.addEventListener('change', () => {{
     if (!box.checked) return;
@@ -2773,7 +2773,7 @@ function setupProgressModel(status) {{
     ['verify', 'verify_wait'].includes(stage) || confirmations > 0 ? 3 :
     ['shortlist', 'refine', 'angle', 'digit_probe', 'ocr'].includes(stage) || candidates.length ? 2 : 1;
   if (saved) current = 5;
-  // 0.5.11 (Stefan 22.11., 13:12): the list jumped back to "find the counter" with every new
+  // 0.5.11: the list jumped back to "find the counter" with every new
   // picture. A step reached once in this run stays ticked; the cycle of the single picture
   // is shown below the running step instead.
   const rawCurrent = current;
@@ -2814,7 +2814,7 @@ function setupProgressModel(status) {{
   ];
   if (status.simplified) steps.push({{key: 'background', optional: true,
     label: en ? 'In the background: refine the last digit (optional)' : 'Im Hintergrund: letzte Stelle verfeinern (optional)', result: ''}});
-  // Sub-steps (Stefan 22.11., 11:43): the running step unfolds its small intermediate steps,
+  // Sub-steps: the running step unfolds its small intermediate steps,
   // finished steps can be opened again.
   const tested = Number(status.tested || 0);
   const sub = (label, done, running, extra) => ({{label, state: done ? 'done' : running ? 'current' : 'todo', extra: extra || ''}});
@@ -3014,6 +3014,22 @@ function renderGlareConfirm(status, active, background) {{
       (visible ? (en ? ' (read so far: ' : ' (bisher gelesen: ') + visible + ')' : '') + '.';
     const out = box.querySelector('.glare-confirm-text');
     if (out.textContent !== text) out.textContent = text;
+  }}
+  // 0.5.19: the frame did not fit the entered reading – say so while the setup keeps looking.
+  const mismatch = active && !background && !prompt && status && status.glare_mismatch === true;
+  for (const box of document.querySelectorAll('.glare-confirm')) {{
+    let note = box.nextElementSibling;
+    if (!note || !note.classList.contains('glare-mismatch')) {{
+      if (!mismatch) continue;
+      note = document.createElement('p');
+      note.className = 'glare-mismatch';
+      box.after(note);
+    }}
+    note.hidden = !mismatch;
+    const text = lang === 'en' ?
+      'The digits read in this frame do not fit the meter reading you entered. The setup keeps looking for a better frame and will ask again.' :
+      'Die gelesenen Ziffern passen nicht zum eingetragenen Zählerstand. Die Einrichtung sucht weiter nach einem besseren Rahmen und fragt dann noch einmal.';
+    if (note.textContent !== text) note.textContent = text;
   }}
 }}
 function renderSetupCandidates(list, candidates) {{
@@ -3638,7 +3654,7 @@ async function refreshTestStatus() {{
     showRegionPhoto();
     showRegionChoices(job.calibration?.preview?.regions);
     const success = document.querySelector('#setup-success');
-    // 0.5.17 (Stefan 22.11., 15:28): "for the impatient" the notice can be closed; it stays
+    // 0.5.17: "for the impatient" the notice can be closed; it stays
     // closed for this setup only.
     success.hidden = !job.setup_success || setupSuccessClosed() === (job.setup_success?.duration || '');
     const duration = document.querySelector('#setup-duration');
@@ -3741,7 +3757,7 @@ async function refreshTestStatus() {{
       estimated_hidden: 'Die verdeckte Nachkommastelle wurde geschätzt.',
     }}[job.ocr_method] || '');
     method.hidden = !method.textContent;
-    // 0.5.14 (B4, Stefan 22.11., 14:21): say which check the picture belongs to. While a new
+    // 0.5.14 (B4): say which check the picture belongs to. While a new
     // check is running, the picture of the previous one is dimmed and labelled as such.
     const previewTime = document.querySelector('#preview-time');
     const stampNs = Number(showManual ? job.checked_at * 1e9 : automaticVersion);
@@ -3795,7 +3811,7 @@ function tick() {{
 function formatStamp(epoch) {{
   return new Intl.DateTimeFormat(lang === 'en' ? 'en-GB' : 'de-DE', {{day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'}}).format(new Date(epoch * 1000));
 }}
-// 0.5.14 (Stefan 22.11., 13:32): the load of the machine below the background tasks, to
+// 0.5.14: the load of the machine below the background tasks, to
 // estimate when the next one can start.
 let backgroundLoadTimer = null;
 async function refreshBackgroundLoad() {{
@@ -4397,7 +4413,7 @@ async function refreshAutomatic() {{
     document.querySelector('#report-bug-hint').hidden = !(sample.failure_attempts >= 3);
     recovery.dataset.state = sample.retry_suppressed ? 'waiting' : 'retrying';
     recovery.textContent = sample.recovery_notice;
-    // 0.5.12 (Stefan 13:43): once the reading was entered the request disappears; it only comes
+    // 0.5.12: once the reading was entered the request disappears; it only comes
     // back when a check after the entry could not fill the digit again.
     filledSlots = Array.isArray(sample.filled_slots) ? sample.filled_slots : [];
     const hiddenPrompt = sample.hidden_digit_prompt && !(readingEnteredAt && Number(sample.hidden_digit_prompt.image_time || sample.hidden_digit_prompt.time) <= readingEnteredAt)
@@ -4825,7 +4841,7 @@ def start_panel(
         if (type(finished_check) in (int, float) and finished_check > completed["time"]
                 and time.time() - completed["time"] >= 5):
             return None
-        # 0.5.17 (Stefan 22.11., 15:26): a setup saved with a reflection (or a still meter) only
+        # 0.5.17: a setup saved with a reflection (or a still meter) only
         # counts as completed with its first passed automatic check; the notice then stays a
         # minute instead of until the next check.
         if (type(finished_check) in (int, float) and abs(finished_check - completed["time"]) < 5
@@ -5619,7 +5635,7 @@ def start_panel(
 
             if path == "/automatik-jetzt":
                 if not start_automatic_check or not start_automatic_check():
-                    # 0.5.17 (Stefan 22.11., 15:30): no bare error page – usually a check is already
+                    # 0.5.17: no bare error page – usually a check is already
                     # running or requested. Back to the overview with a short note.
                     self.redirect("?ui=overview&saved=check-busy" + keep_mode)
                     return
@@ -5951,7 +5967,7 @@ def start_panel(
                     problem(503)
                     return
                 if field("return_to") == "overview":
-                    # Stefan 22.11., 13:28: stay on the overview and say that the value was taken over.
+                    # Stay on the overview and say that the value was taken over.
                     self.redirect("?saved=reading&ui=overview" + keep_mode)
                     return
                 self.redirect("?saved=fallback&ui=settings" + keep_mode + "#fallback-form")

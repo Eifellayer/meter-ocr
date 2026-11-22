@@ -35,7 +35,7 @@ from checks import (
     compare_sample, crop_register, lighting_ocr_profiles, read_register, read_with_retries, record_sample,
     anchored_leading_digits, anchored_hidden_digits, within_anchor_bounds, anchor_bounds,
     learned_flow_limit, slow_roller_digit, hidden_roller_flow, hidden_roller_interval, hidden_fill_reachable, hidden_fill_with_turning_roller,
-                    estimated_hidden_digits, HIDDEN_ESTIMATE_AFTER, HIDDEN_ESTIMATE_NOTICE,
+                    estimated_hidden_digits, shadow_decimal_estimate, HIDDEN_ESTIMATE_AFTER, HIDDEN_ESTIMATE_NOTICE,
                     only_known_hidden_unclear, HIDDEN_FILLED_NOTICE, HIDDEN_FILLED_TURNING_NOTICE,
     automatic_interval_minutes, defer_duplicate_cycle,
     LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, LAST_DIGIT_RETRIES, SUCCESSFUL_CHECKS,
@@ -1312,7 +1312,7 @@ def draw_test_preview(register, integer_width, whole_boxes, fraction_boxes, read
             # 0.5.15: a hidden digit filled in from the meter reading is not a read digit.
             color = (241, 184, 54)
         elif idx in quiet_slots and not chars[idx].isdigit():
-            # 0.5.15 (Stefan 22.11., 14:30): a roller that was not compared (e.g. turning) is grey,
+            # 0.5.15: a roller that was not compared (e.g. turning) is grey,
             # not alarm red – the check did not depend on it.
             color = (128, 140, 150)
         elif idx in uncertain or idx in suspected_slots:
@@ -1859,7 +1859,7 @@ def main():
                 if running:
                     calibration.state = "cancelled"
             elif action == "confirm-reflection":
-                # 0.5.17 (Stefan 22.11., 15:23): the user confirms the reflection and enters the
+                # 0.5.17: the user confirms the reflection and enters the
                 # reading; the frame is taken with the next picture and the reading anchors the checks.
                 prompt = calibration.glare_prompt() if running else None
                 if not prompt or prompt["id"] != verification_id or reading is None:
@@ -1869,10 +1869,23 @@ def main():
                                  "reflection_estimate_enabled": True}, request_check=False)
                 # Saving the reading must not look like a changed configuration to the running setup.
                 calibration_configuration = calibration_configuration_now()
-                glare_confirmed["id"] = verification_id
+                rules_now = get_auto_rules()
+                calibration.known_reading = manual_reading_anchor(rules_now, zone)
+                calibration.known_flow = rules_now.get("max_flow_lph") or 0
                 calibration_next = time.monotonic()
                 wake_worker.set()
-                debug_log.record(kind="setup_glare_confirmed", positions=prompt["positions"])
+                # 0.5.19: without a comparison sensor the visible whole digits were checked against
+                # nothing. If they contradict the entered reading, the frame is not taken; the setup
+                # keeps looking and asks again for a frame that fits.
+                if calibration.visible_fits_known_reading(prompt.get("visible", ""), rules_now["integer_digits"],
+                                                         time.time()):
+                    glare_confirmed["id"] = verification_id
+                    debug_log.record(kind="setup_glare_confirmed", positions=prompt["positions"])
+                else:
+                    calibration.drop_glare()
+                    calibration.glare_mismatch = True
+                    debug_log.record(kind="setup_glare_mismatch", positions=prompt["positions"],
+                                     visible=prompt.get("visible", ""))
             elif action == "skip-verification":
                 current_id = calibration.skippable_verification_id() if calibration else None
                 if (not current_id or verification_id != current_id
@@ -1921,9 +1934,14 @@ def main():
                 calibration, known_good = setup_flow.new_job(
                     action, limit, region, configuration, history, setup_store, previous, now,
                     simplified=simplified, intensive=intensive, make=Calibration)
-                # 0.5.14 (B2, Stefan 22.11., 14:07): a digit marked as hidden by hand is known to
+                # 0.5.14 (B2): a digit marked as hidden by hand is known to
                 # the setup from the first picture; before, only reflections it detected itself counted.
                 calibration.marked_positions = tuple(hidden_reflection_slots(rules, source))
+                # 0.5.19: a recently entered reading checks the whole digits of a frame with a hidden digit.
+                entered = manual_reading_anchor(rules, zone)
+                if entered is not None and 0 <= time.time() - entered["time"] <= 24 * 60 * 60:
+                    calibration.known_reading = entered
+                    calibration.known_flow = rules.get("max_flow_lph") or 0
                 calibration_preview.clear()
                 calibration_images.clear()
                 calibration_configuration = configuration
@@ -2002,7 +2020,7 @@ def main():
                 if automatic_capture["seq"] <= job.automatic_seq or automatic_capture["result"] is None:
                     return True
                 # Lowest priority: waiting-time work and shadow experiments first, and only with
-                # spare CPU capacity. Otherwise the last digit stays open (Stefan 22.11.).
+                # spare CPU capacity. Otherwise the last digit stays open.
                 if any(idle_state["jobs"]) or not system_idle():
                     return True
                 job.automatic_seq = automatic_capture["seq"]
@@ -2634,7 +2652,7 @@ def main():
         request_id = manual_options["request_id"] if manual else None
         if manual:
             update_progress(request_id, "running", "Lade Zählerbild und Referenzdaten …")
-        # Stefan (22.11.): a fine search that finds nothing for hours gives up instead of
+        # A fine search that finds nothing for hours gives up instead of
         # running forever. A running background search for the last roller ends here.
         if (not manual and calibration is not None and calibration.background
                 and calibration.purpose != "relocate" and calibration.state in ("waiting", "testing")):
@@ -2774,7 +2792,7 @@ def main():
                     print(f"Prüfstatus konnte nicht übertragen werden: {error}")
                 check_reminder(reminder, history, now, review_after)
             waiting = next((job for job in idle_state["jobs"] if job), None)
-            # Stefan (22.11.): the background search for the last roller must not block the
+            # The background search for the last roller must not block the
             # waiting-time work (shadow experiments, re-reads). Only a real setup does.
             if waiting is not None and (calibration is None or calibration.background
                                         or calibration.state not in ("waiting", "testing")):
@@ -3227,7 +3245,7 @@ def main():
                         pattern = disputed_digit_pattern(same_frame, comparison_decimals, integer_digits,
                                                          SHIFTED_DIGIT_POSITIONS)
                         paused_now = not manual and get_auto_paused()
-                        # 0.5.14 (B5, Stefan 22.11., 14:25): a digit known to be hidden is not rechecked
+                        # 0.5.14 (B5): a digit known to be hidden is not rechecked
                         # intensively; that only cost time (about 70 s per check, recheck timed out).
                         hidden_known = (not manual and only_known_hidden_unclear(
                             observed or ocr, comparison_decimals, integer_digits,
@@ -3619,7 +3637,7 @@ def main():
                             if not anchored and hidden_slots:
                                 anchor = newest_anchor(anchor, manual_reading_anchor(active_rules, zone),
                                                        read_state["captured"])
-                                # 0.5.17 (Stefan 22.11., 15:36): every confirmed check is a fresh anchor too, so
+                                # 0.5.17: every confirmed check is a fresh anchor too, so
                                 # the hidden digit stays fillable from check to check without asking again.
                                 counted_now = history.get("consumption") or {}
                                 if (type(counted_now.get("reading_litres")) is int
@@ -3636,7 +3654,7 @@ def main():
                                 )
                                 partly_filled = None
                                 if not anchored:
-                                    # 0.5.11 (seen live 22.11., 13:28: "10511.?3?"): while gas flows the last
+                                    # 0.5.11 (seen live: "10511.?3?"): while gas flows the last
                                     # roller is turning as well. Fill the hidden digit with fewer compared
                                     # decimals and leave the turning roller open; the check is then
                                     # confirmed one decimal coarser like any check with a turning roller.
@@ -3652,7 +3670,7 @@ def main():
                                     updated.pop("hidden_digit_prompt", None)
                                     updated.pop("hidden_digit_since", None)
                                 elif reading_entered_meanwhile(active_rules, get_auto_rules()):
-                                    # 0.5.13 (Stefan 22.11., 14:18): the reading was entered while this check
+                                    # 0.5.13: the reading was entered while this check
                                     # was already running with the old rules. Do not ask again; the next
                                     # check uses the entry.
                                     updated.pop("hidden_digit_prompt", None)
@@ -3663,7 +3681,7 @@ def main():
                                     # possible value) to fill the hidden digit from: ask for the reading.
                                     asked = history.get("hidden_digit_since") or time.time()
                                     updated["hidden_digit_since"] = asked
-                                    # 0.5.17 (Stefan 22.11., 15:36): once a reading was entered, never ask again;
+                                    # 0.5.17: once a reading was entered, never ask again;
                                     # if the gap since the last confirmed reading is too long, estimate at once.
                                     entered_once = (manual_reading_anchor(active_rules, zone) is not None
                                                     or active_rules.get("hidden_digit_prompt_hidden"))
@@ -3674,7 +3692,7 @@ def main():
                                         updated["hidden_digit_prompt"] = {
                                             "positions": [slot + 1 for slot in hidden_slots], "time": time.time(),
                                             "image_time": read_state["captured"]}
-                                    # 0.5.12 (Stefan 13:46/13:47): do not wait for the entry for ever. After
+                                    # 0.5.12: do not wait for the entry for ever. After
                                     # five minutes a hidden decimal is estimated (never full cubic metres).
                                     known = [value for value in (
                                         (history.get("consumption") or {}).get("reading_litres"),
@@ -3725,6 +3743,19 @@ def main():
                                           f"(≤ {flow_limit} l/h) ergänzt: {ocr} -> {value}")
                                     ocr, ocr_confirmed, ocr_readings = value, True, slow_readings
                                     ocr_method = "slow_roller"
+                            # 0.5.19, shadow mode only: how well unclear decimals could be estimated from
+                            # the last confirmed reading and the flow. Nothing is changed or published.
+                            if not ocr_confirmed and not hidden_slots:
+                                counted_now = history.get("consumption") or {}
+                                if (type(counted_now.get("reading_litres")) is int
+                                        and type(counted_now.get("timestamp")) in (int, float)):
+                                    shadow = shadow_decimal_estimate(
+                                        ocr_readings, {"value": counted_now["reading_litres"],
+                                                       "time": counted_now["timestamp"]},
+                                        read_state["captured"], comparison_decimals, integer_digits,
+                                        hidden_roller_flow(history, active_rules["max_flow_lph"]))
+                                    if shadow:
+                                        debug_log.record(kind="shadow_decimal_estimate", read=ocr, **shadow)
                         register = read_state["register"]
                         integer_width = read_state["integer_width"]
                         whole_boxes = read_state["whole_boxes"]
@@ -3887,7 +3918,7 @@ def main():
                             preview.save(buffer, "JPEG", quality=88, optimize=True)
                             atomic_write(AUTOMATIC_PREVIEW, buffer.getvalue(), 0o600)
                             automatic_preview_ready = True
-                        # 0.5.12 (Stefan 22.11., 13:41): plain cut-out of the counter, without frames,
+                        # 0.5.12: plain cut-out of the counter, without frames,
                         # shown below the request to enter the meter reading.
                         with io.BytesIO() as buffer:
                             register.convert("RGB").save(buffer, "JPEG", quality=90)
@@ -4395,7 +4426,7 @@ def main():
                   f"OCR: {ocr or '?'} ({data['ocr_attempts']} Durchläufe) | "
                   f"SLFork: {data['actual_value']} | Ergebnis: {outcome}")
             local = locals()
-            # 0.5.17 (Stefan 22.11., 15:33): new reading methods are tested only in the pause between
+            # 0.5.17: new reading methods are tested only in the pause between
             # two checks, never right after a check – that kept every check longer than needed.
             experiment = ({"skipped": "deferred"} if not manual and local.get("register") is not None
                           and experiments.enabled_experiments(active_rules) else None)
@@ -4406,7 +4437,7 @@ def main():
                                                lambda *arguments: atomic_write(*arguments))
                 # Left for the waiting time: an experiment the busy machine skipped, or digits
                 # that stayed unclear. Only the newest check counts; older work is dropped.
-                # 0.5.15 (Stefan 22.11., 13:33): one task per pause, taking turns when several are due.
+                # 0.5.15: one task per pause, taking turns when several are due.
                 idle_state["turn"] += 1
                 idle_state["jobs"][:] = idle_work.keep_recent(idle_state["jobs"], idle_job(
                     idle_work.next_reason([
@@ -4426,7 +4457,7 @@ def main():
                 read_plan_state.update(planned)
             stationary_record = None
             if not manual and local.get("register") is not None:
-                # Shadow mode only (Stefan 22.11., 11:48): measure whether the rollers stood still
+                # Shadow mode only: measure whether the rollers stood still
                 # since the previous check; nothing is decided from it yet.
                 try:
                     current_strip = {"register": local["register"].copy(), "image": data.get("esp_timestamp"),

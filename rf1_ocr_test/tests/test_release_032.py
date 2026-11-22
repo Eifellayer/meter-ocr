@@ -58,7 +58,7 @@ class SlowRollerTest(unittest.TestCase):
     anchor = {"time": 1000.0, "value": 10492800}
 
     def test_first_decimal_completed_when_only_one_value_is_reachable(self):
-        # 17:18 on Stefan's meter: the 8 was unreadable, the 5 behind it clear.
+        # On a real meter the 8 was unreadable, the 5 behind it clear.
         filled = slow_roller_digit(["10492.?5?", "10492.?5?"], self.anchor, 1120.0, 2, 5, 1800)
         self.assertEqual((["10492.85", "10492.85"], [5]), filled)
 

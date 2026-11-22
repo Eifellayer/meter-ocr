@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.19
+
+- **Spiegelung nur mit passenden Ziffern übernehmen.** Ohne Vergleichssensor prüfte die Bestätigung einer Spiegelung die sichtbaren Stellen gegen nichts. So konnte ein Rahmen übernommen werden, der eine volle Kubikmeter-Stelle falsch las (z. B. 5 statt 2). Jetzt müssen die gelesenen vollen Kubikmeter zum eingetragenen Zählerstand passen – mit dem, was der Zähler seitdem höchstens weitergelaufen sein kann. Passt es nicht, übernimmt die App den Rahmen nicht, sagt das in der Einrichtung und sucht weiter. Ein kürzlich eingetragener Zählerstand prüft die Rahmen von Anfang an mit.
+- **Schätzung unklarer Nachkommastellen im Schattenmodus.** Bleibt eine Nachkommastelle ohne Spiegelung unlesbar, rechnet die App jetzt nur mit, welche Werte vom letzten bestätigten Stand aus erreichbar wären, und schreibt das ins Debug-Protokoll. Am Ergebnis der Prüfung ändert sich nichts.
+- **Aufgeräumte Kommentare im Quelltext.** Kommentare beschreiben nur noch Version und Sachverhalt.
+- *English:* Without a comparison sensor, confirming a reflection no longer accepts a frame whose whole cubic metres contradict the reading entered by hand; the setup says so and keeps looking. A recently entered reading checks such frames from the start. For decimals that stay unreadable without a reflection, the app now only computes in shadow mode which values would be reachable from the last confirmed reading and writes that to the debug log; check results are unchanged. Source comments tidied up.
+
 ## 0.5.18
 
 - **Aufgeräumte Konfigurationsseite in Home Assistant.** Die Seite „Konfiguration“ der App stammte noch aus den ersten Versionen: Pflichtfelder für ESP-Adresse, Bildausschnitt und Ziffernbreite mit Beispielwerten, die längst in der App selbst eingestellt werden. Sichtbar ist jetzt nur noch die Zeitzone, mit dem Hinweis, dass alles andere in der App eingerichtet wird. Die alten Felder bleiben als optionale „Altwerte“ erhalten (Home Assistant blendet sie standardmäßig aus), damit ältere Installationen ihre Werte behalten.

@@ -1,4 +1,4 @@
-"""Live view of the background work for the overview (Stefan 22.11., 11:43/11:50).
+"""Live view of the background work for the overview.
 
 With the box "Hintergrundarbeit anzeigen" ticked, the overview lists every piece of work the app
 does beside the automatic check, shown like the check itself: whether it runs, what it does,

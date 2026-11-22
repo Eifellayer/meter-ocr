@@ -141,7 +141,7 @@ if __name__ == "__main__":
 
 class FrameBelongsToItsPictureTests(unittest.TestCase):
     def test_previous_picture_is_hidden_while_the_new_one_loads(self):
-        # 0.5.10 (Stefan 22.11., 13:09): the new frame lay on the previous picture.
+        # 0.5.10: the new frame lay on the previous picture.
         self.assertIn(".calibration-photo-grid img[hidden]{{display:none}}", PANEL)
         self.assertIn("region.hidden = !regionReady || frame.dataset.shown !== String(preview.frame);", PANEL)
         self.assertIn("if (kind === 'frame') region.hidden = region.dataset.frame !== String(revision);", PANEL)

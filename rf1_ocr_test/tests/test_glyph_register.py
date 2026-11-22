@@ -83,7 +83,7 @@ class SetupAutostartTests(TestCase):
         self.assertFalse(run.setup_autostart_due({}, "0.1.25", None, lambda: False))
 
     def test_unfinished_setup_is_recognised_from_the_debug_log(self):
-        # Stefan 20.11.2026: setup timed out after 20 min, the automatic then read "?????.9??".
+        # Setup timed out after 20 min, the automatic then read "?????.9??".
         start = '{"kind": "setup_start", "trigger": "user"}'
         timeout = '{"kind": "setup_end", "state": "timeout", "purpose": "setup"}'
         unclear = '{"kind": "automatic", "outcome": "ocr_unclear"}'

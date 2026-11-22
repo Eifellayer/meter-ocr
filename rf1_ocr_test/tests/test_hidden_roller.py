@@ -50,7 +50,7 @@ class HiddenRollerTests(unittest.TestCase):
 
 
 class TurningLastRollerTests(unittest.TestCase):
-    """0.5.11, live 22.11.2026 13:28: reading entered as 10511,534, the check read "10511.?3?"."""
+    """0.5.11: reading entered as 10511,534, the check read "10511.?3?"."""
 
     anchor = {"time": 1000.0, "value": 10511534}
 
@@ -74,7 +74,7 @@ class TurningLastRollerTests(unittest.TestCase):
 
 
 class EstimatedHiddenDecimalTests(unittest.TestCase):
-    """0.5.12 (Stefan 22.11.2026, 13:46): estimate a hidden decimal instead of failing for good."""
+    """0.5.12: estimate a hidden decimal instead of failing for good."""
 
     def test_lowest_digit_not_below_the_last_reading(self):
         self.assertEqual(("10511.53", [5]), estimated_hidden_digits(["10511.?3"] * 3, 10511500, 2, 5, [5]))
@@ -96,7 +96,7 @@ class EstimatedHiddenDecimalTests(unittest.TestCase):
 
 
 class EntryDuringRunningCheckTests(unittest.TestCase):
-    """0.5.13 (Stefan 22.11.2026, 14:18): a check that was running during the entry asked again."""
+    """0.5.13: a check that was running during the entry asked again."""
 
     def test_entry_made_while_the_check_was_running(self):
         from run import reading_entered_meanwhile

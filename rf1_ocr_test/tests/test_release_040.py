@@ -122,7 +122,7 @@ class GroupTests(unittest.TestCase):
         self.assertEqual("hint", rows[1]["role"])
 
     def test_register_with_hits_is_listed_after_leaving_the_shortlist(self):
-        """0.4.1 (Stefan 20.11., 20:55): two matches with hits were missing from the candidate list."""
+        """0.4.1: two matches with hits were missing from the candidate list."""
         job = Calibration(10, 0, rank_candidates=True)
         hit = Layout((100, 50, 300, 100), -13, 150)
         job.current_stamp = 1
@@ -142,7 +142,7 @@ class GroupTests(unittest.TestCase):
         self.assertEqual(list(range(1, 7)), [row["number"] for row in rows])
 
     def test_later_worse_image_does_not_lower_a_frames_best_score(self):
-        """0.4.2 (Stefan 20.11., 21:24): a better frame was overwritten by a later 75 % reading."""
+        """0.4.2: a better frame was overwritten by a later 75 % reading."""
         job = Calibration(10, 0, rank_candidates=True)
         layout = Layout((100, 50, 300, 100), -14, 150)
         with patch.object(calibration, "agreement_percent", side_effect=[88, 88, 75, 75]), \
@@ -155,7 +155,7 @@ class GroupTests(unittest.TestCase):
         self.assertEqual(88, job.groups[0]["percent"])
 
     def test_one_decimal_less_still_agrees_for_setup_hits(self):
-        """0.4.2 (Stefan 20.11., 21:23): 10494.2?? next to a confirmed 10494.27? was not counted."""
+        """0.4.2: 10494.2?? next to a confirmed 10494.27? was not counted."""
         agree = calibration.agreeing_prefixes
         self.assertEqual(2, agree(["10494.27?", "10494.27?"], 2, 5))
         self.assertEqual(1, agree(["10494.2??", "10494.2??"], 2, 5))

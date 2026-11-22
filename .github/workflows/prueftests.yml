@@ -1,6 +1,6 @@
 name: Prüftests
 
-# Stefan (22.11.): kein Warten vor jedem Release. Die volle Testreihe läuft nur auf Knopfdruck
+# Kein Warten vor jedem Release. Die volle Testreihe läuft nur auf Knopfdruck
 # (Actions → Prüftests → Run workflow, oder per API), z. B. wenn nach einem Release etwas nicht
 # funktioniert. Nur der schnelle Bau des App-Images (ca. 25 s) läuft bei jedem PR mit.
 on:

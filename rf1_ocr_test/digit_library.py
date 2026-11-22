@@ -1,6 +1,6 @@
 """Digit shapes learned from this meter's own confirmed readings (0.4.0, Experiment 2).
 
-The first decimal digit "8" of Stefan's meter is sometimes read, sometimes not ("10492.?5?",
+The first decimal digit "8" of a real meter is sometimes read, sometimes not ("10492.?5?",
 20.11.). Generic font templates do not match this blurred roller well, but the same "8" was read
 surely on many confirmed checks. After every confirmed automatic check the app keeps a running
 average of each digit cell that both OCR profiles read the same, and an unclear cell is filled

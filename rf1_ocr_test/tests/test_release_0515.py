@@ -56,7 +56,7 @@ if __name__ == "__main__":
 
 
 class ReflectedCandidateTests(unittest.TestCase):
-    """0.5.17 (Stefan 22.11.2026, 15:18): the frame confirmed with a hidden digit was not listed."""
+    """0.5.17: the frame confirmed with a hidden digit was not listed."""
 
     def test_frame_with_hidden_digit_is_listed_and_counted(self):
         from calibration import Calibration, Layout
@@ -72,7 +72,7 @@ class ReflectedCandidateTests(unittest.TestCase):
 
 
 class GlareConfirmTests(unittest.TestCase):
-    """0.5.17 (Stefan 22.11.2026, 15:23): confirm a detected reflection and enter the reading."""
+    """0.5.17: confirm a detected reflection and enter the reading."""
 
     def test_prompt_and_confirmation(self):
         from calibration import MIN_IMAGES, Calibration, Layout
@@ -96,7 +96,7 @@ class GlareConfirmTests(unittest.TestCase):
 
 
 class PromptOnceTests(unittest.TestCase):
-    """0.5.17 (Stefan 22.11.2026, 15:36/15:39): ask for the reading once, optionally never again."""
+    """0.5.17: ask for the reading once, optionally never again."""
 
     def test_option_is_saved(self):
         self.assertIn('name="hide_prompt"', PANEL)

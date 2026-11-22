@@ -1,4 +1,4 @@
-"""Work between two routine checks, without new camera images (0.5.0, Stefan 21.11.2026).
+"""Work between two routine checks, without new camera images (0.5.0).
 
 The app keeps the pictures of the last two checks (the regular picture and the one of the
 cross-check). In the waiting time it may look at them again with a small budget; it never
@@ -53,7 +53,7 @@ def forget_images(folder):
 
 
 # --- When the waiting time may be used -------------------------------------------------
-# Stefan 21.11.2026: only a few tests in between, never load the machine (a Raspberry Pi)
+# Only a few tests in between, never load the machine (a Raspberry Pi)
 # needlessly, and only with the pictures already taken.
 MAX_READS_PER_WAIT = 6        # digit reads (each one OCR process) between two checks
 MIN_SECONDS_AFTER_CHECK = 20  # let the machine settle after a check
@@ -64,7 +64,7 @@ REASONS = ("unclear_check", "experiment", "control")
 def next_reason(candidates, turn):
     """Pick one task per waiting time, taking turns when several are due (0.5.15).
 
-    Stefan 22.11.2026, 13:33: when there is too much for one pause, do the tasks alternately
+    When there is too much for one pause, do the tasks alternately
     between the checks instead of squeezing all of them into one block. ``candidates`` are the
     reasons that apply to the last check in order of priority; ``turn`` counts the pauses.
     Returns the chosen reason or "".

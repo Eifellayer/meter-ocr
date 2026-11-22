@@ -1,4 +1,4 @@
-"""Which rollers a routine check has to read (0.5.0, idea Stefan 21.11.2026).
+"""Which rollers a routine check has to read (0.5.0).
 
 The first three digits of a meter change only when the fourth rolls over (every 100 m³).
 Once a complete read confirmed them they are taken over from the last reading instead of

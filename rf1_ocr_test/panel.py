@@ -4255,7 +4255,7 @@ async function refreshAutomatic() {{
     recovery.textContent = sample.recovery_notice;
     // 0.5.12 (Stefan 13:43): once the reading was entered the request disappears; it only comes
     // back when a check after the entry could not fill the digit again.
-    const hiddenPrompt = sample.hidden_digit_prompt && !(readingEnteredAt && Number(sample.hidden_digit_prompt.time) <= readingEnteredAt)
+    const hiddenPrompt = sample.hidden_digit_prompt && !(readingEnteredAt && Number(sample.hidden_digit_prompt.image_time || sample.hidden_digit_prompt.time) <= readingEnteredAt)
       ? sample.hidden_digit_prompt : null;
     document.querySelector('#hidden-digit-prompt').hidden = !hiddenPrompt;
     document.querySelector('#hero-action').hidden = !hiddenPrompt;

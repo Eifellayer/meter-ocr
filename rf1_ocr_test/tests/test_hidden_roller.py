@@ -93,3 +93,15 @@ class EstimatedHiddenDecimalTests(unittest.TestCase):
 
     def test_no_value_at_or_above_the_last_reading(self):
         self.assertIsNone(estimated_hidden_digits(["10511.?3"] * 3, 10511950, 2, 5, [5]))
+
+
+class EntryDuringRunningCheckTests(unittest.TestCase):
+    """0.5.13 (Stefan 22.11.2026, 14:18): a check that was running during the entry asked again."""
+
+    def test_entry_made_while_the_check_was_running(self):
+        from run import reading_entered_meanwhile
+        before = {"fallback_value": "", "fallback_time": ""}
+        after = {"fallback_value": "10511,990", "fallback_time": "2026-11-22T14:16"}
+        self.assertTrue(reading_entered_meanwhile(before, after))
+        self.assertFalse(reading_entered_meanwhile(after, after))
+        self.assertFalse(reading_entered_meanwhile(after, before))

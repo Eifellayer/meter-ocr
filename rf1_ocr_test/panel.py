@@ -287,6 +287,23 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 /* 0.5.11: the free space on the right holds the checklist of the pictures evaluated so far. */
 .setup-timeline-grid{{display:grid;gap:.8rem 1.6rem}}
 @media(min-width:900px){{.setup-timeline-grid{{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);align-items:start}}}}
+/* 0.5.28: steps left, the tested picture and the pictures so far right; one column on small screens
+   and whenever one side has nothing to show. */
+.calibration-layout{{display:grid;gap:.9rem 1.6rem;margin:.75rem 0;align-items:start}}
+.calibration-main:not(:has(> :not([hidden]))),.calibration-side:not(:has(> :not([hidden]))){{display:none}}
+@media(min-width:900px){{.calibration-layout:has(> .calibration-main > :not([hidden])):has(> .calibration-side > :not([hidden])){{grid-template-columns:minmax(0,1fr) minmax(0,1.05fr)}}}}
+.calibration-main .setup-timeline-box{{margin:0}}
+.calibration-side{{display:grid;gap:.75rem;min-width:0}}
+.calibration-side .calibration-photo-panel{{margin:0;padding:.65rem .75rem;border:1px solid var(--edge);border-radius:.6rem;background:var(--surface-2)}}
+.calibration-side .calibration-photo-panel > summary{{cursor:pointer;font-weight:650}}
+.calibration-side .calibration-photo-grid{{grid-template-columns:minmax(0,1fr);margin:.55rem 0 0}}
+.calibration-side .calibration-photo-frame{{width:auto}}
+.calibration-side .calibration-photo-grid img{{width:100%}}
+.calibration-side .setup-rounds-box{{padding:.65rem .75rem;border:1px solid var(--edge);border-radius:.6rem}}
+.calibration-actions{{display:flex;flex-wrap:wrap;align-items:flex-start;gap:.6rem;margin:.2rem 0 .4rem}}
+.calibration-live .quality-hint{{grid-template-columns:minmax(0,1fr);gap:.5rem;margin:0 0 .6rem}}
+.calibration-live .quality-hint p{{margin:0}}
+.calibration-actions .calibration-skip{{flex:1 1 18rem}}
 .setup-rounds-box h4{{margin:0 0 .4rem;font-size:.92rem}}
 .setup-rounds{{list-style:none;margin:0;padding:0;display:grid;gap:.3rem;font-size:.86rem;font-variant-numeric:tabular-nums}}
 .setup-rounds li{{display:grid;grid-template-columns:1.3rem minmax(0,1fr);gap:.45rem;padding:.35rem .55rem;border-radius:.5rem;background:var(--surface-2);border:1px solid var(--edge)}}
@@ -873,22 +890,8 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 <noscript><button type="submit">Speichern</button></noscript>
 </form>
 <p id="calibration-overview-state" role="status"></p>
+<progress id="calibration-overview-progress" aria-label="Verstrichene Zeit der Selbsteinrichtung"></progress>
 <p class="calibration-last-digit-note settings-note" hidden></p>
-<div class="setup-timeline-box" role="group" aria-labelledby="setup-timeline-title" hidden>
-<h3 id="setup-timeline-title">So weit ist die Einrichtung</h3>
-<div class="setup-timeline-grid">
-<div class="setup-timeline-main">
-<ol class="setup-timeline" aria-live="polite"></ol>
-<p class="setup-timeline-stats"></p>
-</div>
-<div class="setup-rounds-box" hidden>
-<h4>Bilder bisher</h4>
-<ol class="setup-rounds"></ol>
-</div>
-</div>
-</div>
-<details class="setup-help calibration-candidate-panel" open hidden><summary>Gefundene Rahmen (Kandidaten)</summary><ol class="calibration-candidates"></ol></details>
-{calibration_skip_html}
 <div class="reflection-suggestion action-needed glare-confirm" hidden>
 <p><strong>Spiegelung erkannt.</strong> <span class="glare-confirm-text"></span> Bitte bestätige das und trag den aktuellen Zählerstand ein. Die App übernimmt dann den Rahmen und nutzt den Stand in den weiteren Prüfungen, um die verdeckte Stelle zu ergänzen.</p>
 <form method="post" action="selbsteinrichtung" class="reflection-actions">
@@ -897,10 +900,29 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 <label>Aktueller Zählerstand<input name="fallback_value" inputmode="decimal" maxlength="16" placeholder="z. B. 10512,345" required></label>
 <button type="submit" name="action" value="confirm-reflection">Bestätigen und übernehmen</button>
 </form></div>
-<p class="calibration-image-hint settings-note" hidden></p>
-<button type="button" id="calibration-open-region">Ziffernfeld manuell markieren</button>
-<progress id="calibration-overview-progress" aria-label="Verstrichene Zeit der Selbsteinrichtung"></progress>
+<!-- 0.5.28: steps on the left, the picture being tested on the right; the frame list folded away below. -->
+<div class="calibration-layout">
+<div class="calibration-main">
+<div class="setup-timeline-box" role="group" aria-labelledby="setup-timeline-title" hidden>
+<h3 id="setup-timeline-title">So weit ist die Einrichtung</h3>
+<ol class="setup-timeline" aria-live="polite"></ol>
+<p class="setup-timeline-stats"></p>
+</div>
+</div>
+<div class="calibration-side">
 {calibration_preview_html}
+<div class="setup-rounds-box" hidden>
+<h4>Bilder bisher</h4>
+<ol class="setup-rounds"></ol>
+</div>
+</div>
+</div>
+<p class="calibration-image-hint settings-note" hidden></p>
+<div class="calibration-actions">
+<button type="button" id="calibration-open-region">Ziffernfeld manuell markieren</button>
+{calibration_skip_html}
+</div>
+<details class="setup-help calibration-candidate-panel" hidden><summary>Gefundene Rahmen (Kandidaten)</summary><ol class="calibration-candidates"></ol></details>
 </div>
 {wizard_saved_notice}
 <div class="paused-notice" id="paused-notice" {paused_notice_hidden} role="status" aria-live="polite"><strong>Automatik pausiert</strong><p>Es starten keine neuen automatischen Prüfungen. Ein bereits laufender Durchlauf darf noch enden. Manuelle Tests bleiben verfügbar.</p><form method="post" action="automatik-pause" id="resume-auto-form"><input type="hidden" name="lang" value="{language}"><input type="hidden" name="mode" value="{language_mode}"><input type="hidden" name="csrf" value="{csrf}"><input type="hidden" name="paused" value="0"><button type="submit">Automatik fortsetzen</button></form></div>
@@ -2950,12 +2972,14 @@ function refreshCalibrationImages(preview) {{
     }}
     const regionReady = hasCrop && Array.isArray(preview.region);
     region.dataset.frame = regionReady ? String(preview.frame) : '';
-    region.hidden = !regionReady || frame.dataset.shown !== String(preview.frame);
-    if (!region.hidden) {{
+    // 0.5.28: position the frame before it can appear. The picture's onload shows it, and
+    // before, a frame not yet positioned briefly sat as a dot below the picture.
+    if (regionReady) {{
       ['left', 'top', 'width', 'height'].forEach((part, index) => {{
         region.style[part] = preview.region[index] * 100 + '%';
       }});
     }}
+    region.hidden = !regionReady || frame.dataset.shown !== String(preview.frame);
     section.querySelector('.calibration-preview-angle').textContent = hasCrop ? ' · ' + preview.angle + '°' : '';
     section.querySelector('.calibration-preview-reading').textContent = preview.last_digit_only ?
       (preview.reading ? 'Letzte Rolle: ' + preview.reading : 'Letzte Rolle wird gelesen …') :
@@ -3209,7 +3233,7 @@ function renderSetupTimeline(box, model) {{
   }}
   const stats = box.querySelector('.setup-timeline-stats');
   if (stats.textContent !== model.stats) stats.textContent = model.stats;
-  const roundsBox = box.querySelector('.setup-rounds-box');
+  const roundsBox = (box.closest('.calibration-live') || box).querySelector('.setup-rounds-box');
   if (roundsBox) {{
     const en = lang === 'en';
     roundsBox.hidden = !model.rounds.length;
@@ -3531,6 +3555,9 @@ function refreshCalibration(status) {{
   for (const box of document.querySelectorAll('.setup-timeline-box')) {{
     box.hidden = !active || status.automatic || status.intensive || background;
     if (!box.hidden) renderSetupTimeline(box, progressModel);
+    // 0.5.28: the pictures-so-far list stands beside the timeline and follows it.
+    const rounds = box.closest('.calibration-live')?.querySelector('.setup-rounds-box');
+    if (box.hidden && rounds) rounds.hidden = true;
   }}
   for (const plan of document.querySelectorAll('.setup-phase')) {{
     plan.hidden = !active || status.automatic;

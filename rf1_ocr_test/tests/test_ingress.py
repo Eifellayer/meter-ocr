@@ -1304,8 +1304,10 @@ class BrowserTests(IngressFixture):
                 candidates = page.locator("#calibration-overview .calibration-candidates li")
                 self.assertEqual(2, candidates.count())
                 self.assertTrue(page.locator("#calibration-overview .calibration-candidate-panel").is_visible())
+                # 0.5.28: the frame list is folded away below the steps and the picture.
+                self.assertFalse(page.locator("#calibration-overview .calibration-candidate-panel").evaluate("node => node.open"))
                 self.assertEqual("true", candidates.nth(1).get_attribute("data-selected"))
-                self.assertIn("−13°", candidates.nth(1).inner_text())
+                self.assertIn("−13°", candidates.nth(1).text_content())
                 # 0.5.11: checklist of the pictures so far, newest first, with tick or cross.
                 rounds = page.locator("#calibration-overview .setup-rounds li")
                 self.assertEqual(2, rounds.count())

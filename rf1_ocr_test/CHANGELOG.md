@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.16
+
+- **Kein „Treffer“ mehr auf leerer Fläche.** Lag bei der Einrichtung eine Rahmenreihe um eine Stelle verschoben, saß der erste Rahmen auf dem leeren Gehäuse neben dem Zählwerk – und die Texterkennung las dort trotzdem eine „1“ (grün markiert). Jetzt prüft die App die Mitte jedes Rahmens: Ist sie völlig glatt, während die übrigen Rahmen Ziffern zeigen, zählt eine dort gelesene Ziffer als unklar. Die verschobene Reihe verliert damit gegen die richtig sitzende.
+- *English:* No more “hits” on a blank surface: when a frame row was shifted by one field during setup, the OCR read a “1” on the bare housing next to the counter. A digit read in a frame whose middle is completely plain (while the other frames show digits) now counts as unclear, so the shifted row loses against the correct one.
+
 ## 0.5.15
 
 - **Schalter wie auf dem Smartphone.** Alle Optionen zum Anhaken sind jetzt weiche, abgerundete Kacheln mit Schiebeschalter; eingeschaltete Kacheln sind farbig hinterlegt. Die ganze Kachel ist Tippfläche, Tastatur und Bildschirmleser funktionieren weiter.

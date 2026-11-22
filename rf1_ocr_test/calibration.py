@@ -16,7 +16,8 @@ from checks import OCR_PROFILES, compare_sample, crop_register, meter_prefix, re
 from consumption import accumulate_consumption
 from layout import (crop_coordinates, digit_box_settings, find_digit_row, find_neighbour_digit_rows,
                     dark_register_cells, find_dark_register, find_dark_strip, find_glyph_register, find_raw_digit_rows, normalize_digit_boxes,
-                    rotated_width, same_digit_region, scale_digit_boxes, turn_crop, glare_slots, digit_presence)
+                    rotated_width, same_digit_region, scale_digit_boxes, turn_crop, glare_slots, digit_presence,
+                    empty_digit_slots)
 
 from meter_learning import propose_digit_boxes
 
@@ -1183,6 +1184,32 @@ class Calibration:
     def passes(self, layout):
         return self.shortlist.get(layout, (0,))[0] >= self.threshold_for(layout)
 
+    def mask_empty_fields(self, frame, layout, readings):
+        """Digits read in a frame without any glyph become "?" (0.5.16, Stefan 22.11., 15:05)."""
+        if not layout.digit_boxes or not readings:
+            return readings
+        try:
+            left, top, right, bottom = layout.box
+            register = turn_crop(frame.crop((left, top, right, bottom)), layout.rotation)
+            boxes = scale_digit_boxes(layout.digit_boxes, register.size)
+            empty = set(empty_digit_slots(register, boxes, skip=set(glare_slots(register, boxes))
+                                          | set(self.marked_positions)))
+        except (ValueError, TypeError, AttributeError):
+            return readings
+        if not empty:
+            return readings
+        masked = []
+        for value in readings:
+            slot, chars = 0, []
+            for char in str(value):
+                if char.isdigit() or char == "?":
+                    chars.append("?" if slot in empty else char)
+                    slot += 1
+                else:
+                    chars.append(char)
+            masked.append("".join(chars))
+        return masked
+
     def note_digit_found(self, frame, layout):
         if not layout.digit_boxes:
             return
@@ -1787,6 +1814,7 @@ class Calibration:
             except (OSError, ValueError, subprocess.SubprocessError):
                 on_decision("unreadable")
                 continue
+            readings = self.mask_empty_fields(frame, layout, readings)
             score = score_layout(layout, readings)
             coarse.append((score, layout, readings))
             # A plain setup reads two decimals: there the row is complete without the third one.
@@ -1873,6 +1901,7 @@ class Calibration:
                 perfect = trial
             if collecting:
                 self.coarse_attempts += self.attempts - previous_attempts
+            values = self.mask_empty_fields(frame, trial, values)
             coarse[index] = score_layout(trial, values), trial, values
             if self.attempts > previous_attempts and on_selected is not None and not stop():
                 on_selected(trial, values)

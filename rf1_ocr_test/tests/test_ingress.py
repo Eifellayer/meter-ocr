@@ -1269,9 +1269,15 @@ class BrowserTests(IngressFixture):
                 page.goto(self.base + f"?ui=overview&lang={language}")
                 timeline = page.locator("#calibration-overview .setup-timeline")
                 timeline.locator('li[data-state="current"]').first.wait_for()
-                self.assertEqual(6, timeline.locator("li").count())
+                self.assertEqual(6, timeline.locator(":scope > li").count())
+                # 0.5.7: the running step unfolds its intermediate steps.
+                self.assertTrue(timeline.locator('li[data-step="image"] details.setup-substeps').evaluate("node => node.open"))
                 self.assertEqual("image", timeline.locator('li[data-state="current"]').get_attribute("data-step"))
                 self.assertEqual("optional", timeline.locator('li[data-step="background"]').get_attribute("data-state"))
+                # 0.5.7: the box shows the background work on the overview.
+                page.locator("#show-background-work").check()
+                page.locator("#background-live").wait_for(state="visible")
+                page.locator("#background-live-list p").first.wait_for()
                 self.calibration.update(
                     state="testing", stage="ocr", tested=2, attempts=7, variant=2, rotation=-13,
                     confirmations=1, seconds=700,

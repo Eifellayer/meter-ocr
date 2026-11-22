@@ -279,9 +279,9 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .setup-substeps summary{{cursor:pointer;color:var(--muted)}}
 .setup-substeps ul{{list-style:none;margin:.2rem 0 0;padding:0}}
 .setup-substeps li{{margin:.1rem 0;font-variant-numeric:tabular-nums}}
-.setup-substeps li[data-state="todo"]{{color:var(--muted)}}
-.setup-substeps li[data-state="current"]{{font-weight:700}}
-.setup-substeps li[data-state="warn"]{{color:light-dark(#8a5a00,#ffd27a)}}
+.setup-substeps li[data-sub="todo"]{{color:var(--muted)}}
+.setup-substeps li[data-sub="current"]{{font-weight:700}}
+.setup-substeps li[data-sub="warn"]{{color:light-dark(#8a5a00,#ffd27a)}}
 .setup-timeline-stats{{margin:.1rem 0 0;color:var(--muted);font-size:.85rem;font-variant-numeric:tabular-nums}}
 @keyframes setup-pulse{{0%,100%{{box-shadow:0 0 0 0 light-dark(#0b8f7c55,#38c9b055)}}50%{{box-shadow:0 0 0 .4rem light-dark(#0b8f7c00,#38c9b000)}}}}
 @keyframes setup-tick{{from{{transform:scale(.4);opacity:0}}to{{transform:scale(1);opacity:1}}}}
@@ -400,7 +400,7 @@ section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 .meter-hero-wait{{margin:.35rem 0 0;font-size:.88rem;color:var(--muted)}}
 .background-work-box{{margin:.5rem 0 .75rem}}
 .background-work-toggle{{display:inline-flex;gap:.45rem;align-items:center;font-size:.92rem;cursor:pointer}}
-.background-work{{margin-top:.5rem}}
+.background-live{{margin-top:.5rem}}
 .background-job{{margin:0 0 .6rem;padding:.6rem .85rem;border:1px solid var(--edge);border-radius:.75rem}}
 .background-job[data-state="running"]{{border-color:var(--accent)}}
 .background-job p{{margin:.15rem 0 0;font-size:.9rem;overflow-wrap:anywhere}}
@@ -736,9 +736,9 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 </div>
 <div class="background-work-box">
 <label class="background-work-toggle"><input type="checkbox" id="show-background-work"> Hintergrundarbeit anzeigen</label>
-<section id="background-work" class="background-work" aria-label="Hintergrundarbeit" hidden>
+<section id="background-live" class="background-live" aria-label="Hintergrundarbeit" hidden>
 <p class="settings-note">Was die App neben der automatischen Prüfung tut: Feinsuche, Wartezeit-Arbeit, Schattenmodus und Nacharbeit. Nur zur Ansicht, du musst nichts tun.</p>
-<div id="background-work-list"></div>
+<div id="background-live-list"></div>
 </section>
 </div>
 <div class="crop-actions" id="setup-start-actions" {resume_setup_hidden}>
@@ -2797,7 +2797,7 @@ function renderSetupTimeline(box, model) {{
         const items = document.createElement('ul');
         items.append(...step.substeps.map(part => {{
           const item = document.createElement('li');
-          item.dataset.state = part.state;
+          item.dataset.sub = part.state;
           item.textContent = (part.state === 'done' ? '✓ ' : part.state === 'current' ? '▸ ' : part.state === 'warn' ? '! ' : '○ ') +
             part.label + (part.extra ? ' – ' + part.extra : '');
           return item;
@@ -3568,12 +3568,12 @@ function formatStamp(epoch) {{
   return new Intl.DateTimeFormat(lang === 'en' ? 'en-GB' : 'de-DE', {{day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'}}).format(new Date(epoch * 1000));
 }}
 function renderBackgroundWork(items) {{
-  const box = document.querySelector('#background-work');
+  const box = document.querySelector('#background-live');
   const toggle = document.querySelector('#show-background-work');
   if (!box || !toggle) return;
   box.hidden = !toggle.checked;
   if (box.hidden) return;
-  const list = document.querySelector('#background-work-list');
+  const list = document.querySelector('#background-live-list');
   const key = JSON.stringify(items);
   if (list.dataset.items === key) return;
   list.dataset.items = key;
@@ -3631,7 +3631,7 @@ function renderBackgroundWork(items) {{
     try {{ toggle.checked = localStorage.getItem('rf1-show-background-work') === '1'; }} catch (error) {{}}
     toggle.addEventListener('change', () => {{
       try {{ localStorage.setItem('rf1-show-background-work', toggle.checked ? '1' : '0'); }} catch (error) {{}}
-      document.querySelector('#background-work-list').dataset.items = '';
+      document.querySelector('#background-live-list').dataset.items = '';
       renderBackgroundWork(lastBackgroundWork);
     }});
   }}

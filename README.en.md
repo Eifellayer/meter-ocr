@@ -1,6 +1,6 @@
 # AI Meter Reader
 
-**Version 0.5.23** · [Deutsch](README.md) · [Guide](rf1_ocr_test/DOCS.md) · [Changelog](rf1_ocr_test/CHANGELOG.md) · [Roadmap](RELEASE-PLAN.md)
+**Version 0.5.24** · [Deutsch](README.md) · [Guide](rf1_ocr_test/DOCS.md) · [Changelog](rf1_ocr_test/CHANGELOG.md) · [Roadmap](RELEASE-PLAN.md)
 
 <img src="assets/project-logo.png" alt="AI Meter Reader" width="110">
 
@@ -12,8 +12,10 @@ Home Assistant app that reads mechanical meters (mainly gas meters with digit ro
 
 1. Add the repository (link above, or `https://github.com/Eifellayer/meter-ocr` under **Settings → Apps → Install app → ⋮ → Repositories**).
 2. Install **AI Meter Reader**, start it and open the web UI.
-3. Pick the image source in the setup wizard: ESPHome / Home Assistant camera, AI on the Edge / SLFork, or **ESP as camera only**.
+3. Pick the image source in the setup wizard: **Build a meter camera**, ESPHome / Home Assistant camera, AI on the Edge / SLFork, or **ESP as camera only**.
 4. Start automatic setup. The app finds the digit area, confirms it on several images and then checks on its own.
+
+No camera yet? An ESP32 with a camera (ESP32-CAM, ESP32-S3-CAM by Freenove or AI-Thinker, XIAO ESP32S3 Sense, Waveshare ESP32-S3-ETH) becomes a ready-made **meter camera** within minutes using the [installer page](https://eifellayer.github.io/meter-ocr/) – straight from the browser, no ESPHome knowledge needed. See the [guide](rf1_ocr_test/DOCS.md#meter-camera-in-one-click) for details.
 
 ## What it does
 

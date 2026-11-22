@@ -4,12 +4,12 @@
 
 ## Deutsch
 
-**Version 0.5.23.** Die App liest deinen Zähler lokal aus dem Kamerabild. Sie ist keine geeichte Messung.
+**Version 0.5.24.** Die App liest deinen Zähler lokal aus dem Kamerabild. Sie ist keine geeichte Messung.
 
 ### Einrichtung
 
 1. App starten und Weboberfläche öffnen. Der Einrichtungsassistent führt in vier Schritten durch Bildquelle, Zähleranzeige, Bildausschnitt und Hinweise.
-2. **Bildquelle:** ESPHome- oder Home-Assistant-Kamera, AI on the Edge / SLFork oder **ESP nur als Kamera** (die App holt nur das Bild und liest selbst).
+2. **Bildquelle:** Zählerkamera bauen, ESPHome- oder Home-Assistant-Kamera (auch Überwachungskamera oder Handy), AI on the Edge / SLFork oder **ESP nur als Kamera** (die App holt nur das Bild und liest selbst).
 3. **Selbsteinrichtung:** Die App sucht den Ziffernbereich und bestätigt ihn an mehreren Bildern. Sind sieben Ziffern sicher, läuft die Automatik. Die achte Stelle stimmt sie im Hintergrund fein ab („Optimierung läuft“, mit Höchstdauer).
    Wie weit sie ist, zeigt die **Übersicht** während der Einrichtung unter „So weit ist die Einrichtung“: erledigte Schritte mit Häkchen, der laufende Schritt hervorgehoben, darunter die gefundenen Rahmen.
 4. Passt der automatisch gefundene Rahmen nicht, kannst du ihn im Assistenten selbst ziehen.
@@ -37,6 +37,23 @@ Praktisch getestet ist bisher nur ein Gaszähler; Wasserzähler sind ungetestet.
 - Bleiben nach den OCR-Versuchen bis zu drei Ziffern unklar, verschiebt die App nur deren Rahmen leicht und liest sie neu (höchstens 10 zusätzliche Einzelziffer-Lesungen).
 - Sprünge über dem maximalen Durchfluss (Standard 6 m³/h, nach Qmax des Zählers einstellen) werden verworfen.
 - Ein einzelner niedrigerer Wert wird verworfen. Zeigen mindestens drei Ablesungen über 15 Minuten stimmig einen niedrigeren Stand, übernimmt die App ihn, ohne negativen oder doppelten Verbrauch zu buchen.
+
+### Zählerkamera mit einem Klick
+
+Für die gängigsten Kameraboards gibt es eine fertige ESPHome-Firmware. ESPHome-Kenntnisse brauchst du dafür nicht.
+
+| Board | Blitz | Stand |
+|---|---|---|
+| AI-Thinker ESP32-CAM (mit Programmier-Platine ESP32-CAM-MB) | LED | getestet |
+| ESP32-S3-CAM: Freenove ESP32-S3 WROOM CAM, AI-Thinker ESP32-S3-CAM | RGB-LED | getestet |
+| Seeed XIAO ESP32S3 Sense | – | ungetestet, Rückmeldung erwünscht |
+| Waveshare ESP32-S3-ETH (Netzwerkkabel, auch PoE) | – | ungetestet, Rückmeldung erwünscht |
+
+1. Im Einrichtungsassistenten **Zählerkamera bauen** wählen, das Board antippen und **Firmware installieren** öffnen – oder direkt die [Installer-Seite](https://eifellayer.github.io/meter-ocr/) aufrufen. Das klappt am Computer in Chrome oder Edge, das Board hängt per USB daran.
+2. **Installieren** drücken, den Anschluss wählen und danach das WLAN eintragen. Kommt keine WLAN-Abfrage, öffnet die Kamera ein eigenes WLAN „zaehlerkamera-…“, über das du dein WLAN am Handy einträgst.
+3. Home Assistant meldet die neue **Zählerkamera** unter Einstellungen → Geräte & Dienste: dort **Hinzufügen** drücken. Der Assistent wählt sie danach von selbst aus. Blitz, Belichtung und Verstärkung übernimmt die App.
+
+Die Firmware erkennt den Kamerachip selbst (OV2640, OV3660, OV5640) und nimmt Bilder mit 800×600 Pixeln auf. Liegt das Bild gespiegelt oder auf dem Kopf, legst du beim Gerät in Home Assistant den Schalter **Bild spiegeln** oder **Bild umdrehen** um. Die Zusätze **WLAN-Kanal** und **WLAN-Zugangspunkt** sind ab Werk ausgeschaltet und lassen sich dort bei Bedarf aktivieren. Neue Firmware erscheint als normales Update in Home Assistant. Wer selbst weiterbauen will, übernimmt die Kamera im ESPHome Device Builder mit **Adopt**; die Konfiguration liegt im Ordner `esphome/` des Repositorys. Eine schon vorhandene eigene ESPHome-Kamera kannst du natürlich weiter nutzen.
 
 ### ESPHome-Kamera mit Blitz (ESP32-CAM)
 
@@ -104,12 +121,12 @@ Nach einem App-Update oder Neustart lädt die geöffnete Weboberfläche selbst n
 
 ## English
 
-**Version 0.5.23.** The app reads your meter locally from a camera image. It is not a certified measurement.
+**Version 0.5.24.** The app reads your meter locally from a camera image. It is not a certified measurement.
 
 ### Setup
 
 1. Start the app and open the web UI. The setup wizard guides you through image source, meter display, crop and alerts in four steps.
-2. **Image source:** ESPHome or Home Assistant camera, AI on the Edge / SLFork, or **ESP as camera only** (the app only fetches the image and reads it itself).
+2. **Image source:** build a meter camera, ESPHome or Home Assistant camera (also a security camera or phone), AI on the Edge / SLFork, or **ESP as camera only** (the app only fetches the image and reads it itself).
 3. **Automatic setup:** the app finds the digit area and confirms it on several images. Once seven digits are certain, automatic checks run. The eighth digit is fine-tuned in the background ("Optimisation running", with a maximum duration).
    The **Overview** shows how far it is under "Setup progress" while the setup runs: finished steps ticked, the current step highlighted, the frames found below.
 4. If the detected frame is wrong, draw it yourself in the wizard.
@@ -137,6 +154,23 @@ So far only one gas meter has been tested in practice; water meters are untested
 - If up to three digits stay unclear after the OCR attempts, the app nudges only their frames and reads them again (at most 10 extra single-digit reads).
 - Jumps above the maximum flow (default 6 m³/h, set it to the meter's Qmax) are rejected.
 - A single lower reading is rejected. If at least three consistent readings over 15 minutes show a lower value, the app accepts it without booking negative or duplicate consumption.
+
+### Meter camera in one click
+
+There is ready-made ESPHome firmware for the most common camera boards. No ESPHome knowledge is needed.
+
+| Board | Flash | Status |
+|---|---|---|
+| AI-Thinker ESP32-CAM (with the ESP32-CAM-MB programmer board) | LED | tested |
+| ESP32-S3-CAM: Freenove ESP32-S3 WROOM CAM, AI-Thinker ESP32-S3-CAM | RGB LED | tested |
+| Seeed XIAO ESP32S3 Sense | – | untested, feedback welcome |
+| Waveshare ESP32-S3-ETH (network cable, also PoE) | – | untested, feedback welcome |
+
+1. In the setup wizard choose **Build a meter camera**, tap your board and open **Install firmware** – or go straight to the [installer page](https://eifellayer.github.io/meter-ocr/). Use Chrome or Edge on a computer with the board connected by USB.
+2. Press **Install**, pick the port and then enter your Wi-Fi. If no Wi-Fi prompt appears, the camera opens its own Wi-Fi “zaehlerkamera-…”; connect your phone to it and enter your Wi-Fi there.
+3. Home Assistant reports the new **meter camera** under Settings → Devices & services: press **Add** there. The wizard then picks it by itself. The app takes over flash, exposure and gain.
+
+The firmware detects the camera chip itself (OV2640, OV3660, OV5640) and takes pictures at 800×600 pixels. If the picture is mirrored or upside down, switch **Bild spiegeln** (mirror) or **Bild umdrehen** (flip) on the device in Home Assistant. The extras **WLAN-Kanal** (Wi-Fi channel) and **WLAN-Zugangspunkt** (access point) are off by default and can be enabled there. New firmware shows up as a normal update in Home Assistant. To keep building it yourself, take the camera over in the ESPHome Device Builder with **Adopt**; the configuration lives in the repository's `esphome/` folder. An ESPHome camera of your own keeps working, of course.
 
 ### ESPHome camera with flash (ESP32-CAM)
 

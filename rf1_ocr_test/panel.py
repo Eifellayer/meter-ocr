@@ -53,6 +53,8 @@ from notification_settings import notification_rules
 from source_settings import CameraOffline, source_check_key, source_rules
 
 SUPERVISOR_ADDRESS = "172.30.32.2"
+# Installer page for the ready-made meter camera firmware (esphome/ in the repository).
+KIT_INSTALLER_URL = "https://eifellayer.github.io/meter-ocr/"
 MAX_MANUAL_IMAGE_BYTES = 3_000_000
 MAX_MULTIPART_OVERHEAD = 16_384
 
@@ -623,6 +625,33 @@ white-space:pre-line;line-height:1.24em;text-align:center;animation:roll 2.2s li
 .setup-step div.setup-help,.setup-step .source-mode-guide{{background:var(--surface-2);border:1px solid var(--edge);border-radius:var(--radius-sm);padding:.8rem .9rem;display:grid;gap:.6rem}}
 .setup-step div.setup-help > *,.setup-step .source-mode-guide > *{{margin:0}}
 .setup-step .source-mode-guide ul{{padding-left:1.1rem;display:grid;gap:.3rem}}
+/* ---------- 0.5.24: source cards and the one-click meter camera ---------- */
+.source-cards-ready .source-mode-select{{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}}
+.setup-step .source-mode-guide:has(.source-cards:not([hidden])){{background:transparent;border:0;padding:0}}
+.source-cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,15rem),1fr));gap:.6rem}}
+.source-card{{position:relative;display:grid;grid-template-columns:auto 1fr;gap:.15rem .7rem;align-items:start;text-align:left;font:inherit;color:inherit;cursor:pointer;
+min-height:0;padding:.8rem .85rem;border-radius:var(--radius-sm);border:1.5px solid var(--edge);background:var(--surface-2);transition:border-color .15s,transform .15s}}
+.source-card:hover{{transform:translateY(-1px);border-color:light-dark(#b9c7d2,#3c4c59)}}
+.source-card[aria-checked="true"]{{border-color:var(--accent);background:var(--accent-soft)}}
+.source-card[aria-checked="true"]::after{{content:"✓";position:absolute;top:.5rem;right:.6rem;width:1.3rem;height:1.3rem;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:var(--accent-ink);font-size:.75rem;font-weight:800}}
+.source-card-icon{{grid-row:span 2;display:grid;place-items:center;width:2.3rem;height:2.3rem;border-radius:.7rem;background:var(--surface);border:1px solid var(--edge);color:var(--accent)}}
+.source-card-icon svg{{width:1.35rem;height:1.35rem}}
+.source-card strong{{font-size:.95rem;line-height:1.3;padding-right:1.2rem}}
+.source-card small{{color:var(--muted);font-size:.82rem;line-height:1.4}}
+.source-cards.needs-choice .source-card{{border-color:var(--warn)}}
+.source-cards-hint{{color:var(--warn)}}
+.setup-step div.kit-panel{{border-color:var(--accent);background:linear-gradient(160deg,var(--accent-soft),var(--surface-2) 70%)}}
+.kit-boards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,13.5rem),1fr));gap:.45rem}}
+.kit-board{{display:flex;align-items:flex-start;gap:.5rem;padding:.55rem .65rem;border:1px solid var(--edge);border-radius:.55rem;background:var(--surface);cursor:pointer}}
+.kit-board:has(:checked){{border-color:var(--accent)}}
+.kit-board input{{margin:.2rem 0 0;flex:none}}
+.kit-board span{{display:grid;gap:.05rem;min-width:0}}
+.kit-board strong{{font-size:.88rem}}
+.kit-board small{{color:var(--muted);font-size:.78rem}}
+.kit-steps{{margin:0;padding-left:1.3rem;display:grid;gap:.45rem}}
+.kit-steps li::marker{{color:var(--accent);font-weight:750}}
+.kit-install{{background:var(--accent);color:var(--accent-ink);border-color:transparent;margin-right:.4rem}}
+.kit-status[data-state="found"]{{color:var(--ok);font-weight:650}}
 .setup-step details.setup-help{{background:var(--surface-2);border-radius:var(--radius-sm);padding:0 .9rem}}
 .setup-step details.setup-help > summary{{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:.6rem}}
 .setup-step details.setup-help > summary::-webkit-details-marker{{display:none}}
@@ -1213,13 +1242,32 @@ name: Zählerstand (OCR)</code></pre>
 <fieldset class="setup-step active" data-step="0"><legend>1. Bildquelle</legend>
 <p class="settings-note quality-hint" {quality_hint_hidden}>Je schlechter das Kamerabild (Unschärfe, Spiegelungen, schwaches Licht, schräger Blickwinkel), desto länger dauern Einrichtung und Optimierung. Ein scharfes, gerades Bild ohne Lichtfleck auf den Ziffern spart am meisten Zeit.</p>
 <div class="source-mode-guide">
-<label>Woher kommt das Zählerbild?<select name="source_mode" id="wizard-source-mode" required>{wizard_source_options}</select></label>
-<ul class="settings-note" aria-label="Erklärung der Bildquellen">
-<li><strong>ESPHome / Kamera:</strong> Empfohlen für den Einstieg mit einer Kamera. Die App liest den Stand selbst.</li>
-<li><strong>Home-Assistant-Kamera mit Vergleichswert:</strong> Die App holt pro Prüfung ein Standbild und kann den Wert mit einem vorhandenen Sensor abgleichen.</li>
-<li><strong>AI on the Edge / SLFork:</strong> Die App prüft den ESP-Messwert. Du kannst den ESP auch nur als Kamera verwenden.</li>
-</ul>
+<label class="source-mode-select">Woher kommt das Zählerbild?<select name="source_mode" id="wizard-source-mode" required>{wizard_source_options}</select></label>
+<div class="source-cards" id="wizard-source-cards" role="radiogroup" aria-label="Woher kommt das Zählerbild?" hidden>
+<button type="button" class="source-card" role="radio" aria-checked="false" data-mode="esphome" data-kit="1"><span class="source-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2"/><circle cx="12" cy="10" r="3.5"/><path d="M9 17h6"/><path d="M19.5 3.5l1.5-1.5M21 6h1.5"/></svg></span><strong>Zählerkamera bauen</strong><small>ESP32 mit Kamera: Firmware mit einem Klick installieren, Blitz inklusive.</small></button>
+<button type="button" class="source-card" role="radio" aria-checked="false" data-mode="esphome"><span class="source-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L17 6h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="12.5" r="3.5"/></svg></span><strong>Kamera aus Home Assistant</strong><small>ESPHome, Überwachungskamera oder Handy. Die App liest den Stand selbst.</small></button>
+<button type="button" class="source-card" role="radio" aria-checked="false" data-mode="camera"><span class="source-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L17 6h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 12.5l2 2 4-4"/></svg></span><strong>Kamera mit Vergleichswert</strong><small>Standbild pro Prüfung, abgeglichen mit einem vorhandenen Zählersensor.</small></button>
+<button type="button" class="source-card" role="radio" aria-checked="false" data-mode="slfork"><span class="source-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4"/></svg></span><strong>AI on the Edge / SLFork</strong><small>Die App prüft den ESP-Messwert oder nutzt den ESP nur als Kamera.</small></button>
 </div>
+<p class="settings-note source-cards-hint" id="wizard-source-cards-hint" role="alert" hidden>Bitte wähle zuerst aus, woher das Zählerbild kommt.</p>
+</div>
+<div id="wizard-kit" class="setup-help kit-panel" hidden>
+<p><strong>Zählerkamera mit einem Klick</strong> – ein ESP32 mit Kamera wird zur fertigen Zählerkamera, ohne ESPHome-Kenntnisse. Welches Board hast du?</p>
+<div class="kit-boards" role="radiogroup" aria-label="Board">
+<label class="kit-board"><input type="radio" form="wizard-kit-choice" name="kit_board" value="auto" checked><span><strong>Automatisch erkennen</strong><small>ESP32-CAM oder ESP32-S3-CAM</small></span></label>
+<label class="kit-board"><input type="radio" form="wizard-kit-choice" name="kit_board" value="esp32-cam"><span><strong>AI-Thinker ESP32-CAM</strong><small>mit Blitz-LED</small></span></label>
+<label class="kit-board"><input type="radio" form="wizard-kit-choice" name="kit_board" value="esp32-s3-cam"><span><strong>ESP32-S3-CAM</strong><small>Freenove oder AI-Thinker, mit Blitz</small></span></label>
+<label class="kit-board"><input type="radio" form="wizard-kit-choice" name="kit_board" value="xiao-esp32s3-sense"><span><strong>XIAO ESP32S3 Sense</strong><small>sehr klein, ohne Blitz</small></span></label>
+<label class="kit-board"><input type="radio" form="wizard-kit-choice" name="kit_board" value="waveshare-esp32s3-eth"><span><strong>Waveshare ESP32-S3-ETH</strong><small>Netzwerkkabel statt WLAN</small></span></label>
+</div>
+<ol class="kit-steps">
+<li><a class="button-link kit-install" id="wizard-kit-install" href="{kit_installer_url}?board=auto&amp;lang={language}" target="_blank" rel="noopener">Firmware installieren</a> <span>Öffnet den Installer in einem neuen Tab. Am Computer Chrome oder Edge benutzen und das Board per USB anstecken.</span></li>
+<li><span>Im Installer das WLAN eintragen.</span></li>
+<li><span>Home Assistant meldet die neue Zählerkamera unter <a href="/config/integrations/dashboard" target="_top">Geräte &amp; Dienste</a>. Dort „Hinzufügen“ drücken.</span></li>
+</ol>
+<p id="wizard-kit-status" class="settings-note kit-status" role="status" aria-live="polite">Sobald die Kamera in Home Assistant ist, wählt der Assistent sie hier selbst aus.</p>
+</div>
+<p id="wizard-stream-hint" class="settings-note" hidden>Überwachungskamera oder Handy mit Bildadresse (Snapshot, MJPEG, RTSP)? <a href="/config/integrations/dashboard/add?domain=generic" target="_top">In Home Assistant als Kamera anlegen</a>, danach erscheint sie hier in der Liste.</p>
 <div id="wizard-discovered-sources" class="setup-help">
 <label>Geräte suchen<input type="search" id="wizard-camera-search" placeholder="z. B. Gaszähler"></label>
 <div class="discovered-row"><label>In Home Assistant gefunden<select id="wizard-discovered-source" disabled><option value="">Es wurden keine Geräte gefunden</option></select></label><button type="button" id="wizard-refresh-sources" class="icon-refresh" aria-label="Neu suchen" title="Neu suchen">↻</button></div>
@@ -1986,6 +2034,13 @@ function showSetupStep(index) {{
 }}
 setupForm.querySelectorAll('.setup-next').forEach(button => button.addEventListener('click', () => {{
   const invalid = [...setupSteps[setupStep].querySelectorAll('input,select')].find(field => !field.checkValidity());
+  if (invalid && invalid.id === 'wizard-source-mode' && !sourceCards.hidden) {{
+    // The select is only kept for the form: point at the cards instead of a tiny hidden field.
+    sourceCards.classList.add('needs-choice');
+    sourceCardsHint.hidden = false;
+    sourceCards.querySelector('.source-card').focus();
+    return;
+  }}
   if (invalid) {{ invalid.reportValidity(); return; }}
   showSetupStep(setupStep + 1);
 }}));
@@ -2009,7 +2064,79 @@ function showWizardSource() {{
     attemptChoice.value = '10';
   }}
   previousWizardSource = mode;
+  updateSourceCards();
 }}
+// 0.5.24: cards instead of the plain select, and the one-click meter camera.
+const sourceCards = document.querySelector('#wizard-source-cards');
+const sourceCardsHint = document.querySelector('#wizard-source-cards-hint');
+const kitPanel = document.querySelector('#wizard-kit');
+const kitStatus = document.querySelector('#wizard-kit-status');
+const kitInstall = document.querySelector('#wizard-kit-install');
+let kitOpen = false;
+let kitTimer = null;
+let kitPolls = 0;
+function updateSourceCards() {{
+  const mode = wizardSourceMode.value;
+  sourceCards.querySelectorAll('.source-card').forEach(card => {{
+    const kit = card.dataset.kit === '1';
+    card.setAttribute('aria-checked', String(card.dataset.mode === mode && (mode !== 'esphome' || kit === kitOpen)));
+  }});
+  kitPanel.hidden = !(kitOpen && mode === 'esphome');
+  document.querySelector('#wizard-stream-hint').hidden = mode !== 'esphome' || kitOpen;
+  if (kitPanel.hidden) stopKitWatch(); else startKitWatch();
+}}
+function kitCameraFound() {{
+  const kits = sourceSuggestions.filter(source => source.kit && source.mode === 'esphome' && source.available !== false);
+  if (!kits.length) return false;
+  const current = setupForm.elements.camera.value.trim();
+  const source = kits.find(item => item.camera === current) || kits[0];
+  if (current !== source.camera) {{
+    setupForm.elements.camera.value = source.camera;
+    clearWizardImage();
+  }}
+  const index = String(sourceSuggestions.indexOf(source));
+  if ([...discoveredSource.options].some(option => option.value === index)) discoveredSource.value = index;
+  kitStatus.dataset.state = 'found';
+  kitStatus.textContent = lang === 'en' ?
+    'Meter camera found: ' + source.label + '. The app takes over flash and exposure automatically.' :
+    'Zählerkamera gefunden: ' + source.label + '. Blitz und Belichtung übernimmt die App automatisch.';
+  stopKitWatch();
+  return true;
+}}
+function startKitWatch() {{
+  if (kitTimer || kitCameraFound()) return;
+  kitPolls = 0;
+  // Look every 10 seconds whether Home Assistant knows the new camera yet (at most half an hour).
+  kitTimer = setInterval(async () => {{
+    kitPolls += 1;
+    if (kitPanel.hidden || !setupDialog.open || kitPolls > 180) {{ stopKitWatch(); return; }}
+    await loadSourceSuggestions(true, false);
+    kitCameraFound();
+  }}, 10000);
+}}
+function stopKitWatch() {{
+  if (kitTimer) clearInterval(kitTimer);
+  kitTimer = null;
+}}
+sourceCards.hidden = false;
+document.querySelector('.source-mode-guide').classList.add('source-cards-ready');
+sourceCards.addEventListener('click', event => {{
+  const card = event.target.closest('.source-card');
+  if (!card) return;
+  kitOpen = card.dataset.kit === '1';
+  sourceCards.classList.remove('needs-choice');
+  sourceCardsHint.hidden = true;
+  if (wizardSourceMode.value !== card.dataset.mode) {{
+    wizardSourceMode.value = card.dataset.mode;
+    clearWizardImage();
+  }}
+  showWizardSource();
+}});
+document.querySelectorAll('input[name="kit_board"]').forEach(input => input.addEventListener('change', () => {{
+  const url = new URL(kitInstall.href);
+  url.searchParams.set('board', input.value);
+  kitInstall.href = url.toString();
+}}));
 wizardSourceMode.addEventListener('change', showWizardSource); showWizardSource();
 const discoveredSource = document.querySelector('#wizard-discovered-source');
 const cameraSearch = document.querySelector('#wizard-camera-search');
@@ -2060,7 +2187,8 @@ function filterWizardSources() {{
   discoveredSource.options.length = 1;
   sourceSuggestions.forEach((source, index) => {{
     if (![source.label, source.camera, source.url].join(' ').toLowerCase().includes(term)) return;
-    const type = source.mode === 'slfork' ? 'AI on the Edge' : (lang === 'en' ? 'Camera' : 'Kamera');
+    const type = source.mode === 'slfork' ? 'AI on the Edge' :
+      source.kit ? (lang === 'en' ? 'Meter camera' : 'Zählerkamera') : (lang === 'en' ? 'Camera' : 'Kamera');
     const offline = source.available === false ? (lang === 'en' ? ' (not available in Home Assistant)' : ' (in Home Assistant nicht verfügbar)') : '';
     discoveredSource.add(new Option(type + ' · ' + source.label + offline, String(index)));
   }});
@@ -5339,6 +5467,7 @@ def start_panel(
                 reflection_digit=html.escape(str(estimate.get("digit", ""))),
                 reflection_right=html.escape(str(estimate.get("right", ""))),
                 reflection_time=html.escape(str(estimate.get("time", 0))),
+                kit_installer_url=KIT_INSTALLER_URL,
                 wizard_source_options=select_options(
                     source_choices, source_option if source_selected and not setup_pending else ""
                 ),

@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Zählerkamera installieren · AI Meter Reader</title>
+<meta name="description" content="Firmware für die Zählerkamera des AI Meter Reader direkt aus dem Browser installieren.">
+<meta name="color-scheme" content="light dark">
+<script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+<style>
+:root{color-scheme:light dark;font:16px/1.55 "Inter","Segoe UI Variable","Segoe UI",system-ui,-apple-system,sans-serif;
+--page:light-dark(#eef2f5,#0b1117);--surface:light-dark(#ffffff,#141c24);--surface-2:light-dark(#f6f8fa,#1a242e);
+--edge:light-dark(#e1e7ec,#26323d);--ink:light-dark(#0f1f2b,#e6edf3);--muted:light-dark(#5b6b78,#93a3b1);
+--accent:light-dark(#0b8f7c,#38c9b0);--accent-ink:light-dark(#ffffff,#04201b);--accent-soft:light-dark(#e2f4f1,#123a34);
+--warn:light-dark(#a46a00,#f2c14e);--warn-soft:light-dark(#fff4d9,#33290f);
+--radius:1.1rem;--radius-sm:.7rem;--shadow:0 1px 2px light-dark(#0f1f2b0d,#0006),0 8px 24px light-dark(#0f1f2b0f,#0004)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--ink)}
+main{max-width:58rem;margin:0 auto;padding:1.5rem 1rem 3rem;display:grid;gap:1.1rem}
+a{color:var(--accent)}
+header{display:flex;align-items:center;gap:.9rem;flex-wrap:wrap}
+.brand-mark{flex:none;width:3rem;height:3rem;border-radius:.9rem;display:grid;place-items:center;
+background:linear-gradient(140deg,var(--accent),light-dark(#0a6f87,#2a8fb0));color:#fff;box-shadow:var(--shadow)}
+.brand-mark svg{width:1.8rem;height:1.8rem}
+header h1{font-size:1.55rem;letter-spacing:-.02em;margin:0;line-height:1.2}
+header p{margin:.15rem 0 0;color:var(--muted)}
+.lang{margin-left:auto;display:flex;gap:.3rem}
+.lang button{font:inherit;font-size:.85rem;padding:.3rem .7rem;border-radius:99px;border:1px solid var(--edge);background:var(--surface);color:var(--muted);cursor:pointer}
+.lang button[aria-pressed="true"]{color:var(--ink);border-color:var(--accent);background:var(--accent-soft)}
+.card{background:var(--surface);border:1px solid var(--edge);border-radius:var(--radius);box-shadow:var(--shadow);padding:1.2rem 1.3rem}
+.card h2{display:flex;align-items:center;gap:.6rem;margin:0 0 .8rem;font-size:1.1rem;letter-spacing:-.01em}
+.step{flex:none;display:inline-grid;place-items:center;width:1.75rem;height:1.75rem;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-size:.9rem;font-weight:750}
+.boards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,12.5rem),1fr));gap:.7rem}
+.board{position:relative;display:grid;gap:.45rem;align-content:start;text-align:left;font:inherit;color:inherit;cursor:pointer;
+padding:.9rem;border-radius:var(--radius-sm);border:1.5px solid var(--edge);background:var(--surface-2);transition:border-color .15s,transform .15s}
+.board:hover{transform:translateY(-1px);border-color:light-dark(#b9c7d2,#3c4c59)}
+.board[aria-checked="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.board[aria-checked="true"]::after{content:"✓";position:absolute;top:.6rem;right:.7rem;width:1.4rem;height:1.4rem;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:var(--accent-ink);font-size:.8rem;font-weight:800}
+.board svg{width:100%;height:4.6rem}
+.board strong{font-size:.98rem;line-height:1.3}
+.board small{color:var(--muted);font-size:.83rem;line-height:1.4}
+.tag{justify-self:start;font-size:.72rem;font-weight:700;letter-spacing:.02em;padding:.12rem .5rem;border-radius:99px;background:var(--surface);border:1px solid var(--edge);color:var(--muted)}
+.tag.ok{color:var(--accent);border-color:var(--accent)}
+.tag.new{color:var(--warn);border-color:var(--warn);background:var(--warn-soft)}
+.install{display:grid;gap:.9rem}
+.install-row{display:flex;flex-wrap:wrap;align-items:center;gap:.9rem 1.2rem}
+.install-row p{margin:0;flex:1 1 18rem;color:var(--muted)}
+.install-button{font:inherit;font-size:1.05rem;font-weight:750;padding:.8rem 1.6rem;border-radius:99px;border:0;cursor:pointer;
+background:var(--accent);color:var(--accent-ink);box-shadow:var(--shadow);display:inline-flex;align-items:center;gap:.55rem}
+.install-button svg{width:1.25rem;height:1.25rem}
+.note{margin:0;padding:.75rem .9rem;border-radius:var(--radius-sm);background:var(--warn-soft);color:var(--ink);border:1px solid light-dark(#f0dca8,#4a3d17)}
+ol.flow{margin:0;padding:0;list-style:none;display:grid;gap:.7rem;counter-reset:flow}
+ol.flow li{counter-increment:flow;display:grid;grid-template-columns:2rem 1fr;gap:.2rem .7rem;align-items:start}
+ol.flow li::before{content:counter(flow);grid-row:span 2;display:grid;place-items:center;width:1.9rem;height:1.9rem;border-radius:50%;border:1.5px solid var(--accent);color:var(--accent);font-weight:750}
+ol.flow strong{line-height:1.9rem}
+ol.flow span{color:var(--muted);font-size:.93rem}
+details{border-top:1px solid var(--edge);padding:.65rem 0}
+details:first-of-type{border-top:0}
+summary{cursor:pointer;font-weight:650}
+details p,details ul{margin:.5rem 0 0;color:var(--muted);font-size:.93rem}
+details ul{padding-left:1.2rem}
+footer{color:var(--muted);font-size:.85rem;text-align:center}
+@media(max-width:520px){main{padding:1rem .7rem 2.5rem}.card{padding:1rem}.install-button{width:100%;justify-content:center}}
+</style>
+</head>
+<body>
+<main>
+<header>
+<span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5a8 8 0 1 1 15 0"/><path d="M12 13l3.5-4"/><circle cx="12" cy="13.5" r="1.4" fill="currentColor"/><path d="M7 20h10"/></svg></span>
+<div><h1 data-t="title">Zählerkamera installieren</h1>
+<p data-t="subtitle">Ein ESP32 mit Kamera wird zur Kamera für den AI Meter Reader – ohne ESPHome-Kenntnisse.</p></div>
+<div class="lang" role="group" aria-label="Sprache / Language"><button type="button" data-lang="de">Deutsch</button><button type="button" data-lang="en">English</button></div>
+</header>
+
+<section class="card" aria-labelledby="board-title">
+<h2 id="board-title"><span class="step">1</span><span data-t="step1">Welches Board hast du?</span></h2>
+<div class="boards" role="radiogroup" aria-labelledby="board-title" id="boards"></div>
+</section>
+
+<section class="card install" aria-labelledby="install-title">
+<h2 id="install-title"><span class="step">2</span><span data-t="step2">Anstecken und installieren</span></h2>
+<div class="install-row">
+<esp-web-install-button id="installer" manifest="firmware/automatisch.manifest.json">
+<button slot="activate" class="install-button" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg><span data-t="install">Installieren</span></button>
+<p slot="unsupported" class="note" data-t="unsupported">Dein Browser kann keine USB-Geräte ansprechen. Öffne diese Seite am Computer in Chrome oder Edge.</p>
+<p slot="not-allowed" class="note" data-t="notAllowed">Die Installation geht nur über eine sichere Verbindung (https).</p>
+</esp-web-install-button>
+<p id="install-hint" data-t="installHint">Board per USB an den Computer stecken, „Installieren“ drücken und den Anschluss auswählen. Danach fragt der Installer nach deinem WLAN.</p>
+</div>
+<p class="note" id="board-note" hidden></p>
+</section>
+
+<section class="card" aria-labelledby="after-title">
+<h2 id="after-title"><span class="step">3</span><span data-t="step3">Fertig – so geht es weiter</span></h2>
+<ol class="flow">
+<li><strong data-t="after1">WLAN eintragen</strong><span data-t="after1d">Gleich nach der Installation im selben Fenster. Kommt keine Abfrage, mit dem Handy das WLAN „zaehlerkamera-…“ der Kamera verbinden und dort dein WLAN eintragen.</span></li>
+<li><strong data-t="after2">In Home Assistant hinzufügen</strong><span><span data-t="after2d">Home Assistant meldet die neue Zählerkamera unter Einstellungen → Geräte &amp; Dienste. Dort „Hinzufügen“ drücken.</span> <a href="https://my.home-assistant.io/redirect/integrations/" target="_blank" rel="noopener" data-t="after2link">Geräte &amp; Dienste öffnen</a></span></li>
+<li><strong data-t="after3">Im AI Meter Reader auswählen</strong><span data-t="after3d">Im Einrichtungsassistenten erscheint die Kamera von selbst. Blitz, Belichtung und Verstärkung übernimmt die App automatisch.</span></li>
+</ol>
+</section>
+
+<section class="card" aria-labelledby="help-title">
+<h2 id="help-title" data-t="help">Hilfe, wenn es hakt</h2>
+<details><summary data-t="h1">Kein Anschluss in der Auswahl</summary>
+<ul><li data-t="h1a">Ein USB-Kabel mit Datenleitungen benutzen – reine Ladekabel zeigen nichts an.</li>
+<li data-t="h1b">Ältere Boards brauchen einen Treiber für den USB-Chip (CH340 oder CP210x).</li>
+<li data-t="h1c">Das ESP32-CAM hat keinen USB-Anschluss: Es braucht die Programmier-Platine (ESP32-CAM-MB) oder einen USB-Seriell-Adapter.</li></ul></details>
+<details><summary data-t="h2">Die Verbindung klappt nicht</summary>
+<p data-t="h2a">BOOT-Taste gedrückt halten, kurz RESET drücken, BOOT loslassen und noch einmal „Installieren“ wählen. Bei Boards mit zwei USB-Buchsen die andere Buchse probieren.</p></details>
+<details><summary data-t="h3">Das Bild ist gespiegelt oder steht auf dem Kopf</summary>
+<p data-t="h3a">In Home Assistant beim Gerät die Schalter „Bild spiegeln“ oder „Bild umdrehen“ umlegen. Schräg oder quer hängende Kameras richtet die App selbst aus.</p></details>
+<details><summary data-t="h4">Selbst in ESPHome weiterbauen</summary>
+<p data-t="h4a">Im ESPHome Device Builder erscheint die Kamera mit „Adopt“. Dann baut ESPHome die Firmware selbst und du kannst sie erweitern; Updates von hier gibt es danach nicht mehr.</p></details>
+</section>
+
+<footer><span data-t="footer">Firmware</span> <span id="version">–</span> · <a href="https://github.com/Eifellayer/meter-ocr" target="_blank" rel="noopener">AI Meter Reader</a> · <span data-t="built">gebaut mit</span> <a href="https://esphome.io" target="_blank" rel="noopener">ESPHome</a> &amp; <a href="https://esphome.github.io/esp-web-tools/" target="_blank" rel="noopener">ESP Web Tools</a></footer>
+</main>
+
+<script>
+const ART = {
+  auto: '<svg viewBox="0 0 120 60" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="40" y="12" width="40" height="36" rx="5"/><rect x="51" y="23" width="18" height="14" rx="2"/><path d="M48 12V6M60 12V6M72 12V6M48 54v-6M60 54v-6M72 54v-6M40 22h-6M40 38h-6M80 22h6M80 38h6"/><path d="M96 14l2.5 5 5 2.5-5 2.5-2.5 5-2.5-5-5-2.5 5-2.5z" fill="currentColor" stroke="none"/></svg>',
+  'esp32-cam': '<svg viewBox="0 0 120 60" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="30" y="6" width="60" height="48" rx="4"/><circle cx="60" cy="27" r="11"/><circle cx="60" cy="27" r="5"/><rect x="40" y="44" width="10" height="5" rx="1.5" fill="currentColor" stroke="none"/><circle cx="80" cy="15" r="3" fill="currentColor" stroke="none"/></svg>',
+  'esp32-s3-cam': '<svg viewBox="0 0 120 60" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="10" width="92" height="40" rx="4"/><circle cx="74" cy="30" r="10"/><circle cx="74" cy="30" r="4.5"/><rect x="8" y="16" width="10" height="9" rx="2"/><rect x="8" y="35" width="10" height="9" rx="2"/><rect x="30" y="20" width="22" height="20" rx="2"/><circle cx="96" cy="18" r="3" fill="currentColor" stroke="none"/></svg>',
+  'xiao-esp32s3-sense': '<svg viewBox="0 0 120 60" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="42" y="8" width="36" height="44" rx="5"/><rect x="53" y="4" width="14" height="7" rx="2"/><circle cx="60" cy="31" r="8.5"/><circle cx="60" cy="31" r="3.5"/><path d="M42 18h-4M42 26h-4M42 34h-4M42 42h-4M78 18h4M78 26h4M78 34h4M78 42h4"/></svg>',
+  'waveshare-esp32s3-eth': '<svg viewBox="0 0 120 60" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="12" y="8" width="96" height="44" rx="4"/><rect x="18" y="16" width="26" height="28" rx="2"/><path d="M24 24h14M24 30h14M26 44v-6h10v6"/><circle cx="78" cy="30" r="10"/><circle cx="78" cy="30" r="4.5"/><rect x="100" y="22" width="12" height="16" rx="2"/></svg>'
+};
+const BOARDS = [
+  {id: 'auto', manifest: 'automatisch', tag: 'auto',
+   de: ['Automatisch erkennen', 'ESP32-CAM oder ESP32-S3-CAM (Freenove, AI-Thinker). Der Installer erkennt den Chip selbst.'],
+   en: ['Detect automatically', 'ESP32-CAM or ESP32-S3-CAM (Freenove, AI-Thinker). The installer detects the chip itself.']},
+  {id: 'esp32-cam', tag: 'ok',
+   de: ['AI-Thinker ESP32-CAM', 'Der Klassiker mit Blitz-LED. Zum Flashen mit Programmier-Platine (ESP32-CAM-MB).'],
+   en: ['AI-Thinker ESP32-CAM', 'The classic board with flash LED. Flash it with the programmer board (ESP32-CAM-MB).']},
+  {id: 'esp32-s3-cam', tag: 'ok',
+   de: ['ESP32-S3-CAM', 'Freenove ESP32-S3 WROOM CAM oder AI-Thinker ESP32-S3-CAM, mit RGB-LED als Blitz.'],
+   en: ['ESP32-S3-CAM', 'Freenove ESP32-S3 WROOM CAM or AI-Thinker ESP32-S3-CAM, with an RGB LED as flash.']},
+  {id: 'xiao-esp32s3-sense', tag: 'new',
+   de: ['Seeed XIAO ESP32S3 Sense', 'Sehr klein, mit aufgesteckter Kamera. Kein eigener Blitz.'],
+   en: ['Seeed XIAO ESP32S3 Sense', 'Very small, with plug-on camera. No flash of its own.']},
+  {id: 'waveshare-esp32s3-eth', tag: 'new',
+   de: ['Waveshare ESP32-S3-ETH', 'Mit Netzwerkkabel (auch PoE) statt WLAN – für Keller ohne Empfang. Kein eigener Blitz.'],
+   en: ['Waveshare ESP32-S3-ETH', 'Network cable (also PoE) instead of Wi-Fi – for basements without reception. No flash of its own.']}
+];
+const TEXT = {
+  en: {title: 'Install the meter camera', subtitle: 'An ESP32 with a camera becomes the camera for AI Meter Reader – no ESPHome knowledge needed.',
+       step1: 'Which board do you have?', step2: 'Plug in and install', install: 'Install',
+       unsupported: 'Your browser cannot talk to USB devices. Open this page on a computer in Chrome or Edge.',
+       notAllowed: 'Installing only works over a secure connection (https).',
+       installHint: 'Connect the board to your computer by USB, press “Install” and choose the port. The installer then asks for your Wi-Fi.',
+       step3: 'Done – what comes next', after1: 'Enter your Wi-Fi',
+       after1d: 'Right after the installation in the same window. If no prompt appears, connect your phone to the camera’s own Wi-Fi “zaehlerkamera-…” and enter your Wi-Fi there.',
+       after2: 'Add it in Home Assistant', after2d: 'Home Assistant reports the new meter camera under Settings → Devices & services. Press “Add” there.',
+       after2link: 'Open Devices & services', after3: 'Choose it in AI Meter Reader',
+       after3d: 'The camera shows up in the setup wizard by itself. The app takes over flash, exposure and gain automatically.',
+       help: 'Help if something gets stuck', h1: 'No port in the list',
+       h1a: 'Use a USB cable with data lines – pure charging cables show nothing.',
+       h1b: 'Older boards need a driver for their USB chip (CH340 or CP210x).',
+       h1c: 'The ESP32-CAM has no USB port: it needs the programmer board (ESP32-CAM-MB) or a USB serial adapter.',
+       h2: 'The connection fails', h2a: 'Hold BOOT, press RESET briefly, release BOOT and choose “Install” again. On boards with two USB ports try the other one.',
+       h3: 'The picture is mirrored or upside down', h3a: 'In Home Assistant, switch “Bild spiegeln” (mirror) or “Bild umdrehen” (flip) on the device. The app straightens tilted or sideways cameras itself.',
+       h4: 'Keep building it in ESPHome', h4a: 'The camera appears in the ESPHome Device Builder with “Adopt”. ESPHome then builds the firmware itself and you can extend it; updates from this page stop after that.',
+       footer: 'Firmware', built: 'built with',
+       untested: 'Not tested with real hardware yet. Please report whether it works.'},
+  de: {}
+};
+document.querySelectorAll('[data-t]').forEach(node => { TEXT.de[node.dataset.t] = node.textContent; });
+TEXT.de.untested = 'Noch nicht mit echter Hardware getestet. Bitte gib Bescheid, ob es klappt.';
+const TAGS = {de: {auto: 'Empfohlen', ok: 'Getestet', new: 'Neu'}, en: {auto: 'Recommended', ok: 'Tested', new: 'New'}};
+const params = new URLSearchParams(location.search);
+let lang = params.get('lang') || ((navigator.language || 'de').toLowerCase().startsWith('de') ? 'de' : 'en');
+if (!TEXT[lang]) lang = 'de';
+let selected = BOARDS.some(board => board.id === params.get('board')) ? params.get('board') : 'auto';
+const installer = document.querySelector('#installer');
+const boardList = document.querySelector('#boards');
+const note = document.querySelector('#board-note');
+
+function render() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll('[data-t]').forEach(node => {
+    const text = TEXT[lang][node.dataset.t];
+    if (text) node.textContent = text;
+  });
+  document.querySelectorAll('.lang button').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.lang === lang)));
+  boardList.replaceChildren(...BOARDS.map(board => {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'board';
+    card.setAttribute('role', 'radio');
+    card.setAttribute('aria-checked', String(board.id === selected));
+    card.dataset.board = board.id;
+    const [name, description] = board[lang];
+    card.innerHTML = ART[board.id] + '<span class="tag ' + board.tag + '"></span><strong></strong><small></small>';
+    card.querySelector('.tag').textContent = TAGS[lang][board.tag];
+    card.querySelector('strong').textContent = name;
+    card.querySelector('small').textContent = description;
+    card.addEventListener('click', () => choose(board.id));
+    return card;
+  }));
+  const board = BOARDS.find(item => item.id === selected);
+  installer.setAttribute('manifest', 'firmware/' + (board.manifest || board.id) + '.manifest.json');
+  note.hidden = board.tag !== 'new';
+  note.textContent = TEXT[lang].untested;
+}
+function choose(id) {
+  selected = id;
+  params.set('board', id);
+  history.replaceState(null, '', '?' + params.toString());
+  render();
+}
+document.querySelectorAll('.lang button').forEach(button => button.addEventListener('click', () => {
+  lang = button.dataset.lang;
+  params.set('lang', lang);
+  history.replaceState(null, '', '?' + params.toString());
+  render();
+}));
+render();
+fetch('firmware/esp32-s3-cam.manifest.json', {cache: 'no-store'})
+  .then(response => response.ok ? response.json() : null)
+  .then(manifest => { if (manifest && manifest.version) document.querySelector('#version').textContent = manifest.version; })
+  .catch(() => {});
+</script>
+</body>
+</html>

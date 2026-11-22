@@ -1,0 +1,8 @@
+# Fertige Firmware für den Installer: Board-Datei plus Updates.
+
+substitutions:
+  board: waveshare-esp32s3-eth
+
+packages:
+  zaehlerkamera: !include waveshare-esp32s3-eth.yaml
+  werk: !include common/werk.yaml

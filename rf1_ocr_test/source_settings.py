@@ -26,20 +26,26 @@ def camera_problem(camera, token, fetch):
         return ""
     return CAMERA_OFFLINE if state == "unavailable" else ""
 
+# Home Assistant shows the ready-made meter camera firmware (esphome/) with this model,
+# taken from its ESPHome project name "eifellayer.zaehlerkamera".
+KIT_MODEL = "zaehlerkamera"
 ESP_ADDRESS_MODES = ("slfork", "slfork_camera")
 SOURCE_MODES = (*ESP_ADDRESS_MODES, "camera", "esphome")
 CAMERA = re.compile(r"camera\.[a-z0-9_]+")
 REFERENCE = re.compile(r"sensor\.[a-z0-9_]+")
 LIGHT = re.compile(r"light\.[a-z0-9_]+")
 
-DISCOVERY_TEMPLATE = """
+DISCOVERY_TEMPLATE = """{% set KIT_MODEL = '""" + KIT_MODEL + """' %}
 {% set found = namespace(cameras=[], devices=[]) %}
 {% for camera in states.camera %}
-  {% set found.cameras = found.cameras + [{'label': camera.name, 'camera': camera.entity_id, 'available': camera.state != 'unavailable'}] %}
+  {% set device = device_id(camera.entity_id) %}
+  {% set model = ((device_attr(device, 'model') or '') if device else '') | lower %}
+  {% set found.cameras = found.cameras + [{'label': camera.name, 'camera': camera.entity_id, 'available': camera.state != 'unavailable', 'kit': model == KIT_MODEL}] %}
 {% endfor %}
 {% for item in states.sensor if item.entity_id.endswith('_ip_address') or item.entity_id.endswith('_last_processed') %}
   {% set device = device_id(item.entity_id) %}
-  {% set model = device_attr(device, 'model') | default('', true) | lower %}
+  {# device_attr() fails for entities without a device (e.g. a template sensor *_ip_address). #}
+  {% set model = ((device_attr(device, 'model') or '') if device else '') | lower %}
   {% if 'ai-on-the-edge' in model or 'ai on the edge' in model %}
     {% set found.devices = found.devices + [
       {'label': device_attr(device, 'name_by_user') or device_attr(device, 'name'),
@@ -99,7 +105,9 @@ def discovered_sources(data):
             label = str(item.get("label") or camera)[:120]
             # A camera that is offline in Home Assistant delivers no picture: say so in the list.
             choices[camera] = {"mode": "esphome", "label": label, "camera": camera,
-                               "available": item.get("available") is not False}
+                               "available": item.get("available") is not False,
+                               # Only the ready-made meter camera carries the marker.
+                               **({"kit": True} if item.get("kit") is True else {})}
     for item in data.get("devices", []):
         url = str(item.get("url") or "").strip().rstrip("/")
         if not url:
@@ -115,4 +123,6 @@ def discovered_sources(data):
         if len(url) <= 150:
             label = str(item.get("label") or url)[:120]
             choices[url] = {"mode": "slfork", "label": label, "url": url}
-    return sorted(choices.values(), key=lambda choice: (choice.get("available") is False, discovery_order(choice)))[:80]
+    # The ready-made meter camera comes first: it is almost always the one just set up.
+    return sorted(choices.values(), key=lambda choice: (choice.get("available") is False, not choice.get("kit"),
+                                                        discovery_order(choice)))[:80]

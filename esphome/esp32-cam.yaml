@@ -1,0 +1,41 @@
+# Zählerkamera für das AI-Thinker ESP32-CAM
+# ESP32, 4 MB Flash, PSRAM, Kamera OV2640 / OV3660 / OV5640, Blitz-LED an GPIO4.
+# Zum Flashen per USB brauchst du die Programmier-Platine (ESP32-CAM-MB) oder einen USB-Seriell-Adapter.
+
+substitutions:
+  board_name: AI-Thinker ESP32-CAM
+  blitz_pin: GPIO4
+  jpeg_qualitaet: "12"
+
+packages:
+  kamera: !include common/kamera.yaml
+  wlan: !include common/wlan.yaml
+  blitz: !include common/blitz.yaml
+  blitz_led: !include common/blitz-led.yaml
+
+esp32:
+  variant: esp32
+  flash_size: 4MB
+  framework:
+    type: esp-idf
+
+# Zusatzspeicher für die Bilder.
+psram:
+
+esp32_camera:
+  external_clock:
+    pin: GPIO0
+  i2c_pins:
+    sda: GPIO26
+    scl: GPIO27
+  data_pins: [GPIO5, GPIO18, GPIO19, GPIO21, GPIO36, GPIO39, GPIO34, GPIO35]
+  vsync_pin: GPIO25
+  href_pin: GPIO23
+  pixel_clock_pin: GPIO22
+  power_down_pin: GPIO32
+
+# Rote LED auf der Rückseite: blinkt, solange etwas nicht stimmt (z. B. kein WLAN).
+status_led:
+  pin:
+    number: GPIO33
+    inverted: true

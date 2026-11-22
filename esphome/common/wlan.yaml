@@ -1,0 +1,43 @@
+# Zählerkamera – WLAN.
+#
+# Zugangsdaten gibt es hier keine: Der Installer trägt das WLAN über USB ein (Improv).
+# Klappt das nicht, öffnet die Kamera ein eigenes WLAN mit ihrem Namen; darüber lässt
+# sich das Heim-WLAN am Handy eintragen.
+
+esphome:
+  # Für den Sensor „WLAN-Kanal“ (esp_wifi_sta_get_ap_info).
+  includes:
+    - "<esp_wifi.h>"
+
+wifi:
+  # Kein WLAN-Stromsparen: sonst antwortet die Kamera verzögert und die Verbindung reißt ab.
+  power_save_mode: none
+  ap:
+
+captive_portal:
+
+sensor:
+  - platform: wifi_signal
+    name: WLAN-Signal
+    update_interval: 60s
+  # Zusatz, ab Werk aus: zeigt in der Historie, ob und wann der Router den Kanal wechselt.
+  - platform: template
+    name: WLAN-Kanal
+    icon: mdi:wifi-settings
+    entity_category: diagnostic
+    disabled_by_default: true
+    accuracy_decimals: 0
+    update_interval: 60s
+    lambda: |-
+      wifi_ap_record_t ap;
+      if (esp_wifi_sta_get_ap_info(&ap) == ESP_OK) {
+        return (float) ap.primary;
+      }
+      return {};
+
+text_sensor:
+  # Zusatz, ab Werk aus: zeigt bei mehreren Routern oder Repeatern, an welchem die Kamera hängt.
+  - platform: wifi_info
+    bssid:
+      name: WLAN-Zugangspunkt
+      disabled_by_default: true

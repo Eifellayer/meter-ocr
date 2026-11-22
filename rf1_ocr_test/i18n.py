@@ -900,6 +900,41 @@ EN_UI = {
     "3. Bildausschnitt und Prüfplan": "3. Image area and schedule",
     "4. Hinweise und speichern": "4. Alerts and save",
     "Woher kommt das Zählerbild?": "Where does the meter image come from?",
+    # 0.5.24: source cards and the one-click meter camera.
+    "Zählerkamera bauen": "Build a meter camera",
+    "ESP32 mit Kamera: Firmware mit einem Klick installieren, Blitz inklusive.":
+        "ESP32 with camera: install the firmware with one click, flash included.",
+    "Kamera aus Home Assistant": "Camera from Home Assistant",
+    "ESPHome, Überwachungskamera oder Handy. Die App liest den Stand selbst.":
+        "ESPHome, security camera or phone. The app reads the meter itself.",
+    "Kamera mit Vergleichswert": "Camera with reference reading",
+    "Standbild pro Prüfung, abgeglichen mit einem vorhandenen Zählersensor.":
+        "One snapshot per check, compared with an existing meter sensor.",
+    "Die App prüft den ESP-Messwert oder nutzt den ESP nur als Kamera.":
+        "The app checks the ESP reading or uses the ESP as a camera only.",
+    "Bitte wähle zuerst aus, woher das Zählerbild kommt.": "Please choose first where the meter image comes from.",
+    "Zählerkamera mit einem Klick": "Meter camera in one click",
+    "– ein ESP32 mit Kamera wird zur fertigen Zählerkamera, ohne ESPHome-Kenntnisse. Welches Board hast du?":
+        "– an ESP32 with a camera becomes a ready-made meter camera, no ESPHome knowledge needed. Which board do you have?",
+    "Automatisch erkennen": "Detect automatically",
+    "ESP32-CAM oder ESP32-S3-CAM": "ESP32-CAM or ESP32-S3-CAM",
+    "mit Blitz-LED": "with flash LED",
+    "Freenove oder AI-Thinker, mit Blitz": "Freenove or AI-Thinker, with flash",
+    "sehr klein, ohne Blitz": "very small, no flash",
+    "Netzwerkkabel statt WLAN": "network cable instead of Wi-Fi",
+    "Firmware installieren": "Install firmware",
+    "Öffnet den Installer in einem neuen Tab. Am Computer Chrome oder Edge benutzen und das Board per USB anstecken.":
+        "Opens the installer in a new tab. Use Chrome or Edge on a computer and connect the board by USB.",
+    "Im Installer das WLAN eintragen.": "Enter your Wi-Fi in the installer.",
+    "Home Assistant meldet die neue Zählerkamera unter ": "Home Assistant reports the new meter camera under ",
+    "Geräte &amp; Dienste": "Devices &amp; services",
+    ". Dort „Hinzufügen“ drücken.": ". Press “Add” there.",
+    "Sobald die Kamera in Home Assistant ist, wählt der Assistent sie hier selbst aus.":
+        "As soon as the camera is in Home Assistant, the wizard selects it here by itself.",
+    "Überwachungskamera oder Handy mit Bildadresse (Snapshot, MJPEG, RTSP)?":
+        "Security camera or phone with an image address (snapshot, MJPEG, RTSP)?",
+    "In Home Assistant als Kamera anlegen": "Add it to Home Assistant as a camera",
+    ", danach erscheint sie hier in der Liste.": ", it then shows up in the list here.",
     "Erklärung der Bildquellen": "Image source guide",
     "In Home Assistant gefunden": "Found in Home Assistant",
     "Gerät auswählen …": "Choose a device …",

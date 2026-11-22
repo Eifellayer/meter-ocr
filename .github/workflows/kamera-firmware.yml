@@ -1,0 +1,128 @@
+name: Zählerkamera-Firmware
+
+# Baut die fertige ESPHome-Firmware für jedes Board und veröffentlicht sie zusammen mit der
+# Installer-Seite auf GitHub Pages. Die Kameras holen ihre Updates von dort.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "esphome/**"
+      - ".github/workflows/kamera-firmware.yml"
+  pull_request:
+    paths:
+      - "esphome/**"
+      - ".github/workflows/kamera-firmware.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kamera-firmware-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Firmware ${{ matrix.board }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - board: esp32-cam
+            label: Zählerkamera (ESP32-CAM)
+          - board: esp32-s3-cam
+            label: Zählerkamera (ESP32-S3-CAM)
+          - board: xiao-esp32s3-sense
+            label: Zählerkamera (XIAO ESP32S3 Sense)
+          - board: waveshare-esp32s3-eth
+            label: Zählerkamera (Waveshare ESP32-S3-ETH)
+    steps:
+      - name: Quellcode holen
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Firmware-Version lesen
+        id: version
+        run: echo "version=$(tr -d '[:space:]' < esphome/VERSION)" >> "$GITHUB_OUTPUT"
+
+      - name: Firmware bauen
+        id: build
+        uses: esphome/build-action@v8.1.0
+        with:
+          yaml-file: esphome/${{ matrix.board }}.factory.yaml
+          version: 2026.11.0
+          complete-manifest: true
+          substitutions: |
+            firmware_version=${{ steps.version.outputs.version }}
+
+      - name: Dateien nach Board benennen
+        env:
+          BOARD: ${{ matrix.board }}
+          LABEL: ${{ matrix.label }}
+          NAME: ${{ steps.build.outputs.name }}
+        run: |
+          set -euo pipefail
+          mkdir -p out/firmware
+          cp "$NAME/$NAME.factory.bin" "out/firmware/$BOARD.factory.bin"
+          cp "$NAME/$NAME.ota.bin" "out/firmware/$BOARD.ota.bin"
+          # Wer von anderer Firmware (z. B. AI on the Edge) wechselt, soll den Speicher löschen können.
+          jq --arg board "$BOARD" --arg label "$LABEL" '
+            .name = $label
+            | .new_install_prompt_erase = true
+            | .builds |= map(
+                .ota.path = ($board + ".ota.bin")
+                | .parts |= map(.path = ($board + ".factory.bin")))' \
+            "$NAME/manifest.json" > "out/firmware/$BOARD.manifest.json"
+          cat "out/firmware/$BOARD.manifest.json"
+
+      - name: Firmware ablegen
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: firmware-${{ matrix.board }}
+          path: out
+          retention-days: 7
+
+  installer:
+    name: Installer-Seite veröffentlichen
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Quellcode holen
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Firmware holen
+        uses: actions/download-artifact@v8.0.2
+        with:
+          pattern: firmware-*
+          merge-multiple: true
+          path: site
+
+      - name: Seite zusammenstellen
+        run: |
+          set -euo pipefail
+          cp -r esphome/installer/. site/
+          # „Automatisch erkennen“: der Installer wählt nach Chip, ESP32 -> ESP32-CAM, ESP32-S3 -> ESP32-S3-CAM.
+          jq -s '(.[1] | del(.builds)) + {name: "Zählerkamera", builds: (.[0].builds + .[1].builds)}' \
+            site/firmware/esp32-cam.manifest.json site/firmware/esp32-s3-cam.manifest.json \
+            > site/firmware/automatisch.manifest.json
+          ls -lR site
+
+      - name: Pages einrichten
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d  # v6.0.0
+
+      - name: Seite hochladen
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9  # v5.0.0
+        with:
+          path: site
+
+      - name: Veröffentlichen
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346  # v5.0.1

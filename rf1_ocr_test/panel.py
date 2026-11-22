@@ -278,6 +278,7 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .calibration-photo-grid img[hidden]{{display:none}}
 .calibration-photo-frame{{position:relative;width:fit-content;max-width:100%}}
 .calibration-crop-region{{position:absolute;border:2px solid #ffcd60;border-radius:.1rem;box-shadow:0 0 0 1px #151c23;pointer-events:none}}
+.calibration-crop-region[data-state="testing"]{{border-style:dashed}}
 .calibration-candidates{{font-variant-numeric:tabular-nums;padding-inline-start:1.8rem;margin:.45rem 0}}
 .calibration-candidates li{{margin:.2rem 0}}
 /* Setup progress: vertical timeline of the work steps (0.3.0). */
@@ -2950,8 +2951,14 @@ function refreshCalibrationImages(preview) {{
     const crop = section.querySelector('[data-image="crop"]');
     const region = section.querySelector('.calibration-crop-region');
     const hasCrop = Boolean(preview.crop);
-    section.querySelector('.calibration-frame-caption').textContent = preview.best_fine_score ?
-      'Bester Treffer der Feinprüfung · ' + preview.best_fine_score + ' %' : 'Aktuelles Kamerabild';
+    // 0.5.29: a frame that is only being tested is drawn dashed and called so; before, every
+    // tested frame looked like the found counter, also one lying across it in the wrong direction.
+    const settled = ['accepted', 'accepted_partial', 'accepted_geometry', 'verified', 'reflected_geometry',
+      'await_movement'].includes(preview.reason);
+    region.dataset.state = settled ? 'found' : 'testing';
+    section.querySelector('.calibration-frame-caption').textContent = (preview.best_fine_score ?
+      'Bester Treffer der Feinprüfung · ' + preview.best_fine_score + ' %' : 'Aktuelles Kamerabild') +
+      (hasCrop ? (settled ? ' · Rahmen passt' : ' · Rahmen wird geprüft') : '');
     section.querySelector('.calibration-crop-figure').hidden = !hasCrop;
     for (const [kind, img] of [['frame', frame], ['crop', crop]]) {{
       const revision = preview[kind];
@@ -3028,9 +3035,16 @@ function setupProgressModel(status) {{
   const required = Number(status.required || 3);
   const candidates = status.candidates || [];
   const best = candidates.reduce((top, item) => Math.max(top, Number(item.percent) || 0), 0);
+  // 0.5.29: "find the counter" is ticked only once a frame has really read it (a confirmation,
+  // a partial hit or an accepted picture). Before, any tested frame ticked it, also a frame lying
+  // across the meter in the wrong direction.
+  const counterFound = confirmations > 0 || Number(status.partial_hits || 0) > 0 ||
+    (status.rounds || []).some(round => String(round?.reason || '').startsWith('accepted')) ||
+    ['verify', 'verify_wait'].includes(stage);
   let current = ['queued', 'capture'].includes(stage) && !status.tested ? 0 :
-    ['verify', 'verify_wait'].includes(stage) || confirmations > 0 ? 3 :
-    ['shortlist', 'refine', 'angle', 'digit_probe', 'ocr'].includes(stage) || candidates.length ? 2 : 1;
+    ['verify', 'verify_wait'].includes(stage) || confirmations > 0 ? 3 : counterFound ? 2 : 1;
+  const phase = current === 0 ? 0 : current === 3 ? 3 :
+    ['shortlist', 'refine', 'angle', 'digit_probe', 'ocr'].includes(stage) || candidates.length || counterFound ? 2 : 1;
   if (saved) current = 5;
   // 0.5.11: the list jumped back to "find the counter" with every new
   // picture. A step reached once in this run stays ticked; the cycle of the single picture
@@ -3048,8 +3062,14 @@ function setupProgressModel(status) {{
   const selected = candidates.find(item => item.selected);
   const detail = [];
   if (current === 0) detail.push(en ? 'Waiting for a camera image' : 'Wartet auf ein Kamerabild');
-  if (current === 1) detail.push(status.row_found ? (en ? 'Digit row found: ' : 'Ziffernreihe erkannt: ') + status.row_found + ' %' :
-    (en ? 'Searching the image for the counter window' : 'Sucht im Bild das Zählwerkfenster'));
+  if (current === 1) {{
+    const testingFrames = ['shortlist', 'refine', 'angle', 'digit_probe', 'ocr'].includes(stage) || candidates.length > 0;
+    detail.push(status.row_found ? (en ? 'Digit row found: ' : 'Ziffernreihe erkannt: ') + status.row_found + ' %' :
+      testingFrames ? (en ? 'Testing frames and rotations' : 'Prüft Rahmen und Drehungen') :
+      (en ? 'Searching the image for the counter window' : 'Sucht im Bild das Zählwerkfenster'));
+    if (status.attempts) detail.push(status.attempts + (en ? ' frames tested' : ' Rahmen getestet'));
+    if (status.rotation != null) detail.push((en ? 'rotation ' : 'Drehung ') + String(status.rotation).replace('-', '−') + '°');
+  }}
   if (current >= 2 && current <= 3) {{
     if (candidates.length) {{
       const number = selected ? selected.number : Number(status.variant) || 1;
@@ -3090,8 +3110,11 @@ function setupProgressModel(status) {{
     find: [
       sub(en ? 'Search the counter window' : 'Zählwerkfenster suchen', current > 1 || !!status.row_found, current === 1,
         status.row_found ? (en ? 'digit row ' : 'Ziffernreihe ') + status.row_found + ' %' : ''),
-      sub(en ? 'Collect frame candidates' : 'Rahmen-Kandidaten sammeln', current > 1, current === 1 && !!status.row_found,
+      sub(en ? 'Collect frame candidates' : 'Rahmen-Kandidaten sammeln', current > 1 || candidates.length > 0,
+        current === 1 && !!status.row_found && !candidates.length,
         candidates.length ? candidates.length + (en ? ' found' : ' gefunden') : ''),
+      sub(en ? 'Read the counter plausibly' : 'Zählwerk plausibel gelesen', current > 1, current === 1 && candidates.length > 0,
+        current > 1 && selected?.reading ? selected.reading : ''),
     ],
     check: [
       sub((en ? 'Test frames' : 'Rahmen testen') + (candidates.length ? ' (' + Math.min(selected ? selected.number : Number(status.variant) || 1, candidates.length) + (en ? ' of ' : ' von ') + candidates.length + ')' : ''),
@@ -3151,6 +3174,7 @@ function setupProgressModel(status) {{
     await_movement: [en ? 'Waiting for the meter to move' : 'Wartet auf Zählerbewegung', 'wait'],
     unclear: [en ? 'Not read clearly' : 'Nicht eindeutig gelesen', 'fail'],
     no_region: [en ? 'Counter not found' : 'Zählwerk nicht gefunden', 'fail'],
+    implausible: [en ? 'Does not fit the last reading' : 'Passt nicht zum letzten Stand', 'fail'],
   }};
   const rounds = (Array.isArray(status.rounds) ? status.rounds : []).map(round => {{
     const [text, result] = roundText[round.reason] || [en ? 'No result' : 'Kein Ergebnis', 'fail'];
@@ -3166,7 +3190,7 @@ function setupProgressModel(status) {{
     (best ? (en ? ' · Best match: ' : ' · Beste Übereinstimmung: ') + best + ' %' : '') +
     ((status.marked_positions || []).length ? (en ? ' · Marked as hidden (reflection): digit ' : ' · Als verdeckt markiert (Spiegelung): Stelle ') +
       status.marked_positions.join(en ? ' and ' : ' und ') : '');
-  return {{active, current: Math.min(rawCurrent, 3), steps, stats, candidates, rounds}};
+  return {{active, current: Math.min(rawCurrent, 3), phase, steps, stats, candidates, rounds}};
 }}
 const setupSubstepsOpen = new Map();
 function renderSetupTimeline(box, model) {{
@@ -3338,6 +3362,9 @@ const rejectedReasons = {{
   small_label: ['zu klein, vermutlich ein Typenschild oder eine Beschriftung', 'too small, probably a type plate or label'],
   quarter_turn: ['um 90° gedreht, passt nicht zur Zählerausrichtung', 'turned by 90°, does not match the meter orientation'],
   aspect: ['Seitenverhältnis passt nicht zu einem Zählwerk', 'aspect ratio does not fit a counter'],
+  implausible: ['passt nicht zum letzten bekannten Zählerstand', 'does not fit the last known meter reading'],
+  half_turn: ['um 180° verdreht gelesen, der gegenüberliegende Rahmen passt besser zum letzten Stand',
+    'read turned by 180°, the opposite frame fits the last reading better'],
 }};
 // Collapsible "Verworfen (n)" list next to a candidate list; created once, closed by default.
 function renderRejectedCandidates(list, rejected) {{
@@ -3360,6 +3387,7 @@ function renderRejectedCandidates(list, rejected) {{
     const known = rejectedReasons[entry?.reason];
     const parts = [known ? known[en ? 1 : 0] : (en ? 'other reason' : 'sonstiger Grund') +
       (entry?.reason ? ' (' + entry.reason + ')' : '')];
+    if (entry?.reading) parts.push((en ? 'read ' : 'las ') + String(entry.reading).replace('.', en ? '.' : ','));
     if (entry?.rotation != null) parts.push((en ? 'rotation ' : 'Drehung ') + String(entry.rotation).replace('-', '−') + '°');
     const frame = Array.isArray(entry?.box) ? entry.box.join(', ') : entry?.box;
     if (frame) parts.push((en ? 'frame ' : 'Rahmen ') + frame);
@@ -3551,7 +3579,7 @@ function refreshCalibration(status) {{
   const progressModel = setupProgressModel(status);
   // The step plan and the timeline come from the same progress state.
   const current = status.intensive ? (['queued', 'capture'].includes(stage) ? 0 :
-    ['verify', 'verify_wait'].includes(stage) ? 2 : 1) : progressModel.current;
+    ['verify', 'verify_wait'].includes(stage) ? 2 : 1) : progressModel.phase;
   for (const box of document.querySelectorAll('.setup-timeline-box')) {{
     box.hidden = !active || status.automatic || status.intensive || background;
     if (!box.hidden) renderSetupTimeline(box, progressModel);

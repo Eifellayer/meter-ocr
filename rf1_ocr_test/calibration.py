@@ -55,6 +55,13 @@ SMALL_LABEL_AREA = .35
 PREFILTER_TURN = 6
 # A first profile with fewer sure digits makes a candidate hopeless: skip the second read.
 HOPELESS_DIGITS = 3
+# 0.5.29: a setup frame checked against the last counted reading uses a realistic flow, not
+# the meter's maximum. Live 22.11.2026: an hour after the last reading the maximum of 6 m³/h
+# let an upside-down frame read 5.7 m³ too much and collect two confirmations.
+SETUP_FLOW_SHARE = .5
+# Two frames on the same digits whose turns differ by 180° ± this many degrees (0.5.29).
+HALF_TURN_TOLERANCE = 30
+SETUP_FLOW_FLOOR_LPH = 1500
 
 
 
@@ -687,6 +694,83 @@ def upright_layout(layout):
     return abs(getattr(layout, "rotation", 0) or 0) < 45
 
 
+def setup_flow_limit(rules):
+    """Flow a new setup frame may claim since the last counted reading (litres per hour).
+
+    The learned limit when the app knows one, otherwise half the configured maximum (at least
+    1.5 m³/h), never above the maximum.
+    """
+    maximum = rules.get("max_flow_lph")
+    if type(maximum) not in (int, float) or maximum <= 0:
+        return maximum
+    learned = rules.get("learned_flow_lph")
+    if type(learned) in (int, float) and learned > 0:
+        return min(maximum, learned)
+    return min(maximum, max(SETUP_FLOW_FLOOR_LPH, maximum * SETUP_FLOW_SHARE))
+
+
+def baseline_litres(baseline):
+    """The last known reading of a setup baseline in litres and the lowest value allowed, or None."""
+    if not isinstance(baseline, dict):
+        return None
+    reading = next((baseline.get(key) for key in ("anchor_litres", "reading_litres")
+                    if type(baseline.get(key)) is int), None)
+    if reading is None:
+        return None
+    lowest = baseline.get("floor_litres")
+    return reading, lowest if type(lowest) is int else reading
+
+
+def half_turned(layout, other):
+    """Two frames on the same digits, turned by about 180° against each other (0.5.29)."""
+    if layout is None or other is None:
+        return False
+    if abs((layout.rotation - other.rotation) % 360 - 180) > HALF_TURN_TOLERANCE:
+        return False
+    left, top, right, bottom = layout.box
+    x, y, u, v = other.box
+    shared = max(0, min(right, u) - max(left, x)) * max(0, min(bottom, v) - max(top, y))
+    return shared >= .5 * min(max(1, (right - left) * (bottom - top)), max(1, (u - x) * (v - y)))
+
+
+def half_turn_layout(layout, slots):
+    """The same frame read turned by another 180° (0.5.29).
+
+    Digit boxes (0–1000 crop coordinates) are mirrored and reversed when there is one per
+    slot, otherwise the frame is read with even rollers.
+    """
+    rotation = layout.rotation + 180 if layout.rotation <= 0 else layout.rotation - 180
+    boxes = ()
+    if len(layout.digit_boxes) == slots:
+        boxes = tuple((1000 - box[2], 1000 - box[3], 1000 - box[0], 1000 - box[1])
+                      for box in reversed(layout.digit_boxes))
+    return replace(layout, rotation=rotation, digit_boxes=boxes)
+
+
+def closer_half_turn(layout, reading, tried, baseline, precision, digits):
+    """The frame turned by 180° on the same digits whose reading fits the last reading better.
+
+    A meter hanging sideways can also read as a plausible number upside down: the right frame
+    read the last reading plus a few litres, the frame turned by 180° a value several m³
+    higher, and the higher one was confirmed. Of two such frames the one closer to the last
+    known reading is the meter. ``tried`` holds (score, layout, readings) of this picture.
+    """
+    known = baseline_litres(baseline)
+    prefix = meter_prefix(reading, precision, digits)
+    if known is None or prefix is None:
+        return None
+    last, lowest = known
+    step = 10 ** (3 - precision)
+    distance = abs(prefix * step - last)
+    for _, other, values in tried:
+        if other == layout or not values or not half_turned(layout, other):
+            continue
+        value = meter_prefix(values[0], precision, digits)
+        if value is not None and value * step + step > lowest and abs(value * step - last) < distance:
+            return other
+    return None
+
+
 def skip_small_labels(candidates):
     """Skip small rows separated vertically from a detected register window."""
     windows = [layout.box for layout in candidates if layout.method == "register_window"]
@@ -968,11 +1052,49 @@ class Calibration:
                 seen.append(group)
             yield layout
 
-    def note_rejection(self, layout, reason):
-        if any(same_digit_region(layout.box, entry["box"]) and entry["reason"] == reason for entry in self.rejected):
+    def half_turn_closer(self, frame, layout, reading, tried, tested, baseline, precision, digits, slots, read,
+                         stop, score_layout):
+        """True when the frame turned by 180° on the same digits reads closer to the last reading.
+
+        A meter hanging sideways also reads as a plausible number upside down. When this
+        picture did not test the turned frame yet, it is read once and added to ``tried``, so
+        the loop that accepts frames checks it next (0.5.29).
+        """
+        if layout in (self.known_good_layout, self.candidate) or self.intensive or self.followup:
+            return False
+        if closer_half_turn(layout, reading, tried, baseline, precision, digits) is not None:
+            return True
+        if any(half_turned(layout, other) for _, other, _ in tried) or stop():
+            return False
+        twin = half_turn_layout(layout, slots)
+        left, top, right, bottom = twin.box
+        if twin in tested or not (0 <= left < right <= frame.width and 0 <= top < bottom <= frame.height):
+            return False
+        tested.add(twin)
+        self.attempts += 1
+        try:
+            values = [read(twin, OCR_PROFILES[0])]
+            if meter_prefix(values[0], precision, digits) is None or stop():
+                return False
+            values.append(read(twin, OCR_PROFILES[1]))
+        except (OSError, ValueError, subprocess.SubprocessError):
+            return False
+        values = self.mask_empty_fields(frame, twin, values)
+        if closer_half_turn(layout, reading, [(None, twin, values)], baseline, precision, digits) is None:
+            return False
+        tried.append((score_layout(twin, values), twin, values))
+        return True
+
+    def note_rejection(self, layout, reason, reading=None):
+        if any(same_digit_region(layout.box, entry["box"]) and entry["reason"] == reason
+               and entry.get("rotation") == layout.rotation for entry in self.rejected):
             return
-        self.rejected = [*self.rejected[-(MAX_REJECTED - 1):],
-                         {"reason": reason, "box": list(layout.box), "rotation": layout.rotation}]
+        entry = {"reason": reason, "box": list(layout.box), "rotation": layout.rotation}
+        if reading:
+            # 0.5.29: a frame that read well but did not fit the last reading is listed with
+            # what it read, so a good-looking frame does not vanish without a trace.
+            entry["reading"] = str(reading)[:16]
+        self.rejected = [*self.rejected[-(MAX_REJECTED - 1):], entry]
 
     def size_reference(self):
         if self.known_good_layout is not None:
@@ -1015,11 +1137,13 @@ class Calibration:
         # the frames are proven by all other digits, the setup is saved provisionally.
         return self.partial_hits > 0 and self.confirmations + self.partial_hits >= MIN_IMAGES + 1
 
-    def partial_hit(self, layout, rows, stamp, flow):
+    def partial_hit(self, layout, rows, stamp, flow, baseline=None, baseline_flow=None):
         """Count an image whose required digits all agree except the last one (0.5.0).
 
         ``rows`` are both readings without the decimal point, cut to the required slots. The
         partial reading must fit the candidate and may neither fall nor jump implausibly.
+        0.5.29: the first partial hit must also fit the last known reading (``baseline``) at
+        the setup flow; before, any frame could collect it, also one turned by 180°.
         """
         if self.candidate is not None and not same_register(layout, self.candidate):
             return False
@@ -1037,6 +1161,15 @@ class Calibration:
         if earlier is not None:
             hours = max(0.0, stamp - earlier[1]) / 3600
             if litres < earlier[0] or litres - earlier[0] > flow * hours + 200:
+                return False
+        elif baseline_litres(baseline) is not None and any(
+                type(baseline.get(key)) in (int, float) for key in ("anchor_time", "timestamp")):
+            last, lowest = baseline_litres(baseline)
+            limit = baseline_flow if type(baseline_flow) in (int, float) else flow
+            since = next(baseline[key] for key in ("anchor_time", "timestamp")
+                         if type(baseline.get(key)) in (int, float))
+            hours = max(0.0, stamp - since) / 3600
+            if litres + 100 <= lowest // 100 * 100 or litres - last // 100 * 100 > limit * hours + 200:
                 return False
         if self.candidate is None:
             self.candidate = layout
@@ -1903,6 +2036,17 @@ class Calibration:
         def reliable(score):
             return score[0] if has_reference else score[4]
 
+        def fits_baseline(value):
+            """A fresh frame's reading fits the last known reading at the setup flow (0.5.29)."""
+            if not baseline or self.confirmations:
+                return True
+            try:
+                accumulate_consumption(baseline, "calibration", stamp, value, precision, setup_flow_limit(rules),
+                                       digits)
+            except ValueError:
+                return False
+            return True
+
         for index, layout in enumerate(candidates, start=1):
             if stop():
                 return None
@@ -1951,7 +2095,10 @@ class Calibration:
             if (self.rank_candidates and reliable(score)
                     and agreement_percent(readings, sample, shown, digits) == 100
                     and not uncertain_slots(required_rows(readings) if short else readings,
-                                            digits + shown)):
+                                            digits + shown)
+                    and fits_baseline(readings[0])):
+                # 0.5.29: only a frame that also fits the last reading ends the search; a frame
+                # turned by 180° read a clean but wrong value and the right frame was never read.
                 perfect = layout
                 break
             if reliable(score) and layout in (self.known_good_layout, self.candidate):
@@ -2126,6 +2273,7 @@ class Calibration:
             if on_selected is not None:
                 on_selected(layout, readings)
             rejection = "unreadable"
+            same = continuing = False
             try:
                 if has_reference and contradicts_reference(readings, sample, digits):
                     self.reject_region(layout)
@@ -2169,7 +2317,8 @@ class Calibration:
                         if recovery is None:
                             if (self.simplified and not (self.automatic or self.intensive or self.followup)
                                     and precision == 2 and weak == [required_slots - 1]
-                                    and self.partial_hit(layout, required_rows(readings), stamp, flow)):
+                                    and self.partial_hit(layout, required_rows(readings), stamp, flow,
+                                                         baseline, setup_flow_limit(rules))):
                                 self.note_group(layout, readings, True, digits + rules["fraction_digits"])
                                 if on_selected is not None:
                                     on_selected(layout, readings)
@@ -2266,10 +2415,34 @@ class Calibration:
                     # A fine-tuned frame of the same register is kept as it is: it produced
                     # the readings of this image.
                     layout = self.candidate
-                anchor = self.counter if same or recovered_slot else baseline or {}
+                # 0.5.29: a fine-tuned frame continues the counted series only when it is the same
+                # register (plain setup) or the last-digit and follow-up checks refine their
+                # verified box. Any other fine-tuned frame is checked against the last reading:
+                # before, one was checked against nothing (no series yet) or against the series of
+                # another frame, so the right frame turned by 180° counted as "lower reading".
+                plain = self.simplified and not (self.intensive or self.followup)
+                continuing = same or (recovered_slot and bool(self.counter) and not plain)
+                known = len(coarse)
+                if baseline and not continuing and self.half_turn_closer(
+                        frame, layout, readings[0], coarse, tested, baseline, image_precision, digits,
+                        digits + rules["fraction_digits"], read, stop, score_layout):
+                    # The same digits turned by 180° read closer to the last reading; that frame
+                    # is checked next in this loop and kept for the next pictures.
+                    if self.rank_candidates and len(coarse) > known:
+                        _, twin, values = coarse[-1]
+                        self.record_intermediate(twin, values, sample, precision, digits,
+                                                 rules["fraction_digits"], frame)
+                    self.note_rejection(layout, "half_turn", readings[0])
+                    on_decision("implausible")
+                    continue
+                if stop():
+                    return None
+                anchor = self.counter if continuing else baseline or {}
                 counter = accumulate_consumption(anchor, "calibration", stamp, readings[0], image_precision,
-                                                flow, digits)
+                                                flow if continuing else setup_flow_limit(rules), digits)
             except (OSError, ValueError, subprocess.SubprocessError):
+                if rejection == "implausible" and baseline and not continuing:
+                    self.note_rejection(layout, "implausible", readings[0])
                 on_decision(rejection)
                 continue
             if self.rank_candidates and (committed or preferred

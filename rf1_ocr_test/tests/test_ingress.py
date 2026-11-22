@@ -1490,8 +1490,9 @@ class BrowserTests(IngressFixture):
             self.assertEqual("12345,67", self.rules["fallback_value"])
             self.calibration.update(state="testing", stage="ocr", rotation=-6, variant=2, seconds=880)
             page.locator("#calibration-overview-state").filter(has_text="Rahmen 2 wird mit Drehung -6° geprüft").wait_for()
+            # 0.5.29: frames are tested, nothing read plausibly yet: "find the counter" keeps running.
             page.locator('#calibration-overview .setup-timeline li[data-state="current"]').filter(
-                has_text="Rahmen und Drehung prüfen").wait_for()
+                has_text="Zählwerk finden").wait_for()
             self.assertIn("Drehung −6°", page.locator(
                 '#calibration-overview .setup-timeline li[data-state="current"] .setup-step-detail').inner_text())
             self.assertEqual("20", page.locator("#calibration-overview-progress").get_attribute("value"))

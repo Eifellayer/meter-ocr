@@ -16,7 +16,8 @@ from layout import MANUAL_ROW_UNCLEAR, PARTLY_UNCLEAR, RAW_ROW_UNCLEAR
 QUIET_FAILURES = 3
 
 
-def verdict(history, language, *, detail, precision_pending, paused, setup_pending, partial_eighth_digit, now):
+def verdict(history, language, *, detail, precision_pending, paused, setup_pending, partial_eighth_digit, now,
+            last_digit_given_up=False):
     """Tone, heading, icon and text for the last automatic check."""
     status = history.get("check_status") or history.get("status")
     tone = "neutral"
@@ -119,6 +120,9 @@ def verdict(history, language, *, detail, precision_pending, paused, setup_pendi
         tone, icon, incident = "ok", "✓", ""
         heading = ("All good. The 8th digit is still being confirmed." if language == "en"
                    else "Alles OK. Die 8. Ziffer wird noch abgesichert.")
+        if last_digit_given_up:
+            heading = ("All good. Checks run with 7 digits, the last roller was not found." if language == "en"
+                       else "Alles OK. Prüfung mit 7 Ziffern, die letzte Rolle wurde nicht gefunden.")
         detail = ""
     elif routine_ok:
         heading = "All good. Automatic checks running." if language == "en" else "Alles OK. Automatik läuft."

@@ -36,7 +36,8 @@ from calibration import (
 from checks import (DEFAULT_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, WARNING_DETAIL_AFTER, meter_prefix,
                     OCR_PROFILES, crop_register, read_register, LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, REFLECTION_SUGGEST_AFTER, STANDALONE_PENDING, STANDALONE_REJECTED_NOTICE,
                     STANDALONE_VERIFIED_NOTICE, last_check_at, recommended_comparison_decimals, reschedule_next_check,
-                    setup_deadlines, setup_source_id, stabilization_interval, stationary_partial_active, valid_interval_minutes)
+                    setup_deadlines, setup_source_id, stabilization_interval, stationary_partial_active, valid_interval_minutes,
+                    eighth_digit_given_up)
 QUIET_FAILURES = status_view.QUIET_FAILURES
 from checks import (DEFAULT_FAILURE_PAUSE_MINUTES, MAX_FAILURE_PAUSE_MINUTES, MIN_FAILURE_PAUSE_MINUTES,
                     FRAME_OFF_NOTICE, FRAME_OFF_WAIT_NOTICE, MOVING_DIGIT_NOTICE, MOVING_NOTICES)
@@ -1154,7 +1155,7 @@ name: Zählerstand (OCR)</code></pre>
 <label>Nachkommastellen auf dem Zähler<select name="fraction_digits">{fraction_digit_options}</select></label>
 <label>Verglichen wird bis<select name="decimals">{wizard_decimal_options}</select></label>
 <div class="settings-note setup-help" data-precision-options {precision_hidden}>
-<p>Der Präzisionsmodus ist experimentell. Der Wert selbst ist genau, aber die schnell laufende letzte Rolle wird oft nicht sicher erkannt. Dann prüft die App vorübergehend mit zwei Nachkommastellen.</p>
+<p>Der Präzisionsmodus ist experimentell. Der Wert selbst ist genau, aber die schnell laufende letzte Rolle wird oft nicht sicher erkannt. Dann prüft die App vorübergehend mit zwei Nachkommastellen. Ist die Bildqualität zu schlecht oder lässt sich die letzte Ziffer trotz mehrerer Versuche nicht lesen, gibt die App die Suche nach sechs Stunden auf und prüft dauerhaft mit zwei Nachkommastellen, bis zur nächsten Einrichtung.</p>
 <p {wizard_initial_hidden}>Die Selbsteinrichtung bestätigt zuerst die ersten zwei Nachkommastellen. Die dritte sucht die App danach automatisch im Hintergrund und justiert die Rahmen mit der Zeit selbst nach. Du musst dafür nichts tun.</p>
 <label class="check-option"><input type="checkbox" name="precision_mode" value="1" {precision_checked}> Präzisionsmodus: auch die dritte Nachkommastelle vergleichen</label>
 </div>
@@ -1314,7 +1315,7 @@ name: Zählerstand (OCR)</code></pre>
 <select name="attempts">{auto_attempt_options}</select></label>
 <div class="settings-field settings-wide" data-precision-options {precision_hidden}>
 <label class="check-option"><input type="checkbox" name="precision_mode" value="1" {precision_checked}> Präzisionsmodus: auch die dritte Nachkommastelle vergleichen</label>
-<small class="field-help">Der Präzisionsmodus ist experimentell. Der Wert selbst ist genau, aber die schnell laufende letzte Rolle wird oft nicht sicher erkannt. Dann prüft die App vorübergehend mit zwei Nachkommastellen.</small>
+<small class="field-help">Der Präzisionsmodus ist experimentell. Der Wert selbst ist genau, aber die schnell laufende letzte Rolle wird oft nicht sicher erkannt. Dann prüft die App vorübergehend mit zwei Nachkommastellen. Ist die Bildqualität zu schlecht oder lässt sich die letzte Ziffer trotz mehrerer Versuche nicht lesen, gibt die App die Suche nach sechs Stunden auf und prüft dauerhaft mit zwei Nachkommastellen, bis zur nächsten Einrichtung.</small>
 </div>
 <label class="settings-field" title="Nach einer unklaren Ablesung folgt ein zusätzlicher Versuch nach fünf Minuten. Schlägt auch der fehl, gilt wieder dieses Intervall."><span class="field-label">Prüfintervall (Minuten)</span>
 <input name="interval_minutes" type="number" min="1" max="{max_interval_minutes}" value="{interval_minutes}" required>
@@ -1985,6 +1986,20 @@ document.querySelectorAll('[data-precision-options]').forEach(options => {{
   fraction.addEventListener('change', showPrecisionOptions);
   showPrecisionOptions();
 }});
+// Precision mode needs a second, explicit confirmation (Stefan 22.11.).
+document.querySelectorAll('input[name="precision_mode"]').forEach(box => {{
+  box.addEventListener('change', () => {{
+    if (!box.checked) return;
+    const question = lang === 'en'
+      ? 'Really switch on precision mode? The fast-moving last roller is often not read reliably. '
+        + 'If the image quality is too poor or the last digit cannot be read despite several attempts, '
+        + 'the app gives up after six hours and checks with two decimal places.'
+      : 'Präzisionsmodus wirklich einschalten? Die schnell laufende letzte Rolle wird oft nicht sicher erkannt. '
+        + 'Ist die Bildqualität zu schlecht oder lässt sich die letzte Ziffer trotz mehrerer Versuche nicht lesen, '
+        + 'gibt die App nach sechs Stunden auf und prüft mit zwei Nachkommastellen.';
+    if (!window.confirm(question)) box.checked = false;
+  }});
+}});
 // The setup wizard and the settings show the same experiment switches; keep both in step.
 for (const name of ['experiments_enabled', 'experiment_perspective', 'experiment_seven_segment']) {{
   const boxes = [...document.querySelectorAll('.experiments-box [name="' + name + '"]:not([type="hidden"])')];
@@ -2599,6 +2614,7 @@ let comparedDecimals = null;
 let configuredDecimals = null;
 let lastDigitSearchAt = null;
 let partialEighthDigit = false;
+let lastDigitGivenUp = false;
 let previousCalibrationState = '';
 let routineOk = {automatic_routine_ok};
 let calibrationNoticeUntil = 0;
@@ -3023,7 +3039,9 @@ function refreshCalibration(status) {{
   if (background && active) {{
     message = 'Optimierung läuft: Die Automatik ist aktiv. Im Hintergrund sucht die App noch die dritte Nachkommastelle und verbessert Rahmen und Winkel.';
   }}
-  if (background && ['failed', 'timeout', 'image_timeout'].includes(status.state)) {{
+  if (status.state === 'gave_up') {{
+    message = 'Letzte Rolle nicht gefunden: Die Suche wurde nach mehreren Stunden beendet. Die Automatik läuft weiter mit einer Nachkommastelle weniger.';
+  }} else if (background && ['failed', 'timeout', 'image_timeout'].includes(status.state)) {{
     message = 'Dritte Nachkommastelle noch offen. Die Automatik läuft weiterhin mit sieben bestätigten Ziffern.';
   }} else if (status.intensive && ['failed', 'timeout', 'image_timeout'].includes(status.state)) {{
     message = status.confirmations >= status.required ?
@@ -3050,7 +3068,7 @@ function refreshCalibration(status) {{
   const weakSlots = status.stress_weak_slots || [];
   const stabilityNote = weakSlots.length ?
     ' · Schwankende Stellen im Intensivtest (von links): ' + weakSlots.join(', ') : '';
-  const tone = status.state === 'saved' ? 'ok' : ['saved_without_verification', 'saved_stationary', 'saved_reflection'].includes(status.state) ? 'warning' :
+  const tone = status.state === 'saved' ? 'ok' : ['saved_without_verification', 'saved_stationary', 'saved_reflection', 'gave_up'].includes(status.state) ? 'warning' :
     ['failed', 'timeout', 'image_timeout', 'save_failed'].includes(status.state) ? 'error' : '';
   label.textContent = (status.automatic ? 'Automatische Nachjustierung · ' : '') + message + ' ' + detail + stabilityNote;
   label.dataset.tone = tone;
@@ -3587,6 +3605,13 @@ function syncHero() {{
         : `Die ${{position}}. Ziffer wird im Hintergrund gesucht${{left}}.`;
       noteState = 'searching';
     }}
+  }} else if (lastDigitGivenUp && comparedDecimals !== null && configuredDecimals !== null && comparedDecimals < configuredDecimals) {{
+    noteText = lang === 'en'
+      ? `The last roller could not be found after several hours of searching. The app keeps checking with ${{comparedDecimals}} of ${{configuredDecimals}} decimal places, even in precision mode. `
+        + 'Either the image quality is too poor, or the last digit could not be read despite several attempts (for example because of a reflection, or because it keeps turning while gas flows). A new setup starts the search again.'
+      : `Die letzte Rolle wurde nach mehreren Stunden Suche nicht gefunden. Die App prüft weiter mit ${{comparedDecimals}} von ${{configuredDecimals}} Nachkommastellen, auch im Präzisionsmodus. `
+        + 'Entweder ist die Bildqualität zu schlecht, oder die letzte Ziffer ließ sich trotz mehrerer Versuche nicht lesen (zum Beispiel wegen einer Spiegelung oder weil sie sich bei laufendem Gas ständig dreht). Eine neue Einrichtung startet die Suche erneut.';
+    noteState = 'skipped';
   }} else if (comparedDecimals !== null && configuredDecimals !== null && comparedDecimals < configuredDecimals) {{
     const at = lastDigitSearchAt && lastDigitSearchAt * 1000 > Date.now()
       ? new Date(lastDigitSearchAt * 1000).toLocaleTimeString(lang === 'en' ? 'en-GB' : 'de-DE', {{hour: '2-digit', minute: '2-digit'}})
@@ -3860,6 +3885,7 @@ async function refreshAutomatic() {{
     configuredDecimals = Number.isInteger(sample.configured_decimals) ? sample.configured_decimals : comparedDecimals;
     lastDigitSearchAt = typeof sample.last_digit_search_at === 'number' ? sample.last_digit_search_at : null;
     partialEighthDigit = sample.partial_eighth_digit === true;
+    lastDigitGivenUp = sample.last_digit_given_up === true;
     document.querySelector('#paused-notice').hidden = !sample.paused;
     document.querySelector('#pause-auto-form').hidden = sample.paused;
     document.querySelector('#start-automatic').disabled = !sample.can_start_automatic;
@@ -4337,6 +4363,7 @@ def start_panel(
         source, setup_pending = get_source()
         stabilizing_until, optimization_until = setup_deadlines(auto_rules, source)
         partial_eighth_digit = stationary_partial_active(auto_rules, source)
+        last_digit_given_up = partial_eighth_digit and eighth_digit_given_up(history, auto_rules)
         decimals = 2 if partial_eighth_digit else auto_rules["decimals"]
         now = time.time()
         interval = stabilization_interval(auto_rules.get("interval_minutes", DEFAULT_INTERVAL_MINUTES),
@@ -4361,7 +4388,8 @@ def start_panel(
         status = history.get("check_status") or history.get("status")
         view = status_view.verdict(history, language, detail=detail, precision_pending=precision_pending,
                                    paused=paused, setup_pending=setup_pending,
-                                   partial_eighth_digit=partial_eighth_digit, now=now)
+                                   partial_eighth_digit=partial_eighth_digit, now=now,
+                                   last_digit_given_up=last_digit_given_up)
         tone, heading, icon, incident = view["tone"], view["heading"], view["icon"], view["incident"]
         show_attempts, detail, routine_ok = view["show_attempts"], view["detail"], view["routine_ok"]
         failure_attempts, retry_suppressed, recovery_notice = status_view.recovery(
@@ -4420,7 +4448,8 @@ def start_panel(
             "configured_decimals": auto_rules["decimals"],
             "interval_hint": bool(failure_attempts) and history.get("check_detail") in (RAW_ROW_UNCLEAR, MANUAL_ROW_UNCLEAR),
             "last_digit_search_at": (max(optimization_until, history.get("eighth_digit_retry_at") or 0)
-                                     if decimals < auto_rules["decimals"] else None),
+                                     if decimals < auto_rules["decimals"] and not last_digit_given_up else None),
+            "last_digit_given_up": last_digit_given_up,
             "reflection_estimate": reflection_estimate,
             "hidden_digit_prompt": (history.get("hidden_digit_prompt")
                                     if auto_rules.get("reflection_estimate_enabled") else None),

@@ -25,7 +25,7 @@ def searched_at_right_angles(read_as, rules=RULES, **job):
     with patch.object(calibration, "layouts", return_value=list(read_as)), \
             patch.object(calibration, "quarter_turn_layouts", return_value=[]) as quarter:
         calibration_job.examine(Image.new("RGB", (800, 600), (40, 40, 40)), None, {"reference_required": False},
-                                100, rules, lambda tried, profile: read_as[tried], lambda: False)
+                                100, rules, lambda tried, profile: read_as.get(tried, "?????.???"), lambda: False)
     return quarter.called
 
 

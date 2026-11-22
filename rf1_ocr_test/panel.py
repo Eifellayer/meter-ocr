@@ -252,6 +252,9 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .calibration-photo-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,17rem),1fr));gap:.8rem;margin:.7rem 0}}
 .calibration-photo-grid figure{{margin:0;min-width:0}}
 .calibration-photo-grid img{{display:block;max-width:100%;height:auto;border-radius:.4rem}}
+/* 0.5.10: display:block above overrode the hidden attribute, so the previous picture stayed
+   visible under the frame of the new one until the new picture had loaded. */
+.calibration-photo-grid img[hidden]{{display:none}}
 .calibration-photo-frame{{position:relative;width:fit-content;max-width:100%}}
 .calibration-crop-region{{position:absolute;border:2px solid #ffcd60;border-radius:.1rem;box-shadow:0 0 0 1px #151c23;pointer-events:none}}
 .calibration-candidates{{font-variant-numeric:tabular-nums;padding-inline-start:1.8rem;margin:.45rem 0}}
@@ -2607,12 +2610,20 @@ function refreshCalibrationImages(preview) {{
       const url = 'lernvorschau.jpg?bild=' + kind + '&v=' + encodeURIComponent(revision);
       if (img.getAttribute('src') !== url) {{
         img.hidden = true;
-        img.onload = () => {{ img.hidden = false; }};
-        img.onerror = () => {{ img.hidden = true; img.removeAttribute('src'); }};
+        delete img.dataset.shown;
+        img.onload = () => {{
+          img.hidden = false;
+          img.dataset.shown = String(revision);
+          // The frame belongs to exactly this picture: show it only together with it.
+          if (kind === 'frame') region.hidden = region.dataset.frame !== String(revision);
+        }};
+        img.onerror = () => {{ img.hidden = true; delete img.dataset.shown; img.removeAttribute('src'); }};
         img.src = url;
       }}
     }}
-    region.hidden = !hasCrop || !Array.isArray(preview.region);
+    const regionReady = hasCrop && Array.isArray(preview.region);
+    region.dataset.frame = regionReady ? String(preview.frame) : '';
+    region.hidden = !regionReady || frame.dataset.shown !== String(preview.frame);
     if (!region.hidden) {{
       ['left', 'top', 'width', 'height'].forEach((part, index) => {{
         region.style[part] = preview.region[index] * 100 + '%';

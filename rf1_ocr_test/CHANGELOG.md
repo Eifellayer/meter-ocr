@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.10
+
+- **Der Rahmen der Einrichtung liegt immer auf dem Bild, zu dem er gehört.** Kam ein neues Kamerabild, blieb das vorige noch sichtbar, bis das neue geladen war – der Rahmen der neuen Aufnahme lag so lange auf dem alten Bild. Jetzt verschwindet das alte Bild sofort, und der Rahmen erscheint erst zusammen mit seinem Bild.
+- **Dauerhaft verdeckte Nachkommastelle wird wirklich ergänzt.** Verdeckt eine Spiegelung die erste Nachkommastelle, fragt die App einmal nach dem aktuellen Zählerstand und zählt von da an mit. Bisher rechnete sie dabei mit dem eingestellten Höchstdurchfluss (6 m³/h): Zwischen zwei Prüfungen waren damit immer mehrere Werte möglich, ergänzt wurde nie. Jetzt gilt der gelernte Durchfluss (mindestens 1,5 m³/h), und solange eine langsame Rolle verdeckt ist, prüft die App etwa alle 2 Minuten, damit immer nur ein Wert infrage kommt. Ist der letzte sichere Stand zu alt geworden, fragt sie erneut.
+- *English:* The setup frame is only shown together with the picture it belongs to. A first decimal hidden for good is now really filled in: the app asks once for the reading, uses the learned flow limit instead of the configured maximum and checks about every 2 minutes while a slow roller is hidden.
+
 ## 0.5.9
 
 - **Einrichtung läuft auch mit einem schmalen Lichtreflex auf einer Rolle durch.** Lag ein dünner, heller Lichtbalken quer über einer Ziffer, las die App diese Stelle dauerhaft nicht (z. B. „10511.?5?“), hielt das für eine drehende Rolle und lief nach 20 Minuten in die Zeitgrenze. Bisher galt nur ein großflächig überstrahltes Ziffernfeld als Spiegelung. Jetzt erkennt die App auch den schmalen Reflex, speichert die Einrichtung nach drei übereinstimmenden Bildern als „mit Spiegelung“ und schätzt die verdeckte Stelle aus dem Verlauf – mit Hinweis in der Oberfläche.

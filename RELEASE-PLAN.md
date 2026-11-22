@@ -1,6 +1,6 @@
 # Roadmap
 
-Stand: November 2026 · Version **0.5.24**
+Stand: November 2026 · Version **0.5.25**
 
 AI Meter Reader liest mechanische Zähler (zuerst Gaszähler) über ein Kamerabild aus – lokal, ohne Cloud. Leitbild ist „Fire and Forget“: Zähler und Kamera auswählen, alles andere erledigt die App selbst und zeigt Unsicherheit offen an.
 
@@ -10,7 +10,7 @@ Erledigtes steht im [Changelog](rf1_ocr_test/CHANGELOG.md), die Zeit vor 0.1.0 i
 
 | Vorhaben | Worum es geht |
 | --- | --- |
-| **Zählerkamera ausbauen** | Seit 0.5.24 gibt es fertige Firmware mit Installer für vier Boards. Als Nächstes: Rückmeldungen zu XIAO und Waveshare, weitere Boards auf Wunsch, Zusätze wie die WLAN-Diagnose direkt im Assistenten ein- und ausschalten, neue Kamera in Home Assistant mit einem Klick hinzufügen. |
+| **Zählerkamera ausbauen** | Seit 0.5.24 gibt es fertige Firmware mit Installer für vier Boards, seit 0.5.25 fügt der Assistent die neue Kamera selbst in Home Assistant hinzu. Als Nächstes: Rückmeldungen zu XIAO und Waveshare, weitere Boards auf Wunsch, Zusätze wie die WLAN-Diagnose direkt im Assistenten ein- und ausschalten. |
 | **Verdeckte Ziffern noch robuster** | Nicht lesbare Nachkommastellen notfalls plausibel aus Zählerstand und Durchfluss schätzen (nie volle Kubikmeter). Seit 0.5.19 misst die App im Schattenmodus, wie gut das ginge. |
 | **Schnellere Einrichtung** | Rahmen zuerst danach vorsortieren, ob in jedem Feld eine Ziffer sitzt, und nur die besten Kandidaten aufwendig lesen. |
 | **Oberfläche im Smartphone-Stil** | Einstellungen als gruppierte Listen mit großen Tippflächen und weichen Übergängen, wie bei aktuellen Smartphone-Oberflächen. |

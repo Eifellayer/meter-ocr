@@ -67,6 +67,7 @@ import system_monitor
 import read_plan
 import seven_segment
 import glyph_match
+import kit_camera
 from layout import (MANUAL_ROW_UNCLEAR, PARTLY_UNCLEAR, RAW_ROW_UNCLEAR, digit_row_tilt, fine_rotation as valid_fine_rotation, crop_coordinates, find_digit_row,
                     digit_box_settings, find_raw_digit_row, normalize_digit_boxes, glyph_clipped, glare_slots, roll_center, rotated_width, scale_digit_boxes, turn_crop)
 import digit_library
@@ -2528,6 +2529,8 @@ def main():
         request_factory_reset=request_factory_reset, get_reset_status=lambda: reset_result["value"],
         skip_setup=skip_setup,
         discover_sources=partial(discover_ha_sources, token),
+        find_kit_cameras=partial(kit_camera.safe_pending, token),
+        confirm_kit_camera=lambda flow_id: kit_camera.safe_add(token, flow_id, post=post_json),
         get_wizard_image=partial(wizard_camera_preview, token=token, zone=zone),
         real_demo=partial(demo.run_real_demo, select=select_register, read=read_visible_digits),
         get_activity=get_automatic_activity, get_background_work=get_background_work,

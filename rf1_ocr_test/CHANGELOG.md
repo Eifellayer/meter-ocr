@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.21
+
+- **Quer und zugleich schief hängender Zähler.** Lag das Zählwerk um 90 Grad gedreht im Bild und hing es zusätzlich ein paar Grad schief, suchte die Einrichtung nach der Vierteldrehung nur einen genau geraden Rahmen. Der schnitt am anderen Ende die Nachkommastellen ab, sie blieben dauerhaft unlesbar. Jetzt misst die Einrichtung auch nach einer Vierteldrehung die verbleibende Schräglage und übernimmt sie in die Drehung des Rahmens. Das gilt ebenso für einen auf dem Kopf stehenden Zähler.
+- *English:* A counter turned by a right angle that also hangs a few degrees askew: after the quarter turn the setup only looked for a perfectly straight frame, which cut off the decimals at the far end, so they stayed unreadable. The setup now measures the remaining tilt after a quarter turn and keeps it in the frame's rotation; the same applies to an upside-down counter.
+
 ## 0.5.20
 
 - **Übersicht bleibt nicht mehr leer.** War die Oberfläche auf Englisch eingestellt und meldete die letzte Prüfung zwei gerade drehende Rollen, ließ sich die Übersicht nicht mehr öffnen. Die Überschrift dafür hatte an dieser Stelle keine englische Fassung. Sie ist ergänzt, und eine fehlende Übersetzung kann die Seite künftig nicht mehr abbrechen – notfalls erscheint die deutsche Überschrift.

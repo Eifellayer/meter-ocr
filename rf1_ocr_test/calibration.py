@@ -343,7 +343,10 @@ def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False
     # Reserve space for neighbour inference and, where possible, the regular crop.
     neighbour_limit = MAX_LAYOUTS_PER_IMAGE - int(configured is not None and not prefer_configured)
     raw_limit = neighbour_limit - 1
-    angles = (0,) if upright else (
+    # 0.5.21: an upright search (a picture already turned by a right angle) still tries the
+    # tilt measured in it, so a meter hanging a few degrees askew keeps its decimals in the frame.
+    level_angles = tuple(dict.fromkeys((skew, 0))) if upright and skew else (0,)
+    angles = level_angles if upright else (
         SMALL_ANGLES if offset == 0 else (0, ANGLES[first], ANGLES[(first + 1) % len(ANGLES)]))
     if not upright and skew is not None:
         # The measured tilt first: a −14° meter is found on the first image (0.4.0).
@@ -432,7 +435,7 @@ def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False
                 if unique(layout):
                     yield layout
     whole, fraction = rules["integer_digits"], rules["fraction_digits"]
-    for angle in (0,) if upright else tuple(dict.fromkeys((*skew_angles(skew)[:1], 0, ANGLES[first]))):
+    for angle in level_angles if upright else tuple(dict.fromkeys((*skew_angles(skew)[:1], 0, ANGLES[first]))):
         if len(emitted) >= neighbour_limit:
             break
         adjusted = turn_crop(frame, angle, expand=False)
@@ -468,7 +471,11 @@ def quarter_turn_layouts(frame, rules, region):
     local_rules = {key: value for key, value in rules.items() if key != "crop"}
     for angle in (180, 90, -90):
         turned = turn_crop(image, angle)
-        candidates = skip_small_labels(list(layouts(turned, None, local_rules, 0, upright=True)))
+        # 0.5.21: a meter turned by a right angle may also hang a few degrees askew. Its tilt is
+        # measured in the turned picture and kept in the rotation; before, the turned picture was
+        # only searched upright and a found tilt was dropped, so the frame cut off the decimals.
+        skew = estimate_skew(turned)
+        candidates = skip_small_labels(list(layouts(turned, None, local_rules, 0, upright=True, skew=skew)))
         for layout in candidates:
             left, top, right, bottom = layout.box
             if not (0 <= left < right <= turned.width and 0 <= top < bottom <= turned.height):
@@ -480,7 +487,15 @@ def quarter_turn_layouts(frame, rules, region):
             else:
                 bounds = (width - right, height - bottom, width - left, height - top)
             box = tuple(value + origin for value, origin in zip(bounds, area[:2] * 2))
-            yield replace(layout, box=box, rotation=angle)
+            yield replace(layout, box=box, rotation=quarter_rotation(angle, layout.rotation))
+
+
+def quarter_rotation(quarter, tilt):
+    """A right-angle turn plus the tilt found in the turned picture, kept within ±180° (0.5.21)."""
+    if not tilt:
+        return quarter
+    total = quarter + tilt
+    return total - 360 if total > 180 else total + 360 if total < -180 else total
 
 
 def search_region(value):

@@ -1381,6 +1381,27 @@ def standalone_reading(camera, sample, ocr, decimals, previous, integer_digits=5
     return latest
 
 
+def keep_finer_reading(previous, latest):
+    """A coarser check (trailing roller turning) must not step the shown reading back.
+
+    10507.86 followed by a one-decimal 10507.8 keeps 10507.86 (support round 22.11.):
+    the coarse value only confirms the finer one. A finer or higher reading replaces it.
+    """
+    if not (isinstance(previous, dict) and isinstance(latest, dict)):
+        return latest
+    digits = latest.get("integer_digits", 5)
+    if (previous.get("camera") != latest.get("camera")
+            or previous.get("integer_digits", digits) != digits
+            or type(previous.get("decimals")) is not int or type(latest.get("decimals")) is not int
+            or previous["decimals"] <= latest["decimals"]):
+        return latest
+    common = latest["decimals"]
+    old_prefix = meter_prefix(previous.get("reading"), common, digits)
+    if old_prefix is None or old_prefix != meter_prefix(latest.get("reading"), common, digits):
+        return latest
+    return {**previous, "image_time": latest.get("image_time", previous.get("image_time"))}
+
+
 def publish_standalone(history, camera, token):
     last = history.get("standalone_reading")
     value = "unavailable"
@@ -3787,7 +3808,8 @@ def main():
                     if raw_fallback and outcome == "ocr_only":
                         updated["source_connection_detail"] = SLFORK_RAW_SUCCESS
                     if new_standalone is not None:
-                        updated["standalone_reading"] = new_standalone
+                        updated["standalone_reading"] = keep_finer_reading(
+                            history.get("standalone_reading"), new_standalone)
                     if lower_recovered and new_consumption is not None and outcome in SUCCESSFUL_CHECKS:
                         updated["check_detail"] = LOWER_RECOVERED
                     if (locals().get("reduced_precision") and outcome in SUCCESSFUL_CHECKS

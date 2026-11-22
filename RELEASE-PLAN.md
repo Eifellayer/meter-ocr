@@ -1,6 +1,6 @@
 # Roadmap
 
-Stand: 21. November 2026 · Version **0.4.4**
+Stand: 22. November 2026 · Version **0.5.4**
 
 **Update-Takt (Stefan 20.11., ca. 08:45):** Kritische Korrekturen sofort veröffentlichen; freigegebene unkritische Punkte (Komfort, Anzeige, Vorschläge) gesammelt höchstens einmal pro Woche als Update. Versionen ab 19.11.2026: kleine Korrekturen erhöhen die letzte Stelle (0.1.x), größere Funktionen die mittlere (0.2.0, Experimentiermodus). Arbeitsweise ab 19.11.2026: Kritische Änderungen (Genauigkeit, Ausfälle, falsche Werte, stehende Automatik) sofort; unkritische Funktionen, die nicht zur Genauigkeit beitragen, in der Support-Runde (bis 25.11. alle 12 Stunden, danach wöchentlich).
 

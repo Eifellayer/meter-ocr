@@ -61,6 +61,24 @@ class QuarterTurnTiltTests(unittest.TestCase):
         self.assertEqual([None, None, None], seen)
 
 
+class PhotographedStripTests(unittest.TestCase):
+    """Cut-out digit strip of a counter turned sideways and about 5° askew (nothing else of the meter)."""
+
+    @staticmethod
+    def frame():
+        strip = Image.open(Path(__file__).with_name("fixtures") / "sideways_tilted_strip.png").convert("RGB")
+        canvas = Image.new("RGB", (800, 600), (95, 95, 95))
+        canvas.paste(strip, (280, 0))
+        return canvas
+
+    def test_the_tilt_is_measured_in_the_turned_picture(self):
+        self.assertIn(calibration.estimate_skew(calibration.turn_crop(self.frame(), -90)), (4, 5, 6))
+
+    def test_the_setup_proposes_the_tilted_quarter_turn(self):
+        rotations = {layout.rotation for layout in quarter_turn_layouts(self.frame(), RULES, None)}
+        self.assertTrue(rotations & {-86, -85, -84}, rotations)
+
+
 class QuarterRotationTests(unittest.TestCase):
     def test_tilt_is_added_to_the_right_angle(self):
         self.assertEqual(-85, quarter_rotation(-90, 5))

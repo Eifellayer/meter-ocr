@@ -652,6 +652,9 @@ min-height:0;padding:.8rem .85rem;border-radius:var(--radius-sm);border:1.5px so
 .kit-steps li::marker{{color:var(--accent);font-weight:750}}
 .kit-install{{background:var(--accent);color:var(--accent-ink);border-color:transparent;margin-right:.4rem}}
 .kit-status[data-state="found"]{{color:var(--ok);font-weight:650}}
+.kit-pending{{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem .8rem;padding:.65rem .8rem;border-radius:.6rem;background:var(--surface);border:1px solid var(--accent)}}
+.kit-pending p{{margin:0;flex:1 1 14rem}}
+#wizard-kit-add{{background:var(--accent);color:var(--accent-ink);border-color:transparent}}
 .setup-step details.setup-help{{background:var(--surface-2);border-radius:var(--radius-sm);padding:0 .9rem}}
 .setup-step details.setup-help > summary{{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:.6rem}}
 .setup-step details.setup-help > summary::-webkit-details-marker{{display:none}}
@@ -1263,8 +1266,9 @@ name: Zählerstand (OCR)</code></pre>
 <ol class="kit-steps">
 <li><a class="button-link kit-install" id="wizard-kit-install" href="{kit_installer_url}?board=auto&amp;lang={language}" target="_blank" rel="noopener">Firmware installieren</a> <span>Öffnet den Installer in einem neuen Tab. Am Computer Chrome oder Edge benutzen und das Board per USB anstecken.</span></li>
 <li><span>Im Installer das WLAN eintragen.</span></li>
-<li><span>Home Assistant meldet die neue Zählerkamera unter <a href="/config/integrations/dashboard" target="_top">Geräte &amp; Dienste</a>. Dort „Hinzufügen“ drücken.</span></li>
+<li><span>Sobald Home Assistant die neue Zählerkamera findet, erscheint hier „In Home Assistant hinzufügen“. Alternativ geht es unter <a href="/config/integrations/dashboard" target="_top">Geräte &amp; Dienste</a>.</span></li>
 </ol>
+<div id="wizard-kit-pending" class="kit-pending" hidden><p id="wizard-kit-pending-text"></p><button type="button" id="wizard-kit-add">In Home Assistant hinzufügen</button></div>
 <p id="wizard-kit-status" class="settings-note kit-status" role="status" aria-live="polite">Sobald die Kamera in Home Assistant ist, wählt der Assistent sie hier selbst aus.</p>
 </div>
 <p id="wizard-stream-hint" class="settings-note" hidden>Überwachungskamera oder Handy mit Bildadresse (Snapshot, MJPEG, RTSP)? <a href="/config/integrations/dashboard/add?domain=generic" target="_top">In Home Assistant als Kamera anlegen</a>, danach erscheint sie hier in der Liste.</p>
@@ -2097,21 +2101,69 @@ function kitCameraFound() {{
   const index = String(sourceSuggestions.indexOf(source));
   if ([...discoveredSource.options].some(option => option.value === index)) discoveredSource.value = index;
   kitStatus.dataset.state = 'found';
+  kitPending.hidden = true;
   kitStatus.textContent = lang === 'en' ?
     'Meter camera found: ' + source.label + '. The app takes over flash and exposure automatically.' :
     'Zählerkamera gefunden: ' + source.label + '. Blitz und Belichtung übernimmt die App automatisch.';
   stopKitWatch();
   return true;
 }}
+// 0.5.25: a camera Home Assistant has discovered but not added yet is added from here.
+const kitPending = document.querySelector('#wizard-kit-pending');
+const kitPendingText = document.querySelector('#wizard-kit-pending-text');
+const kitAdd = document.querySelector('#wizard-kit-add');
+let kitFlow = '';
+async function checkPendingKit() {{
+  if (kitStatus.dataset.state === 'found') {{ kitPending.hidden = true; return; }}
+  try {{
+    const response = await fetch('neue-zaehlerkameras', {{cache: 'no-store'}});
+    if (!response.ok) return;
+    const cameras = await response.json();
+    if (!Array.isArray(cameras) || !cameras.length) {{ kitPending.hidden = true; kitFlow = ''; return; }}
+    kitFlow = cameras[0].flow_id;
+    kitPendingText.textContent = lang === 'en' ?
+      'Home Assistant has found the meter camera “' + cameras[0].name + '”.' :
+      'Home Assistant hat die Zählerkamera „' + cameras[0].name + '“ gefunden.';
+    kitPending.hidden = false;
+  }} catch (_) {{
+    // Home Assistant not reachable right now: the next round tries again.
+  }}
+}}
+kitAdd.addEventListener('click', async () => {{
+  if (!kitFlow) return;
+  kitAdd.disabled = true;
+  const body = new URLSearchParams({{flow_id: kitFlow, csrf: setupForm.elements.csrf.value,
+                                    lang: setupForm.elements.lang.value, mode: setupForm.elements.mode.value}});
+  let result = 'failed';
+  try {{
+    const response = await fetch('zaehlerkamera-hinzufuegen', {{method: 'POST', body}});
+    if (response.ok) result = (await response.json()).result;
+  }} catch (_) {{
+    result = 'failed';
+  }}
+  kitAdd.disabled = false;
+  if (result === 'added' || result === 'gone') {{
+    kitPending.hidden = true;
+    kitFlow = '';
+    kitStatus.textContent = lang === 'en' ? 'Added. The camera shows up here in a few seconds …' :
+      'Hinzugefügt. Die Kamera erscheint hier in wenigen Sekunden …';
+    setTimeout(async () => {{ await loadSourceSuggestions(true, false); kitCameraFound(); }}, 4000);
+  }} else {{
+    kitPendingText.textContent = lang === 'en' ?
+      'Home Assistant still needs an answer for this camera: open Devices & services and press “Add” there.' :
+      'Home Assistant braucht für diese Kamera noch eine Angabe: Öffne Geräte & Dienste und drücke dort „Hinzufügen“.';
+  }}
+}});
 function startKitWatch() {{
   if (kitTimer || kitCameraFound()) return;
+  checkPendingKit();
   kitPolls = 0;
   // Look every 10 seconds whether Home Assistant knows the new camera yet (at most half an hour).
   kitTimer = setInterval(async () => {{
     kitPolls += 1;
     if (kitPanel.hidden || !setupDialog.open || kitPolls > 180) {{ stopKitWatch(); return; }}
     await loadSourceSuggestions(true, false);
-    kitCameraFound();
+    if (!kitCameraFound()) checkPendingKit();
   }}, 10000);
 }}
 function stopKitWatch() {{
@@ -4798,6 +4850,7 @@ def start_panel(
     wake_worker=None, *, address=("0.0.0.0", 8099), test_source_image=None, automatic_preview=None,
     request_factory_reset=None, get_reset_status=None, skip_setup=None, get_activity=None, get_background_work=None,
     get_auto_paused=None, save_auto_paused=None, discover_sources=None,
+    find_kit_cameras=None, confirm_kit_camera=None,
     settings_lock=None, get_calibration=None, control_calibration=None, get_calibration_image=None,
     has_calibration_backup=None, get_wizard_image=None, real_demo=None, statistics_zone=timezone.utc,
     can_start_automatic=None, start_automatic_check=None,
@@ -5217,6 +5270,11 @@ def start_panel(
                 sources = discover_sources() if discover_sources else []
                 self.reply(json.dumps(sources).encode("utf-8"), "application/json; charset=utf-8")
                 return
+            if path == "/neue-zaehlerkameras":
+                # 0.5.25: meter cameras Home Assistant has discovered but not added yet.
+                cameras = find_kit_cameras() if find_kit_cameras else []
+                self.reply(json.dumps(cameras).encode("utf-8"), "application/json; charset=utf-8")
+                return
             if path == "/status":
                 with request_lock:
                     snapshot = dict(progress)
@@ -5609,7 +5667,8 @@ def start_panel(
             if path not in ("/pruefen", "/automatik", "/ausschnitt-uebernehmen", "/sprache",
                             "/benachrichtigungen", "/bildquelle", "/einrichtung", "/einrichtungsbild",
                             "/einrichtung-ueberspringen", "/werkreset", "/automatik-pause",
-                            "/spiegelungs-hinweis-ausblenden", "/bildqualitaet-hinweis-ausblenden", "/ergaenzte-ziffer-bestaetigen", "/selbsteinrichtung", "/fallback", "/ziffernrahmen", "/zaehler-demo", "/automatik-jetzt", "/vergleichsgenauigkeit"):
+                            "/spiegelungs-hinweis-ausblenden", "/bildqualitaet-hinweis-ausblenden", "/ergaenzte-ziffer-bestaetigen", "/selbsteinrichtung", "/fallback", "/ziffernrahmen", "/zaehler-demo", "/automatik-jetzt", "/vergleichsgenauigkeit",
+                            "/zaehlerkamera-hinzufuegen"):
                 self.send_error(404)
                 return
             fallback = browser_locale(self.headers.get("Accept-Language", ""))
@@ -5692,6 +5751,14 @@ def start_panel(
             supplied = form.get("csrf", [])
             if len(supplied) != 1 or not compare_digest(supplied[0].encode(), csrf_token.encode()):
                 problem(403)
+                return
+            if path == "/zaehlerkamera-hinzufuegen":
+                flow = form.get("flow_id", [])
+                if len(flow) != 1 or confirm_kit_camera is None:
+                    problem(400)
+                    return
+                outcome = confirm_kit_camera(flow[0])
+                self.reply(json.dumps({"result": outcome}).encode("utf-8"), "application/json; charset=utf-8")
                 return
             if path == "/einrichtung-ueberspringen":
                 try:

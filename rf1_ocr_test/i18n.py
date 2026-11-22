@@ -923,12 +923,13 @@ EN_UI = {
     "sehr klein, ohne Blitz": "very small, no flash",
     "Netzwerkkabel statt WLAN": "network cable instead of Wi-Fi",
     "Firmware installieren": "Install firmware",
+    "In Home Assistant hinzufügen": "Add to Home Assistant",
     "Öffnet den Installer in einem neuen Tab. Am Computer Chrome oder Edge benutzen und das Board per USB anstecken.":
         "Opens the installer in a new tab. Use Chrome or Edge on a computer and connect the board by USB.",
     "Im Installer das WLAN eintragen.": "Enter your Wi-Fi in the installer.",
-    "Home Assistant meldet die neue Zählerkamera unter ": "Home Assistant reports the new meter camera under ",
+    "Sobald Home Assistant die neue Zählerkamera findet, erscheint hier „In Home Assistant hinzufügen“. Alternativ geht es unter ":
+        "As soon as Home Assistant finds the new meter camera, “Add to Home Assistant” appears here. You can also add it under ",
     "Geräte &amp; Dienste": "Devices &amp; services",
-    ". Dort „Hinzufügen“ drücken.": ". Press “Add” there.",
     "Sobald die Kamera in Home Assistant ist, wählt der Assistent sie hier selbst aus.":
         "As soon as the camera is in Home Assistant, the wizard selects it here by itself.",
     "Überwachungskamera oder Handy mit Bildadresse (Snapshot, MJPEG, RTSP)?":

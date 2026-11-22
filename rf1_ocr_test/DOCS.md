@@ -4,7 +4,7 @@
 
 ## Deutsch
 
-**Version 0.5.24.** Die App liest deinen Zähler lokal aus dem Kamerabild. Sie ist keine geeichte Messung.
+**Version 0.5.25.** Die App liest deinen Zähler lokal aus dem Kamerabild. Sie ist keine geeichte Messung.
 
 ### Einrichtung
 
@@ -51,7 +51,7 @@ Für die gängigsten Kameraboards gibt es eine fertige ESPHome-Firmware. ESPHome
 
 1. Im Einrichtungsassistenten **Zählerkamera bauen** wählen, das Board antippen und **Firmware installieren** öffnen – oder direkt die [Installer-Seite](https://eifellayer.github.io/meter-ocr/) aufrufen. Das klappt am Computer in Chrome oder Edge, das Board hängt per USB daran.
 2. **Installieren** drücken, den Anschluss wählen und danach das WLAN eintragen. Kommt keine WLAN-Abfrage, öffnet die Kamera ein eigenes WLAN „zaehlerkamera-…“, über das du dein WLAN am Handy einträgst.
-3. Home Assistant meldet die neue **Zählerkamera** unter Einstellungen → Geräte & Dienste: dort **Hinzufügen** drücken. Der Assistent wählt sie danach von selbst aus. Blitz, Belichtung und Verstärkung übernimmt die App.
+3. Sobald Home Assistant die neue **Zählerkamera** gefunden hat, zeigt der Assistent **In Home Assistant hinzufügen** – ein Klick, und er wählt sie danach von selbst aus. Alternativ geht das Hinzufügen unter Einstellungen → Geräte & Dienste. Blitz, Belichtung und Verstärkung übernimmt die App.
 
 Die Firmware erkennt den Kamerachip selbst (OV2640, OV3660, OV5640) und nimmt Bilder mit 800×600 Pixeln auf. Liegt das Bild gespiegelt oder auf dem Kopf, legst du beim Gerät in Home Assistant den Schalter **Bild spiegeln** oder **Bild umdrehen** um. Die Zusätze **WLAN-Kanal** und **WLAN-Zugangspunkt** sind ab Werk ausgeschaltet und lassen sich dort bei Bedarf aktivieren. Neue Firmware erscheint als normales Update in Home Assistant. Wer selbst weiterbauen will, übernimmt die Kamera im ESPHome Device Builder mit **Adopt**; die Konfiguration liegt im Ordner `esphome/` des Repositorys. Eine schon vorhandene eigene ESPHome-Kamera kannst du natürlich weiter nutzen.
 
@@ -121,7 +121,7 @@ Nach einem App-Update oder Neustart lädt die geöffnete Weboberfläche selbst n
 
 ## English
 
-**Version 0.5.24.** The app reads your meter locally from a camera image. It is not a certified measurement.
+**Version 0.5.25.** The app reads your meter locally from a camera image. It is not a certified measurement.
 
 ### Setup
 
@@ -168,7 +168,7 @@ There is ready-made ESPHome firmware for the most common camera boards. No ESPHo
 
 1. In the setup wizard choose **Build a meter camera**, tap your board and open **Install firmware** – or go straight to the [installer page](https://eifellayer.github.io/meter-ocr/). Use Chrome or Edge on a computer with the board connected by USB.
 2. Press **Install**, pick the port and then enter your Wi-Fi. If no Wi-Fi prompt appears, the camera opens its own Wi-Fi “zaehlerkamera-…”; connect your phone to it and enter your Wi-Fi there.
-3. Home Assistant reports the new **meter camera** under Settings → Devices & services: press **Add** there. The wizard then picks it by itself. The app takes over flash, exposure and gain.
+3. As soon as Home Assistant has found the new **meter camera**, the wizard shows **Add to Home Assistant** – one click, and it then picks the camera by itself. You can also add it under Settings → Devices & services. The app takes over flash, exposure and gain.
 
 The firmware detects the camera chip itself (OV2640, OV3660, OV5640) and takes pictures at 800×600 pixels. If the picture is mirrored or upside down, switch **Bild spiegeln** (mirror) or **Bild umdrehen** (flip) on the device in Home Assistant. The extras **WLAN-Kanal** (Wi-Fi channel) and **WLAN-Zugangspunkt** (access point) are off by default and can be enabled there. New firmware shows up as a normal update in Home Assistant. To keep building it yourself, take the camera over in the ESPHome Device Builder with **Adopt**; the configuration lives in the repository's `esphome/` folder. An ESPHome camera of your own keeps working, of course.
 

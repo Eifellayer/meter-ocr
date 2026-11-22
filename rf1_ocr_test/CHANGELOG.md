@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.25
+
+- **Neue Zählerkamera mit einem Klick in Home Assistant.** Hat Home Assistant eine frisch installierte Zählerkamera im Netz gefunden, zeigt der Einrichtungsassistent sie unter „Zählerkamera bauen“ an. Ein Klick auf „In Home Assistant hinzufügen“ übernimmt sie, danach wählt der Assistent die Kamera von selbst aus. Der Umweg über Einstellungen → Geräte & Dienste entfällt. Braucht Home Assistant für die Kamera noch eine Angabe, sagt der Assistent das und verweist dorthin.
+- *English:* Add a new meter camera to Home Assistant in one click: once Home Assistant has discovered a freshly installed meter camera, the setup wizard shows it under “Build a meter camera”. One click on “Add to Home Assistant” takes it over, and the wizard then picks the camera by itself – no detour via Settings → Devices & services. If Home Assistant still needs an answer for the camera, the wizard says so and points there.
+
 ## 0.5.24
 
 - **Zählerkamera mit einem Klick.** Für die gängigsten Kameraboards gibt es jetzt eine fertige ESPHome-Firmware: AI-Thinker ESP32-CAM, ESP32-S3-CAM (Freenove und AI-Thinker), Seeed XIAO ESP32S3 Sense und Waveshare ESP32-S3-ETH mit Netzwerkkabel. Board an den Computer stecken, auf der Installer-Seite „Installieren“ drücken, WLAN eintragen – fertig. ESPHome-Kenntnisse braucht es dafür nicht. Die Firmware erkennt den Kamerachip selbst (OV2640, OV3660, OV5640) und bringt Blitz, Belichtung, Verstärkung sowie Schalter zum Spiegeln und Umdrehen des Bildes mit. Neue Versionen erscheinen in Home Assistant als normales Firmware-Update. Wer selbst weiterbauen will, übernimmt die Kamera mit „Adopt“ in den ESPHome Device Builder.

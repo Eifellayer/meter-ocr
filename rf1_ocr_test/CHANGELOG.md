@@ -3,7 +3,8 @@
 ## 0.5.8
 
 - **Zwischenschritte der Einrichtung werden wieder sauber angezeigt.** In 0.5.7 rutschten die Unterpunkte in die schmale Spalte der Zeitleiste und standen Wort für Wort untereinander. Sie nutzen jetzt die volle Breite.
-- *English:* The setup's intermediate steps use the full width again instead of being squeezed into the timeline's marker column.
+- **Klarere Texte bei den Hintergrundaufgaben.** Das Häkchen heißt jetzt „Hintergrundaufgaben anzeigen“; die Aufgaben tragen verständliche Namen wie „Letzte Nachkommastelle bestimmen“, „Unklares Ergebnis nachprüfen“ und „Neue Leseverfahren testen (Schattenmodus)“ statt interner Begriffe.
+- *English:* The setup's intermediate steps use the full width again instead of being squeezed into the timeline's marker column. Clearer wording for the background tasks (“Show background tasks”, “Pinning down the last decimal”, “Re-checking an unclear result”, “Testing new reading methods”).
 
 ## 0.5.7
 

@@ -48,7 +48,7 @@ class TurningRetryTest(unittest.TestCase):
 
 class BackgroundWorkTest(unittest.TestCase):
     def test_overview_has_the_toggle_and_live_list(self):
-        self.assertIn('id="show-background-work"> Hintergrundarbeit anzeigen', PANEL)
+        self.assertIn('id="show-background-work"> Hintergrundaufgaben anzeigen', PANEL)
         self.assertIn("function renderBackgroundWork(items)", PANEL)
         self.assertIn('"background_work": get_background_work(language)', PANEL)
         self.assertIn("get_background_work=get_background_work", RUN)

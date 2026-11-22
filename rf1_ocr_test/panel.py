@@ -739,9 +739,9 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 </details>
 </div>
 <div class="background-work-box">
-<label class="background-work-toggle"><input type="checkbox" id="show-background-work"> Hintergrundarbeit anzeigen</label>
-<section id="background-live" class="background-live" aria-label="Hintergrundarbeit" hidden>
-<p class="settings-note">Was die App neben der automatischen Prüfung tut: Feinsuche, Wartezeit-Arbeit, Schattenmodus und Nacharbeit. Nur zur Ansicht, du musst nichts tun.</p>
+<label class="background-work-toggle"><input type="checkbox" id="show-background-work"> Hintergrundaufgaben anzeigen</label>
+<section id="background-live" class="background-live" aria-label="Hintergrundaufgaben" hidden>
+<p class="settings-note">Hier siehst du, was die App zwischen den regulären Prüfungen selbstständig erledigt: die letzte Nachkommastelle genauer bestimmen, unklare Ergebnisse nachprüfen und neue Leseverfahren testen. Nur zur Information – du musst nichts tun.</p>
 <div id="background-live-list"></div>
 </section>
 </div>
@@ -3585,7 +3585,7 @@ function renderBackgroundWork(items) {{
   if (!items.length) {{
     const empty = document.createElement('p');
     empty.className = 'settings-note';
-    empty.textContent = en ? 'No background work since the app started.' : 'Noch keine Hintergrundarbeit seit dem Start der App.';
+    empty.textContent = en ? 'No background tasks since the app started.' : 'Seit dem Start der App gab es noch keine Hintergrundaufgaben.';
     list.replaceChildren(empty);
     return;
   }}

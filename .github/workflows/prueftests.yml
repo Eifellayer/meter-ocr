@@ -1,14 +1,10 @@
 name: Prüftests
 
-# Stefan (22.11.): schneller – ein Lauf pro PR (nicht zusätzlich bei jedem Push auf den Branch),
-# keine Tests bei reinen Plan-/README-Änderungen, Tests auf 4 Rechner verteilt.
+# Stefan (22.11.): kein Warten vor jedem Release. Die volle Testreihe läuft nur auf Knopfdruck
+# (Actions → Prüftests → Run workflow, oder per API), z. B. wenn nach einem Release etwas nicht
+# funktioniert. Nur der schnelle Bau des App-Images (ca. 25 s) läuft bei jedem PR mit.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "rf1_ocr_test/**"
-      - "repository.yaml"
-      - ".github/workflows/prueftests.yml"
+  workflow_dispatch:
   pull_request:
     paths:
       - "rf1_ocr_test/**"
@@ -24,6 +20,7 @@ concurrency:
 
 jobs:
   test:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

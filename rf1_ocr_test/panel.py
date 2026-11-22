@@ -279,6 +279,10 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .setup-substeps summary{{cursor:pointer;color:var(--muted)}}
 .setup-substeps ul{{list-style:none;margin:.2rem 0 0;padding:0}}
 .setup-substeps li{{margin:.1rem 0;font-variant-numeric:tabular-nums}}
+/* 0.5.8: the timeline rules (.setup-timeline li: two-column grid, connector line) also hit the
+   sub-step items and squeezed them into the 1.6rem marker column. Reset them here. */
+.setup-timeline .setup-substeps li{{display:block;position:static;padding:0;grid-template-columns:none}}
+.setup-timeline .setup-substeps li::before{{content:none;display:none}}
 .setup-substeps li[data-sub="todo"]{{color:var(--muted)}}
 .setup-substeps li[data-sub="current"]{{font-weight:700}}
 .setup-substeps li[data-sub="warn"]{{color:light-dark(#8a5a00,#ffd27a)}}

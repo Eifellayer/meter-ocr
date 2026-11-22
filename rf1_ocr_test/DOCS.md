@@ -4,7 +4,7 @@
 
 ## Deutsch
 
-**Version 0.5.7.** Die App liest deinen Zähler lokal aus dem Kamerabild. Sie ist keine geeichte Messung.
+**Version 0.5.8.** Die App liest deinen Zähler lokal aus dem Kamerabild. Sie ist keine geeichte Messung.
 
 ### Einrichtung
 
@@ -104,7 +104,7 @@ Nach einem App-Update oder Neustart lädt die geöffnete Weboberfläche selbst n
 
 ## English
 
-**Version 0.5.7.** The app reads your meter locally from a camera image. It is not a certified measurement.
+**Version 0.5.8.** The app reads your meter locally from a camera image. It is not a certified measurement.
 
 ### Setup
 

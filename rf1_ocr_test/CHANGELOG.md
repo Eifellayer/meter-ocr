@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.8
+
+- **Zwischenschritte der Einrichtung werden wieder sauber angezeigt.** In 0.5.7 rutschten die Unterpunkte in die schmale Spalte der Zeitleiste und standen Wort für Wort untereinander. Sie nutzen jetzt die volle Breite.
+- *English:* The setup's intermediate steps use the full width again instead of being squeezed into the timeline's marker column.
+
 ## 0.5.7
 
 - **Nach einer gröberen Prüfung schaut die App schnell noch einmal hin.** Drehte sich bei der Gegenprüfung gerade die letzte Rolle, bestätigt die App den Stand mit einer Nachkommastelle weniger. Bisher wartete sie dann das volle Prüfintervall. Jetzt holt sie nach etwa 45 Sekunden ein neues Bildpaar, wenn die Rolle wieder steht, damit schnell der volle Wert dasteht – vor allem direkt nach der Einrichtung. Das passiert einmal pro Serie, damit ein laufender Zähler nicht doppelt so oft geprüft wird. Unter dem Zählerstand steht, warum die App so kurz wartet.

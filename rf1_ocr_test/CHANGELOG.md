@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.13
+
+- **Keine erneute Nachfrage direkt nach der Eingabe.** Lief beim Eintragen des Zählerstands gerade eine Prüfung, kannte sie den neuen Stand noch nicht und fragte sofort wieder danach. Diese Prüfung fragt jetzt nicht mehr nach, sondern startet direkt die nächste, die den eingetragenen Stand nutzt.
+- *English:* A check that was already running while the meter reading was entered no longer asks for the reading again; the next check starts right away and uses the entry.
+
 ## 0.5.12
 
 - **Bild des Zählwerks unter der Eingabe „Ziffer verdeckt“.** Wenn die App nach dem Zählerstand fragt, zeigt sie darunter das ausgeschnittene Zählwerk der letzten Aufnahme – ohne Rahmen und Beschriftung. Der eingetragene Stand wird der Aufnahmezeit dieses Bildes zugeordnet.

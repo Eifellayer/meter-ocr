@@ -798,6 +798,13 @@ def manual_reading_anchor(rules, zone):
         return None
 
 
+def reading_entered_meanwhile(rules_at_start, rules_now):
+    """True when the meter reading was entered or changed while a check was running."""
+    keys = ("fallback_value", "fallback_time")
+    return bool(rules_now.get("fallback_value") and rules_now.get("fallback_time")) and any(
+        rules_at_start.get(key) != rules_now.get(key) for key in keys)
+
+
 def newest_anchor(first, second, before):
     candidates = [item for item in (first, second)
                   if isinstance(item, dict) and type(item.get("time")) in (int, float) and item["time"] < before]
@@ -3591,6 +3598,12 @@ def main():
                                 if anchored or partly_filled:
                                     updated.pop("hidden_digit_prompt", None)
                                     updated.pop("hidden_digit_since", None)
+                                elif reading_entered_meanwhile(active_rules, get_auto_rules()):
+                                    # 0.5.13 (Stefan 22.11., 14:18): the reading was entered while this check
+                                    # was already running with the old rules. Do not ask again; the next
+                                    # check uses the entry.
+                                    updated.pop("hidden_digit_prompt", None)
+                                    request_automatic_check()
                                 elif not hidden_fill_reachable(anchor, read_state["captured"], hidden_slots,
                                                                integer_digits, comparison_decimals, anchor_flow):
                                     # No verified or entered reading (or one too old to leave a single

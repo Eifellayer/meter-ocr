@@ -35,6 +35,7 @@ from checks import (
     compare_sample, crop_register, lighting_ocr_profiles, read_register, read_with_retries, record_sample,
     anchored_leading_digits, anchored_hidden_digits, within_anchor_bounds, anchor_bounds,
     learned_flow_limit, slow_roller_digit, hidden_roller_flow, hidden_roller_interval, hidden_fill_reachable, hidden_fill_with_turning_roller,
+                    estimated_hidden_digits, HIDDEN_ESTIMATE_AFTER, HIDDEN_ESTIMATE_NOTICE,
     automatic_interval_minutes, defer_duplicate_cycle,
     LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, LAST_DIGIT_RETRIES, SUCCESSFUL_CHECKS,
     SEVENTH_DIGIT_WAIT_NOTICE,
@@ -3589,12 +3590,35 @@ def main():
                                         ocr_method = "anchored"
                                 if anchored or partly_filled:
                                     updated.pop("hidden_digit_prompt", None)
+                                    updated.pop("hidden_digit_since", None)
                                 elif not hidden_fill_reachable(anchor, read_state["captured"], hidden_slots,
                                                                integer_digits, comparison_decimals, anchor_flow):
                                     # No verified or entered reading (or one too old to leave a single
                                     # possible value) to fill the hidden digit from: ask for the reading.
+                                    asked = history.get("hidden_digit_since") or time.time()
+                                    updated["hidden_digit_since"] = asked
                                     updated["hidden_digit_prompt"] = {
-                                        "positions": [slot + 1 for slot in hidden_slots], "time": time.time()}
+                                        "positions": [slot + 1 for slot in hidden_slots], "time": time.time(),
+                                        "image_time": read_state["captured"]}
+                                    # 0.5.12 (Stefan 13:46/13:47): do not wait for the entry for ever. After
+                                    # five minutes a hidden decimal is estimated (never full cubic metres).
+                                    known = [value for value in (
+                                        (history.get("consumption") or {}).get("reading_litres"),
+                                        (anchor or {}).get("value")) if type(value) is int]
+                                    estimate = (estimated_hidden_digits(
+                                        ocr_readings, max(known, default=None), comparison_decimals,
+                                        integer_digits, hidden_slots)
+                                        if time.time() - asked >= HIDDEN_ESTIMATE_AFTER else None)
+                                    if estimate:
+                                        print(f"Verdeckte Nachkommastelle nach {HIDDEN_ESTIMATE_AFTER // 60} Minuten "
+                                              f"ohne Eingabe geschätzt: {ocr} -> {estimate[0]}")
+                                        ocr, ocr_readings = estimate[0], [estimate[0]] * len(ocr_readings)
+                                        ocr_method = "estimated_hidden"
+                                        updated["hidden_digit_estimated"] = {
+                                            "positions": [slot + 1 for slot in estimate[1]], "time": time.time()}
+                                        ocr_confirmed = "?" not in estimate[0]
+                                        # The estimate stands in for the entry: no request while it works.
+                                        updated.pop("hidden_digit_prompt", None)
                             if anchored:
                                 anchored_readings, filled_positions = anchored
                                 value, confirmed = resolve_ocr_readings(
@@ -3784,6 +3808,11 @@ def main():
                             preview.save(buffer, "JPEG", quality=88, optimize=True)
                             atomic_write(AUTOMATIC_PREVIEW, buffer.getvalue(), 0o600)
                             automatic_preview_ready = True
+                        # 0.5.12 (Stefan 22.11., 13:41): plain cut-out of the counter, without frames,
+                        # shown below the request to enter the meter reading.
+                        with io.BytesIO() as buffer:
+                            register.convert("RGB").save(buffer, "JPEG", quality=90)
+                            atomic_write(HISTORY.with_name("ocr-zaehlwerk.jpg"), buffer.getvalue(), 0o600)
                         if active_rules.get("experiments_enabled"):
                             # Plain digit strip (window only, no labels) for /testbild-streifen.
                             with io.BytesIO() as buffer:
@@ -3913,6 +3942,8 @@ def main():
                             and not validation_detail and not lower_recovered):
                         updated["check_detail"] = (REDUCED_PRECISION2_NOTICE if locals().get("reduced_by") == 2
                                                    else REDUCED_PRECISION_NOTICE)
+                    if ocr_method == "estimated_hidden" and outcome in SUCCESSFUL_CHECKS and not validation_detail:
+                        updated["check_detail"] = HIDDEN_ESTIMATE_NOTICE
                     updated["ocr_readings"] = ocr_readings if outcome == "ocr_unclear" else []
                     if outcome == "ocr_unclear" and updated["check_detail"] != LAST_DIGIT_NOTICE:
                         if not validation_detail and not ocr_error and only_last_compared_unclear(

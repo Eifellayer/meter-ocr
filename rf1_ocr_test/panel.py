@@ -144,6 +144,9 @@ header{{display:flex;align-items:baseline;justify-content:space-between;gap:.5re
 .setting-highlight{{outline:3px solid var(--accent, #2ec4a6);outline-offset:2px}}
 .reflection-suggestion{{margin:.65rem 0;color:var(--muted);font-size:.92rem}}
 /* 0.5.11: an input the app is waiting for sits at the top of the overview and stands out. */
+.hidden-digit-figure{{flex-basis:100%;margin:.2rem 0 .5rem}}
+.hidden-digit-figure img{{display:block;width:100%;max-width:34rem;height:auto;border-radius:.4rem;image-rendering:auto}}
+.hidden-digit-figure figcaption{{font-size:.85rem;color:var(--muted);margin-top:.25rem}}
 .reflection-suggestion.action-needed{{padding:.75rem .9rem;border:2px solid light-dark(#b26a00,#ffb74d);border-radius:.7rem;background:var(--surface-2);color:inherit;font-size:1rem}}
 .reflection-actions{{display:flex;align-items:center;gap:.65rem;flex-wrap:wrap}}
 .reflection-actions form{{display:inline}}
@@ -748,6 +751,7 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 <input type="hidden" name="lang" value="{language}"><input type="hidden" name="mode" value="{language_mode}">
 <input type="hidden" name="csrf" value="{csrf}"><input type="hidden" name="return_to" value="overview">
 <input type="hidden" name="fallback_time" id="hidden-digit-time" value="">
+<figure class="hidden-digit-figure" id="hidden-digit-figure" hidden><img id="hidden-digit-image" alt="Ausschnitt des Zählwerks aus der letzten Aufnahme"><figcaption>Zählwerk in der letzten Aufnahme<span id="hidden-digit-image-time"></span>. Lies den Stand hier ab; die verdeckte Stelle bitte am Zähler nachsehen.</figcaption></figure>
 <label>Aktueller Zählerstand<input name="fallback_value" inputmode="decimal" maxlength="16" placeholder="z. B. 10486,16" required></label>
 <button type="submit">Zählerstand übernehmen</button>
 </form></div>
@@ -1622,6 +1626,7 @@ tabs.forEach((tab, index) => {{
   }});
 }});
 const settingsSections = ['#source-settings', '#automatic-settings', '#notification-settings'];
+const readingEnteredAt = searchPrefs.get('saved') === 'reading' ? Date.now() / 1000 : 0;
 const selectedTab = searchPrefs.get('ui');
 const settingsOpen = selectedTab ? selectedTab === 'settings' :
   searchPrefs.get('saved') === 'crop' || settingsSections.some(selector => document.querySelector(selector).open);
@@ -4248,12 +4253,30 @@ async function refreshAutomatic() {{
     document.querySelector('#report-bug-hint').hidden = !(sample.failure_attempts >= 3);
     recovery.dataset.state = sample.retry_suppressed ? 'waiting' : 'retrying';
     recovery.textContent = sample.recovery_notice;
-    const hiddenPrompt = sample.hidden_digit_prompt;
+    // 0.5.12 (Stefan 13:43): once the reading was entered the request disappears; it only comes
+    // back when a check after the entry could not fill the digit again.
+    const hiddenPrompt = sample.hidden_digit_prompt && !(readingEnteredAt && Number(sample.hidden_digit_prompt.time) <= readingEnteredAt)
+      ? sample.hidden_digit_prompt : null;
     document.querySelector('#hidden-digit-prompt').hidden = !hiddenPrompt;
     document.querySelector('#hero-action').hidden = !hiddenPrompt;
     if (hiddenPrompt) {{
       document.querySelector('#hidden-digit-text').textContent =
         'Stelle ' + hiddenPrompt.positions.join(' und ') + ' ist durch eine Spiegelung verdeckt.';
+      // 0.5.12: the cut-out counter of the last picture; the reading entered belongs to its time.
+      const figure = document.querySelector('#hidden-digit-figure');
+      const picture = document.querySelector('#hidden-digit-image');
+      const stamp = Number(hiddenPrompt.image_time);
+      if (Number.isFinite(stamp) && stamp > 0 && picture.dataset.stamp !== String(stamp)) {{
+        picture.dataset.stamp = String(stamp);
+        picture.onload = () => {{ figure.hidden = false; }};
+        picture.onerror = () => {{ figure.hidden = true; document.querySelector('#hidden-digit-time').value = ''; }};
+        picture.src = 'zaehlwerk.jpg?v=' + stamp;
+        const taken = new Date(stamp * 1000);
+        const pad = value => String(value).padStart(2, '0');
+        document.querySelector('#hidden-digit-time').value = taken.getFullYear() + '-' + pad(taken.getMonth() + 1) + '-' +
+          pad(taken.getDate()) + 'T' + pad(taken.getHours()) + ':' + pad(taken.getMinutes());
+        document.querySelector('#hidden-digit-image-time').textContent = ' (' + pad(taken.getHours()) + ':' + pad(taken.getMinutes()) + ')';
+      }}
     }}
     const live = sample.reflection_live_estimate;
     document.querySelector('#reflection-live').hidden = !live;
@@ -4476,6 +4499,7 @@ def start_panel(
         images["/automatikvorschau.jpg"] = automatic_preview
     if test_source_image is not None:
         images["/testbild.jpg"] = test_source_image
+    images["/zaehlwerk.jpg"] = history_path.with_name("ocr-zaehlwerk.jpg")
     manual_settings_path = history_path.with_name("manual-test-settings.json")
     csrf_token = token_urlsafe(32)
     request_lock = Lock()

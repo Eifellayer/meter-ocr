@@ -61,6 +61,18 @@ MIN_SECONDS_BEFORE_CHECK = 60  # stay clear of the next check
 REASONS = ("unclear_check", "experiment", "control")
 
 
+def next_reason(candidates, turn):
+    """Pick one task per waiting time, taking turns when several are due (0.5.15).
+
+    Stefan 22.11.2026, 13:33: when there is too much for one pause, do the tasks alternately
+    between the checks instead of squeezing all of them into one block. ``candidates`` are the
+    reasons that apply to the last check in order of priority; ``turn`` counts the pauses.
+    Returns the chosen reason or "".
+    """
+    due = [reason for reason in candidates if reason in REASONS]
+    return due[turn % len(due)] if due else ""
+
+
 def keep_recent(jobs, newest):
     """Work of the last two checks, newest first; ``None`` marks a check that left nothing.
 

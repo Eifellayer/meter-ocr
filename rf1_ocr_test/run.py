@@ -842,15 +842,19 @@ def shadow_experiments(rules, manual, register, boxes, stable, light, forced):
 IDLE_PENDING_NOTICE = "App läuft. Wartet auf die nächste automatische Prüfung. Im Hintergrund ist noch eine Nacharbeit offen."
 
 
-def idle_job(reason, register, boxes, ocr, light, forced, image, now):
-    """What the waiting time may look at again: the register of the last check, already cut out."""
+def idle_job(reason, register, boxes, ocr, light, forced, image, now, skip=()):
+    """What the waiting time may look at again: the register of the last check, already cut out.
+
+    ``skip``: slots known to be hidden by a reflection; re-reading them costs time for nothing (0.5.15).
+    """
     digits = re.sub(r"[^0-9?]", "", ocr or "")
     if reason not in idle_work.REASONS or register is None or not boxes:
         return None
-    if reason == "unclear_check" and ("?" not in digits or len(digits) != len(boxes)):
+    if reason == "unclear_check" and (len(digits) != len(boxes) or not any(
+            digit == "?" and index not in skip for index, digit in enumerate(digits))):
         return None
     return {"reason": reason, "register": register, "boxes": list(boxes), "digits": digits, "stable": ocr,
-            "light": light, "forced": forced, "image": image, "at": now}
+            "light": light, "forced": forced, "image": image, "at": now, "skip": list(skip)}
 
 
 def idle_step(job, rules, now, next_check, used, *, sample=None, on_start=None):
@@ -880,7 +884,8 @@ def idle_step(job, rules, now, next_check, used, *, sample=None, on_start=None):
         return read_register(picture, job["light"], digits, profile=OCR_PROFILES[1],
                              force_polarity=job["forced"], isolated_digit=True)
 
-    unclear = [index for index, digit in enumerate(job["digits"]) if digit == "?"][:allowed]
+    unclear = [index for index, digit in enumerate(job["digits"])
+               if digit == "?" and index not in job.get("skip", ())][:allowed]
     reread = [{"position": index + 1, "digit": read_digit(job["register"], job["boxes"][index], read)}
               for index in unclear]
     return used + len(reread), {"reread": reread}
@@ -1248,7 +1253,8 @@ def approximate_whole_boxes(width, height, count):
 
 
 def draw_test_preview(register, integer_width, whole_boxes, fraction_boxes, reading,
-                      whole_digits=5, fraction_digits=3, readings=None, composed=False, pending=False, suspected_slots=(), visible_slots=None):
+                      whole_digits=5, fraction_digits=3, readings=None, composed=False, pending=False, suspected_slots=(), visible_slots=None,
+                      filled_slots=(), quiet_slots=()):
     """Mark OCR digit regions and the actual read characters for manual diagnostics.
 
     Green: a digit was read without observed variation; yellow: attempts disagreed
@@ -1302,6 +1308,13 @@ def draw_test_preview(register, integer_width, whole_boxes, fraction_boxes, read
             continue
         if pending:
             color = (71, 157, 194)
+        elif idx in filled_slots:
+            # 0.5.15: a hidden digit filled in from the meter reading is not a read digit.
+            color = (241, 184, 54)
+        elif idx in quiet_slots and not chars[idx].isdigit():
+            # 0.5.15 (Stefan 22.11., 14:30): a roller that was not compared (e.g. turning) is grey,
+            # not alarm red – the check did not depend on it.
+            color = (128, 140, 150)
         elif idx in uncertain or idx in suspected_slots:
             color = (241, 184, 54)
         else:
@@ -1775,7 +1788,7 @@ def main():
     # digits in whole degrees, this gives the remaining fine angle to save with the layout.
     calibration_tilts = {}
     read_plan_state = {}
-    idle_state = {"jobs": [], "used": 0}  # work left by the last two checks, newest first
+    idle_state = {"jobs": [], "used": 0, "turn": 0}  # work left by the last two checks, newest first
     calibration_next = 0.0
     calibration_worker = None
     setup_retry = {"job": None, "at": 0.0, "count": 0}
@@ -3827,6 +3840,10 @@ def main():
                             register, integer_width, whole_boxes, fraction_boxes, ocr,
                             integer_digits, fraction_digits, readings=ocr_readings,
                             composed=bool(ocr_readings and ocr not in ocr_readings),
+                            filled_slots=(hidden_reflection_slots(active_rules, active_source)
+                                          if ocr_method in ("anchored_hidden", "estimated_hidden") else ()),
+                            quiet_slots=(range(integer_digits + decimals, integer_digits + fraction_digits)
+                                         if locals().get("ocr_confirmed") else ()),
                         )
                         with io.BytesIO() as buffer:
                             preview.save(buffer, "JPEG", quality=88, optimize=True)
@@ -3942,6 +3959,9 @@ def main():
                     outcome = updated["status"]
                     updated["ocr_candidates"] = ocr_candidates
                     updated["ocr_method"] = ocr_method if automatic_preview_ready else None
+                    # 0.5.15: digits filled in (not read) are marked in the big meter reading.
+                    updated["filled_slots"] = (hidden_reflection_slots(active_rules, active_source)
+                                               if ocr_method in ("anchored_hidden", "estimated_hidden") else [])
                     if standalone and outcome == "ocr_only":
                         if standalone_reference is None:
                             outcome = updated["status"] = STANDALONE_PENDING
@@ -4349,14 +4369,19 @@ def main():
                                                lambda *arguments: atomic_write(*arguments))
                 # Left for the waiting time: an experiment the busy machine skipped, or digits
                 # that stayed unclear. Only the newest check counts; older work is dropped.
+                # 0.5.15 (Stefan 22.11., 13:33): one task per pause, taking turns when several are due.
+                idle_state["turn"] += 1
                 idle_state["jobs"][:] = idle_work.keep_recent(idle_state["jobs"], idle_job(
-                    "experiment" if experiment and experiment.get("skipped") else
-                    "unclear_check" if "?" in (ocr or "") else "",
+                    idle_work.next_reason([
+                        *(["unclear_check"] if "?" in (ocr or "") else []),
+                        *(["experiment"] if experiment and experiment.get("skipped") else []),
+                    ], idle_state["turn"]),
                     local.get("register"),
                     [*(local.get("whole_boxes") or []), *(local.get("fraction_boxes") or [])], ocr,
                     options["helle_ziffern"] if active_rules["polarity"] == "auto"
                     else active_rules["polarity"] == "light",
-                    active_rules["polarity"] != "auto", data.get("esp_timestamp"), time.time()))
+                    active_rules["polarity"] != "auto", data.get("esp_timestamp"), time.time(),
+                    skip=hidden_reflection_slots(active_rules, active_source)))
                 idle_state["used"] = 0
                 taken_over = local.get("assumed_whole") or ""
                 planned = read_plan.after_check(read_plan_state, active_rules, outcome, taken_over, ocr, time.time())

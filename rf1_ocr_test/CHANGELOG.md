@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.6
+
+- **Die Suche nach der letzten Rolle blockiert nichts mehr.** Im Hintergrund suchte die App bisher immer weiter nach der achten Ziffer und brauchte dafür nach jeder Prüfung bis zu einer halben Minute Rechenzeit. Der Schattenmodus fiel deshalb fast immer wegen Auslastung aus, und die Nacharbeit in der Wartezeit lief gar nicht. Jetzt haben Schattenmodus und Nacharbeit Vorrang. Die Suche läuft nur noch, wenn das Gerät Luft hat.
+- **Nach sechs Stunden ohne Erfolg gibt die App die Suche auf.** Die Automatik prüft dann weiter mit einer Nachkommastelle weniger, auch im Präzisionsmodus. Ein Hinweis sagt, warum: Entweder ist die Bildqualität zu schlecht, oder die letzte Ziffer ließ sich trotz mehrerer Versuche nicht lesen. Eine neue Einrichtung startet die Suche erneut.
+- **Präzisionsmodus mit doppelter Bestätigung.** Beim Einschalten fragt die App nach, ob du ihn wirklich willst. Die Beschreibung erklärt jetzt auch, was passiert, wenn die letzte Ziffer nicht lesbar ist.
+- *English:* The background search for the last roller no longer blocks shadow experiments and waiting-time work; it only runs with spare CPU capacity. After six hours without success it stops, checks continue with one decimal place less (also in precision mode), and a note explains why. Switching on precision mode now asks for a second confirmation.
+
 ## 0.5.5
 
 - **Keine falsche Fehlermeldung mehr während der Feinsuche im Hintergrund.** Sucht die App im Hintergrund noch die dritte Nachkommastelle, bekommt sie nur die Bilder der normalen Prüfungen (etwa alle 11 Minuten). Der Einrichtungsstatus meldete dazwischen „Kein neues Kamerabild“ (rot), obwohl die Suche ganz normal weiterlief. Jetzt steht dort „Optimierung läuft“ mit der restlichen Rechenzeit.

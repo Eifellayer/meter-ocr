@@ -1086,6 +1086,38 @@ def stationary_partial_active(rules, source):
 # A failed optional eighth-digit search must not permanently strand a saved
 # seven-digit setup. Retry infrequently and remember the deadline across restarts.
 EIGHTH_DIGIT_RETRY_SECONDS = 60 * 60
+# Stefan (22.11.): if the last roller cannot be found at all (e.g. the flash reflects on it),
+# give up after several hours instead of searching forever, and say so. The seven-digit
+# checks keep running; a new setup (new frame revision) starts the search again.
+EIGHTH_DIGIT_GIVE_UP_SECONDS = 6 * 60 * 60
+
+
+def eighth_digit_scope(rules):
+    revision = rules.get("crop_revision")
+    return str(revision) if revision else None
+
+
+def eighth_digit_given_up(history, rules):
+    scope = eighth_digit_scope(rules)
+    return scope is not None and history.get("eighth_digit_given_up") == scope
+
+
+def note_eighth_digit_search(history, rules, now):
+    """Remember when the search for this frame began; True once it has run too long."""
+    scope = eighth_digit_scope(rules)
+    if scope is None:
+        return False
+    if eighth_digit_given_up(history, rules):
+        return True
+    since = history.get("eighth_digit_search_since")
+    if history.get("eighth_digit_search_scope") != scope or type(since) not in (int, float) or since > now:
+        history["eighth_digit_search_scope"] = scope
+        history["eighth_digit_search_since"] = now
+        return False
+    if now - since >= EIGHTH_DIGIT_GIVE_UP_SECONDS:
+        history["eighth_digit_given_up"] = scope
+        return True
+    return False
 
 
 def eighth_digit_retry_due(rules, source, history, now):
@@ -1093,12 +1125,15 @@ def eighth_digit_retry_due(rules, source, history, now):
     deadline = history.get("eighth_digit_retry_at", 0)
     return (stationary_partial_active(rules, source)
             and rules.get("fraction_digits") == 3
+            and not eighth_digit_given_up(history, rules)
             and (type(deadline) not in (int, float) or now >= deadline))
 
 
 def resume_optional_eighth_digit(history, rules, source, now, begin):
     """Start one bounded fine-check and persist its next allowable retry time."""
-    if not eighth_digit_retry_due(rules, source, history, now) or not begin():
+    if not eighth_digit_retry_due(rules, source, history, now):
+        return False
+    if note_eighth_digit_search(history, rules, now) or not begin():
         return False
     history["eighth_digit_retry_at"] = now + EIGHTH_DIGIT_RETRY_SECONDS
     return True

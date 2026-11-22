@@ -424,9 +424,11 @@ EN_UI = {
     STANDALONE_VERIFIED_NOTICE: "Meter reading cross-checked against a second snapshot.",
     STANDALONE_REJECTED_NOTICE: "The second image does not confirm the first meter reading.",
     "Vergleichswert": "Reference reading",
-    "Der Präzisionsmodus ist experimentell. Der Wert selbst ist genau, aber die schnell laufende letzte Rolle wird oft nicht sicher erkannt. Dann prüft die App vorübergehend mit zwei Nachkommastellen.":
+    "Der Präzisionsmodus ist experimentell. Der Wert selbst ist genau, aber die schnell laufende letzte Rolle wird oft nicht sicher erkannt. Dann prüft die App vorübergehend mit zwei Nachkommastellen. Ist die Bildqualität zu schlecht oder lässt sich die letzte Ziffer trotz mehrerer Versuche nicht lesen, gibt die App die Suche nach sechs Stunden auf und prüft dauerhaft mit zwei Nachkommastellen, bis zur nächsten Einrichtung.":
         "Precision mode is experimental. The value itself is exact, but the fast-moving last roller is often not "
-        "recognised reliably. The app then checks with two decimal places for a while.",
+        "recognised reliably. The app then checks with two decimal places for a while. If the image quality is too "
+        "poor or the last digit cannot be read despite several attempts, the app stops searching after six hours "
+        "and keeps checking with two decimal places until the next setup.",
     "Präzisionsmodus: auch die dritte Nachkommastelle vergleichen": "Precision mode: also compare the third decimal place",
     "Prüfung bestanden mit Hinweis": "Check passed with a note",
     "Test bestanden mit Hinweis": "Test passed with a note",
@@ -440,6 +442,8 @@ EN_UI = {
         "One of the first seven digits is moving. The crop is retained while a fresh image is checked.",
     "Optimierung läuft: Die Automatik ist aktiv. Im Hintergrund sucht die App noch die dritte Nachkommastelle und verbessert Rahmen und Winkel.":
         "Optimising: automatic checks are active. In the background the app is still locating the third decimal and improving frames and angle.",
+    "Letzte Rolle nicht gefunden: Die Suche wurde nach mehreren Stunden beendet. Die Automatik läuft weiter mit einer Nachkommastelle weniger.":
+        "Last roller not found: the search was ended after several hours. Automatic checks continue with one decimal place less.",
     "Dritte Nachkommastelle noch offen. Die Automatik läuft weiterhin mit sieben bestätigten Ziffern.":
         "Third decimal still unconfirmed. Automatic checks continue with seven confirmed digits.",
     "Die Einrichtung bestätigt zuerst sieben Ziffern. Die dritte Nachkommastelle kann anschließend separat geprüft werden.":

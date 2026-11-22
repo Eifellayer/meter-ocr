@@ -14,10 +14,10 @@ from layout import MANUAL_ROW_UNCLEAR, PARTLY_UNCLEAR, RAW_ROW_UNCLEAR
 
 EN_UI = {
     # 0.5.7: background work on the overview, sub-steps of the setup
-    "> Hintergrundarbeit anzeigen<": "> Show background work<",
-    'aria-label="Hintergrundarbeit"': 'aria-label="Background work"',
-    "Was die App neben der automatischen Prüfung tut: Feinsuche, Wartezeit-Arbeit, Schattenmodus und Nacharbeit. Nur zur Ansicht, du musst nichts tun.":
-        "What the app does beside the automatic check: fine search, waiting-time work, shadow mode and follow-up. For viewing only, you do not need to do anything.",
+    "> Hintergrundaufgaben anzeigen<": "> Show background tasks<",
+    'aria-label="Hintergrundaufgaben"': 'aria-label="Background tasks"',
+    "Hier siehst du, was die App zwischen den regulären Prüfungen selbstständig erledigt: die letzte Nachkommastelle genauer bestimmen, unklare Ergebnisse nachprüfen und neue Leseverfahren testen. Nur zur Information – du musst nichts tun.":
+        "What the app takes care of on its own between the regular checks: pinning down the last decimal, re-checking unclear results and testing new reading methods. For information only – no action needed.",
     ">So weit ist die Einrichtung<": ">Setup progress<",
     "<summary>Gefundene Rahmen (Kandidaten)</summary>": "<summary>Frames found (candidates)</summary>",
     'aria-label="Gelesene Ziffern je Versuch und Stelle"': 'aria-label="Digits read per attempt and position"',

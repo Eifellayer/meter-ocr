@@ -279,6 +279,10 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .setup-substeps summary{{cursor:pointer;color:var(--muted)}}
 .setup-substeps ul{{list-style:none;margin:.2rem 0 0;padding:0}}
 .setup-substeps li{{margin:.1rem 0;font-variant-numeric:tabular-nums}}
+/* 0.5.8: the timeline rules (.setup-timeline li: two-column grid, connector line) also hit the
+   sub-step items and squeezed them into the 1.6rem marker column. Reset them here. */
+.setup-timeline .setup-substeps li{{display:block;position:static;padding:0;grid-template-columns:none}}
+.setup-timeline .setup-substeps li::before{{content:none;display:none}}
 .setup-substeps li[data-sub="todo"]{{color:var(--muted)}}
 .setup-substeps li[data-sub="current"]{{font-weight:700}}
 .setup-substeps li[data-sub="warn"]{{color:light-dark(#8a5a00,#ffd27a)}}
@@ -735,9 +739,9 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 </details>
 </div>
 <div class="background-work-box">
-<label class="background-work-toggle"><input type="checkbox" id="show-background-work"> Hintergrundarbeit anzeigen</label>
-<section id="background-live" class="background-live" aria-label="Hintergrundarbeit" hidden>
-<p class="settings-note">Was die App neben der automatischen Prüfung tut: Feinsuche, Wartezeit-Arbeit, Schattenmodus und Nacharbeit. Nur zur Ansicht, du musst nichts tun.</p>
+<label class="background-work-toggle"><input type="checkbox" id="show-background-work"> Hintergrundaufgaben anzeigen</label>
+<section id="background-live" class="background-live" aria-label="Hintergrundaufgaben" hidden>
+<p class="settings-note">Hier siehst du, was die App zwischen den regulären Prüfungen selbstständig erledigt: die letzte Nachkommastelle genauer bestimmen, unklare Ergebnisse nachprüfen und neue Leseverfahren testen. Nur zur Information – du musst nichts tun.</p>
 <div id="background-live-list"></div>
 </section>
 </div>
@@ -3581,7 +3585,7 @@ function renderBackgroundWork(items) {{
   if (!items.length) {{
     const empty = document.createElement('p');
     empty.className = 'settings-note';
-    empty.textContent = en ? 'No background work since the app started.' : 'Noch keine Hintergrundarbeit seit dem Start der App.';
+    empty.textContent = en ? 'No background tasks since the app started.' : 'Seit dem Start der App gab es noch keine Hintergrundaufgaben.';
     list.replaceChildren(empty);
     return;
   }}

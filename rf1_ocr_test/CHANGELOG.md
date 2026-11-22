@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.8
+
+- **Zwischenschritte der Einrichtung werden wieder sauber angezeigt.** In 0.5.7 rutschten die Unterpunkte in die schmale Spalte der Zeitleiste und standen Wort für Wort untereinander. Sie nutzen jetzt die volle Breite.
+- **Klarere Texte bei den Hintergrundaufgaben.** Das Häkchen heißt jetzt „Hintergrundaufgaben anzeigen“; die Aufgaben tragen verständliche Namen wie „Letzte Nachkommastelle bestimmen“, „Unklares Ergebnis nachprüfen“ und „Neue Leseverfahren testen (Schattenmodus)“ statt interner Begriffe.
+- *English:* The setup's intermediate steps use the full width again instead of being squeezed into the timeline's marker column. Clearer wording for the background tasks (“Show background tasks”, “Pinning down the last decimal”, “Re-checking an unclear result”, “Testing new reading methods”).
+
 ## 0.5.7
 
 - **Nach einer gröberen Prüfung schaut die App schnell noch einmal hin.** Drehte sich bei der Gegenprüfung gerade die letzte Rolle, bestätigt die App den Stand mit einer Nachkommastelle weniger. Bisher wartete sie dann das volle Prüfintervall. Jetzt holt sie nach etwa 45 Sekunden ein neues Bildpaar, wenn die Rolle wieder steht, damit schnell der volle Wert dasteht – vor allem direkt nach der Einrichtung. Das passiert einmal pro Serie, damit ein laufender Zähler nicht doppelt so oft geprüft wird. Unter dem Zählerstand steht, warum die App so kurz wartet.

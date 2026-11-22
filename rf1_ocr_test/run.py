@@ -808,9 +808,22 @@ def reading_entered_meanwhile(rules_at_start, rules_now):
 
 
 def newest_anchor(first, second, before):
+    """The newest anchor before ``before`` – unless an older one shows a higher reading.
+
+    0.5.30: a reading entered after a confirmed one but lower than it cannot be right (the
+    meter never runs backwards). The newer entry won by its time alone and filled a hidden
+    digit one cubic metre too low, so the shown reading stepped back. The higher, older
+    reading stays the lower bound then; its older time only widens the reachable range.
+    """
     candidates = [item for item in (first, second)
                   if isinstance(item, dict) and type(item.get("time")) in (int, float) and item["time"] < before]
-    return max(candidates, key=lambda item: item["time"], default=None)
+    newest = max(candidates, key=lambda item: item["time"], default=None)
+    valued = [item for item in candidates if type(item.get("value")) is int]
+    highest = max(valued, key=lambda item: item["value"], default=None)
+    if (newest is not None and highest is not None and type(newest.get("value")) is int
+            and highest["value"] > newest["value"]):
+        return highest
+    return newest
 
 
 def shadow_experiments(rules, manual, register, boxes, stable, light, forced):
@@ -1437,6 +1450,47 @@ def keep_finer_reading(previous, latest):
     if old_prefix is None or old_prefix != meter_prefix(latest.get("reading"), common, digits):
         return latest
     return {**previous, "image_time": latest.get("image_time", previous.get("image_time"))}
+
+
+def shown_reading(history, camera):
+    """The reading the meter sensor shows for this camera now, as (litres, step), or None.
+
+    The last standalone reading, otherwise the booked value publish_standalone falls back to
+    after a new setup or reset (0.5.30).
+    """
+    last = history.get("standalone_reading")
+    if isinstance(last, dict) and last.get("camera") == camera:
+        decimals = last.get("decimals")
+        if type(decimals) is not int or not 0 <= decimals <= 3:
+            return None
+        prefix = meter_prefix(last.get("reading"), decimals, last.get("integer_digits", 5))
+        return None if prefix is None else (prefix * 10 ** (3 - decimals), 10 ** (3 - decimals))
+    counter = history.get("consumption")
+    if not (isinstance(counter, dict) and isinstance(counter.get("source"), list)
+            and camera in counter["source"] and type(counter.get("anchor_litres")) is int):
+        return None
+    litres, step = counter["anchor_litres"], counter.get("anchor_step") or counter.get("step_litres") or 1
+    pending = counter.get("pending_litres")
+    if type(pending) is int and pending > litres:
+        litres, step = pending, counter.get("pending_step") or step
+    return litres, step
+
+
+def next_standalone(history, latest, lower_recovered=False):
+    """The standalone reading to show after this check, or None to keep the shown one.
+
+    0.5.30: the shown reading never steps back unless the consumption logic proved the
+    higher reading a misread (lower_recovered). After a new setup a filled hidden digit
+    showed 10513.42 although 10514.0 had been shown before.
+    """
+    shown = None if lower_recovered else shown_reading(history, latest.get("camera"))
+    decimals = latest.get("decimals")
+    if shown is not None and type(decimals) is int and 0 <= decimals <= 3:
+        prefix = meter_prefix(latest.get("reading"), decimals, latest.get("integer_digits", 5))
+        step = 10 ** (3 - decimals)
+        if prefix is not None and prefix * step + max(step, shown[1]) <= shown[0]:
+            return None
+    return keep_finer_reading(history.get("standalone_reading"), latest)
 
 
 def publish_standalone(history, camera, token):
@@ -3655,6 +3709,14 @@ def main():
                                     anchor = newest_anchor(anchor, {"value": counted_now["reading_litres"],
                                                                     "time": counted_now["timestamp"]},
                                                            read_state["captured"])
+                                # 0.5.30: the highest booked reading is a lower bound as well; a newer
+                                # but lower entry or pending reading must not fill below it.
+                                booked = [value for value in (counted_now.get("anchor_litres"),
+                                                              counted_now.get("floor_litres")) if type(value) is int]
+                                if booked and type(counted_now.get("anchor_time")) in (int, float):
+                                    anchor = newest_anchor(anchor, {"value": max(booked),
+                                                                    "time": counted_now["anchor_time"]},
+                                                           read_state["captured"])
                                 # 0.5.10: with the configured maximum flow several values of a hidden
                                 # first decimal were always reachable and nothing was ever filled.
                                 anchor_flow = hidden_roller_flow(history, active_rules["max_flow_lph"])
@@ -4057,8 +4119,14 @@ def main():
                     if raw_fallback and outcome == "ocr_only":
                         updated["source_connection_detail"] = SLFORK_RAW_SUCCESS
                     if new_standalone is not None:
-                        updated["standalone_reading"] = keep_finer_reading(
-                            history.get("standalone_reading"), new_standalone)
+                        shown_next = next_standalone(history, new_standalone, lower_recovered)
+                        if shown_next is None:
+                            print(f"Angezeigter Zählerstand bleibt: {new_standalone['reading']} liegt unter dem "
+                                  f"bisher angezeigten Stand (kein bestätigter Lesefehler)")
+                            debug_log.record(kind="standalone_kept", ocr=new_standalone["reading"],
+                                             method=ocr_method)
+                        else:
+                            updated["standalone_reading"] = shown_next
                     if lower_recovered and new_consumption is not None and outcome in SUCCESSFUL_CHECKS:
                         updated["check_detail"] = LOWER_RECOVERED
                     if (locals().get("reduced_precision") and outcome in SUCCESSFUL_CHECKS

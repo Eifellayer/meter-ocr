@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.2
+
+- **Kein Bild mehr „ohne Blitz“.** Die Kamera liefert auf eine Anfrage zuerst ihr zuletzt gespeichertes Bild, und das war oft noch vor dem Einschalten des Lichts aufgenommen. Die App holt nach dem Einschalten jetzt ein Bild und verwirft es; erst das nächste wird ausgewertet. Bisher wurde ein dunkles Bild nur erkannt, wenn die App schon wusste, wie hell ein Bild mit Licht ist – nach einem Neustart der App nicht, dann wurde das dunkle Bild benutzt und sogar als Maßstab gemerkt.
+
 ## 0.5.1
 
 Nachkontrolle direkt nach 0.5.0 am echten Zähler.

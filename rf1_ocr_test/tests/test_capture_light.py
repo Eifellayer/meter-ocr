@@ -160,7 +160,8 @@ class DarkPictureTest(unittest.TestCase):
 
         def take():
             calls.append(("take", ""))
-            return pictures.pop(0)
+            # The last picture repeats: the camera keeps delivering the same scene.
+            return pictures.pop(0) if len(pictures) > 1 else pictures[0]
 
         return calls, fetch, post, take
 
@@ -175,8 +176,27 @@ class DarkPictureTest(unittest.TestCase):
         bright = grey_jpeg(90)
         calls, fetch, post, take = self.calls_for([bright], ["off"])
         self.assertEqual(bright, lit_picture("light.blitz", take, "t", fetch=fetch, post=post, sleep=lambda _: None))
-        self.assertEqual(2, calls.count(("take", "")))
         self.assertAlmostEqual(90, self.run.LIT_BRIGHTNESS["light.blitz"], delta=2)
+
+    def test_several_frames_from_before_the_light_are_waited_out(self):
+        # Seen live on 22.11.2026 with 0.5.2: the camera stored a new frame only every 5 s,
+        # so also the frame after the dropped one was dark. The light stays on until a lit one comes.
+        self.run.LIT_BRIGHTNESS["light.blitz"] = 120
+        bright = grey_jpeg(118)
+        calls, fetch, post, take = self.calls_for([grey_jpeg(25), grey_jpeg(26), grey_jpeg(27), bright], ["off"])
+        waits = []
+        self.assertEqual(bright, lit_picture("light.blitz", take, "t", fetch=fetch, post=post, sleep=waits.append))
+        self.assertEqual(1, calls.count(("post", "turn_on")))
+        self.assertEqual([1.5, 1.0, 1.0, 1.0], waits[:4])
+        self.assertLess(calls.index(("take", "")), calls.index(("post", "turn_off")))
+        self.assertEqual(120 * 0.8 + 0.2 * 118, round(self.run.LIT_BRIGHTNESS["light.blitz"], 1))
+
+    def test_dark_frames_are_waited_out_without_any_reference(self):
+        # After a restart there is no reference yet: a frame clearly brighter than the first ends the wait.
+        bright = grey_jpeg(110)
+        calls, fetch, post, take = self.calls_for([grey_jpeg(25), grey_jpeg(25), bright], ["off"])
+        self.assertEqual(bright, lit_picture("light.blitz", take, "t", fetch=fetch, post=post, sleep=lambda _: None))
+        self.assertAlmostEqual(110, self.run.LIT_BRIGHTNESS["light.blitz"], delta=2)
 
     def test_dark_picture_is_retaken_with_light(self):
         self.run.LIT_BRIGHTNESS["light.blitz"] = 85
@@ -184,8 +204,9 @@ class DarkPictureTest(unittest.TestCase):
         calls, fetch, post, take = self.calls_for([grey_jpeg(48), bright], ["off"])
         picture = lit_picture("light.blitz", take, "t", fetch=fetch, post=post, sleep=lambda _: None)
         self.assertEqual(bright, picture)
+        # Dropped frame, dark frame, lit frame: the light simply stays on (0.5.3), no second switching.
         self.assertEqual(3, calls.count(("take", "")))
-        self.assertEqual(2, calls.count(("post", "turn_on")))
+        self.assertEqual(1, calls.count(("post", "turn_on")))
         self.assertIn(("post", "turn_off"), calls)
 
     def test_light_switched_off_by_someone_else_is_switched_on_and_off_again(self):

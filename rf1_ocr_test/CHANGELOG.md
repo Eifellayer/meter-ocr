@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.3
+
+- **Das Licht bleibt an, bis wirklich ein helles Bild da ist.** Ein Bild zu verwerfen (0.5.2) reichte nicht: Die Kamera gab nach dem Einschalten teils mehrere Sekunden lang noch Bilder von vorher heraus. Die App lässt das Licht jetzt an und holt im Sekundentakt weitere Bilder (bis zu sechs), bis eines hell ist. Nach einem Neustart der App, wenn sie die übliche Helligkeit noch nicht kennt, endet das Warten, sobald ein Bild deutlich heller ist als das erste.
+- Die Kamera-Verstärkung wird erst erhöht, wenn auch nach diesem Warten alle Bilder dunkel bleiben. Vorher wurde sie wegen der alten, dunklen Bilder unnötig hochgedreht.
+
 ## 0.5.2
 
 - **Kein Bild mehr „ohne Blitz“.** Die Kamera liefert auf eine Anfrage zuerst ihr zuletzt gespeichertes Bild, und das war oft noch vor dem Einschalten des Lichts aufgenommen. Die App holt nach dem Einschalten jetzt ein Bild und verwirft es; erst das nächste wird ausgewertet. Bisher wurde ein dunkles Bild nur erkannt, wenn die App schon wusste, wie hell ein Bild mit Licht ist – nach einem Neustart der App nicht, dann wurde das dunkle Bild benutzt und sogar als Maßstab gemerkt.

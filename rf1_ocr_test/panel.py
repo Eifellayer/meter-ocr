@@ -50,7 +50,8 @@ from language import MODES, SUPPORTED, USER_ID, browser_locale, profile_script
 from layout import MANUAL_ROW_UNCLEAR, PARTLY_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, fine_rotation, split_rotation, digit_box_settings, scale_digit_boxes, turn_crop
 from meter_learning import suggest_single_digit_box
 from notification_settings import notification_rules
-from source_settings import CameraOffline, source_check_key, source_rules
+from source_settings import CAMERA, CameraOffline, source_check_key, source_rules
+from kit_camera import EXTRAS as KIT_EXTRAS
 
 SUPERVISOR_ADDRESS = "172.30.32.2"
 # Installer page for the ready-made meter camera firmware (esphome/ in the repository).
@@ -655,6 +656,10 @@ min-height:0;padding:.8rem .85rem;border-radius:var(--radius-sm);border:1.5px so
 .kit-pending{{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem .8rem;padding:.65rem .8rem;border-radius:.6rem;background:var(--surface);border:1px solid var(--accent)}}
 .kit-pending p{{margin:0;flex:1 1 14rem}}
 #wizard-kit-add{{background:var(--accent);color:var(--accent-ink);border-color:transparent}}
+.kit-extras{{margin:0;padding:.65rem .8rem;border:1px solid var(--edge);border-radius:.6rem;background:var(--surface);display:grid;gap:.45rem}}
+.kit-extras legend{{padding:0 .3rem;font-size:.88rem;font-weight:650}}
+.kit-extras label{{display:flex;align-items:flex-start;gap:.5rem}}
+.kit-extras small{{color:var(--muted)}}
 .setup-step details.setup-help{{background:var(--surface-2);border-radius:var(--radius-sm);padding:0 .9rem}}
 .setup-step details.setup-help > summary{{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:.6rem}}
 .setup-step details.setup-help > summary::-webkit-details-marker{{display:none}}
@@ -1270,6 +1275,11 @@ name: Zählerstand (OCR)</code></pre>
 </ol>
 <div id="wizard-kit-pending" class="kit-pending" hidden><p id="wizard-kit-pending-text"></p><button type="button" id="wizard-kit-add">In Home Assistant hinzufügen</button></div>
 <p id="wizard-kit-status" class="settings-note kit-status" role="status" aria-live="polite">Sobald die Kamera in Home Assistant ist, wählt der Assistent sie hier selbst aus.</p>
+<fieldset id="wizard-kit-extras" class="kit-extras" hidden><legend>Zusätze der Zählerkamera (ab Werk aus)</legend>
+<label class="check-option" data-extra-row="wlan_kanal"><input type="checkbox" form="wizard-kit-choice" data-extra="wlan_kanal"> <span><strong>WLAN-Kanal</strong> <small>zeigt in der Historie, ob der Router den Kanal wechselt</small></span></label>
+<label class="check-option" data-extra-row="wlan_zugangspunkt"><input type="checkbox" form="wizard-kit-choice" data-extra="wlan_zugangspunkt"> <span><strong>WLAN-Zugangspunkt</strong> <small>zeigt bei mehreren Routern oder Repeatern, wo die Kamera hängt</small></span></label>
+<p id="wizard-kit-extras-status" class="settings-note" role="status" aria-live="polite"></p>
+</fieldset>
 </div>
 <p id="wizard-stream-hint" class="settings-note" hidden>Überwachungskamera oder Handy mit Bildadresse (Snapshot, MJPEG, RTSP)? <a href="/config/integrations/dashboard/add?domain=generic" target="_top">In Home Assistant als Kamera anlegen</a>, danach erscheint sie hier in der Liste.</p>
 <div id="wizard-discovered-sources" class="setup-help">
@@ -2102,6 +2112,7 @@ function kitCameraFound() {{
   if ([...discoveredSource.options].some(option => option.value === index)) discoveredSource.value = index;
   kitStatus.dataset.state = 'found';
   kitPending.hidden = true;
+  loadKitExtras(source.camera);
   kitStatus.textContent = lang === 'en' ?
     'Meter camera found: ' + source.label + '. The app takes over flash and exposure automatically.' :
     'Zählerkamera gefunden: ' + source.label + '. Blitz und Belichtung übernimmt die App automatisch.';
@@ -2152,6 +2163,50 @@ kitAdd.addEventListener('click', async () => {{
     kitPendingText.textContent = lang === 'en' ?
       'Home Assistant still needs an answer for this camera: open Devices & services and press “Add” there.' :
       'Home Assistant braucht für diese Kamera noch eine Angabe: Öffne Geräte & Dienste und drücke dort „Hinzufügen“.';
+  }}
+}});
+// 0.5.26: optional extras of the meter camera (disabled entities), switched without flashing.
+const kitExtras = document.querySelector('#wizard-kit-extras');
+const kitExtrasStatus = document.querySelector('#wizard-kit-extras-status');
+let kitExtrasCamera = '';
+async function loadKitExtras(camera) {{
+  kitExtrasCamera = camera;
+  try {{
+    const response = await fetch('zaehlerkamera-zusaetze?camera=' + encodeURIComponent(camera), {{cache: 'no-store'}});
+    const extras = response.ok ? await response.json() : {{}};
+    let shown = 0;
+    kitExtras.querySelectorAll('[data-extra-row]').forEach(row => {{
+      const extra = extras[row.dataset.extraRow];
+      row.hidden = !extra;
+      if (extra) {{ row.querySelector('input').checked = extra.enabled === true; shown += 1; }}
+    }});
+    kitExtras.hidden = shown === 0;
+  }} catch (_) {{
+    kitExtras.hidden = true;
+  }}
+}}
+kitExtras.addEventListener('change', async event => {{
+  const box = event.target.closest('input[data-extra]');
+  if (!box || !kitExtrasCamera) return;
+  box.disabled = true;
+  const body = new URLSearchParams({{camera: kitExtrasCamera, extra: box.dataset.extra, on: box.checked ? '1' : '0',
+                                    csrf: setupForm.elements.csrf.value, lang: setupForm.elements.lang.value,
+                                    mode: setupForm.elements.mode.value}});
+  let result = 'failed';
+  try {{
+    const response = await fetch('zaehlerkamera-zusatz', {{method: 'POST', body}});
+    if (response.ok) result = (await response.json()).result;
+  }} catch (_) {{
+    result = 'failed';
+  }}
+  box.disabled = false;
+  if (result === 'saved') {{
+    kitExtrasStatus.textContent = lang === 'en' ? 'Saved. Home Assistant applies it in about 30 seconds.' :
+      'Gespeichert. Home Assistant übernimmt es in etwa 30 Sekunden.';
+  }} else {{
+    box.checked = !box.checked;
+    kitExtrasStatus.textContent = lang === 'en' ? 'Could not be changed. Try again or switch it at the device in Home Assistant.' :
+      'Ließ sich nicht ändern. Versuche es noch einmal oder schalte es beim Gerät in Home Assistant.';
   }}
 }});
 function startKitWatch() {{
@@ -4850,7 +4905,7 @@ def start_panel(
     wake_worker=None, *, address=("0.0.0.0", 8099), test_source_image=None, automatic_preview=None,
     request_factory_reset=None, get_reset_status=None, skip_setup=None, get_activity=None, get_background_work=None,
     get_auto_paused=None, save_auto_paused=None, discover_sources=None,
-    find_kit_cameras=None, confirm_kit_camera=None,
+    find_kit_cameras=None, confirm_kit_camera=None, get_kit_extras=None, set_kit_extra=None,
     settings_lock=None, get_calibration=None, control_calibration=None, get_calibration_image=None,
     has_calibration_backup=None, get_wizard_image=None, real_demo=None, statistics_zone=timezone.utc,
     can_start_automatic=None, start_automatic_check=None,
@@ -5270,6 +5325,12 @@ def start_panel(
                 sources = discover_sources() if discover_sources else []
                 self.reply(json.dumps(sources).encode("utf-8"), "application/json; charset=utf-8")
                 return
+            if path == "/zaehlerkamera-zusaetze":
+                # 0.5.26: the extras of the meter camera (off by default) for the checkboxes.
+                camera = parse_qs(urlsplit(self.path).query).get("camera", [""])[0]
+                extras = get_kit_extras(camera) if get_kit_extras and CAMERA.fullmatch(camera) else {}
+                self.reply(json.dumps(extras).encode("utf-8"), "application/json; charset=utf-8")
+                return
             if path == "/neue-zaehlerkameras":
                 # 0.5.25: meter cameras Home Assistant has discovered but not added yet.
                 cameras = find_kit_cameras() if find_kit_cameras else []
@@ -5668,7 +5729,7 @@ def start_panel(
                             "/benachrichtigungen", "/bildquelle", "/einrichtung", "/einrichtungsbild",
                             "/einrichtung-ueberspringen", "/werkreset", "/automatik-pause",
                             "/spiegelungs-hinweis-ausblenden", "/bildqualitaet-hinweis-ausblenden", "/ergaenzte-ziffer-bestaetigen", "/selbsteinrichtung", "/fallback", "/ziffernrahmen", "/zaehler-demo", "/automatik-jetzt", "/vergleichsgenauigkeit",
-                            "/zaehlerkamera-hinzufuegen"):
+                            "/zaehlerkamera-hinzufuegen", "/zaehlerkamera-zusatz"):
                 self.send_error(404)
                 return
             fallback = browser_locale(self.headers.get("Accept-Language", ""))
@@ -5751,6 +5812,15 @@ def start_panel(
             supplied = form.get("csrf", [])
             if len(supplied) != 1 or not compare_digest(supplied[0].encode(), csrf_token.encode()):
                 problem(403)
+                return
+            if path == "/zaehlerkamera-zusatz":
+                camera, extra, state = (form.get(name, []) for name in ("camera", "extra", "on"))
+                if (set_kit_extra is None or len(camera) != 1 or not CAMERA.fullmatch(camera[0])
+                        or len(extra) != 1 or extra[0] not in KIT_EXTRAS or state not in (["1"], ["0"])):
+                    problem(400)
+                    return
+                outcome = set_kit_extra(camera[0], extra[0], state == ["1"])
+                self.reply(json.dumps({"result": outcome}).encode("utf-8"), "application/json; charset=utf-8")
                 return
             if path == "/zaehlerkamera-hinzufuegen":
                 flow = form.get("flow_id", [])

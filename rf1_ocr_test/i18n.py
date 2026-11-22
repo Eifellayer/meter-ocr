@@ -924,6 +924,10 @@ EN_UI = {
     "Netzwerkkabel statt WLAN": "network cable instead of Wi-Fi",
     "Firmware installieren": "Install firmware",
     "In Home Assistant hinzufügen": "Add to Home Assistant",
+    "Zusätze der Zählerkamera (ab Werk aus)": "Extras of the meter camera (off by default)",
+    "zeigt in der Historie, ob der Router den Kanal wechselt": "shows in the history whether the router changes the channel",
+    "zeigt bei mehreren Routern oder Repeatern, wo die Kamera hängt":
+        "shows which router or repeater the camera is connected to",
     "Öffnet den Installer in einem neuen Tab. Am Computer Chrome oder Edge benutzen und das Board per USB anstecken.":
         "Opens the installer in a new tab. Use Chrome or Edge on a computer and connect the board by USB.",
     "Im Installer das WLAN eintragen.": "Enter your Wi-Fi in the installer.",

@@ -90,3 +90,54 @@ def safe_add(token, flow_id, *, post, command=ha_command):
     except (OSError, ValueError, TypeError, WebSocketException) as error:
         print(f"Zählerkamera konnte nicht hinzugefügt werden: {type(error).__name__}")
         return "failed"
+
+
+# Extras of the firmware that are switched off by default (entities disabled in Home Assistant).
+EXTRAS = {"wlan_kanal": "WLAN-Kanal", "wlan_zugangspunkt": "WLAN-Zugangspunkt"}
+
+
+def kit_extras(token, camera, *, command=ha_command):
+    """The extras of the meter camera behind `camera`: {key: {"entity_id": …, "enabled": bool}}."""
+    entries = [entry for entry in command(token, {"type": "config/entity_registry/list"}) or []
+               if isinstance(entry, dict) and isinstance(entry.get("entity_id"), str)]
+    device = next((entry.get("device_id") for entry in entries if entry["entity_id"] == camera), None)
+    if not device:
+        return {}
+    found = {}
+    for entry in entries:
+        if entry.get("device_id") != device or entry.get("platform") != "esphome":
+            continue
+        for key, name in EXTRAS.items():
+            if entry.get("original_name") == name:
+                found[key] = {"entity_id": entry["entity_id"], "enabled": entry.get("disabled_by") is None}
+    return found
+
+
+def set_kit_extra(token, camera, key, enabled, *, command=ha_command):
+    """Switch one extra on or off. Only entities of the camera's own device are touched."""
+    extras = kit_extras(token, camera, command=command)
+    if key not in extras:
+        raise LookupError("This camera has no such extra")
+    command(token, {"type": "config/entity_registry/update", "entity_id": extras[key]["entity_id"],
+                    "disabled_by": None if enabled else "user"})
+    return True
+
+
+def safe_extras(token, camera, *, command=ha_command):
+    try:
+        return {key: {"enabled": value["enabled"]} for key, value in kit_extras(token, camera, command=command).items()}
+    except (OSError, ValueError, TypeError, KeyError, WebSocketException) as error:
+        print(f"Zusätze der Zählerkamera konnten nicht gelesen werden: {type(error).__name__}")
+        return {}
+
+
+def safe_set_extra(token, camera, key, enabled, *, command=ha_command):
+    """set_kit_extra() for the web page: "saved", "gone" or "failed"."""
+    try:
+        set_kit_extra(token, camera, key, enabled, command=command)
+        return "saved"
+    except LookupError:
+        return "gone"
+    except (OSError, ValueError, TypeError, KeyError, WebSocketException) as error:
+        print(f"Zusatz der Zählerkamera konnte nicht geändert werden: {type(error).__name__}")
+        return "failed"

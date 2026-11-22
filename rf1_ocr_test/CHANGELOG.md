@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.27
+
+- **App startet wieder.** Seit 0.5.25 fehlte eine neue Programmdatei im App-Image, die App brach beim Start sofort ab. Die Datei ist jetzt enthalten. Ein neuer Test prüft künftig vor jeder Version, dass alles, was die App lädt, auch im Image landet.
+- *English:* The app starts again: since 0.5.25 a new program file was missing from the app image, so the app stopped right at start. The file is included now, and a new test checks before every release that everything the app loads ends up in the image.
+
 ## 0.5.26
 
 - **Zusätze der Zählerkamera per Schalter.** Die Firmware bringt Zusätze mit, die nicht jeder braucht, etwa den WLAN-Kanal oder den WLAN-Zugangspunkt. Sie sind ab Werk aus. Ist die Zählerkamera gefunden, zeigt der Einrichtungsassistent dafür Schalter. Ein Klick schaltet einen Zusatz ein oder aus, ohne neu zu flashen. Home Assistant übernimmt das nach etwa 30 Sekunden.

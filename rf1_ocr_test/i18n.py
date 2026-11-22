@@ -533,6 +533,12 @@ EN_UI = {
     " Ohne Gegenprobe kann der übernommene Rahmen spätere Ablesungen ungenauer machen.":
         " Using this crop without verification can make future readings less accurate.",
     "Gegenprobe überspringen und Rahmen übernehmen": "Skip verification and use this crop",
+    "Steht auf dem Kopf? Um 180° drehen": "Upside down? Turn by 180°",
+    "Spiegelverkehrt? Bild spiegeln": "Mirror-inverted? Mirror the picture",
+    "Die Einrichtung prüft mit dem nächsten Bild um 180° gedreht weiter.":
+        "The setup continues turned by 180° with the next picture.",
+    "Das Kamerabild wird jetzt gespiegelt. Die Einrichtung sucht das Zählwerk neu.":
+        "The camera picture is mirrored now. The setup searches the counter again.",
     "Rahmen ohne Gegenprobe übernommen. Spätere Ablesungen können ungenauer sein.":
         "Crop saved without verification. Future readings may be less accurate.",
     "Hinweis zum Kamerabild. ": "Camera image note. ",

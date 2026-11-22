@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.18
+
+- **Aufgeräumte Konfigurationsseite in Home Assistant.** Die Seite „Konfiguration“ der App stammte noch aus den ersten Versionen: Pflichtfelder für ESP-Adresse, Bildausschnitt und Ziffernbreite mit Beispielwerten, die längst in der App selbst eingestellt werden. Sichtbar ist jetzt nur noch die Zeitzone, mit dem Hinweis, dass alles andere in der App eingerichtet wird. Die alten Felder bleiben als optionale „Altwerte“ erhalten (Home Assistant blendet sie standardmäßig aus), damit ältere Installationen ihre Werte behalten.
+- *English:* Tidied configuration tab in Home Assistant: only the time zone is shown, with a note that everything else is set up in the app. The old fields remain as optional “legacy” entries (hidden by default) so older installations keep their values.
+
 ## 0.5.17
 
 - **Rahmen mit verdeckter Stelle erscheint in der Kandidatenliste.** Bestätigte die Einrichtung einen Rahmen trotz Spiegelung („Rahmen passt, eine Stelle verdeckt“), fehlte er unter „Gefundene Rahmen“, weil er keine Lese-Prozentzahl hat. Jetzt steht er dort mit Drehung, gelesenen Stellen, Trefferzahl und „Stelle X verdeckt (Spiegelung)“. Auch „Rahmen bestätigen“ zählt diese Bilder jetzt mit (z. B. 1/3 statt 0/3).

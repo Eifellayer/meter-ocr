@@ -1,5 +1,5 @@
 name: AI Meter Reader
-version: "0.5.17"
+version: "0.5.18"
 slug: rf1_ocr_test
 description: "Lokale Zählerablesung per Kamera / Local camera-based meter reading"
 arch:
@@ -14,25 +14,18 @@ map:
   - type: media
     read_only: false
 options:
-  esp_url: "http://esp-gaszaehler.local"
-  ausschnitt: "52,56,564,132"
-  vorkomma_breite: 305
-  helle_ziffern: false
   zeitzone: Europe/Berlin
-  push_dienst: ""
-  vergleich_nachkommastellen: 2
-  ocr_versuche: 5
-  kamera_entitaet: ""
-  referenz_entitaet: ""
+# 0.5.18: everything else is set up in the app's own page. The old fields stay in the schema as
+# optional entries so existing installations keep their values; Home Assistant hides them by default.
 schema:
-  esp_url: url
-  ausschnitt: str
-  vorkomma_breite: int(1,9999)
-  helle_ziffern: bool
   zeitzone: str
-  push_dienst: str?
-  intervall_sekunden: int?
-  vergleich_nachkommastellen: int(0,3)
-  ocr_versuche: int(1,10)
+  esp_url: url?
   kamera_entitaet: str?
   referenz_entitaet: str?
+  push_dienst: str?
+  ausschnitt: str?
+  vorkomma_breite: int(1,9999)?
+  helle_ziffern: bool?
+  vergleich_nachkommastellen: int(0,3)?
+  ocr_versuche: int(1,10)?
+  intervall_sekunden: int?

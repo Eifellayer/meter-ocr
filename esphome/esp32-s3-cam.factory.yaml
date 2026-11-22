@@ -1,0 +1,9 @@
+# Fertige Firmware für den Installer: Board-Datei plus Updates und WLAN-Einrichtung über USB.
+
+substitutions:
+  board: esp32-s3-cam
+
+packages:
+  zaehlerkamera: !include esp32-s3-cam.yaml
+  werk: !include common/werk.yaml
+  werk_wlan: !include common/werk-wlan.yaml

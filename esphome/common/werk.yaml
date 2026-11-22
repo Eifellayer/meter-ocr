@@ -1,0 +1,28 @@
+# Zählerkamera – Zusätze der fertigen Firmware aus dem Installer.
+#
+# Nicht nötig, wenn du die Kamera mit „Adopt“ in den ESPHome Device Builder übernimmst:
+# dann baut ESPHome die Firmware selbst aus der Board-Datei.
+
+substitutions:
+  # Wird beim Bauen durch die Version aus esphome/VERSION ersetzt.
+  firmware_version: dev
+
+esphome:
+  project:
+    name: eifellayer.zaehlerkamera
+    version: ${firmware_version}
+
+# „Adopt“ im ESPHome Device Builder übernimmt die Board-Datei als Paket.
+dashboard_import:
+  package_import_url: github://Eifellayer/meter-ocr/esphome/${board}.yaml@main
+
+# Neue Firmware erscheint in Home Assistant als normales Update.
+http_request:
+
+ota:
+  - platform: http_request
+
+update:
+  - platform: http_request
+    name: Firmware
+    source: https://eifellayer.github.io/meter-ocr/firmware/${board}.manifest.json

@@ -1,0 +1,28 @@
+# Zählerkamera – Blitz an einer einfachen LED (z. B. ESP32-CAM, GPIO4).
+
+output:
+  - platform: ledc
+    id: blitz_ausgang
+    pin: ${blitz_pin}
+    # Eigener Kanal: die Kamera nutzt LEDC-Kanal 0 für ihren Takt.
+    channel: 2
+    # Volle Helligkeit löst bei manchen Boards Neustarts aus und macht mehr Spiegelungen.
+    max_power: 60%
+
+light:
+  - platform: monochromatic
+    id: blitz
+    output: blitz_ausgang
+    name: Blitz
+    restore_mode: ALWAYS_OFF
+    default_transition_length: 0s
+    on_turn_on:
+      - script.execute: blitz_aus
+    on_turn_off:
+      # Im Dauerbetrieb bleibt das Licht an, auch wenn eine Aufnahme es ausschaltet.
+      - delay: 200ms
+      - if:
+          condition:
+            switch.is_on: blitz_dauerhaft
+          then:
+            - light.turn_on: blitz

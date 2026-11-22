@@ -1,0 +1,38 @@
+# Zählerkamera – Blitz (gemeinsamer Teil).
+#
+# Die App schaltet den Blitz für jede Aufnahme kurz ein und wieder aus. Zur Sicherheit
+# geht er nach 30 Sekunden von selbst aus. Für die Einrichtung gibt es einen Dauerbetrieb,
+# der sich nach 30 Minuten selbst beendet. Die LED selbst steht in blitz-led.yaml oder
+# blitz-ws2812.yaml (Licht mit der ID „blitz“).
+
+switch:
+  - platform: template
+    id: blitz_dauerhaft
+    name: Blitz dauerhaft an (Einrichtung)
+    icon: mdi:flashlight
+    optimistic: true
+    restore_mode: ALWAYS_OFF
+    on_turn_on:
+      - light.turn_on: blitz
+      - script.execute: dauerlicht_aus
+    on_turn_off:
+      - script.stop: dauerlicht_aus
+      - light.turn_off: blitz
+
+script:
+  # Normaler Blitz: nach 30 s aus, außer der Dauerbetrieb ist an.
+  - id: blitz_aus
+    mode: restart
+    then:
+      - delay: 30s
+      - if:
+          condition:
+            switch.is_off: blitz_dauerhaft
+          then:
+            - light.turn_off: blitz
+  # Sicherung: Dauerbetrieb nach 30 Minuten automatisch beenden.
+  - id: dauerlicht_aus
+    mode: restart
+    then:
+      - delay: 30min
+      - switch.turn_off: blitz_dauerhaft

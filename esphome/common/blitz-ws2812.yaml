@@ -1,0 +1,22 @@
+# Zählerkamera – Blitz an einer RGB-LED (WS2812, z. B. Freenove ESP32-S3, GPIO48).
+
+light:
+  - platform: esp32_rmt_led_strip
+    id: blitz
+    pin: ${blitz_pin}
+    num_leds: 1
+    chipset: WS2812
+    channel_colors: GRB
+    name: Blitz
+    restore_mode: ALWAYS_OFF
+    default_transition_length: 0s
+    on_turn_on:
+      - script.execute: blitz_aus
+    on_turn_off:
+      # Im Dauerbetrieb bleibt das Licht an, auch wenn eine Aufnahme es ausschaltet.
+      - delay: 200ms
+      - if:
+          condition:
+            switch.is_on: blitz_dauerhaft
+          then:
+            - light.turn_on: blitz

@@ -1,0 +1,166 @@
+# Zählerkamera – gemeinsamer Teil für alle Boards.
+#
+# Die Board-Dateien (esphome/*.yaml) binden diese Datei ein und ergänzen die Pins.
+# Die Werte stammen aus laufenden Zählerkameras und haben sich bei schwachem WLAN bewährt:
+# Kameratakt 20 MHz, im Leerlauf kaum Bilder (die App holt sich selbst ein Bild),
+# Belichtung und Verstärkung fest, damit der Blitz nicht jedes Bild anders aussehen lässt.
+
+substitutions:
+  name: zaehlerkamera
+  friendly_name: Zählerkamera
+  board_name: ESP32 mit Kamera
+  jpeg_qualitaet: "10"
+  # Ausrichtung ab Werk. Liegt das Bild gespiegelt oder auf dem Kopf, lässt es sich
+  # mit den Schaltern „Bild spiegeln“ und „Bild umdrehen“ ohne neues Flashen korrigieren.
+  bild_spiegeln: RESTORE_DEFAULT_ON
+  bild_umdrehen: RESTORE_DEFAULT_ON
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  comment: Zählerkamera für ${board_name}
+  name_add_mac_suffix: true
+  on_boot:
+    priority: -100
+    then:
+      - lambda: |-
+          id(kamera).set_horizontal_mirror(id(bild_spiegeln_schalter).state);
+          id(kamera).set_vertical_flip(id(bild_umdrehen_schalter).state);
+          id(kamera).set_aec_mode(id(auto_belichtung).state ? esp32_camera::ESP32_GC_MODE_AUTO : esp32_camera::ESP32_GC_MODE_MANU);
+          id(kamera).set_aec_value((uint16_t) id(belichtung).state);
+          id(kamera).set_agc_value((uint8_t) id(verstaerkung).state);
+          id(kamera).set_brightness((int8_t) id(helligkeit).state);
+          id(kamera).update_camera_parameters();
+
+logger:
+
+api:
+
+ota:
+  - platform: esphome
+
+esp32_camera:
+  id: kamera
+  name: Bild
+  external_clock:
+    # Höchster Takt, den ESPHome zulässt; 10 MHz brachte keine stabilere Funkstrecke.
+    frequency: 20MHz
+  # Größere Bilder kommen bei manchen Kameras gar nicht erst an.
+  resolution: 800x600
+  jpeg_quality: ${jpeg_qualitaet}
+  max_framerate: 2 fps
+  # Im Leerlauf fast keine Bilder: jedes Leerlaufbild belegt die Funkstrecke.
+  idle_framerate: 0.05 fps
+  brightness: 1
+  aec_mode: manual
+  aec_value: 600
+  agc_mode: manual
+  agc_value: 4
+
+number:
+  - platform: template
+    id: belichtung
+    name: Belichtung
+    icon: mdi:camera-iris
+    entity_category: config
+    min_value: 0
+    max_value: 1200
+    step: 10
+    initial_value: 600
+    restore_value: true
+    optimistic: true
+    on_value:
+      - lambda: |-
+          id(kamera).set_aec_value((uint16_t) x);
+          id(kamera).update_camera_parameters();
+  - platform: template
+    id: verstaerkung
+    name: Verstärkung
+    icon: mdi:brightness-percent
+    entity_category: config
+    min_value: 0
+    max_value: 30
+    step: 1
+    initial_value: 4
+    restore_value: true
+    optimistic: true
+    on_value:
+      - lambda: |-
+          id(kamera).set_agc_value((uint8_t) x);
+          id(kamera).update_camera_parameters();
+  - platform: template
+    id: helligkeit
+    name: Helligkeit
+    icon: mdi:brightness-6
+    entity_category: config
+    min_value: -2
+    max_value: 2
+    step: 1
+    initial_value: 1
+    restore_value: true
+    optimistic: true
+    on_value:
+      - lambda: |-
+          id(kamera).set_brightness((int8_t) x);
+          id(kamera).update_camera_parameters();
+
+switch:
+  - platform: template
+    id: auto_belichtung
+    name: Automatische Belichtung
+    icon: mdi:camera-metering-matrix
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    on_turn_on:
+      - lambda: |-
+          id(kamera).set_aec_mode(esp32_camera::ESP32_GC_MODE_AUTO);
+          id(kamera).update_camera_parameters();
+    on_turn_off:
+      - lambda: |-
+          id(kamera).set_aec_mode(esp32_camera::ESP32_GC_MODE_MANU);
+          id(kamera).update_camera_parameters();
+  - platform: template
+    id: bild_spiegeln_schalter
+    name: Bild spiegeln
+    icon: mdi:flip-horizontal
+    entity_category: config
+    optimistic: true
+    restore_mode: ${bild_spiegeln}
+    on_turn_on:
+      - lambda: |-
+          id(kamera).set_horizontal_mirror(true);
+          id(kamera).update_camera_parameters();
+    on_turn_off:
+      - lambda: |-
+          id(kamera).set_horizontal_mirror(false);
+          id(kamera).update_camera_parameters();
+  - platform: template
+    id: bild_umdrehen_schalter
+    name: Bild umdrehen
+    icon: mdi:flip-vertical
+    entity_category: config
+    optimistic: true
+    restore_mode: ${bild_umdrehen}
+    on_turn_on:
+      - lambda: |-
+          id(kamera).set_vertical_flip(true);
+          id(kamera).update_camera_parameters();
+    on_turn_off:
+      - lambda: |-
+          id(kamera).set_vertical_flip(false);
+          id(kamera).update_camera_parameters();
+
+sensor:
+  - platform: uptime
+    name: Laufzeit seit Neustart
+    update_interval: 60s
+
+# Zeigt, ob die Kamera neu startet (z. B. Brownout bei schwachem Netzteil) oder nur die Verbindung verliert.
+debug:
+  update_interval: 60s
+
+text_sensor:
+  - platform: debug
+    reset_reason:
+      name: Letzter Neustart-Grund

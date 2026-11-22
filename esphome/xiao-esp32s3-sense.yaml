@@ -1,0 +1,38 @@
+# Zählerkamera für den Seeed XIAO ESP32S3 Sense (mit aufgesteckter Kamera-Platine)
+# ESP32-S3, 8 MB Flash, 8 MB PSRAM (octal). Ohne eigenen Blitz: in der App bei Bedarf
+# ein externes Licht aus Home Assistant eintragen.
+# Noch nicht mit echter Hardware getestet – Rückmeldung erwünscht.
+
+substitutions:
+  board_name: Seeed XIAO ESP32S3 Sense
+
+packages:
+  kamera: !include common/kamera.yaml
+  wlan: !include common/wlan.yaml
+
+esp32:
+  variant: esp32s3
+  flash_size: 8MB
+  framework:
+    type: esp-idf
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+esp32_camera:
+  external_clock:
+    pin: GPIO10
+  i2c_pins:
+    sda: GPIO40
+    scl: GPIO39
+  data_pins: [GPIO15, GPIO17, GPIO18, GPIO16, GPIO14, GPIO12, GPIO11, GPIO48]
+  vsync_pin: GPIO38
+  href_pin: GPIO47
+  pixel_clock_pin: GPIO13
+
+# Gelbe LED neben der USB-Buchse: blinkt, solange etwas nicht stimmt (z. B. kein WLAN).
+status_led:
+  pin:
+    number: GPIO21
+    inverted: true

@@ -1,0 +1,9 @@
+# Fertige Firmware für den Installer: Board-Datei plus Updates und WLAN-Einrichtung über USB.
+
+substitutions:
+  board: xiao-esp32s3-sense
+
+packages:
+  zaehlerkamera: !include xiao-esp32s3-sense.yaml
+  werk: !include common/werk.yaml
+  werk_wlan: !include common/werk-wlan.yaml

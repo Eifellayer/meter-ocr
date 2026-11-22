@@ -1,0 +1,36 @@
+# Zählerkamera für ESP32-S3-Kameraboards mit der Belegung des ESP32-S3-EYE:
+# Freenove ESP32-S3 WROOM CAM (N8R8 / N16R8) und AI-Thinker ESP32-S3-CAM (N16R8).
+# 8 MB Flash oder mehr, 8 MB PSRAM (octal), RGB-LED (WS2812) an GPIO48 als Blitz.
+
+substitutions:
+  board_name: ESP32-S3-CAM (Freenove / AI-Thinker)
+  blitz_pin: GPIO48
+  # Auf diesen Boards sitzt das Kameramodul so, dass das Bild ohne Spiegeln richtig herum ankommt.
+  bild_spiegeln: RESTORE_DEFAULT_OFF
+
+packages:
+  kamera: !include common/kamera.yaml
+  wlan: !include common/wlan.yaml
+  blitz: !include common/blitz.yaml
+  blitz_ws2812: !include common/blitz-ws2812.yaml
+
+esp32:
+  variant: esp32s3
+  flash_size: 8MB
+  framework:
+    type: esp-idf
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+esp32_camera:
+  external_clock:
+    pin: GPIO15
+  i2c_pins:
+    sda: GPIO4
+    scl: GPIO5
+  data_pins: [GPIO11, GPIO9, GPIO8, GPIO10, GPIO12, GPIO18, GPIO17, GPIO16]
+  vsync_pin: GPIO6
+  href_pin: GPIO7
+  pixel_clock_pin: GPIO13

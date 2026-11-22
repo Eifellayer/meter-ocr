@@ -34,7 +34,7 @@ PERFECT_CONFIRMATION_INTERVAL = 12
 LAST_DIGIT_CAPTURE_INTERVAL = 2
 # Fine grid up to ±20° (no jump from 12° to 18°). Right angles are no longer part of the
 # regular rotation: quarter turns are only tried when nothing with the right digit count
-# was found (quarter_turn_layouts, Stefan 20.11., 18:46).
+# was found (quarter_turn_layouts).
 ANGLES = (-3, 3, -1, 1, -2, 2, -4, 4, -6, 6, -9, 9, -12, 12, -14, 14, -16, 16, -18, 18, -20, 20)
 SEARCH_ANGLE_LIMIT = 20
 SMALL_ANGLES = (0, -1, 1, -2, 2, -3, 3)
@@ -42,7 +42,7 @@ MAX_LAYOUTS_PER_IMAGE = 5
 COARSE_LIMIT = 50
 SHORTLIST_LIMIT = 5
 DEFAULT_INTENSIVE_AGREEMENT = 80
-# 0.5.11, two percentages (Stefan 22.11., 12:51): the 80 % were a rough guess. When a glyph sits
+# 0.5.11, two percentages: the 80 % were a rough guess. When a glyph sits
 # in (nearly) every digit field, the frame itself is right; a lower reading agreement is then
 # enough to keep working with it. The reading is still confirmed image by image.
 COARSE_AGREEMENT = 60
@@ -62,7 +62,7 @@ def agreeing_prefixes(readings, precision, digits):
     """Precision at which two OCR readings agree: the requested one, or one decimal less (min. 1).
 
     Returns None if they do not agree. Used for setup hits only: the whole digits and at least
-    one decimal must be sure and identical in both readings (Stefan 20.11., 21:23).
+    one decimal must be sure and identical in both readings.
     """
     if len(readings) < 2:
         return None
@@ -179,7 +179,7 @@ def same_register(layout, other, overlap=.8, max_turn=2):
 
     Used only to count setup confirmations. ``similar_layout`` treats every refined frame as
     new, which reset the confirmations 1 → 2 → 1 on every image although each image read the
-    right register (Stefan, 20.11.2026: 16 images, 0 confirmations). A shifted frame is still
+    right register (16 images, 0 confirmations). A shifted frame is still
     caught afterwards, because the readings must form a plausible counter series.
     """
     if layout is None or other is None:
@@ -206,7 +206,7 @@ def estimate_skew(frame, limit=SEARCH_ANGLE_LIMIT):
     Cheap deskew without OCR (about 0.2 s): turn an edge image of a small copy in 1° steps and
     keep the angle whose row profile is the sharpest. The result is the angle ``turn_crop``
     needs to level the picture. The setup tries it (and ±1°, ±2°) first instead of waiting until
-    the coarse angle grid reaches e.g. −14° after many images (Stefan 20.11., 18:46).
+    the coarse angle grid reaches e.g. −14° after many images.
     """
     try:
         gray = frame.convert("L")
@@ -683,7 +683,7 @@ def worth_intensive(items, shortlist, best, threshold):
     if best < threshold:
         return items
     # Below the confirmation threshold a frame is only a search aid once another frame reaches
-    # it (Stefan 20.11., 18:52: 70–75 % frames cost images and time without ever being saved).
+    # it (70–75 % frames cost images and time without ever being saved).
     floor_percent = max(best - INTENSIVE_GAP, threshold)
     kept = [item for item in items
             if shortlist.get(item[1], (0,))[0] > 0 and shortlist.get(item[1], (0,))[0] >= floor_percent]
@@ -751,6 +751,31 @@ def refinement_layouts(layout, rules, readings):
                           method="refined")
 
 
+def visible_fits_reading(visible, integer_digits, known, flow_lph, stamp):
+    """True when the whole digits of ``visible`` ("?" = unknown) can show the known reading.
+
+    ``known`` is {"value": litres, "time": epoch seconds}. The reachable range runs from one
+    cubic metre below the reading (a picture taken just before the entry) up to the reading plus
+    maximum flow × elapsed time plus one cubic metre. Missing data always passes.
+    """
+    whole = str(visible or "")[:integer_digits]
+    if (not isinstance(known, dict) or type(known.get("value")) is not int or known["value"] < 0
+            or type(known.get("time")) not in (int, float) or len(whole) != integer_digits
+            or not any(char.isdigit() for char in whole)):
+        return True
+    elapsed = max(0.0, (stamp if type(stamp) in (int, float) else known["time"]) - known["time"])
+    flow = flow_lph if type(flow_lph) in (int, float) and flow_lph > 0 else 0
+    low = max(0, known["value"] // 1000 - 1)
+    high = (known["value"] + int(flow * elapsed / 3600)) // 1000 + 1
+    if high - low > 2000:
+        return True
+    for cubic_metres in range(low, high + 1):
+        shown = str(cubic_metres).zfill(integer_digits)
+        if len(shown) == integer_digits and all(char == "?" or char == digit for char, digit in zip(whole, shown)):
+            return True
+    return False
+
+
 @dataclass
 class Calibration:
     limit: int
@@ -808,6 +833,11 @@ class Calibration:
     reflected_positions: tuple = ()
     # Reflection found by the app itself (no marked positions): layout, positions, visible digits, images.
     auto_glare: dict | None = None
+    # 0.5.19: a reading entered by hand ({"value": litres, "time": epoch}) and the flow limit;
+    # a frame with a hidden digit must show whole cubic metres that fit it.
+    known_reading: dict | None = None
+    known_flow: float = 0.0
+    glare_mismatch: bool = False
     auto_reflection: bool = False
     # Slots the user marked as hidden by a reflection (0-based); trusted without glare detection.
     marked_positions: tuple = ()
@@ -879,7 +909,7 @@ class Calibration:
     def best_of_group(self, layout):
         """The frame of this register that read most digits surely over several images.
 
-        Stefan (20.11., 18:50): the setup saved the first confirmed −12° frame although −13°/−14°
+        The setup saved the first confirmed −12° frame although −13°/−14°
         read better. Only frames with at least two images count; ties keep the confirmed frame.
         """
         group = self.group_of(layout)
@@ -1012,6 +1042,8 @@ class Calibration:
             if reference_digits is not None and any(
                     char != reference_digits[index] for index, char in enumerate(visible) if char != "?"):
                 continue
+            if not self.visible_fits_known_reading(visible, digits):
+                continue
             previous = self.auto_glare
             if (previous is not None and similar_layout(layout, previous["layout"])
                     and previous["positions"] == tuple(weak) and previous["visible"][:-1] == visible[:-1]):
@@ -1019,6 +1051,7 @@ class Calibration:
             else:
                 count = 1
             self.auto_glare = {"layout": layout, "positions": tuple(weak), "visible": visible, "count": count}
+            self.glare_mismatch = False
             if on_selected is not None:
                 on_selected(layout, readings)
             if count >= MIN_IMAGES:
@@ -1028,6 +1061,18 @@ class Calibration:
                 self.auto_reflection = True
             return True
         return False
+
+    def visible_fits_known_reading(self, visible, integer_digits, stamp=None):
+        """Do the visible whole digits fit the reading entered by hand (0.5.19)?
+
+        Without a comparison sensor the reflection confirmation compared the visible digits
+        against nothing, so a misread whole digit (e.g. 5 instead of 2) could be taken. The whole
+        cubic metres must lie between the entered reading and what the meter can reach since then
+        (maximum flow × time, at least one cubic metre either side). Without a known reading
+        nothing can be checked and the frame passes.
+        """
+        return visible_fits_reading(visible, integer_digits, self.known_reading, self.known_flow,
+                                    self.current_stamp if stamp is None else stamp)
 
     def reflection_crop_ready(self):
         return self.reflected_layout is not None and self.reflected_confirmations >= MIN_IMAGES
@@ -1156,6 +1201,7 @@ class Calibration:
                 "confirmations": self.confirmations, "required": MIN_IMAGES,
                 "reflected_confirmations": self.glare_hits(),
                 "glare_prompt": self.glare_prompt(),
+                "glare_mismatch": self.glare_mismatch,
                 "row_found": self.row_found, "agreement_threshold": self.agreement_threshold,
                 "coarse_threshold": COARSE_AGREEMENT, "digit_found_threshold": DIGIT_FOUND_COARSE,
                 "full_hits": self.full_hits, "partial_hits": self.partial_hits,
@@ -1184,6 +1230,10 @@ class Calibration:
         positions = [slot + 1 for slot in glare["positions"]]
         return {"id": ",".join(map(str, positions)), "positions": positions, "visible": glare.get("visible", "")}
 
+    def drop_glare(self):
+        """Forget a reflection candidate that contradicts the entered reading (0.5.19)."""
+        self.auto_glare = None
+
     def confirm_glare(self):
         """The user confirmed the reflection: take the frame without waiting for three pictures."""
         glare = self.auto_glare
@@ -1210,7 +1260,7 @@ class Calibration:
         return self.shortlist.get(layout, (0,))[0] >= self.threshold_for(layout)
 
     def mask_empty_fields(self, frame, layout, readings):
-        """Digits read in a frame without any glyph become "?" (0.5.16, Stefan 22.11., 15:05)."""
+        """Digits read in a frame without any glyph become "?" (0.5.16)."""
         if not layout.digit_boxes or not readings:
             return readings
         try:
@@ -1277,7 +1327,7 @@ class Calibration:
                          "hits": len(group["hits"]) if group is not None else self.confirmations,
                          "merged": max(0, len(group["layouts"]) - 1) if group is not None else 0,
                          "found": self.digit_found.get(candidate), "role": "confirm"})
-        # Stefan (20.11., 18:48/20:55): registers with hits are always listed, also when their frames were
+        # Registers with hits are always listed, also when their frames were
         # pushed out of the five-place shortlist by frames with a higher percentage but no hits.
         listed = [self.group_of(row_layout) for row_layout in self.shortlist] + [self.group_of(candidate)
                                                                                   if candidate is not None else None]
@@ -1293,7 +1343,7 @@ class Calibration:
                          "hits": len(group["hits"]), "merged": max(0, len(group["layouts"]) - 1),
                          "found": self.digit_found.get(layout),
                          "role": "hint" if percent is not None and percent < self.threshold_for(layout) else "confirm"})
-        # 0.5.17 (Stefan 22.11., 15:18): the frame confirmed with a hidden digit (reflection) was
+        # 0.5.17: the frame confirmed with a hidden digit (reflection) was
         # missing from the list – it has no reading score, so it never entered the shortlist.
         glare = self.reflected_layout or (self.auto_glare or {}).get("layout")
         if glare is not None and not any(row["selected"] for row in rows):
@@ -1666,7 +1716,7 @@ class Calibration:
             group["percent"] = max(group.get("percent", 0), percentage)
         if required_agreement:
             score = (percentage, round(crop_quality(frame, layout), 2), required_agreement)
-            # Stefan (20.11., 21:24): a frame that read better on an earlier image must keep that score;
+            # A frame that read better on an earlier image must keep that score;
             # a later, worse image of the same frame no longer pushes it down (e.g. to 75 %).
             previous = self.shortlist.get(layout)
             if previous is not None and self.score_stamps.get(layout) != self.current_stamp:
@@ -1674,7 +1724,7 @@ class Calibration:
             self.score_stamps[layout] = self.current_stamp
             self.shortlist[layout] = score
             ranked = sorted(self.shortlist.items(), key=lambda pair: pair[1], reverse=True)
-            # Keep every register group with hits in the list (Stefan 20.11., 18:48: a −13° frame with
+            # Keep every register group with hits in the list (a −13° frame with
             # seven hits was pushed out by near-duplicates); near-duplicates only fill free places.
             first, rest, seen = [], [], []
             for item in ranked:

@@ -1,6 +1,6 @@
 """Silent self-improvement of the saved frame with the pictures of the automatic checks (0.4.0).
 
-Stefan (20.11.2026, 19:04/19:45): when the rear digits stay unclear, the recheck first tries the
+When the rear digits stay unclear, the recheck first tries the
 saved angle ±1° and ±2°, then moves the frames of the decimal digits up and down – not only
 sideways. Every trial is read with two OCR profiles on the picture the check already took (no
 extra images). A slow machine manages only a few trials per picture, so the plan is kept in the

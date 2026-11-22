@@ -5,7 +5,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class MultipleMetersFieldRemovedTest(unittest.TestCase):
-    """0.3.3: the confusing "Experimentell · Mehrere Zähler" field is gone (Stefan 20.11.)."""
+    """0.3.3: the confusing "Experimentell · Mehrere Zähler" field is gone."""
 
     def test_field_endpoint_and_module_are_removed(self):
         panel = (ROOT / "panel.py").read_text(encoding="utf-8")

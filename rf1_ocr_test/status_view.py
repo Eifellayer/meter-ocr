@@ -38,7 +38,7 @@ def verdict(history, language, *, detail, precision_pending, paused, setup_pendi
         tone, heading, icon = "ok", "Zählerstand gegengeprüft", "✓"
     elif (not precision_pending and status == "ocr_only"
           and history.get("check_detail") in CALM_PASS_NOTICES):
-        # 0.5.14 (B6, Stefan 22.11., 14:27/14:30): the check passed; a turning roller or a digit
+        # 0.5.14 (B6): the check passed; a turning roller or a digit
         # filled from the meter reading is a remark, not a problem.
         tone, heading, icon = "ok", "Prüfung bestanden", "✓"
     elif not precision_pending and status == "match_with_warning":

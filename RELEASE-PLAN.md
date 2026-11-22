@@ -1,6 +1,6 @@
 # Roadmap
 
-Stand: November 2026 · Version **0.5.18**
+Stand: November 2026 · Version **0.5.19**
 
 AI Meter Reader liest mechanische Zähler (zuerst Gaszähler) über ein Kamerabild aus – lokal, ohne Cloud. Leitbild ist „Fire and Forget“: Zähler und Kamera auswählen, alles andere erledigt die App selbst und zeigt Unsicherheit offen an.
 
@@ -11,7 +11,7 @@ Erledigtes steht im [Changelog](rf1_ocr_test/CHANGELOG.md), die Zeit vor 0.1.0 i
 | Vorhaben | Worum es geht |
 | --- | --- |
 | **Einrichtung der Kamera für alle** | Fertiges ESPHome-Grundpaket mit Board-Dateien für gängige ESP32-Kameras, damit niemand eine eigene Firmware schreiben muss. |
-| **Verdeckte Ziffern noch robuster** | Bei Spiegelungen die sichtbaren Stellen gegen den bekannten Zählerstand und den Durchfluss prüfen; nicht lesbare Nachkommastellen notfalls plausibel schätzen (nie volle Kubikmeter). |
+| **Verdeckte Ziffern noch robuster** | Nicht lesbare Nachkommastellen notfalls plausibel aus Zählerstand und Durchfluss schätzen (nie volle Kubikmeter). Seit 0.5.19 misst die App im Schattenmodus, wie gut das ginge. |
 | **Schnellere Einrichtung** | Rahmen zuerst danach vorsortieren, ob in jedem Feld eine Ziffer sitzt, und nur die besten Kandidaten aufwendig lesen. |
 | **Oberfläche im Smartphone-Stil** | Einstellungen als gruppierte Listen mit großen Tippflächen und weichen Übergängen, wie bei aktuellen Smartphone-Oberflächen. |
 | **Licht und Kamera** | Lichttest in der Einrichtung, optional externe LED, Kamera-Diagnose direkt in der App. |

@@ -255,7 +255,7 @@ class CalibrationTests(TestCase):
         self.assertEqual(0, strict.confirmations)
 
     def test_fine_tuned_frames_of_the_same_register_keep_counting(self):
-        # Stefan 20.11.2026: every image read the right register, but each refined frame
+        # Every image read the right register, but each refined frame
         # (−12° instead of −13°, box nudged) counted as new: 16 images, 0 confirmations.
         rules = {**RULES, "decimals": 3, "fraction_digits": 3, "attempts": 3}
         reference = calibration.two_decimal_reading("12345.239")
@@ -726,7 +726,7 @@ class CalibrationTests(TestCase):
         self.assertEqual(0, self.job.confirmations)
 
     def test_no_quarter_turn_when_an_upright_candidate_reads_most_digits(self):
-        # Camera without reference (Stefan 20.11., 18:46): "10493.3??" at −12° is clearly the
+        # Camera without reference: "10493.3??" at −12° is clearly the
         # register; ±90°/180° must not be searched just because the last roller was turning.
         sample = {"reference_required": False}
         image = frame(1)

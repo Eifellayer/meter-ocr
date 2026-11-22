@@ -29,7 +29,7 @@ MIN_FAILURE_PAUSE_MINUTES, MAX_FAILURE_PAUSE_MINUTES = 5, 240
 DEFAULT_FAILURE_PAUSE_MINUTES = FAILURE_COOLDOWN_INTERVAL // 60
 # When the host has spare capacity, retry sooner: a failed check usually just met a turning roller.
 QUICK_RETRY_INTERVAL = 2 * 60
-# Stefan (22.11., 11:45): a check that was only coarser because the last roller was turning gets a
+# A check that was only coarser because the last roller was turning gets a
 # new picture pair soon (the roller stands still again after half a minute or so) instead of
 # waiting the full interval. Once per series of coarser checks, so a steadily running meter does
 # not double the number of checks.
@@ -538,7 +538,7 @@ def only_known_hidden_unclear(ocr, decimals, integer_digits, hidden_slots):
         return False
     unclear = {index for index, char in enumerate(shown) if char == "?"}
     # A turning last compared roller is allowed as well: it is not rechecked during the check, but
-    # re-read in the pause between two checks (0.5.17, Stefan 22.11., 15:31/15:33).
+    # re-read in the pause between two checks (0.5.17).
     turning = {len(shown) - 1} if decimals >= 2 else set()
     return bool(unclear & set(hidden_slots)) and unclear <= set(hidden_slots) | turning
 
@@ -847,7 +847,7 @@ HIDDEN_ESTIMATE_NOTICE = ("Eine Nachkommastelle ist durch eine Spiegelung verdec
 def estimated_hidden_digits(readings, floor_litres, decimals, integer_digits, positions):
     """Replace a hidden decimal by the lowest plausible digit instead of failing for good.
 
-    0.5.12 (Stefan 22.11.2026, 13:46): after a waiting time a hidden decimal that cannot be
+    0.5.12: after a waiting time a hidden decimal that cannot be
     determined is estimated – never a digit of the full cubic metres. The lowest completion
     that does not fall below the last known reading is taken, so the meter never runs
     backwards. Turning last rollers stay open. Returns (reading, filled slots) or None.
@@ -888,6 +888,49 @@ def estimated_hidden_digits(readings, floor_litres, decimals, integer_digits, po
                 return reading + "?" * drop, [index - 1 for index in hidden]
         return None
     return None
+
+
+def shadow_decimal_estimate(readings, anchor, stamp, decimals, integer_digits, flow_lph):
+    """Shadow mode only (0.5.19): what an estimate of unclear decimals would give.
+
+    For decimals that stay unclear without a reflection, nothing is changed yet. This only
+    measures, from the last confirmed reading and the flow bound, the lowest plausible
+    completion, the highest one and how many completions are reachable at all. Full cubic
+    metres are never estimated. Returns a dict for the debug log or None.
+    """
+    bounds = anchor_bounds(anchor, stamp, decimals, flow_lph)
+    if bounds is None or not readings or decimals < 1 or not 1 <= integer_digits <= 9:
+        return None
+    length = integer_digits + decimals + 1
+    rows = [str(value)[:length] for value in readings]
+    if any(len(row) != length or not re.fullmatch(r"[0-9?]+\.[0-9?]+", row) for row in rows):
+        return None
+    majority = len(rows) // 2 + 1
+    pattern = []
+    for index in range(length):
+        if index == integer_digits:
+            pattern.append(".")
+            continue
+        votes = Counter(row[index] for row in rows if row[index].isdigit())
+        digit, count = votes.most_common(1)[0] if votes else ("?", 0)
+        pattern.append(digit if count >= majority else "?")
+    unclear = [index for index, char in enumerate(pattern) if char == "?"]
+    if not unclear or len(unclear) > 2 or min(unclear) < integer_digits:
+        return None
+    step = 10 ** (3 - decimals)
+    low, high = bounds
+    reachable = []
+    for digits in product("0123456789", repeat=len(unclear)):
+        chars = list(pattern)
+        for index, digit in zip(unclear, digits):
+            chars[index] = digit
+        reading = "".join(chars)
+        if low - step <= int(reading.replace(".", "")) * step <= high:
+            reachable.append(reading)
+    if not reachable:
+        return {"pattern": "".join(pattern), "reachable": 0}
+    return {"pattern": "".join(pattern), "reachable": len(reachable),
+            "lowest": reachable[0], "highest": reachable[-1]}
 
 
 def within_anchor_bounds(ocr, anchor, stamp, decimals, integer_digits, max_flow_lph):
@@ -1240,7 +1283,7 @@ def stationary_partial_active(rules, source):
 # A failed optional eighth-digit search must not permanently strand a saved
 # seven-digit setup. Retry infrequently and remember the deadline across restarts.
 EIGHTH_DIGIT_RETRY_SECONDS = 60 * 60
-# Stefan (22.11.): if the last roller cannot be found at all (e.g. the flash reflects on it),
+# If the last roller cannot be found at all (e.g. the flash reflects on it),
 # give up after several hours instead of searching forever, and say so. The seven-digit
 # checks keep running; a new setup (new frame revision) starts the search again.
 EIGHTH_DIGIT_GIVE_UP_SECONDS = 6 * 60 * 60

@@ -54,7 +54,7 @@ def new_job(action, limit, region, configuration, history, store, previous, now,
     repair = action == "repair"
     scope = store.candidate_scope(configuration, region, simplified, intensive)
     # A new setup starts without the frames of earlier runs: after the camera was
-    # moved they only read rubbish first and were even chosen again (Stefan 21.11.).
+    # moved they only read rubbish first and were even chosen again.
     shortlist = {} if repair or action == "setup" else store.load_calibration_candidates(scope, rules)
     known_good = store.load_known_good_layout(rules, source)
     if known_good is None:

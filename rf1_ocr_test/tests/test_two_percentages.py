@@ -84,7 +84,7 @@ class CoarseThresholdTests(unittest.TestCase):
 
 
 class EmptyFieldTests(unittest.TestCase):
-    """0.5.16 (Stefan 22.11.2026, 15:05): a frame on the bare housing read a "1"."""
+    """0.5.16: a frame on the bare housing read a "1"."""
 
     def shifted(self):
         # Eight frames shifted one field to the left: the first one lies on the bare housing,

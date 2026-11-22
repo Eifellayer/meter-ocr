@@ -1,4 +1,4 @@
-"""Standstill by picture comparison, shadow mode only (Stefan 22.11., 11:48).
+"""Standstill by picture comparison, shadow mode only.
 
 "Wenn das eine Bild eine hundertprozentige Übereinstimmung mit dem nächsten hat, von der Stellung
 der Rollen her, kann man sich die nächste Prüfung schenken." This module only measures: it

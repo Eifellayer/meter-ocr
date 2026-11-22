@@ -1115,7 +1115,7 @@ def digit_presence(register, boxes, skip=()):
     First of the two percentages (0.5.11): "is there a digit in every field?". Frames in
     ``skip`` (hidden by a reflection) are left out. Returns None when no frame can be judged.
     """
-    # 0.5.17 (Stefan 22.11., 15:21: "Ziffern gefunden 0 %" next to a good reading): the shape test
+    # 0.5.17 ("Ziffern gefunden 0 %" next to a good reading): the shape test
     # rejected real digits whose frame touches the dark gaps between the rollers. Only the middle
     # of a frame is judged now, like for the empty-field check.
     gray = register.convert("L")
@@ -1127,7 +1127,7 @@ def digit_presence(register, boxes, skip=()):
 def empty_digit_slots(register, boxes, skip=()):
     """Digit frames that clearly hold no glyph while most of the others do (0.5.16).
 
-    Stefan 22.11.2026, 15:05: a frame row shifted by one field put its first frame on the bare
+    A frame row shifted by one field put its first frame on the bare
     housing left of the counter, and the OCR still read a "1" there. Such a frame must not count
     as a read digit. Returns the indices, or an empty list when the strip as a whole is unclear.
     """

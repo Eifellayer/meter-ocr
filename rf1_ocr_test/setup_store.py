@@ -107,7 +107,7 @@ def last_setup_unfinished(text=None):
     """True if the newest user/update setup ran out of time or failed and nothing read since.
 
     Then a new version restarts the setup on its own after the update, even though an older
-    frame is still stored (Stefan 20.11.2026: setup timed out, automatic read only "?????.9??").
+    frame is still stored (setup timed out, automatic read only "?????.9??").
     """
     try:
         lines = (debug_log.read_text(debug_log.MAX_ENTRIES) if text is None else text).splitlines()
@@ -151,7 +151,7 @@ def saved_layout_rules(rules, source, attempt, layout, tilts, *, provisional=Fal
         if not previous_completion:
             completed = success
     revision = str(time.time_ns())
-    # 0.5.14 (B7, Stefan 22.11., 14:28): a setup saved with a reflection also starts with two
+    # 0.5.14 (B7): a setup saved with a reflection also starts with two
     # decimals; the last roller is searched later in the background like after every setup.
     partial = provisional or reflected or verified and attempt.simplified
     partial_scope = calibration_source_id([source, revision]) if partial else None

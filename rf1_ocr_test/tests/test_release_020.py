@@ -43,6 +43,23 @@ class GlareTests(TestCase):
         strip, boxes = roller_strip()
         self.assertEqual([], glare_slots(strip, boxes))
 
+    def test_narrow_streak_of_light_over_one_digit_is_found(self):
+        # 0.5.9, seen live on 22.11.2026: after the camera was moved, a thin bright bar lay across
+        # the first decimal roller. It covers only a few percent of the frame, the setup kept
+        # reading "10511.?5?" and ran into its time limit.
+        strip, boxes = roller_strip()
+        x = 30 + 5 * 60
+        ImageDraw.Draw(strip).rounded_rectangle((x - 20, 52, x + 20, 60), radius=4, fill=(252, 252, 255))
+        self.assertEqual([5], glare_slots(strip, boxes))
+
+    def test_bright_digits_alone_are_no_streak(self):
+        # A roller with clearly brighter glyphs (uneven light) must not count as a reflection.
+        strip, boxes = roller_strip()
+        draw = ImageDraw.Draw(strip)
+        font = ImageFont.truetype("DejaVuSans-Bold.ttf", 60)
+        draw.text((30 + 3 * 60, 70), "8", fill=(235, 238, 245), font=font, anchor="mm")
+        self.assertEqual([], glare_slots(strip, boxes))
+
 
 class HiddenDigitTests(TestCase):
     anchor = {"time": 1000.0, "value": 10483335}

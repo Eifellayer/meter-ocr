@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.9
+
+- **Einrichtung läuft auch mit einem schmalen Lichtreflex auf einer Rolle durch.** Lag ein dünner, heller Lichtbalken quer über einer Ziffer, las die App diese Stelle dauerhaft nicht (z. B. „10511.?5?“), hielt das für eine drehende Rolle und lief nach 20 Minuten in die Zeitgrenze. Bisher galt nur ein großflächig überstrahltes Ziffernfeld als Spiegelung. Jetzt erkennt die App auch den schmalen Reflex, speichert die Einrichtung nach drei übereinstimmenden Bildern als „mit Spiegelung“ und schätzt die verdeckte Stelle aus dem Verlauf – mit Hinweis in der Oberfläche.
+- *English:* The setup now also completes when a narrow streak of light hides one digit. Until now only a largely washed-out digit frame counted as a reflection; the setup kept waiting for the “turning” roller and timed out after 20 minutes.
+
 ## 0.5.8
 
 - **Zwischenschritte der Einrichtung werden wieder sauber angezeigt.** In 0.5.7 rutschten die Unterpunkte in die schmale Spalte der Zeitleiste und standen Wort für Wort untereinander. Sie nutzen jetzt die volle Breite.

@@ -1071,6 +1071,11 @@ def glyph_clipped(image, box):
     return max(mass[:edge]) > heaviest * .5 or max(mass[-edge:]) > heaviest * .5
 
 
+GLARE_STREAK_PEAK = 200
+GLARE_STREAK_STEP = 40
+GLARE_STREAK_SHARE = .04
+
+
 def glare_slots(register, boxes):
     """Return the indices of digit frames that are washed out by a reflection of the light.
 
@@ -1102,9 +1107,20 @@ def glare_slots(register, boxes):
                 peak = level
                 break
         peaks.append(peak)
-    level = max(140, min(245, round(1.8 * median(peaks))))
-    if level <= median(peaks) + 30:
-        return []
-    shares = [sum(histogram[level:]) / max(1, sum(histogram)) if histogram else 0 for histogram in histograms]
-    found = [index for index, share in enumerate(shares) if share >= .2]
+    middle = median(peaks)
+    level = max(140, min(245, round(1.8 * middle)))
+    found = []
+    if level > middle + 30:
+        shares = [sum(histogram[level:]) / max(1, sum(histogram)) if histogram else 0 for histogram in histograms]
+        found = [index for index, share in enumerate(shares) if share >= .2]
+    # 0.5.9: a narrow streak of light across one digit (seen live on 22.11.2026 after the camera
+    # was moved) covers far less than a fifth of the frame, yet hides the digit just the same.
+    # Its brightest pixels stand far above the glyphs of all other frames; a few percent of the
+    # frame are enough.
+    streak = round(middle) + GLARE_STREAK_STEP
+    for index, histogram in enumerate(histograms):
+        if (histogram is not None and index not in found and peaks[index] >= max(GLARE_STREAK_PEAK, middle + GLARE_STREAK_STEP)
+                and sum(histogram[min(255, streak):]) / max(1, sum(histogram)) >= GLARE_STREAK_SHARE):
+            found.append(index)
+    found.sort()
     return found if len(found) <= 2 else []

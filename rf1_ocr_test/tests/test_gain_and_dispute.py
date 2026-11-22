@@ -75,7 +75,7 @@ class CameraGainTest(unittest.TestCase):
     def test_dark_with_light_raises_gain_in_bounded_steps(self):
         run.LIT_BRIGHTNESS["light.blitz"] = 79
         calls, fetch, post = self.make()
-        pictures = iter([grey_jpeg(24), grey_jpeg(25), grey_jpeg(25)])
+        pictures = iter([grey_jpeg(20), grey_jpeg(24), grey_jpeg(25), grey_jpeg(25)])  # first one is dropped (0.5.2)
         run.lit_picture("light.blitz", lambda: next(pictures), "t", fetch=fetch, post=post, sleep=lambda _: None)
         sets = [call[2] for call in calls if call[0] == "post" and call[1] == "set_value"]
         self.assertEqual([{"entity_id": "number.esp_verstarkung", "value": 6}], sets)
@@ -84,7 +84,7 @@ class CameraGainTest(unittest.TestCase):
         run.LIT_BRIGHTNESS["light.blitz"] = 79
         calls, fetch, post = self.make()
         bright = grey_jpeg(80)
-        pictures = iter([grey_jpeg(24), grey_jpeg(25), bright])
+        pictures = iter([grey_jpeg(20), grey_jpeg(24), grey_jpeg(25), bright])  # first one is dropped (0.5.2)
         waits = []
         picture = run.lit_picture("light.blitz", lambda: next(pictures), "t", fetch=fetch, post=post,
                                   sleep=waits.append)

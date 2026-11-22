@@ -519,6 +519,14 @@ def lit_picture(light, take, token, *, fetch, post, delay=LIGHT_DELAY, sleep=tim
                 sleep(delay)
             except OSError as error:
                 print(f"Licht für die Aufnahme konnte nicht eingeschaltet werden: {type(error).__name__}")
+            if switched:
+                # 0.5.2: the camera hands out its newest stored frame first, and that one may
+                # have been taken before the light came on (seen live: light on, picture dark,
+                # the repeat bright). One frame is fetched and dropped so the next one is lit.
+                try:
+                    take()
+                except (OSError, ValueError):
+                    pass
         picture = take()
         brightness = picture_brightness(picture)
         if dark_picture(light, brightness):

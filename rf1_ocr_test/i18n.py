@@ -20,6 +20,7 @@ EN_UI = {
         "What the app takes care of on its own between the regular checks: pinning down the last decimal, re-checking unclear results and testing new reading methods. For information only – no action needed.",
     ">So weit ist die Einrichtung<": ">Setup progress<",
     ">Bilder bisher<": ">Pictures so far<",
+    ">Eingabe nötig: Zählerstand einmal eintragen<": ">Input needed: enter the meter reading once<",
     "<summary>Gefundene Rahmen (Kandidaten)</summary>": "<summary>Frames found (candidates)</summary>",
     'aria-label="Gelesene Ziffern je Versuch und Stelle"': 'aria-label="Digits read per attempt and position"',
     "Klappt es dauerhaft nicht? <a": "Still not working? <a",

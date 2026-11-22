@@ -418,6 +418,8 @@ section>div{{background:var(--surface);border:1px solid var(--edge);border-radiu
 section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 .stamp,#countdown{{font-variant-numeric:tabular-nums}}
 .meter-hero-wait{{margin:.35rem 0 0;font-size:.88rem;color:var(--muted)}}
+.meter-hero-action{{margin:.5rem 0 0}}
+.meter-hero-action a{{display:inline-block;padding:.4rem .8rem;border-radius:.6rem;border:2px solid light-dark(#b26a00,#ffb74d);font-weight:700;color:inherit;text-decoration:none}}
 .background-work-box{{margin:.5rem 0 .75rem}}
 .background-work-toggle{{display:inline-flex;gap:.45rem;align-items:center;font-size:.92rem;cursor:pointer}}
 .background-live{{margin-top:.5rem}}
@@ -730,6 +732,7 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 <p class="meter-hero-meta"><span>Letzte Prüfung <strong id="hero-last-check">–</strong></span>
 <span>Nächste Prüfung <strong id="hero-countdown">–</strong></span></p>
 <p class="meter-hero-wait" id="hero-wait-reason" role="status" hidden></p>
+<p class="meter-hero-action" id="hero-action" role="status" hidden><a href="#hidden-digit-prompt">Eingabe nötig: Zählerstand einmal eintragen</a></p>
 <p class="meter-hero-stale" id="hero-stale" role="status" hidden><span id="hero-stale-text"></span><button type="button" class="secondary" id="reload-view">Neu laden</button></p>
 </div>
 <div class="check-card-heading"><h2>Automatische Kontrolle</h2></div>
@@ -4243,6 +4246,7 @@ async function refreshAutomatic() {{
     recovery.textContent = sample.recovery_notice;
     const hiddenPrompt = sample.hidden_digit_prompt;
     document.querySelector('#hidden-digit-prompt').hidden = !hiddenPrompt;
+    document.querySelector('#hero-action').hidden = !hiddenPrompt;
     if (hiddenPrompt) {{
       document.querySelector('#hidden-digit-text').textContent =
         'Stelle ' + hiddenPrompt.positions.join(' und ') + ' ist durch eine Spiegelung verdeckt.';

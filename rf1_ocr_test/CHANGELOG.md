@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.30
+
+- **Angezeigter Zählerstand springt nicht mehr zurück.** Nach einer neuen Einrichtung konnte die App eine verdeckte Stelle aus einem später eingetragenen, aber niedrigeren Stand ergänzen. Der angezeigte Zählerstand fiel dann unter den zuvor angezeigten. Ein eingetragener oder noch unbestätigter Stand, der unter einem bereits gezählten liegt, ersetzt diesen jetzt nicht mehr als Untergrenze. Der Zähler läuft nie rückwärts. Der angezeigte Zählerstand geht nur noch zurück, wenn die App einen früheren Wert nachweislich als Lesefehler erkannt hat. Der Gesamtverbrauch war davon nie betroffen.
+- *English:* The shown meter reading no longer steps back: after a new setup the app could fill a hidden digit from a reading entered later but lower than the one counted before, and the shown reading fell below the previous one. An entered or still unconfirmed reading below a counted one no longer replaces it as the lower bound (the meter never runs backwards), and the shown reading only goes back once the app has proven an earlier value a misread. The total consumption was never affected.
+
 ## 0.5.29
 
 - **„Zählwerk finden“ wird erst abgehakt, wenn das Zählwerk wirklich gefunden ist.** Bisher galt der Schritt als erledigt, sobald es Rahmen-Kandidaten gab, auch wenn der geprüfte Rahmen quer über dem Zähler oder verdreht lag. Jetzt läuft der Schritt, bis ein Rahmen einen plausiblen Stand gelesen hat, und zeigt so lange, wie viele Rahmen getestet wurden und mit welcher Drehung. Ein Rahmen, der nur geprüft wird, ist im Kamerabild gestrichelt und heißt „Rahmen wird geprüft“. Erst ein passender Rahmen ist durchgezogen.

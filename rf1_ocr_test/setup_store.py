@@ -151,7 +151,9 @@ def saved_layout_rules(rules, source, attempt, layout, tilts, *, provisional=Fal
         if not previous_completion:
             completed = success
     revision = str(time.time_ns())
-    partial = (provisional and not reflected) or verified and attempt.simplified
+    # 0.5.14 (B7, Stefan 22.11., 14:28): a setup saved with a reflection also starts with two
+    # decimals; the last roller is searched later in the background like after every setup.
+    partial = provisional or reflected or verified and attempt.simplified
     partial_scope = calibration_source_id([source, revision]) if partial else None
     pending_source = setup_source_id(source) if provisional else rules.get("setup_pending_source")
     pending_started = finished - elapsed if provisional else rules.get("setup_pending_started")

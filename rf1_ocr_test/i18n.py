@@ -20,6 +20,15 @@ EN_UI = {
         "What the app takes care of on its own between the regular checks: pinning down the last decimal, re-checking unclear results and testing new reading methods. For information only – no action needed.",
     ">So weit ist die Einrichtung<": ">Setup progress<",
     ">Bilder bisher<": ">Pictures so far<",
+    "Bild der vorigen Prüfung (": "Picture of the previous check (",
+    " Uhr). Die laufende Prüfung ist noch nicht fertig.": "). The running check is not finished yet.",
+    "Bild der letzten Prüfung (": "Picture of the last check (",
+    " Uhr).": ").",
+    "Die verdeckte Stelle wurde aus dem Zählerstand und dem Durchfluss ergänzt.": "The hidden digit was filled in from the meter reading and the flow.",
+    "Die verdeckte Nachkommastelle wurde geschätzt.": "The hidden decimal was estimated.",
+    "Prüfung bestanden": "Check passed",
+    "Eine Stelle ist durch eine Spiegelung verdeckt und wurde aus dem Zählerstand und dem Durchfluss ergänzt. Alle anderen verglichenen Stellen wurden gelesen.": "One digit is hidden by a reflection and was filled in from the meter reading and the flow. All other compared digits were read.",
+    "Eine Stelle ist durch eine Spiegelung verdeckt und wurde aus dem Zählerstand und dem Durchfluss ergänzt. Die letzte Rolle drehte sich gerade; diese Prüfung gilt deshalb mit einer Nachkommastelle weniger.": "One digit is hidden by a reflection and was filled in from the meter reading and the flow. The last roller was turning; this check therefore counts with one decimal less.",
     "Eine Nachkommastelle ist durch eine Spiegelung verdeckt und wurde geschätzt, weil kein Zählerstand eingetragen wurde. Die vollen Kubikmeter sind gelesen. Für einen genauen Wert den Zählerstand einmal in den Einstellungen eintragen.": "One decimal is hidden by a reflection and was estimated because no meter reading was entered. The full cubic metres are read. For an exact value enter the meter reading once in the settings.",
     "Ausschnitt des Zählwerks aus der letzten Aufnahme": "Cut-out of the counter from the last picture",
     ">Zählwerk in der letzten Aufnahme<": ">Counter in the last picture<",
@@ -189,7 +198,9 @@ EN_UI = {
     "Dieser Rahmen umfasst die Ziffernreihe": "This crop covers the digit row",
     "Kein Bild verfügbar. Prüfe die Bildquelle oder wähle ein Testbild.": "No image available. Check the source or choose a test image.",
     "Ziffernrahmen für Spiegelungen suchen": "Find digit boxes for reflections",
-    "Gelbe Rahmen sind möglicherweise gespiegelt. Du kannst bis zu zwei Stellen markieren und die Rahmen ziehen.": "Yellow boxes may be affected by reflections. Mark up to two positions and drag the boxes to adjust them.",
+    "Gelbe Rahmen sind möglicherweise gespiegelt. Tippe auf einen Rahmen, um die Stelle als verdeckt zu markieren oder die Markierung aufzuheben (höchstens zwei). Zum Verschieben den Rahmen ziehen.": "Yellow boxes may be affected by reflections. Tap a box to mark the digit as hidden or to remove the mark (two at most). Drag a box to move it.",
+    " als verdeckt markiert. Das wird mit der Einrichtung gespeichert und bei der Selbsteinrichtung und allen Prüfungen berücksichtigt.": " marked as hidden. This is saved with the setup and used by the automatic setup and all checks.",
+    "Keine Stelle markiert. Tippe auf einen Rahmen oder eine Schaltfläche, um eine verdeckte Stelle zu markieren.": "No digit marked. Tap a box or a button to mark a hidden digit.",
     "Ziffernfeld mit markierten Spiegelungen": "Meter digits with marked reflections",
     "Ziffernrahmen werden gesucht …": "Finding digit boxes …",
     "Kein Ziffernfeld gefunden. Du kannst die Einrichtung direkt fortsetzen.": "No digit row found. You can continue setup.",
@@ -1061,6 +1072,8 @@ def english_result(detail, status=None, decimals=0, readings=None):
         return " ".join(filter(None, (EN_UI[STANDALONE_REJECTED_NOTICE], EN_DETAILS.get(reason))))
     if detail in EN_DETAILS:
         return EN_DETAILS[detail]
+    if detail in EN_UI:
+        return EN_UI[detail]
     for prefix in (
         "Rohbild gelesen. Das aufbereitete ESP-Bild war nicht nutzbar – prüfe in AI on the Edge die Bildausrichtung und die Referenzmarken.",
         "Aufbereitetes ESP-Bild nicht nutzbar. Es konnte kein frisches Rohbild geladen werden.",

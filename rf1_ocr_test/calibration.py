@@ -808,6 +808,8 @@ class Calibration:
     # Reflection found by the app itself (no marked positions): layout, positions, visible digits, images.
     auto_glare: dict | None = None
     auto_reflection: bool = False
+    # Slots the user marked as hidden by a reflection (0-based); trusted without glare detection.
+    marked_positions: tuple = ()
     reflected_confirmations: int = 0
     region: tuple | None = None
     focused: bool = False
@@ -1002,8 +1004,8 @@ class Calibration:
                 continue
             if len(boxes) < required_slots:
                 continue
-            glared = glare_slots(register, boxes)
-            if not glared or not set(weak) <= set(glared):
+            glared = set(glare_slots(register, boxes)) | set(self.marked_positions)
+            if not glared or not set(weak) <= glared:
                 continue
             visible = "".join("?" if index in weak else rows[0][index] for index in range(digits))
             if reference_digits is not None and any(
@@ -1156,6 +1158,7 @@ class Calibration:
                 "coarse_threshold": COARSE_AGREEMENT, "digit_found_threshold": DIGIT_FOUND_COARSE,
                 "full_hits": self.full_hits, "partial_hits": self.partial_hits,
                 "image_hints": self.image_hints,
+                "marked_positions": [slot + 1 for slot in self.marked_positions],
                 "rounds": list(self.rounds),
                 "known_good_available": self.known_good_layout is not None and self.region is None,
                 "stress_weak_slots": self.stress_weak_slots,

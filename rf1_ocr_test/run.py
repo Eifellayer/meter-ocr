@@ -36,6 +36,7 @@ from checks import (
     anchored_leading_digits, anchored_hidden_digits, within_anchor_bounds, anchor_bounds,
     learned_flow_limit, slow_roller_digit, hidden_roller_flow, hidden_roller_interval, hidden_fill_reachable, hidden_fill_with_turning_roller,
                     estimated_hidden_digits, HIDDEN_ESTIMATE_AFTER, HIDDEN_ESTIMATE_NOTICE,
+                    only_known_hidden_unclear, HIDDEN_FILLED_NOTICE, HIDDEN_FILLED_TURNING_NOTICE,
     automatic_interval_minutes, defer_duplicate_cycle,
     LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, LAST_DIGIT_RETRIES, SUCCESSFUL_CHECKS,
     SEVENTH_DIGIT_WAIT_NOTICE,
@@ -1890,6 +1891,9 @@ def main():
                 calibration, known_good = setup_flow.new_job(
                     action, limit, region, configuration, history, setup_store, previous, now,
                     simplified=simplified, intensive=intensive, make=Calibration)
+                # 0.5.14 (B2, Stefan 22.11., 14:07): a digit marked as hidden by hand is known to
+                # the setup from the first picture; before, only reflections it detected itself counted.
+                calibration.marked_positions = tuple(hidden_reflection_slots(rules, source))
                 calibration_preview.clear()
                 calibration_images.clear()
                 calibration_configuration = configuration
@@ -3188,7 +3192,12 @@ def main():
                         pattern = disputed_digit_pattern(same_frame, comparison_decimals, integer_digits,
                                                          SHIFTED_DIGIT_POSITIONS)
                         paused_now = not manual and get_auto_paused()
-                        near_hit = (digit_probe_enabled and regular_status != "match"
+                        # 0.5.14 (B5, Stefan 22.11., 14:25): a digit known to be hidden is not rechecked
+                        # intensively; that only cost time (about 70 s per check, recheck timed out).
+                        hidden_known = (not manual and only_known_hidden_unclear(
+                            observed or ocr, comparison_decimals, integer_digits,
+                            hidden_reflection_slots(active_rules, active_source)))
+                        near_hit = (digit_probe_enabled and regular_status != "match" and not hidden_known
                                     and read_state["captured"] is not None and not sample.get("reference_is_fallback")
                                     and (pattern or not ocr_confirmed
                                          and missing_digit_pattern(observed, comparison_decimals, integer_digits,
@@ -3198,6 +3207,7 @@ def main():
                         if not near_hit:
                             recovery_log["reason"] = (
                                 "matched" if regular_status == "match" else
+                                "hidden_known" if hidden_known else
                                 "confirmed" if ocr_confirmed else
                                 "disabled" if not digit_probe_enabled else
                                 "paused" if paused_now else
@@ -3594,7 +3604,7 @@ def main():
                                         print(f"Verdeckte Stelle aus eingetragenem/bestätigtem Stand ergänzt, "
                                               f"letzte Rolle dreht: {ocr} -> {partly_filled}")
                                         ocr, ocr_readings = partly_filled, [partly_filled] * len(ocr_readings)
-                                        ocr_method = "anchored"
+                                        ocr_method = "anchored_hidden"
                                 if anchored or partly_filled:
                                     updated.pop("hidden_digit_prompt", None)
                                     updated.pop("hidden_digit_since", None)
@@ -3644,7 +3654,8 @@ def main():
                                     print(f"Führende Stelle(n) {', '.join(str(p + 1) for p in filled_positions)} "
                                           f"aus bestätigtem Stand ergänzt: {ocr} -> {value}")
                                     ocr, ocr_confirmed, ocr_readings = value, True, anchored_readings
-                                    ocr_method = "anchored"
+                                    ocr_method = ("anchored_hidden" if hidden_slots and set(filled_positions) <= set(hidden_slots)
+                                                  else "anchored")
                             flow_limit = learned_flow_limit(history, active_rules["max_flow_lph"])
                             slow_anchor = history.get("reflection_anchor")
                             slow = (None if ocr_confirmed else slow_roller_digit(
@@ -3957,6 +3968,10 @@ def main():
                                                    else REDUCED_PRECISION_NOTICE)
                     if ocr_method == "estimated_hidden" and outcome in SUCCESSFUL_CHECKS and not validation_detail:
                         updated["check_detail"] = HIDDEN_ESTIMATE_NOTICE
+                    elif ocr_method == "anchored_hidden" and outcome in SUCCESSFUL_CHECKS and not validation_detail:
+                        # B6: a passed check reads as passed; the limits are only a remark.
+                        updated["check_detail"] = (HIDDEN_FILLED_TURNING_NOTICE if locals().get("reduced_precision")
+                                                   else HIDDEN_FILLED_NOTICE)
                     updated["ocr_readings"] = ocr_readings if outcome == "ocr_unclear" else []
                     if outcome == "ocr_unclear" and updated["check_detail"] != LAST_DIGIT_NOTICE:
                         if not validation_detail and not ocr_error and only_last_compared_unclear(

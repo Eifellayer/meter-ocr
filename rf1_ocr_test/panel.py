@@ -147,6 +147,7 @@ header{{display:flex;align-items:baseline;justify-content:space-between;gap:.5re
 .hidden-digit-figure{{flex-basis:100%;margin:.2rem 0 .5rem}}
 .hidden-digit-figure img{{display:block;width:100%;max-width:34rem;height:auto;border-radius:.4rem;image-rendering:auto}}
 .hidden-digit-figure figcaption{{font-size:.85rem;color:var(--muted);margin-top:.25rem}}
+#test-preview-image.preview-outdated{{opacity:.5;filter:grayscale(.6)}}
 .reflection-suggestion.action-needed{{padding:.75rem .9rem;border:2px solid light-dark(#b26a00,#ffb74d);border-radius:.7rem;background:var(--surface-2);color:inherit;font-size:1rem}}
 .reflection-actions{{display:flex;align-items:center;gap:.65rem;flex-wrap:wrap}}
 .reflection-actions form{{display:inline}}
@@ -723,6 +724,7 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 <main>
 <div class="tab-content" id="view-overview" role="tabpanel" aria-labelledby="tab-overview" {overview_hidden}>
 {overview_saved_notice}
+{marked_reflection_note}
 <div class="panel" id="check-overview">
 <div class="meter-hero" id="meter-hero">
 <div class="meter-hero-top">
@@ -775,6 +777,7 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 <section id="background-live" class="background-live" aria-label="Hintergrundaufgaben" hidden>
 <p class="settings-note">Hier siehst du, was die App zwischen den regulären Prüfungen selbstständig erledigt: die letzte Nachkommastelle genauer bestimmen, unklare Ergebnisse nachprüfen und neue Leseverfahren testen. Nur zur Information – du musst nichts tun.</p>
 <div id="background-live-list"></div>
+<p class="settings-note background-load" id="background-load" role="status"></p>
 </section>
 </div>
 <div class="crop-actions" id="setup-start-actions" {resume_setup_hidden}>
@@ -879,6 +882,7 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 <div class="preview" id="test-preview" {automatic_preview_hidden}>
 <h2 id="preview-heading">Letztes Testbild</h2>
 <img id="test-preview-image"{automatic_preview_src} alt="Letztes Testbild">
+<p id="preview-time" class="settings-note" hidden></p>
 <p id="ocr-method" class="settings-note" hidden></p>
 <details id="ocr-candidate-details" hidden>
 <summary>Beste Kandidaten der Rahmen-Nachprüfung</summary>
@@ -1245,7 +1249,7 @@ name: Zählerstand (OCR)</code></pre>
 <div id="wizard-reflection-options" hidden>
 <button type="button" id="wizard-reflection-load">Ziffernrahmen für Spiegelungen suchen</button>
 <figure class="crop-live-preview" id="wizard-reflection-preview" hidden>
-<figcaption>Gelbe Rahmen sind möglicherweise gespiegelt. Du kannst bis zu zwei Stellen markieren und die Rahmen ziehen.</figcaption>
+<figcaption>Gelbe Rahmen sind möglicherweise gespiegelt. Tippe auf einen Rahmen, um die Stelle als verdeckt zu markieren oder die Markierung aufzuheben (höchstens zwei). Zum Verschieben den Rahmen ziehen.</figcaption>
 <div class="digit-editor"><canvas role="img" aria-label="Ziffernfeld mit markierten Spiegelungen"></canvas><div class="digit-layer"></div></div>
 <div class="crop-actions" id="wizard-reflection-choices"></div>
 </figure>
@@ -1860,9 +1864,28 @@ reflectionButton.addEventListener('click', async () => {{
         button.disabled = !selected && marked.size >= 2;
         layer.children[index].dataset.reflection = String(selected);
       }});
+      // B3: say what is marked and that it will be used.
+      const names = [...marked].sort((a, b) => a - b).map(index => index + 1);
+      reflectionStatus.textContent = names.length
+        ? 'Stelle ' + names.join(' und ') + ' als verdeckt markiert. Das wird mit der Einrichtung gespeichert und bei der Selbsteinrichtung und allen Prüfungen berücksichtigt.'
+        : 'Keine Stelle markiert. Tippe auf einen Rahmen oder eine Schaltfläche, um eine verdeckte Stelle zu markieren.';
     }}
     reflectionPreview.addEventListener('digit-edit', () => {{
       if (revision === reflectionRevision) saveMarkings();
+    }});
+    // 0.5.14 (B1): a tap on a digit frame (without dragging it) marks or unmarks that digit.
+    Array.from(layer.children).forEach((frameButton, index) => {{
+      let start = null;
+      frameButton.addEventListener('pointerdown', event => {{ start = [event.clientX, event.clientY]; }});
+      frameButton.addEventListener('pointerup', event => {{
+        if (!start || revision !== reflectionRevision) return;
+        const moved = Math.hypot(event.clientX - start[0], event.clientY - start[1]);
+        start = null;
+        if (moved > 5) return;
+        if (marked.has(index)) marked.delete(index);
+        else if (marked.size < 2) marked.add(index);
+        saveMarkings();
+      }});
     }});
     reflectionChoices.replaceChildren();
     for (let index = 0; index < count; index++) {{
@@ -2841,7 +2864,9 @@ function setupProgressModel(status) {{
   const stats = (en ? 'Images: ' : 'Bilder: ') + (status.tested || 0) +
     (en ? ' · Frames tested: ' : ' · Rahmen getestet: ') + (status.attempts || 0) +
     (en ? ' · Time so far: ' : ' · Bisherige Dauer: ') + clock + ' min' +
-    (best ? (en ? ' · Best match: ' : ' · Beste Übereinstimmung: ') + best + ' %' : '');
+    (best ? (en ? ' · Best match: ' : ' · Beste Übereinstimmung: ') + best + ' %' : '') +
+    ((status.marked_positions || []).length ? (en ? ' · Marked as hidden (reflection): digit ' : ' · Als verdeckt markiert (Spiegelung): Stelle ') +
+      status.marked_positions.join(en ? ' and ' : ' und ') : '');
   return {{active, current: Math.min(rawCurrent, 3), steps, stats, candidates, rounds}};
 }}
 const setupSubstepsOpen = new Map();
@@ -3650,8 +3675,26 @@ async function refreshTestStatus() {{
       shifted: 'Die fehlende Ziffer wurde im verschobenen Rahmen direkt gelesen.',
       composed: 'Ziffern aus übereinstimmenden OCR-Versuchen zusammengesetzt.',
       anchored: 'Unveränderliche führende Stellen aus dem zuletzt bestätigten Stand ergänzt.',
+      anchored_hidden: 'Die verdeckte Stelle wurde aus dem Zählerstand und dem Durchfluss ergänzt.',
+      estimated_hidden: 'Die verdeckte Nachkommastelle wurde geschätzt.',
     }}[job.ocr_method] || '');
     method.hidden = !method.textContent;
+    // 0.5.14 (B4, Stefan 22.11., 14:21): say which check the picture belongs to. While a new
+    // check is running, the picture of the previous one is dimmed and labelled as such.
+    const previewTime = document.querySelector('#preview-time');
+    const stampNs = Number(showManual ? job.checked_at * 1e9 : automaticVersion);
+    const running = ['working', 'queued'].includes(document.querySelector('.activity-status')?.dataset.state);
+    let timeText = '';
+    if (Number.isFinite(stampNs) && stampNs > 1e17) {{
+      const taken = new Date(stampNs / 1e6);
+      const clock = [taken.getHours(), taken.getMinutes(), taken.getSeconds()].map(value => String(value).padStart(2, '0')).join(':');
+      timeText = running && !showManual
+        ? 'Bild der vorigen Prüfung (' + clock + ' Uhr). Die laufende Prüfung ist noch nicht fertig.'
+        : 'Bild der letzten Prüfung (' + clock + ' Uhr).';
+    }}
+    if (previewTime.textContent !== timeText) previewTime.textContent = timeText;
+    previewTime.hidden = !timeText;
+    document.querySelector('#test-preview-image').classList.toggle('preview-outdated', running && !showManual);
     const candidateList = document.querySelector('#ocr-candidates');
     renderOcrCandidates(candidateList, showManual || !job.automatic_preview ? [] : job.ocr_candidates);
     document.querySelector('#ocr-candidate-details').hidden = candidateList.hidden;
@@ -3690,12 +3733,46 @@ function tick() {{
 function formatStamp(epoch) {{
   return new Intl.DateTimeFormat(lang === 'en' ? 'en-GB' : 'de-DE', {{day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'}}).format(new Date(epoch * 1000));
 }}
+// 0.5.14 (Stefan 22.11., 13:32): the load of the machine below the background tasks, to
+// estimate when the next one can start.
+let backgroundLoadTimer = null;
+async function refreshBackgroundLoad() {{
+  const out = document.querySelector('#background-load');
+  const toggle = document.querySelector('#show-background-work');
+  if (!out || !toggle || !toggle.checked) return;
+  try {{
+    const response = await fetch('systemstatus', {{cache: 'no-store'}});
+    if (!response.ok) throw new Error();
+    const load = await response.json();
+    const en = lang === 'en';
+    const parts = [];
+    if (load.cpu_percent != null) parts.push((en ? 'Processor ' : 'Prozessor ') + load.cpu_percent + ' %' +
+      (load.app_cpu_percent != null ? (en ? ' (app ' : ' (App ') + load.app_cpu_percent + ' %)' : ''));
+    if (load.memory_used_percent != null) parts.push((en ? 'Memory ' : 'Arbeitsspeicher ') + load.memory_used_percent + ' %');
+    if (load.temperature_c != null) parts.push(Math.round(load.temperature_c) + ' °C');
+    const seconds = next ? Math.max(0, Math.ceil(next - Date.now() / 1000)) : null;
+    if (seconds != null) parts.push((en ? 'next check in ' : 'nächste Prüfung in ') + Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0') + ' min');
+    const busy = (load.cpu_percent != null && load.cpu_percent >= 85) || (load.memory_used_percent != null && load.memory_used_percent >= 92);
+    out.textContent = (en ? 'Load: ' : 'Auslastung: ') + (parts.join(' · ') || '–') + '. ' + (busy
+      ? (en ? 'The machine is busy; background tasks wait.' : 'Der Rechner ist ausgelastet; Hintergrundaufgaben warten.')
+      : (en ? 'Background tasks run in the time between the checks.' : 'Hintergrundaufgaben laufen in der Zeit zwischen den Prüfungen.'));
+  }} catch (_) {{
+    out.textContent = '';
+  }}
+}}
 function renderBackgroundWork(items) {{
   const box = document.querySelector('#background-live');
   const toggle = document.querySelector('#show-background-work');
   if (!box || !toggle) return;
   box.hidden = !toggle.checked;
-  if (box.hidden) return;
+  if (box.hidden) {{
+    if (backgroundLoadTimer) {{ clearInterval(backgroundLoadTimer); backgroundLoadTimer = null; }}
+    return;
+  }}
+  if (!backgroundLoadTimer) {{
+    refreshBackgroundLoad();
+    backgroundLoadTimer = setInterval(refreshBackgroundLoad, 5000);
+  }}
   const list = document.querySelector('#background-live-list');
   const key = JSON.stringify(items);
   if (list.dataset.items === key) return;
@@ -4403,6 +4480,26 @@ def select_options(choices, chosen):
         f'<option value="{value}"{" selected" if value == chosen else ""}>{label}</option>'
         for value, label in choices.items()
     )
+
+
+def marked_reflection_note(rules, source, language):
+    """0.5.14 (B3): say on the overview which digit is treated as hidden by a reflection."""
+    marked = rules.get("setup_reflection")
+    if (not rules.get("reflection_estimate_enabled") or not isinstance(marked, dict) or source is None
+            or marked.get("source") != setup_source_id(source)):
+        return ""
+    positions = [slot + 1 for slot in marked.get("positions") or [] if type(slot) is int]
+    if not positions:
+        return ""
+    if language == "en":
+        text = (f"Digit {' and '.join(map(str, positions))} is hidden by a reflection "
+                f"({'found by the setup' if marked.get('automatic') else 'marked by you'}). "
+                "The app does not read it, but fills it in from the meter reading and the flow.")
+    else:
+        text = (f"Stelle {' und '.join(map(str, positions))} ist durch eine Spiegelung verdeckt "
+                f"({'von der Einrichtung erkannt' if marked.get('automatic') else 'von dir markiert'}). "
+                "Die App liest sie nicht, sondern ergänzt sie aus Zählerstand und Durchfluss.")
+    return '<p class="settings-note marked-reflection-note">' + html.escape(text) + "</p>"
 
 
 def fallback_options(value, stamp, decimals, integer_digits, fraction_digits):
@@ -5139,6 +5236,7 @@ def start_panel(
                 quality_hint_hidden="hidden" if auto_rules.get("quality_hint_hidden") else "",
                 reflection_suggestion_hidden="" if summary["reflection_suggestion"] else "hidden",
                 reflection_estimate_hidden="" if estimate.get("confirmed") else "hidden",
+                marked_reflection_note=marked_reflection_note(auto_rules, get_source()[0] if get_source else None, language),
                 reflection_approval_hidden="" if pending_estimate else "hidden",
                 reflection_approval_id=html.escape(str(pending_estimate.get("id", ""))),
                 reflection_digits_option=(select_options({pending_estimate["digit"]: pending_estimate["digit"]}, "")

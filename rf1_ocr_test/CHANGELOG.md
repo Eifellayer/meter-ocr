@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.14
+
+- **Bestandene Prüfung wird als bestanden gezeigt.** Wurde eine verdeckte Stelle aus dem Zählerstand ergänzt oder drehte sich die letzte Rolle, stand das bisher wie ein Problem da. Jetzt meldet die Übersicht „Alles OK“ mit Haken; die Einschränkung steht nur noch als Anmerkung darunter. Die Bildunterschrift nennt die ergänzte verdeckte Stelle richtig.
+- **Verdeckte Stelle wird nicht mehr aufwendig nachgeprüft.** Ist bekannt, dass eine Stelle durch eine Spiegelung verdeckt ist, entfällt die Nachprüfung dieser Stelle. Eine Prüfung dauert dadurch deutlich kürzer.
+- **Nach einer Einrichtung mit Spiegelung zuerst zwei Nachkommastellen.** Die App verglich danach sofort alle drei Nachkommastellen. Jetzt startet sie wie nach jeder Einrichtung mit zwei und sucht die letzte Rolle später im Hintergrund.
+- **Spiegelung per Tipp auf den Rahmen markieren.** Im Einrichtungsassistenten markiert ein Tipp auf einen Ziffernrahmen die Stelle als verdeckt oder hebt die Markierung auf; Ziehen verschiebt den Rahmen wie bisher. Darunter steht, was markiert ist.
+- **Die Selbsteinrichtung nutzt die markierte Stelle.** Eine von Hand markierte Stelle gilt ab dem ersten Bild als verdeckt. Übersicht und Einrichtung zeigen, welche Stelle als verdeckt behandelt wird.
+- **Testbild gehört erkennbar zu seiner Prüfung.** Unter dem Bild steht die Uhrzeit der Prüfung. Läuft gerade eine neue Prüfung, ist das Bild der vorigen abgeblendet und so beschriftet.
+- **Auslastung bei den Hintergrundaufgaben.** Unter der Liste stehen Prozessor, Arbeitsspeicher, Temperatur und die Zeit bis zur nächsten Prüfung.
+- *English:* A passed check is shown as passed, also when a hidden digit was filled in or the last roller was turning. A digit known to be hidden is no longer rechecked intensively, so checks are much shorter. After a setup with a reflection the app starts with two decimals. Tapping a digit frame marks or unmarks it as hidden; the automatic setup uses the mark, and overview and setup show it. The test picture names the time of its check and is dimmed while a new check is running. The background tasks show the machine load and the time until the next check.
+
 ## 0.5.13
 
 - **Keine erneute Nachfrage direkt nach der Eingabe.** Lief beim Eintragen des Zählerstands gerade eine Prüfung, kannte sie den neuen Stand noch nicht und fragte sofort wieder danach. Diese Prüfung fragt jetzt nicht mehr nach, sondern startet direkt die nächste, die den eingetragenen Stand nutzt.

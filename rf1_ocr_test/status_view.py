@@ -9,11 +9,15 @@ from datetime import datetime
 from checks import (FRAME_OFF_NOTICE, FRAME_OFF_WAIT_NOTICE, LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, MOVING_DIGIT_NOTICE,
                     MOVING_NOTICES, STANDALONE_PENDING, STANDALONE_REJECTED_NOTICE, STANDALONE_VERIFIED_NOTICE,
                     WARNING_DETAIL_AFTER)
+from checks import (HIDDEN_ESTIMATE_NOTICE, HIDDEN_FILLED_NOTICE, HIDDEN_FILLED_TURNING_NOTICE,
+                    REDUCED_PRECISION2_NOTICE, REDUCED_PRECISION_NOTICE)
 from consumption import EXCESSIVE_INCREASE, LOWER_PENDING, LOWER_READING
 from i18n import EN_UI, english_result
 from layout import MANUAL_ROW_UNCLEAR, PARTLY_UNCLEAR, RAW_ROW_UNCLEAR
 
 QUIET_FAILURES = 3
+CALM_PASS_NOTICES = (REDUCED_PRECISION_NOTICE, REDUCED_PRECISION2_NOTICE, HIDDEN_FILLED_NOTICE,
+                     HIDDEN_FILLED_TURNING_NOTICE, HIDDEN_ESTIMATE_NOTICE)
 
 
 def verdict(history, language, *, detail, precision_pending, paused, setup_pending, partial_eighth_digit, now,
@@ -32,6 +36,11 @@ def verdict(history, language, *, detail, precision_pending, paused, setup_pendi
     elif (not precision_pending and status == "ocr_only"
           and history.get("check_detail") == STANDALONE_VERIFIED_NOTICE):
         tone, heading, icon = "ok", "Zählerstand gegengeprüft", "✓"
+    elif (not precision_pending and status == "ocr_only"
+          and history.get("check_detail") in CALM_PASS_NOTICES):
+        # 0.5.14 (B6, Stefan 22.11., 14:27/14:30): the check passed; a turning roller or a digit
+        # filled from the meter reading is a remark, not a problem.
+        tone, heading, icon = "ok", "Prüfung bestanden", "✓"
     elif not precision_pending and status == "match_with_warning":
         tone, heading, icon = "notice", "Prüfung bestanden mit Hinweis", ""
         if history.get("check_detail") == LAST_DIGIT_PASS:

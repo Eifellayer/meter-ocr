@@ -525,6 +525,29 @@ FRAME_OFF_WAIT_NOTICE = ("Die letzte verglichene Stelle war mehrmals hintereinan
                          "Rahmen neben der Rolle. Bis das korrigiert ist, prüft die App mit einer Nachkommastelle weniger.")
 
 
+def only_known_hidden_unclear(ocr, decimals, integer_digits, hidden_slots):
+    """True when every unreadable compared digit is a known hidden slot or a turning last roller.
+
+    0.5.14 (B5): such a reading needs no intensive recheck – the hidden digit cannot be read
+    anyway and is filled from the meter reading and the flow.
+    """
+    text = str(ocr or "")
+    compared = integer_digits + (decimals + 1 if decimals else 0)
+    shown = text[:compared].replace(".", "")
+    if not hidden_slots or len(shown) != integer_digits + decimals or "?" not in shown:
+        return False
+    unclear = {index for index, char in enumerate(shown) if char == "?"}
+    turning = {len(shown) - 1} if decimals >= 2 else set()
+    return bool(unclear & set(hidden_slots)) and unclear <= set(hidden_slots) | turning
+
+
+HIDDEN_FILLED_NOTICE = ("Eine Stelle ist durch eine Spiegelung verdeckt und wurde aus dem Zählerstand und dem "
+                        "Durchfluss ergänzt. Alle anderen verglichenen Stellen wurden gelesen.")
+HIDDEN_FILLED_TURNING_NOTICE = ("Eine Stelle ist durch eine Spiegelung verdeckt und wurde aus dem Zählerstand und dem "
+                                "Durchfluss ergänzt. Die letzte Rolle drehte sich gerade; diese Prüfung gilt deshalb "
+                                "mit einer Nachkommastelle weniger.")
+
+
 def only_last_compared_unclear(ocr, decimals, integer_digits=5):
     """True if exactly the last compared position of the display is unreadable."""
     text = str(ocr or "")

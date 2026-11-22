@@ -34,7 +34,7 @@ from checks import (
     STANDALONE_CACHED_CAPTURE_DELAY, MAX_OCR_ATTEMPTS, DEFAULT_FAILURE_PAUSE_MINUTES, MAX_FAILURE_PAUSE_MINUTES, MIN_FAILURE_PAUSE_MINUTES, SHIFTED_DIGIT_POSITIONS, ROW_SHIFT_READS, ROW_SHIFT_TRIALS, plausible_integer_digits, note_skew, skew_offset, SHIFTED_DIGIT_READS, missing_digit_pattern, single_missing_digit, disputed_digit_pattern, resolve_ocr_readings,
     compare_sample, crop_register, lighting_ocr_profiles, read_register, read_with_retries, record_sample,
     anchored_leading_digits, anchored_hidden_digits, within_anchor_bounds, anchor_bounds,
-    learned_flow_limit, slow_roller_digit,
+    learned_flow_limit, slow_roller_digit, hidden_roller_flow, hidden_roller_interval, hidden_fill_reachable,
     automatic_interval_minutes, defer_duplicate_cycle,
     LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, LAST_DIGIT_RETRIES, SUCCESSFUL_CHECKS,
     SEVENTH_DIGIT_WAIT_NOTICE,
@@ -773,6 +773,15 @@ def hidden_reflection_slots(rules, source):
     if not isinstance(positions, list) or not all(type(slot) is int and slot >= 0 for slot in positions):
         return []
     return positions[:2]
+
+
+def hidden_roller_cadence(interval_minutes, rules, source, history):
+    """Shorter check interval while a reflection hides a slow roller, so it can be filled (0.5.10)."""
+    slots = hidden_reflection_slots(rules, source)
+    if not slots:
+        return interval_minutes
+    return hidden_roller_interval(interval_minutes, slots, rules["integer_digits"], rules["decimals"],
+                                  hidden_roller_flow(history, rules["max_flow_lph"]))
 
 
 def manual_reading_anchor(rules, zone):
@@ -2543,6 +2552,7 @@ def main():
         if adaptive:
             interval_minutes = suggested_interval(interval_minutes, history.get("adaptive_flow", {}), source_key, now.month)
         interval_minutes = stabilization_interval(interval_minutes, stabilizing_until, now.timestamp())
+        interval_minutes = hidden_roller_cadence(interval_minutes, active_rules, active_source, history)
         history["failure_pause_minutes"] = active_rules.get("failure_pause_minutes", DEFAULT_FAILURE_PAUSE_MINUTES)
         if not run_automatic_now and reschedule_next_check(history, interval_minutes):
             try:
@@ -3547,17 +3557,23 @@ def main():
                                 integer_digits, active_rules["max_flow_lph"],
                             )
                             hidden_slots = hidden_reflection_slots(active_rules, active_source)
+                            anchor_flow = active_rules["max_flow_lph"]
                             if not anchored and hidden_slots:
                                 anchor = newest_anchor(anchor, manual_reading_anchor(active_rules, zone),
                                                        read_state["captured"])
+                                # 0.5.10: with the configured maximum flow several values of a hidden
+                                # first decimal were always reachable and nothing was ever filled.
+                                anchor_flow = hidden_roller_flow(history, active_rules["max_flow_lph"])
                                 anchored = anchored_hidden_digits(
                                     ocr_readings, anchor, read_state["captured"], comparison_decimals,
-                                    integer_digits, active_rules["max_flow_lph"], hidden_slots,
+                                    integer_digits, anchor_flow, hidden_slots,
                                 )
                                 if anchored:
                                     updated.pop("hidden_digit_prompt", None)
-                                elif anchor is None:
-                                    # No verified or entered reading to fill the hidden digit from: ask once.
+                                elif not hidden_fill_reachable(anchor, read_state["captured"], hidden_slots,
+                                                               integer_digits, comparison_decimals, anchor_flow):
+                                    # No verified or entered reading (or one too old to leave a single
+                                    # possible value) to fill the hidden digit from: ask for the reading.
                                     updated["hidden_digit_prompt"] = {
                                         "positions": [slot + 1 for slot in hidden_slots], "time": time.time()}
                             if anchored:
@@ -3568,7 +3584,7 @@ def main():
                                 )
                                 if confirmed and within_anchor_bounds(
                                         value, anchor, read_state["captured"], comparison_decimals,
-                                        integer_digits, active_rules["max_flow_lph"]):
+                                        integer_digits, anchor_flow):
                                     print(f"Führende Stelle(n) {', '.join(str(p + 1) for p in filled_positions)} "
                                           f"aus bestätigtem Stand ergänzt: {ocr} -> {value}")
                                     ocr, ocr_confirmed, ocr_readings = value, True, anchored_readings
@@ -4019,6 +4035,7 @@ def main():
                         interval_minutes = suggested_interval(
                             automatic_interval_minutes(active_rules["interval_minutes"], mode), flow, source_key, now.month,
                         )
+                        interval_minutes = hidden_roller_cadence(interval_minutes, active_rules, active_source, updated)
                     local_backup = updated.get("local_geometry_backup", {})
                     if (not optimization_paused and not frames_fixed and (active_rules["fine_alignment_enabled"] or local_backup.get("optimizer"))
                             and local_backup.get("revision") == active_rules["crop_revision"]

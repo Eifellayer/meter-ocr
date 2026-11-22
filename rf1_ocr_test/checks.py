@@ -872,6 +872,57 @@ def slow_roller_digit(readings, anchor, stamp, decimals, integer_digits, flow_li
     return anchored_hidden_digits(readings, anchor, stamp, decimals, integer_digits, flow_limit_lph, slots)
 
 
+HIDDEN_ROLLER_MIN_MINUTES = 2
+HIDDEN_ROLLER_JITTER = .75
+
+
+def hidden_roller_flow(history, max_flow_lph):
+    """Flow bound for a roller a reflection hides permanently (0.5.10).
+
+    The configured maximum (6 m³/h) allows several values of the first decimal between two
+    checks, so nothing could ever be filled. The limit learned from confirmed readings is used
+    instead, and before anything was learned the same floor the slow-roller completion uses.
+    """
+    learned = learned_flow_limit(history, max_flow_lph)
+    if learned is not None:
+        return learned
+    if type(max_flow_lph) not in (int, float) or max_flow_lph <= 0:
+        return SLOW_ROLLER_FLOOR_LPH
+    return min(max_flow_lph, SLOW_ROLLER_FLOOR_LPH)
+
+
+def hidden_roller_span(slots, integer_digits, decimals):
+    """Litres between two neighbouring values of the finest hidden roller, or None if not fillable."""
+    spans = []
+    for slot in slots:
+        if type(slot) is not int or slot < 0 or slot >= integer_digits + decimals:
+            continue
+        spans.append(10 ** (2 - (slot - integer_digits)) if slot >= integer_digits
+                     else 1000 * 10 ** (integer_digits - 1 - slot))
+    step = 10 ** (3 - decimals)
+    # The last compared roller cannot be filled: every value of it is always reachable.
+    return min(spans) if spans and min(spans) > 2 * step else None
+
+
+def hidden_roller_interval(interval_minutes, slots, integer_digits, decimals, flow_lph):
+    """Check often enough that only one value of a hidden roller is reachable between two checks."""
+    span = hidden_roller_span(slots, integer_digits, decimals)
+    if span is None or type(flow_lph) not in (int, float) or flow_lph <= 0:
+        return interval_minutes
+    step = 10 ** (3 - decimals)
+    minutes = int((span - 2 * step) * 60 / flow_lph * HIDDEN_ROLLER_JITTER)
+    return min(interval_minutes, max(HIDDEN_ROLLER_MIN_MINUTES, minutes))
+
+
+def hidden_fill_reachable(anchor, stamp, slots, integer_digits, decimals, flow_lph):
+    """Whether the anchor is still close enough for exactly one value of the hidden roller."""
+    span = hidden_roller_span(slots, integer_digits, decimals)
+    bounds = anchor_bounds(anchor, stamp, decimals, flow_lph)
+    if span is None or bounds is None:
+        return False
+    return bounds[1] - bounds[0] + 10 ** (3 - decimals) < span
+
+
 def track_reflection(history, ocr, readings, stamp, *, verified, unclear, decimals,
                      integer_digits, max_flow_lph, enabled, manual_anchor=None):
     pattern = single_missing_digit(ocr, readings, decimals, integer_digits) if unclear else None

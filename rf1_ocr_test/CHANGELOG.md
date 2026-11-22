@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.22
+
+- **Neue Suche auch bei schon quer eingerichtetem Zähler.** War der Zähler schon um 90 Grad gedreht eingerichtet, las der alte Rahmen oft die vollen Kubikmeter. Die Einrichtung hielt die Suche damit für erledigt und probierte keine gedrehten Rahmen mehr aus – auch nicht die mit Schräglage aus 0.5.21. Jetzt zählt dafür nur noch ein aufrechter Rahmen. Außerdem darf die automatische Nachjustierung bei einem quer oder auf dem Kopf eingerichteten Zähler ebenfalls nach gedrehten Rahmen suchen.
+- *English:* A new search also for a counter already set up sideways: the old frame often read the whole cubic metres, so the setup took the search as done and never tried turned frames again – not even the tilted ones from 0.5.21. Only an upright frame counts for that now. The automatic readjustment may also search turned frames for a counter set up sideways or upside down.
+
 ## 0.5.21
 
 - **Quer und zugleich schief hängender Zähler.** Lag das Zählwerk um 90 Grad gedreht im Bild und hing es zusätzlich ein paar Grad schief, suchte die Einrichtung nach der Vierteldrehung nur einen genau geraden Rahmen. Der schnitt am anderen Ende die Nachkommastellen ab, sie blieben dauerhaft unlesbar. Jetzt misst die Einrichtung auch nach einer Vierteldrehung die verbleibende Schräglage und übernimmt sie in die Drehung des Rahmens. Das gilt ebenso für einen auf dem Kopf stehenden Zähler.

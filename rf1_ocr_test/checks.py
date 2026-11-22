@@ -1,0 +1,1500 @@
+"""Independent OCR and restart-safe agreement counts over a rolling window."""
+from collections import Counter
+from datetime import datetime
+from decimal import Decimal
+import io
+import hashlib
+import json
+import os
+from itertools import product
+import re
+from statistics import median
+import subprocess
+import time
+
+from PIL import Image, ImageChops, ImageFilter, ImageOps, ImageStat
+
+WINDOW_SECONDS = 24 * 60 * 60
+REQUIRED_MATCHES = 5
+DEFAULT_INTERVAL_MINUTES = 10
+LEGACY_INTERVAL_MINUTES = 60
+MAX_INTERVAL_MINUTES = 24 * 60
+NORMAL_INTERVAL = DEFAULT_INTERVAL_MINUTES * 60
+RETRY_INTERVAL = 5 * 60
+STANDALONE_SECOND_CAPTURE_DELAY = 5
+STANDALONE_CACHED_CAPTURE_DELAY = 15
+FAILURE_RETRY_LIMIT = 3
+FAILURE_COOLDOWN_INTERVAL = 30 * 60  # default pause after three failed checks (settable)
+MIN_FAILURE_PAUSE_MINUTES, MAX_FAILURE_PAUSE_MINUTES = 5, 240
+DEFAULT_FAILURE_PAUSE_MINUTES = FAILURE_COOLDOWN_INTERVAL // 60
+# When the host has spare capacity, retry sooner: a failed check usually just met a turning roller.
+QUICK_RETRY_INTERVAL = 2 * 60
+# Stefan (22.11., 11:45): a check that was only coarser because the last roller was turning gets a
+# new picture pair soon (the roller stands still again after half a minute or so) instead of
+# waiting the full interval. Once per series of coarser checks, so a steadily running meter does
+# not double the number of checks.
+TURNING_RETRY_SECONDS = 45
+IDLE_LOAD_PER_CPU = 0.6
+
+
+def system_idle():
+    """True when the host (e.g. the Pi running Home Assistant) has spare CPU capacity."""
+    try:
+        load = os.getloadavg()[0]
+    except (AttributeError, OSError):
+        return False
+    return load < (os.cpu_count() or 1) * IDLE_LOAD_PER_CPU
+WARNING_DETAIL_AFTER = 60 * 60
+REVIEW_AFTER = 4 * 60 * 60
+FRESH_SAMPLE_AGE = 15 * 60
+FALLBACK_NOTICE = "Der ESP verwendet einen Ersatzwert."
+FALLBACK_STATUS = re.compile(
+    r"^(?:E9[123]|00[234])(?:\s|$)|\b(?:use|using) fallback\b|\brate (?:too high|negative)\b",
+    re.IGNORECASE,
+)
+# Cutoff, sharpening, threshold and optional correction for uneven lighting.
+OCR_PROFILES = (
+    (2, 175, 155, False),
+    (0, 125, 125, False),
+    (1, 225, 140, True),
+    (3, 215, 175, True),
+    (6, 200, 180, True),
+    (2, 130, 145, False),
+    (4, 150, 165, False),
+    (1, 185, 155, True),
+    (5, 160, 135, False),
+    (0, 210, 195, True),
+    (2, 140, 135, True),
+    (4, 225, 150, False),
+    (6, 130, 175, True),
+    (3, 160, 190, False),
+    (5, 210, 145, True),
+)
+MAX_CONFIGURED_OCR_ATTEMPTS = 10
+MAX_OCR_ATTEMPTS = len(OCR_PROFILES)
+# Digits still missing after the regular attempts get their own frames nudged and re-read:
+# at most this many positions and this many additional single-digit reads per check.
+SHIFTED_DIGIT_POSITIONS = 3
+SHIFTED_DIGIT_READS = 16
+# Then up to three trials with the whole row of frames moved slightly (two reads each).
+ROW_SHIFT_TRIALS = 3
+ROW_SHIFT_READS = 6
+
+
+def lighting_ocr_profiles(picture):
+    """Try existing shadow-correction profiles sooner on dim or uneven images."""
+    gray = picture.convert("L").resize((64, 20), Image.Resampling.BILINEAR)
+    levels = sorted(gray.tobytes())
+    low, high = levels[len(levels) // 10], levels[len(levels) * 9 // 10]
+    zones = gray.resize((4, 2), Image.Resampling.BOX).tobytes()
+    if high < 75 or high - low < 45 or max(zones) - min(zones) >= 45:
+        return (OCR_PROFILES[0], OCR_PROFILES[2], OCR_PROFILES[1], *OCR_PROFILES[3:])
+    return OCR_PROFILES
+
+
+def crop_register(picture, crop):
+    left, top, right, bottom = crop
+    if not (0 <= left < right <= picture.width and 0 <= top < bottom <= picture.height):
+        raise ValueError(f"Ausschnitt {crop} liegt außerhalb von {picture.size}")
+    return picture.crop(crop)
+
+
+def contrast_channel(picture):
+    """Greyscale from the colour channel with the strongest contrast.
+
+    Red decimal rollers on a white face almost vanish in plain luminance; the green or
+    blue channel keeps them dark. Tested on public meter-digit crops (water and gas):
+    about ten percentage points more correct digits and fewer guesses on unreadable ones.
+    """
+    if picture.mode == "L":
+        return picture
+    rgb = picture.convert("RGB")
+    candidates = [rgb.convert("L"), *rgb.split()]
+    scores = [ImageStat.Stat(channel).stddev[0] for channel in candidates]
+    best = max(range(len(candidates)), key=lambda index: scores[index])
+    # Prefer luminance unless a colour channel is clearly better.
+    return candidates[best] if scores[best] > scores[0] * 1.15 else candidates[0]
+
+
+def read_register(picture, light_digits, digits=5, *, force_polarity=False, profile=OCR_PROFILES[0], deadline=None,
+                  process_env=None, isolated_digit=False):
+    image = contrast_channel(picture)
+    polarities = (light_digits,) if force_polarity else (light_digits, not light_digits)
+    reads = set()
+    limits = {}
+    if deadline is not None:
+        limits["deadline"] = deadline
+    if process_env is not None:
+        limits["process_env"] = process_env
+    if isolated_digit and digits == 1:
+        limits["isolated_digit"] = True
+    for invert in polarities:
+        gray = ImageOps.invert(image) if invert else image
+        value = read_polarity(gray, digits, profile, **limits)
+        if value is not None:
+            reads.add(value)
+    return next(iter(reads)) if len(reads) == 1 else None
+
+def reduce_uneven_lighting(image):
+    """Estimate broad shadows on a small image while excluding the dark strokes."""
+    background = image.copy()
+    background.thumbnail((240, 80))
+    kernel = max(5, (background.height // 12) | 1)
+    background = background.filter(ImageFilter.MaxFilter(kernel)).filter(ImageFilter.MinFilter(kernel))
+    low, high = background.resize((6, 2), Image.Resampling.BILINEAR).getextrema()
+    if high - low < 45:
+        return image
+    background = background.resize(image.size, Image.Resampling.BILINEAR)
+    return ImageChops.subtract(image, background, offset=255)
+
+
+def read_polarity(image, digits, profile, *, deadline=None, process_env=None, isolated_digit=False):
+    cutoff, sharpening, threshold, reduce_shadows = profile
+    if reduce_shadows:
+        image = reduce_uneven_lighting(image)
+    gray = ImageOps.autocontrast(image, cutoff=cutoff)
+    variants = (
+        gray,
+        gray.filter(ImageFilter.UnsharpMask(radius=2, percent=sharpening, threshold=2)),
+        gray.point(lambda value: 255 if value >= threshold else 0),
+    )
+    def read_variant(variant, segmentation):
+        timeout = min(12, deadline - time.monotonic()) if deadline is not None else 12
+        if timeout <= 0:
+            raise TimeoutError("OCR deadline reached")
+        scale = min(3, 2200 / variant.width, 700 / variant.height)
+        resized = variant.resize((max(1, round(variant.width * scale)),
+                                  max(1, round(variant.height * scale))))
+        prepared = ImageOps.expand(resized, border=24, fill=255)
+        with io.BytesIO() as png:
+            prepared.save(png, "PNG")
+            result = subprocess.run(
+                ["tesseract", "stdin", "stdout", "-l", "eng", "--psm", str(segmentation),
+                 "-c", "tessedit_char_whitelist=0123456789"],
+                input=png.getvalue(), capture_output=True, timeout=timeout, check=True,
+                **({"env": process_env} if process_env is not None else {}),
+            ).stdout.decode("ascii", errors="ignore").strip()
+        return result if len(result) == digits and result.isascii() and result.isdigit() else None
+
+    votes = Counter(filter(None, (read_variant(variant, 10 if digits == 1 else 7) for variant in variants)))
+    if len(votes) == 1:
+        value, count = votes.most_common(1)[0]
+        if count >= 2:
+            return value
+    if isolated_digit and not votes:
+        # A tightly marked, high-contrast glyph can be missed by single-character
+        # segmentation. Accept the extra evidence only from an isolated shape.
+        binary = gray.point(lambda value: 255 if value >= min(148, max(140, threshold)) else 0)
+        ink = ImageOps.invert(binary)
+        bounds = ink.getbbox()
+        if bounds and 0.04 <= ink.histogram()[255] / (ink.width * ink.height) <= 0.42:
+            left, top, right, bottom = bounds
+            if (left > 0 and top > 0 and right < ink.width and bottom < ink.height
+                    and bottom - top >= ink.height * .35 and right - left >= ink.width * .15):
+                value = read_variant(binary, 8)
+                if value and value == read_variant(binary, 13):
+                    return value
+    return None
+
+
+def meter_prefix(value, decimals, integer_digits=5):
+    if type(integer_digits) is not int or not 1 <= integer_digits <= 9:
+        return None
+    match = re.fullmatch(rf"([0-9]{{1,{integer_digits}}})(?:[.,]([0-9Nn?]+))?", str(value))
+    if not match:
+        return None
+    fractional = (match[2] or "")[:decimals]
+    if decimals and (len(fractional) != decimals or not fractional.isdigit()):
+        return None
+    return int(match[1] + fractional)
+
+
+def rounded_meter_prefix(value, decimals, integer_digits=5):
+    """Return the selected meter precision rounded half up when the next digit is known."""
+    prefix = meter_prefix(value, decimals, integer_digits)
+    if prefix is None or decimals == 0:
+        return prefix
+    match = re.fullmatch(rf"([0-9]{{1,{integer_digits}}})(?:[.,]([0-9Nn?]+))?", str(value))
+    fraction = match[2] or ""
+    if len(fraction) > decimals and fraction[decimals].isdigit() and fraction[decimals] >= "5":
+        prefix += 1
+    return prefix
+
+
+def common_exact_precision(first, second, max_decimals, integer_digits=5):
+    """Return the finest decimal precision explicitly present and equal in both readings."""
+    for decimals in range(max_decimals, -1, -1):
+        left = meter_prefix(first, decimals, integer_digits)
+        right = meter_prefix(second, decimals, integer_digits)
+        if left is not None and right is not None and left == right:
+            return decimals
+    return None
+
+
+def manual_confirms_failed_auto(history, sample, ocr, *, status, uploaded_image, image_time,
+                                reference_time, source_key, manual_decimals, auto_decimals,
+                                ocr_confirmed, integer_digits, reference_overridden=False):
+    """Only let a manual pass clear failure for the same automatically checked capture."""
+    return (
+        status == "match"
+        and not uploaded_image
+        and not reference_overridden
+        and image_time == history.get("last_epoch")
+        and history.get("check_source") == source_key
+        and (reference_time or image_time)
+            == (history.get("last_reference_time") or history.get("last_epoch"))
+        and history.get("check_status") in (
+            "difference", "ocr_unclear", "slfork_unclear",
+        )
+        and manual_decimals == auto_decimals
+        and compare_sample(sample, ocr, auto_decimals, ocr_confirmed=ocr_confirmed,
+                           integer_digits=integer_digits)[0] == "match"
+    )
+
+
+def comparison_scope(decimals):
+    """Explain precisely which digits participate in a comparison."""
+    if decimals == 0:
+        return "volle Kubikmeter; Nachkommastellen werden nicht verglichen"
+    return f"volle Kubikmeter und {decimals} Nachkommastelle" + ("n" if decimals > 1 else "")
+
+
+def uncertain_positions(readings, decimals, integer_digits=5):
+    """Return 1-based digit positions, or None when all were unreadable."""
+    positions = list(range(integer_digits)) + list(range(integer_digits + 1, integer_digits + 1 + decimals))
+    evidence = [
+        {value[position] if len(value) > position else "?" for value in readings}
+        for position in positions
+    ]
+    if not any(any(char in "0123456789" for char in chars) for chars in evidence):
+        return None
+    return [
+        (position > integer_digits, position - integer_digits if position > integer_digits else position + 1)
+        for position, chars in zip(positions, evidence)
+        if len(chars) != 1 or not all(char in "0123456789" for char in chars)
+    ]
+
+
+def explain_uncertain_positions(readings, decimals, integer_digits=5):
+    """Explain differences at digit positions relevant to this comparison."""
+    positions = uncertain_positions(readings, decimals, integer_digits)
+    if positions is None:
+        return "Keine Ziffern lesbar. Prüfe Ausschnitt und Licht."
+    if not positions:
+        return "OCR unsicher. Bild prüfen."
+    groups = []
+    for fractional, title in ((False, "Vor dem Komma"), (True, "Nach dem Komma")):
+        digits = [str(index) for is_fractional, index in positions if is_fractional == fractional]
+        if digits:
+            groups.append(title + ": " + ", ".join(digits) + ".")
+    return "OCR unsicher. " + " ".join(groups)
+
+
+def disputed_integer_positions(readings, integer_digits, decimals=0):
+    """Whole-number positions on which the readings of one image seriously disagree.
+
+    Two different digits, each read at least twice, cannot both be right. A turning roller
+    explains this only between neighbouring digits while the position to its right shows
+    9 or 0 (the carry). Anything else is a misread (e.g. a narrow 0 read as 1); taking the
+    majority there booked a whole cubic metre too much (20.11.2026, 10490.4 -> 10491.4).
+    """
+    disputed = set()
+    rows = [str(value) for value in readings]
+    for position in range(integer_digits):
+        votes = Counter(row[position] for row in rows if position < len(row) and row[position].isdigit())
+        top = max(votes.values(), default=0)
+        # A rival digit counts when it was read at least twice and by at least a third as
+        # many readings as the leading digit (3:2 or 8:7 is a dispute, 12:3 is noise).
+        strong = sorted(digit for digit, count in votes.items() if count >= 2 and 3 * count >= top)
+        if len(strong) < 2:
+            continue
+        if len(strong) == 2 and (int(strong[1]) - int(strong[0])) % 10 in (1, 9):
+            following = position + 1 if position + 1 < integer_digits else integer_digits + 1
+            if following < integer_digits or decimals:
+                carry = [row[following] for row in rows if following < len(row) and row[following].isdigit()]
+                if carry and all(char in "90" for char in carry):
+                    continue
+        disputed.add(position)
+    return disputed
+
+
+def read_with_retries(read, data, decimals, progress=None, max_attempts=5, trace=None, *, standalone=False,
+                      integer_digits=5, stop_before_attempt=None, force_all_attempts=False,
+                      extra_attempts=0, profiles=OCR_PROFILES, defer_composition=False,
+                      exact_prefix=False):
+    """Read one image up to max_attempts times; stop on the first valid agreement."""
+    if type(max_attempts) is not int or not 1 <= max_attempts <= MAX_CONFIGURED_OCR_ATTEMPTS:
+        raise ValueError("OCR-Versuche müssen zwischen 1 und 10 liegen")
+    if type(extra_attempts) is not int or not 0 <= extra_attempts <= 10:
+        raise ValueError("Zusätzliche OCR-Versuche müssen zwischen 0 und 10 liegen")
+    attempt_limit = min(MAX_OCR_ATTEMPTS, max_attempts + extra_attempts)
+    readings = []
+    for index, profile in enumerate(profiles[:attempt_limit], start=1):
+        if index > 1 and stop_before_attempt and stop_before_attempt():
+            break
+        if progress:
+            progress(index - 1, f"Versuch {index} von {attempt_limit} läuft …")
+        try:
+            value = read(profile)
+        except subprocess.TimeoutExpired as error:
+            print(f"OCR-Variante hat das Zeitlimit überschritten: {error}")
+            value = "?" * integer_digits + ("." + "?" * decimals if decimals else "")
+        status, _ = compare_sample(data, value, decimals, integer_digits=integer_digits,
+                                   exact_prefix=exact_prefix)
+        readings.append(value)
+        if trace is not None:
+            trace.append(str(value))
+        if progress:
+            progress(index, f"Versuch {index} von {attempt_limit} abgeschlossen.")
+        # Stop immediately on a verified match.
+        # Without a reference, a valid OCR result ends the read.
+        if status == "match" or (status == "ocr_only" and not standalone and not force_all_attempts):
+            return value, True, index
+        if standalone and index >= max_attempts:
+            majority = len(readings) // 2 + 1
+            minimum_votes = max(2, majority)
+            prefix_length = integer_digits + (decimals + 1 if decimals else 0)
+            prefixes = Counter(item[:prefix_length] for item in readings
+                               if meter_prefix(item, decimals, integer_digits) is not None)
+            stable = next((item for item, count in prefixes.items() if count >= minimum_votes), None)
+            if stable is not None and disputed_integer_positions(readings, integer_digits, decimals):
+                stable = None
+            if stable is not None:
+                return next(item for item in readings if item.startswith(stable)), True, index
+
+    value, confirmed = resolve_ocr_readings(
+        readings, decimals, integer_digits, standalone=standalone,
+        standalone_composition=attempt_limit > max_attempts, compose=not defer_composition,
+    )
+    return value, confirmed, len(readings)
+
+
+def plausible_integer_digits(previous_litres, previous_time, now, max_flow_lph, integer_digits):
+    """Digits each whole-number position can still show, given the last confirmed reading.
+
+    The meter cannot run backwards and not faster than the configured maximum flow. Returns
+    one set of allowed digits per whole-number position, or None when nothing useful follows.
+    """
+    if (type(previous_litres) is not int or type(previous_time) not in (int, float)
+            or type(max_flow_lph) not in (int, float) or max_flow_lph <= 0):
+        return None
+    hours = max(0.0, now - previous_time) / 3600 + .1
+    low = previous_litres // 1000
+    high = (previous_litres + round(max_flow_lph * hours)) // 1000
+    if high - low > 9 or high >= 10 ** integer_digits:
+        return None
+    values = [str(value).zfill(integer_digits) for value in range(low, high + 1)]
+    return [set(value[position] for value in values) for position in range(integer_digits)]
+
+
+def mask_implausible(readings, allowed, integer_digits):
+    """Blank whole-number digits that the last confirmed reading rules out (e.g. 8 read as 6)."""
+    if not allowed:
+        return list(readings)
+    masked = []
+    for value in readings:
+        chars = list(str(value))
+        for position in range(min(integer_digits, len(chars))):
+            if chars[position].isdigit() and chars[position] not in allowed[position]:
+                chars[position] = "?"
+        masked.append("".join(chars))
+    return masked
+
+
+def resolve_ocr_readings(readings, decimals, integer_digits, *, standalone=False,
+                         standalone_composition=False, compose=True, allowed=None):
+    # Keep stable complete reads, then compose only strict-majority digits.
+    if allowed:
+        readings = mask_implausible(readings, allowed, integer_digits)
+    majority = len(readings) // 2 + 1
+    minimum_votes = max(2, majority) if standalone else majority
+    prefix_length = integer_digits + (decimals + 1 if decimals else 0)
+    prefixes = Counter(value[:prefix_length] for value in readings
+                       if meter_prefix(value, decimals, integer_digits) is not None)
+    prefix = next((value for value, count in prefixes.items() if count >= minimum_votes), None)
+    disputed = disputed_integer_positions(readings, integer_digits, decimals)
+    if disputed:
+        prefix = None
+    if not compose:
+        if prefix is not None:
+            return next(value for value in readings if value.startswith(prefix)), True
+        return max(readings, key=lambda value: sum(ch.isdigit() for ch in value[:prefix_length]), default=""), False
+    display = []
+    for column in zip(*readings):
+        digit, count = Counter(column).most_common(1)[0]
+        display.append(digit if count >= majority else "?")
+    if prefix is not None:
+        display[:prefix_length] = prefix
+    positions = list(range(integer_digits))
+    if decimals:
+        positions.extend(range(integer_digits + 1, integer_digits + 1 + decimals))
+    combined = {}
+    for position in positions:
+        votes = Counter(value[position] for value in readings
+                        if position < len(value) and value[position] in "0123456789")
+        digit, count = votes.most_common(1)[0] if votes else ("", 0)
+        if position in disputed:
+            continue
+        if count >= majority:
+            combined[position] = digit
+        elif allowed and position < integer_digits and count >= 2 and len(votes) == 1:
+            # The impossible readings were blanked; the remaining ones agree.
+            combined[position] = digit
+    for position in range(integer_digits):
+        if position in combined:
+            display[position] = combined[position]
+        elif position in disputed and position < len(display):
+            display[position] = "?"
+    if decimals:
+        for position in range(integer_digits + 1, integer_digits + 1 + decimals):
+            if position in combined and position < len(display):
+                display[position] = combined[position]
+    complete = len(combined) == len(positions)
+    if standalone:
+        return "".join(display), prefix is not None or (
+            standalone_composition and len(readings) >= 2 and complete
+        )
+    return "".join(display), prefix is not None or complete
+
+
+def compare_sample(data, ocr, decimals, *, ocr_confirmed=True, integer_digits=5, exact_prefix=False):
+    if data.get("reference_is_fallback"):
+        return "slfork_unclear", FALLBACK_NOTICE
+    if not ocr_confirmed:
+        return "ocr_unclear", "Zählerstand nicht sicher erkannt. Prüfe die unklaren Stellen im Kamerabild."
+    prefix_reader = meter_prefix if exact_prefix else rounded_meter_prefix
+    value = prefix_reader(ocr, decimals, integer_digits)
+    if value is None:
+        return "ocr_unclear", "Zählerstand nicht lesbar. Mindestens eine benötigte Ziffer konnte nicht erkannt werden. Prüfe das Kamerabild."
+    if data.get("reference_required") is False:
+        return "ocr_only", "Zählerstand gelesen, aber ohne Referenzwert nicht bestätigt. Vergleichseinstellung: " + comparison_scope(decimals) + "."
+    source_status = data.get("slfork_value_status") or ""
+    if re.match(r"^[EW][0-9]+(?:\s|$)", str(source_status)):
+        return "slfork_unclear", "Der ESP meldet ein Problem mit der Zählerablesung. Prüfe den Wert direkt am ESP."
+    if data.get("slfork_process_error") in (-1, -2, "-1", "-2"):
+        return "slfork_unclear", "Die Messung am ESP wurde abgebrochen. Prüfe den ESP; die nächste Aufnahme folgt automatisch."
+    raw = prefix_reader(data["raw_value"], decimals, integer_digits)
+    actual = prefix_reader(data["actual_value"], decimals, integer_digits)
+    if raw is None or actual is None:
+        return "slfork_unclear", "Referenzwert fehlt oder ist ungültig."
+    if raw != actual:
+        return "slfork_unclear", "Der ESP liefert widersprüchliche Zählerwerte. Prüfe den angezeigten Stand am ESP."
+    if value != actual:
+        if decimals == 0:
+            return "difference", "Abweichung: Die vollen Kubikmeter stimmen nicht überein. Bitte das Zählerbild prüfen."
+        if exact_prefix:
+            return ("difference", f"Abweichung: Die ersten {decimals} Nachkommastellen "
+                    "stimmen ohne Rundung nicht mit der Referenz überein.")
+        return ("difference",
+                f"Abweichung: Gerundet auf {decimals} Nachkommastelle{'' if decimals == 1 else 'n'} "
+                "stimmen die Werte nicht überein. Bitte das Zählerbild prüfen.")
+    if decimals == 0:
+        return "match", "Bestätigt: Die vollen Kubikmeter stimmen überein. Nachkommastellen wurden nicht berücksichtigt."
+    if exact_prefix:
+        return ("match", f"Bestätigt: Die ersten {decimals} Nachkommastellen "
+                "stimmen ohne Rundung mit der Referenz überein. Die nächste Stelle bleibt unbestätigt.")
+    return ("match",
+            f"Bestätigt: Gerundet auf {decimals} Nachkommastelle{'' if decimals == 1 else 'n'} "
+            "stimmen Zählerstand und Referenzwert überein.")
+
+
+LAST_DIGIT_NOTICE = "Nur die dritte Nachkommastelle ist unklar oder weicht ab."
+REDUCED_PRECISION_NOTICE = ("Die letzte verglichene Rolle war unklar, vermutlich drehte sie sich gerade. Diese Prüfung wurde deshalb mit einer "
+                            "Nachkommastelle weniger bestätigt. Die nächste Prüfung vergleicht wieder alle Stellen.")
+MOVING_DIGIT_NOTICE = ("Nur die letzte verglichene Stelle war unklar – vermutlich drehte sich die Rolle gerade. "
+                       "Die nächste Prüfung folgt automatisch.")
+MOVING_DIGITS_NOTICE = ("Nur die letzten zwei verglichenen Stellen waren unklar – vermutlich drehten sich die Rollen gerade. "
+                        "Die nächste Prüfung folgt automatisch.")
+REDUCED_PRECISION2_NOTICE = ("Die letzten zwei verglichenen Rollen waren unklar, vermutlich drehten sie sich gerade. Diese Prüfung "
+                             "wurde deshalb mit zwei Nachkommastellen weniger bestätigt. Die nächste Prüfung vergleicht wieder alle Stellen.")
+MOVING_NOTICES = (MOVING_DIGIT_NOTICE, MOVING_DIGITS_NOTICE)
+REDUCED_NOTICES = (REDUCED_PRECISION_NOTICE, REDUCED_PRECISION2_NOTICE)
+TURNING_RETRY_REASON = "turning_retry"
+# Reading below a probably misread stored value; the lower-series correction is collecting.
+LOWER_PENDING_NOTICE = ("Zählerstand liegt unter dem letzten gültigen Wert. Bestätigen weitere stimmige "
+                        "Ablesungen den niedrigeren Stand, wird er übernommen.")
+
+
+# The same last position unclear on several checks in a row is not a turning roller:
+# its frame most likely sits beside the roller.
+FRAME_OFF_STREAK = 3
+FRAME_OFF_NOTICE = ("Die letzte verglichene Stelle war mehrmals hintereinander unklar. Das liegt vermutlich nicht "
+                    "an einer drehenden Rolle, sondern daran, dass ihr Rahmen neben der Rolle sitzt. Die App sucht "
+                    "ihn im Hintergrund neu und prüft bis dahin mit einer Nachkommastelle weniger.")
+FRAME_OFF_WAIT_NOTICE = ("Die letzte verglichene Stelle war mehrmals hintereinander unklar. Vermutlich sitzt ihr "
+                         "Rahmen neben der Rolle. Bis das korrigiert ist, prüft die App mit einer Nachkommastelle weniger.")
+
+
+def only_known_hidden_unclear(ocr, decimals, integer_digits, hidden_slots):
+    """True when every unreadable compared digit is a known hidden slot or a turning last roller.
+
+    0.5.14 (B5): such a reading needs no intensive recheck – the hidden digit cannot be read
+    anyway and is filled from the meter reading and the flow.
+    """
+    text = str(ocr or "")
+    compared = integer_digits + (decimals + 1 if decimals else 0)
+    shown = text[:compared].replace(".", "")
+    if not hidden_slots or len(shown) != integer_digits + decimals or "?" not in shown:
+        return False
+    unclear = {index for index, char in enumerate(shown) if char == "?"}
+    # A turning last compared roller is allowed as well: it is not rechecked during the check, but
+    # re-read in the pause between two checks (0.5.17, Stefan 22.11., 15:31/15:33).
+    turning = {len(shown) - 1} if decimals >= 2 else set()
+    return bool(unclear & set(hidden_slots)) and unclear <= set(hidden_slots) | turning
+
+
+HIDDEN_FILLED_NOTICE = ("Eine Stelle ist durch eine Spiegelung verdeckt und wurde aus dem Zählerstand und dem "
+                        "Durchfluss ergänzt. Alle anderen verglichenen Stellen wurden gelesen.")
+HIDDEN_FILLED_TURNING_NOTICE = ("Eine Stelle ist durch eine Spiegelung verdeckt und wurde aus dem Zählerstand und dem "
+                                "Durchfluss ergänzt. Die letzte Rolle drehte sich gerade; diese Prüfung gilt deshalb "
+                                "mit einer Nachkommastelle weniger.")
+
+
+def only_last_compared_unclear(ocr, decimals, integer_digits=5):
+    """True if exactly the last compared position of the display is unreadable."""
+    text = str(ocr or "")
+    compared = integer_digits + (decimals + 1 if decimals else 0)
+    shown = text[:compared]
+    return (len(shown) == compared and shown[-1] == "?"
+            and "?" not in shown[:-1] and shown[:integer_digits].isdigit())
+def unclear_trailing_decimals(ocr, decimals, integer_digits=5):
+    """Number of trailing compared decimals (1 or 2) that are unreadable while the rest is certain.
+
+    Two trailing positions only count while at least the first decimal stays readable, so a
+    turning pair of rollers is confirmed one or two places coarser instead of failing.
+    """
+    text = str(ocr or "")
+    compared = integer_digits + (decimals + 1 if decimals else 0)
+    shown = text[:compared]
+    if len(shown) != compared or not shown[:integer_digits].isdigit():
+        return 0
+    for drop in (1, 2):
+        if drop > decimals or (drop == 2 and decimals - drop < 1):
+            break
+        if shown[-drop:] == "?" * drop and "?" not in shown[:-drop]:
+            return drop
+    return 0
+
+def last_two_compared_unclear(ocr, decimals, integer_digits=5):
+    """Are exactly the last two compared decimals unreadable while every digit before is certain?
+
+    Unlike ``unclear_trailing_decimals`` this also holds when only two decimals are compared:
+    the reading is then not accepted coarser, but the check is no failure that counts towards
+    the pause after three failed checks (0.5.0, both turning rollers instead of only the last).
+    """
+    text = str(ocr or "")
+    compared = integer_digits + (decimals + 1 if decimals else 0)
+    shown = text[:compared]
+    return (decimals >= 2 and len(shown) == compared and shown.endswith("??")
+            and "?" not in shown[:-2] and shown[:integer_digits].isdigit())
+
+
+LAST_DIGIT_PASS = "Die ersten zwei Nachkommastellen stimmen überein. Die dritte ist bei dieser Prüfung noch nicht bestätigt."
+LAST_DIGIT_RETRIES = 3
+SEVENTH_DIGIT_WAIT_SECONDS = 30 * 60
+SEVENTH_DIGIT_WAIT_NOTICE = (
+    "Die siebte Ziffer ist unklar. Die App wartet, bis der Zählerstand weiter steigt, "
+    "und prüft in 30 Minuten erneut."
+)
+SEVENTH_DIGIT_PASS = (
+    "Die ersten sechs Ziffern stimmen ungerundet mit dem Vergleichswert überein. "
+    "Die siebte Ziffer ist noch nicht sicher lesbar, deshalb ist diese Prüfung nur "
+    "bis zur ersten Nachkommastelle bestätigt. Verbrauch und eingestellte Genauigkeit "
+    "bleiben unverändert. Bis der Zählerstand weiter steigt, prüft die App "
+    "vorübergehend alle 30 Minuten."
+)
+SUCCESSFUL_CHECKS = ("match", "match_with_warning", "ocr_only")
+STANDALONE_PENDING = "standalone_pending"
+STANDALONE_PENDING_NOTICE = "Erstes Bild gelesen. Die App wartet auf eine zweite Aufnahme zur Gegenprüfung."
+STANDALONE_VERIFIED_NOTICE = "Zählerstand mit einer zweiten Aufnahme gegengeprüft."
+STANDALONE_REJECTED_NOTICE = "Die zweite Aufnahme passt nicht zum ersten Zählerstand."
+REFLECTION_SUGGEST_AFTER = 3
+
+
+def missing_digit_pattern(ocr, decimals, integer_digits, limit=1):
+    """Find up to ``limit`` missing digits among the positions required for comparison."""
+    size = integer_digits + (decimals + 1 if decimals else 0)
+    pattern = str(ocr or "")[:size]
+    decimal_part = rf"\.[0-9?]{{{decimals}}}" if decimals else ""
+    if not re.fullmatch(rf"[0-9?]{{{integer_digits}}}{decimal_part}", pattern) or not 1 <= pattern.count("?") <= limit:
+        return None
+    return pattern
+
+
+def single_missing_digit(ocr, readings, decimals, integer_digits, limit=1):
+    """Require majority evidence for all the visible neighbours."""
+    pattern = missing_digit_pattern(ocr, decimals, integer_digits, limit)
+    if pattern is None:
+        return None
+    votes = max(2, len(readings) // 2 + 1)
+    for index, digit in enumerate(pattern):
+        if digit.isdigit() and sum(len(value) > index and value[index] == digit for value in readings) < votes:
+            return None
+    return pattern
+
+
+def disputed_digit_pattern(readings, decimals, integer_digits, limit=1):
+    """A frame is worth rechecking when one (up to ``limit``) required position lacks agreement."""
+    length = integer_digits + (decimals + 1 if decimals else 0)
+    rows = [value[:length] for value in readings]
+    shape = rf"[0-9?]{{{integer_digits}}}" + (rf"\.[0-9?]{{{decimals}}}" if decimals else "")
+    if len(rows) < 2 or any(not re.fullmatch(shape, row) for row in rows):
+        return None
+    consensus = "".join(column[0] if len(set(column)) == 1 else "?" for column in zip(*rows))
+    return consensus if 1 <= consensus.count("?") <= limit else None
+
+
+def recommended_comparison_decimals(history, decimals, integer_digits):
+    """Offer a lower comparison precision after repeated trouble on one decimal place."""
+    if decimals < 2:
+        return None
+    if decimals == 3 and history.get("last_digit_failures", 0) >= 2:
+        return 2
+    issue = history.get("reflection_streak", {})
+    position = issue.get("position")
+    if (history.get("check_status") == "ocr_unclear" and issue.get("count", 0) >= 2
+            and type(position) is int and integer_digits + 2 <= position <= integer_digits + decimals):
+        return position - integer_digits - 1
+    return None
+
+
+def estimate_missing_digit(pattern, stamp, previous, following, decimals, max_flow_lph):
+    """Accept a digit only when every other value violates a measured bound."""
+    before, after = previous["time"], following["time"]
+    if not before < stamp < after or after - before > WINDOW_SECONDS:
+        return None
+    step = 10 ** (3 - decimals)
+    low, high = previous["value"], following["value"]
+    candidates = []
+    for digit in "0123456789":
+        reading = pattern.replace("?", digit)
+        value = int(reading.replace(".", "")) * step
+        if (low <= value <= high
+                and value - low - step <= max_flow_lph * (stamp - before) / 3600
+                and high - value - step <= max_flow_lph * (after - stamp) / 3600):
+            candidates.append(digit)
+    if len(candidates) != 1:
+        return None
+    left, right = pattern.split("?")
+    return {"left": left, "digit": candidates[0], "right": right, "time": stamp}
+
+
+def provisional_digit_estimate(ocr, readings, stamp, previous, decimals, integer_digits, max_flow_lph):
+    """Fill at most one position on each side, only inside a measured flow envelope."""
+    if previous is None or not 0 < stamp - previous["time"] <= WINDOW_SECONDS:
+        return None
+    length = integer_digits + (decimals + 1 if decimals else 0)
+    pattern = str(ocr or "")[:length]
+    whole, _, fraction = pattern.partition(".")
+    if (len(whole) != integer_digits or len(fraction) != decimals
+            or not re.fullmatch(r"[0-9?]+", whole) or (fraction and not re.fullmatch(r"[0-9?]+", fraction))
+            or whole.count("?") > 1 or fraction.count("?") > 1):
+        return None
+    positions = [index for index, char in enumerate(pattern) if char == "?"]
+    if not positions:
+        return None
+    votes = max(2, len(readings) // 2 + 1)
+    if any(char.isdigit() and sum(len(value) > index and value[index] == char for value in readings) < votes
+           for index, char in enumerate(pattern)):
+        return None
+    step = 10 ** (3 - decimals)
+    low = previous["value"]
+    high = low + step - 1 + max_flow_lph * (stamp - previous["time"]) / 3600
+    match = None
+    for digits in product("0123456789", repeat=len(positions)):
+        chars = list(pattern)
+        for index, digit in zip(positions, digits):
+            chars[index] = digit
+        reading = "".join(chars)
+        value = int(reading.replace(".", "")) * step
+        if low <= value <= high:
+            if match is not None:
+                return None
+            match = reading
+    return {"reading": match, "positions": positions, "time": stamp} if match is not None else None
+
+
+ANCHORED_LEADING_NOTICE = "Unveränderliche führende Stellen aus dem zuletzt bestätigten Stand ergänzt."
+
+
+def anchor_bounds(anchor, stamp, decimals, max_flow_lph):
+    """Return the litre range a meter can show at stamp after a verified anchor."""
+    if (not isinstance(anchor, dict) or type(anchor.get("value")) is not int
+            or type(anchor.get("time")) not in (int, float)
+            or type(stamp) not in (int, float) or type(max_flow_lph) not in (int, float) or max_flow_lph <= 0):
+        return None
+    elapsed = stamp - anchor["time"]
+    if not 0 < elapsed <= WINDOW_SECONDS or anchor["value"] < 0:
+        return None
+    step = 10 ** (3 - decimals)
+    low = anchor["value"]
+    return low, low + step + int(max_flow_lph * elapsed / 3600)
+
+
+def anchored_leading_digits(readings, anchor, stamp, decimals, integer_digits, max_flow_lph):
+    """Fill unreadable leading whole digits that cannot have changed since a verified reading.
+
+    Between the anchor and the maximum possible flow, every reachable value shares
+    a common leading prefix. Only unclear positions inside that prefix are filled.
+    A majority reading that contradicts the anchor aborts the fill. Returns the
+    normalized readings and the filled 0-based positions, or None.
+    """
+    bounds = anchor_bounds(anchor, stamp, decimals, max_flow_lph)
+    if bounds is None or not readings or not 1 <= integer_digits <= 9:
+        return None
+    low, high = (value // 1000 for value in bounds)
+    if high >= 10 ** integer_digits:
+        return None
+    lowest, highest = str(low).zfill(integer_digits), str(high).zfill(integer_digits)
+    frozen = 0
+    while frozen < integer_digits and lowest[frozen] == highest[frozen]:
+        frozen += 1
+    rows = [str(value) for value in readings]
+    if frozen == 0 or any(len(row) < integer_digits or not re.fullmatch(r"[0-9?]+", row[:integer_digits])
+                          for row in rows):
+        return None
+    majority = len(rows) // 2 + 1
+    filled = []
+    for position in range(frozen):
+        votes = Counter(row[position] for row in rows if row[position].isdigit())
+        digit, count = votes.most_common(1)[0] if votes else ("", 0)
+        if count >= majority:
+            if digit != lowest[position]:
+                return None
+        else:
+            filled.append(position)
+    if not filled:
+        return None
+    normalized = [lowest[:frozen] + row[frozen:] for row in rows]
+    return normalized, filled
+
+
+HIDDEN_DIGIT_NOTICE = "Verdeckte Stelle aus dem zuletzt bestätigten Stand ergänzt."
+
+
+def anchored_hidden_digits(readings, anchor, stamp, decimals, integer_digits, max_flow_lph, positions):
+    """Fill digits that a reflection hides permanently, from a verified reading.
+
+    Only the given slots (0-based, without the decimal point) may be filled, every other
+    compared digit needs a majority. The fill is accepted only when exactly one completion
+    lies inside the physically reachable range since the anchor. Returns the normalized
+    readings and the filled slots, or None.
+    """
+    bounds = anchor_bounds(anchor, stamp, decimals, max_flow_lph)
+    if bounds is None or not readings or not positions or not 1 <= integer_digits <= 9:
+        return None
+    length = integer_digits + (decimals + 1 if decimals else 0)
+    rows = [str(value)[:length] for value in readings]
+    if any(len(row) != length or not re.fullmatch(r"[0-9?]+(?:\.[0-9?]+)?", row) for row in rows):
+        return None
+    majority = len(rows) // 2 + 1
+    pattern = []
+    for index in range(length):
+        if decimals and index == integer_digits:
+            pattern.append(".")
+            continue
+        votes = Counter(row[index] for row in rows if row[index].isdigit())
+        digit, count = votes.most_common(1)[0] if votes else ("?", 0)
+        pattern.append(digit if count >= majority else "?")
+    allowed = {slot + (1 if decimals and slot >= integer_digits else 0) for slot in positions}
+    hidden = [index for index, char in enumerate(pattern) if char == "?"]
+    if not hidden or len(hidden) > 2 or not set(hidden) <= allowed:
+        return None
+    step = 10 ** (3 - decimals)
+    low, high = bounds
+    match = None
+    for digits in product("0123456789", repeat=len(hidden)):
+        chars = list(pattern)
+        for index, digit in zip(hidden, digits):
+            chars[index] = digit
+        reading = "".join(chars)
+        value = int(reading.replace(".", "")) * step
+        if low - step <= value <= high:
+            if match is not None:
+                return None
+            match = reading
+    if match is None:
+        return None
+    slots = [index - (1 if decimals and index > integer_digits else 0) for index in hidden]
+    return [match] * len(rows), slots
+
+
+def hidden_fill_with_turning_roller(readings, anchor, stamp, decimals, integer_digits, max_flow_lph, positions):
+    """Fill a hidden digit while the last one or two compared rollers are turning.
+
+    0.5.11 (live 22.11.2026: "10511.?3?"): the fill is done with fewer compared decimals; the
+    turning rollers stay open ("10511.53?"), so the check is confirmed that much coarser.
+    Returns the filled reading or None.
+    """
+    if not positions:
+        return None
+    for drop in (1, 2):
+        fewer = decimals - drop
+        if fewer < 1 or max(positions) >= integer_digits + fewer:
+            return None
+        filled = anchored_hidden_digits(readings, anchor, stamp, fewer, integer_digits, max_flow_lph, positions)
+        if filled:
+            return filled[0][0] + "?" * drop
+    return None
+
+
+HIDDEN_ESTIMATE_AFTER = 5 * 60
+HIDDEN_ESTIMATE_NOTICE = ("Eine Nachkommastelle ist durch eine Spiegelung verdeckt und wurde geschätzt, weil kein "
+                          "Zählerstand eingetragen wurde. Die vollen Kubikmeter sind gelesen. Für einen genauen Wert "
+                          "den Zählerstand einmal in den Einstellungen eintragen.")
+
+
+def estimated_hidden_digits(readings, floor_litres, decimals, integer_digits, positions):
+    """Replace a hidden decimal by the lowest plausible digit instead of failing for good.
+
+    0.5.12 (Stefan 22.11.2026, 13:46): after a waiting time a hidden decimal that cannot be
+    determined is estimated – never a digit of the full cubic metres. The lowest completion
+    that does not fall below the last known reading is taken, so the meter never runs
+    backwards. Turning last rollers stay open. Returns (reading, filled slots) or None.
+    """
+    if not readings or not positions or min(positions) < integer_digits:
+        return None
+    for drop in (0, 1, 2):
+        fewer = decimals - drop
+        if fewer < 1 or max(positions) >= integer_digits + fewer:
+            return None
+        length = integer_digits + fewer + 1
+        rows = [str(value)[:length] for value in readings]
+        if any(len(row) != length or not re.fullmatch(r"[0-9?]+\.[0-9?]+", row) for row in rows):
+            return None
+        majority = len(rows) // 2 + 1
+        pattern = []
+        for index in range(length):
+            if index == integer_digits:
+                pattern.append(".")
+                continue
+            votes = Counter(row[index] for row in rows if row[index].isdigit())
+            digit, count = votes.most_common(1)[0] if votes else ("?", 0)
+            pattern.append(digit if count >= majority else "?")
+        allowed = {slot + 1 for slot in positions}
+        hidden = [index for index, char in enumerate(pattern) if char == "?"]
+        if not hidden:
+            return None
+        if not set(hidden) <= allowed:
+            continue
+        step = 10 ** (3 - fewer)
+        floor = (floor_litres // step) * step if type(floor_litres) is int else None
+        for digits in product("0123456789", repeat=len(hidden)):
+            chars = list(pattern)
+            for index, digit in zip(hidden, digits):
+                chars[index] = digit
+            reading = "".join(chars)
+            if floor is None or int(reading.replace(".", "")) * step >= floor:
+                return reading + "?" * drop, [index - 1 for index in hidden]
+        return None
+    return None
+
+
+def within_anchor_bounds(ocr, anchor, stamp, decimals, integer_digits, max_flow_lph):
+    """Accept an anchored result only inside the physically reachable range."""
+    bounds = anchor_bounds(anchor, stamp, decimals, max_flow_lph)
+    value = meter_prefix(ocr, decimals, integer_digits)
+    if bounds is None or value is None:
+        return False
+    step = 10 ** (3 - decimals)
+    litres = value * step
+    # One display step below tolerates a jittering last roller between two photographs.
+    return bounds[0] - step <= litres <= bounds[1]
+
+
+# A slowly turning roller (e.g. the first decimal) can be completed from the last confirmed
+# reading only within the flow this meter really reaches, learned from confirmed readings.
+FLOW_PEAK_MIN_SECONDS = 300
+FLOW_PEAK_MAX_SECONDS = 6 * 60 * 60
+FLOW_PEAK_DAYS = 7
+FLOW_PEAK_MIN_SAMPLES = 12
+SLOW_ROLLER_FLOOR_LPH = 1500
+SLOW_ROLLER_MARGIN = 2
+
+
+def note_flow_peak(history, previous, following, max_flow_lph):
+    """Remember the highest flow per day between two confirmed readings (last 7 days)."""
+    if (not isinstance(previous, dict) or type(previous.get("value")) is not int
+            or type(previous.get("time")) not in (int, float)):
+        return
+    elapsed = following["time"] - previous["time"]
+    delta = following["value"] - previous["value"]
+    if not FLOW_PEAK_MIN_SECONDS <= elapsed <= FLOW_PEAK_MAX_SECONDS or delta < 0:
+        return
+    rate = round(delta * 3600 / elapsed)
+    if type(max_flow_lph) in (int, float) and rate > max_flow_lph:
+        return
+    peaks = history.get("flow_peaks")
+    peaks = {key: value for key, value in peaks.items() if type(value) is int} if isinstance(peaks, dict) else {}
+    day = str(int(following["time"] // 86400))
+    peaks[day] = max(rate, peaks.get(day, 0))
+    keep = sorted(peaks, key=lambda key: int(key) if key.isdigit() else -1)[-FLOW_PEAK_DAYS:]
+    history["flow_peaks"] = {key: peaks[key] for key in keep}
+    samples = history.get("flow_peak_samples", 0)
+    history["flow_peak_samples"] = min((samples if type(samples) is int else 0) + 1, 100000)
+
+
+def learned_flow_limit(history, max_flow_lph):
+    """Twice the highest learned flow (at least 1.5 m³/h), never above the configured limit.
+
+    None until enough confirmed readings were seen; then no slow-roller completion happens.
+    """
+    peaks = history.get("flow_peaks")
+    samples = history.get("flow_peak_samples", 0)
+    if (not isinstance(peaks, dict) or type(samples) is not int or samples < FLOW_PEAK_MIN_SAMPLES
+            or type(max_flow_lph) not in (int, float) or max_flow_lph <= 0):
+        return None
+    values = [value for value in peaks.values() if type(value) is int and value >= 0]
+    if not values:
+        return None
+    return min(max_flow_lph, max(SLOW_ROLLER_FLOOR_LPH, SLOW_ROLLER_MARGIN * max(values)))
+
+
+SLOW_ROLLER_NOTICE = "Langsame Nachkommastelle aus dem zuletzt bestätigten Stand und dem bisherigen Durchfluss ergänzt."
+
+
+def slow_roller_digit(readings, anchor, stamp, decimals, integer_digits, flow_limit_lph):
+    """Complete unclear first or second decimals when only one value is reachable since the anchor.
+
+    Uses the learned flow limit instead of the configured maximum, all other compared digits
+    still need a majority. Returns (normalized readings, filled slots) or None.
+    """
+    if not decimals or flow_limit_lph is None:
+        return None
+    # Slow rollers only: never a whole digit and never the fastest (last compared) roller.
+    slots = [integer_digits + offset for offset in range(min(2, decimals - 1))] if decimals > 1 else []
+    if decimals == 1:
+        return None
+    return anchored_hidden_digits(readings, anchor, stamp, decimals, integer_digits, flow_limit_lph, slots)
+
+
+HIDDEN_ROLLER_MIN_MINUTES = 2
+HIDDEN_ROLLER_JITTER = .75
+
+
+def hidden_roller_flow(history, max_flow_lph):
+    """Flow bound for a roller a reflection hides permanently (0.5.10).
+
+    The configured maximum (6 m³/h) allows several values of the first decimal between two
+    checks, so nothing could ever be filled. The limit learned from confirmed readings is used
+    instead, and before anything was learned the same floor the slow-roller completion uses.
+    """
+    learned = learned_flow_limit(history, max_flow_lph)
+    if learned is not None:
+        return learned
+    if type(max_flow_lph) not in (int, float) or max_flow_lph <= 0:
+        return SLOW_ROLLER_FLOOR_LPH
+    return min(max_flow_lph, SLOW_ROLLER_FLOOR_LPH)
+
+
+def hidden_roller_span(slots, integer_digits, decimals):
+    """Litres between two neighbouring values of the finest hidden roller, or None if not fillable."""
+    spans = []
+    for slot in slots:
+        if type(slot) is not int or slot < 0 or slot >= integer_digits + decimals:
+            continue
+        spans.append(10 ** (2 - (slot - integer_digits)) if slot >= integer_digits
+                     else 1000 * 10 ** (integer_digits - 1 - slot))
+    step = 10 ** (3 - decimals)
+    # The last compared roller cannot be filled: every value of it is always reachable.
+    return min(spans) if spans and min(spans) > 2 * step else None
+
+
+def hidden_roller_interval(interval_minutes, slots, integer_digits, decimals, flow_lph):
+    """Check often enough that only one value of a hidden roller is reachable between two checks."""
+    span = hidden_roller_span(slots, integer_digits, decimals)
+    if span is None or type(flow_lph) not in (int, float) or flow_lph <= 0:
+        return interval_minutes
+    step = 10 ** (3 - decimals)
+    minutes = int((span - 2 * step) * 60 / flow_lph * HIDDEN_ROLLER_JITTER)
+    return min(interval_minutes, max(HIDDEN_ROLLER_MIN_MINUTES, minutes))
+
+
+def hidden_fill_reachable(anchor, stamp, slots, integer_digits, decimals, flow_lph):
+    """Whether the anchor is still close enough for exactly one value of the hidden roller."""
+    span = hidden_roller_span(slots, integer_digits, decimals)
+    bounds = anchor_bounds(anchor, stamp, decimals, flow_lph)
+    if span is None or bounds is None:
+        return False
+    return bounds[1] - bounds[0] + 10 ** (3 - decimals) < span
+
+
+def track_reflection(history, ocr, readings, stamp, *, verified, unclear, decimals,
+                     integer_digits, max_flow_lph, enabled, manual_anchor=None):
+    pattern = single_missing_digit(ocr, readings, decimals, integer_digits) if unclear else None
+    anchor = history.get("reflection_anchor")
+    previous = max((item for item in (anchor, manual_anchor) if item and item["time"] < stamp),
+                   key=lambda item: item["time"], default=None)
+    provisional = (provisional_digit_estimate(ocr, readings, stamp, previous, decimals, integer_digits, max_flow_lph)
+                   if enabled and unclear else None)
+    if provisional:
+        history["reflection_live_estimate"] = provisional
+    else:
+        history.pop("reflection_live_estimate", None)
+    if pattern:
+        position = pattern.index("?")
+        last = history.get("reflection_streak", {})
+        count = last.get("count", 0) + 1 if last.get("position") == position else 1
+        history["reflection_streak"] = {"position": position, "count": min(count, REFLECTION_SUGGEST_AFTER)}
+        if enabled and previous:
+            history["reflection_pending"] = {"pattern": pattern, "time": stamp, "previous": previous}
+    else:
+        history.pop("reflection_streak", None)
+    if not enabled:
+        history.pop("reflection_pending", None)
+        history.pop("reflection_estimate", None)
+    if verified:
+        value = meter_prefix(ocr, decimals, integer_digits)
+        if value is None:
+            return
+        following = {"time": stamp, "value": value * 10 ** (3 - decimals)}
+        pending = history.pop("reflection_pending", None)
+        if pending:
+            estimate = estimate_missing_digit(pending["pattern"], pending["time"], pending["previous"],
+                                              following, decimals, max_flow_lph)
+            if estimate:
+                history["reflection_estimate"] = estimate
+        note_flow_peak(history, history.get("reflection_anchor"), following, max_flow_lph)
+        history["reflection_anchor"] = following
+
+
+def last_digit_can_pass(history, precision_mode):
+    return history.get("last_digit_failures", 0) >= LAST_DIGIT_RETRIES - 1
+
+
+def differs_only_at_last_digit(data, ocr, readings, integer_digits=5):
+    reference = data.get("actual_value")
+    # A reduced comparison still needs trustworthy and consistent source values.
+    if compare_sample(data, reference, 3, integer_digits=integer_digits)[0] != "match":
+        return False
+    if compare_sample(data, ocr, 3, integer_digits=integer_digits)[0] == "match":
+        return False
+    prefix = meter_prefix(reference, 2, integer_digits)
+    if prefix != meter_prefix(data["raw_value"], 2, integer_digits) or prefix != meter_prefix(ocr, 2, integer_digits):
+        return False
+    agreeing = sum(meter_prefix(reading, 2, integer_digits) == prefix for reading in readings)
+    return agreeing >= 2 and agreeing > len(readings) // 2
+
+
+def seventh_digit_can_pass(data, ocr, readings, integer_digits=5):
+    """Safely accept six matching digits when only the seventh roller is unclear.
+
+    This is a *partial* reference comparison without rounding. Do not synthesize a
+    precise OCR reading, confirm consumption, or modify configured precision.
+    """
+    if data.get("reference_required") is False or len(readings) < 2:
+        return False
+    reference = data.get("actual_value")
+    if not reference or compare_sample(data, reference, 2, integer_digits=integer_digits)[0] != "match":
+        return False
+    prefix = meter_prefix(reference, 1, integer_digits)
+    if (prefix is None or meter_prefix(data["raw_value"], 1, integer_digits) != prefix
+            or meter_prefix(ocr, 1, integer_digits) != prefix):
+        return False
+    agreeing = [
+        str(reading).replace(",", ".").partition(".")[2][1:2]
+        for reading in readings if meter_prefix(reading, 1, integer_digits) == prefix
+    ]
+    if len(agreeing) < 2 or len(agreeing) <= len(readings) // 2:
+        return False
+    # A consistently recognized but *wrong* seventh digit is a real mismatch,
+    # not a roller transition. The seventh position must actually be uncertain.
+    digit_votes = Counter(value for value in agreeing if value.isdigit())
+    return not digit_votes or digit_votes.most_common(1)[0][1] * 2 <= len(agreeing)
+
+
+def rolling_summary(history, now, review_after=REVIEW_AFTER):
+    epoch = now.timestamp()
+    count = sum(epoch - WINDOW_SECONDS < stamp <= epoch for stamp in history.get("confirmations", ()))
+    failure = history.get("failure_since")
+    return {
+        "matches_last_24h": count,
+        "required_matches": REQUIRED_MATCHES,
+        "window_started_at_epoch": history.get("started_at"),
+        "failure_since_epoch": failure,
+        "review_due": failure is not None and epoch - failure >= review_after,
+        "check_status": history.get("check_status"),
+        "next_check_at_epoch": history.get("next_check_at"),
+        "last_match_at_epoch": history.get("last_match_at"),
+        "check_detail": history.get("check_detail"),
+    }
+
+
+def sample_timestamp(data, zone):
+    return timestamp_epoch(data["esp_timestamp"], zone)
+
+
+def timestamp_epoch(value, zone):
+    stamp = datetime.fromisoformat(value)
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=zone)
+    return stamp.timestamp()
+
+
+def slfork_reference(data, image_time, zone, previous_match):
+    """Label carried-forward values and find the time of a trusted observation."""
+    actual = data["actual_value"]
+    fallback = data.get("slfork_fallback_value")
+    status = str(data.get("slfork_value_status") or "")
+    try:
+        reported_time = timestamp_epoch(data.get("slfork_last_valid_timestamp"), zone)
+    except (TypeError, ValueError, OverflowError, OSError):
+        reported_time = None
+
+    def amount(value):
+        text = str(value).replace(",", ".")
+        return Decimal(text) if re.fullmatch(r"[0-9]{1,5}(?:\.[0-9]+)?", text) else None
+
+    fallback_amount = amount(fallback)
+    is_fallback = bool(FALLBACK_STATUS.search(status)) or (
+        fallback_amount is not None and fallback_amount == amount(actual)
+        and reported_time is not None and reported_time != image_time
+    )
+    if not is_fallback:
+        valid = not (re.match(r"^[EW][0-9]+(?:\s|$)", status)
+                     or data.get("slfork_process_error") in (-1, -2, "-1", "-2"))
+        return {"reference_is_fallback": False, "reference": actual,
+                "reference_time": image_time if valid and amount(actual) is not None else None}
+
+    displayed = fallback if fallback_amount is not None else actual
+    verified_time = previous_match.get("time")
+    # Negative-rate handling can advance the fallback timestamp without updating the value.
+    if reported_time is None or reported_time >= image_time:
+        reported_time = None
+    if (amount(displayed) is not None and amount(displayed) == amount(previous_match.get("reading"))
+            and isinstance(verified_time, (int, float)) and verified_time < image_time):
+        reported_time = max(verified_time, reported_time or verified_time)
+    return {"reference_is_fallback": True, "reference": displayed, "reference_time": reported_time}
+
+
+def sample_epoch(data, zone, now):
+    captured = sample_timestamp(data, zone)
+    epoch = now.timestamp()
+    return captured if epoch - FRESH_SAMPLE_AGE < captured <= epoch + 60 else None
+
+
+def record_sample(history, data, ocr, zone, now, decimals=0, *, ocr_confirmed=True, integer_digits=5,
+                  readings=(), precision_mode=False, exact_prefix=False):
+    """Count each in-window cycle at most once, even after a restart."""
+    captured = sample_epoch(data, zone, now)
+    if captured is None or captured <= history.get("last_epoch", 0):
+        return False
+
+    epoch = now.timestamp()
+    if "started_at" not in history:
+        history.update(started_at=epoch, confirmations=[], status="no_current_sample")
+    history["confirmations"] = [old for old in history["confirmations"] if old > epoch - WINDOW_SECONDS]
+    status, detail = compare_sample(data, ocr, decimals, ocr_confirmed=ocr_confirmed,
+                                    integer_digits=integer_digits, exact_prefix=exact_prefix)
+    if (decimals == 3 and status in ("difference", "ocr_unclear")
+            and differs_only_at_last_digit(data, ocr, readings, integer_digits)):
+        can_pass = last_digit_can_pass(history, precision_mode)
+        retries = min(history.get("last_digit_failures", 0) + 1, LAST_DIGIT_RETRIES)
+        history["last_digit_failures"] = retries
+        detail = LAST_DIGIT_NOTICE
+        if can_pass:
+            status, detail = "match_with_warning", LAST_DIGIT_PASS
+    else:
+        history.pop("last_digit_failures", None)
+    if (decimals == 2 and status in ("difference", "ocr_unclear")
+            and seventh_digit_can_pass(data, ocr, readings, integer_digits)):
+        status, detail = "match_with_warning", SEVENTH_DIGIT_PASS
+        history["seventh_digit_wait"] = True
+    else:
+        history.pop("seventh_digit_wait", None)
+    if status == "match":
+        history["confirmations"].append(captured)
+        history["last_match_at"] = captured
+    history.update(last_epoch=captured, status=status, ocr_value=ocr, check_detail=detail)
+    return True
+
+
+def valid_interval_minutes(value):
+    return type(value) is int and 1 <= value <= MAX_INTERVAL_MINUTES
+
+
+SETUP_STABILIZATION_SECONDS = 20 * 60
+SETUP_OPTIMIZATION_PAUSE_SECONDS = 60 * 60
+SETUP_CHECK_INTERVAL_MINUTES = 5
+
+
+def without_light(value):
+    """The capture light does not change which camera is read, so it is not part of its identity."""
+    if isinstance(value, dict):
+        return {key: item for key, item in value.items() if key not in ("light", "camera_light")}
+    if isinstance(value, list):
+        return [without_light(item) for item in value]
+    return value
+
+
+def setup_source_id(source):
+    return hashlib.sha256(json.dumps(without_light(source), sort_keys=True).encode()).hexdigest()
+
+
+def stationary_partial_active(rules, source):
+    revision = rules.get("crop_revision")
+    return (rules["decimals"] == 3 and bool(revision)
+            and rules.get("stationary_partial_scope") == setup_source_id([source, revision]))
+
+
+# A failed optional eighth-digit search must not permanently strand a saved
+# seven-digit setup. Retry infrequently and remember the deadline across restarts.
+EIGHTH_DIGIT_RETRY_SECONDS = 60 * 60
+# Stefan (22.11.): if the last roller cannot be found at all (e.g. the flash reflects on it),
+# give up after several hours instead of searching forever, and say so. The seven-digit
+# checks keep running; a new setup (new frame revision) starts the search again.
+EIGHTH_DIGIT_GIVE_UP_SECONDS = 6 * 60 * 60
+
+
+def eighth_digit_scope(rules):
+    revision = rules.get("crop_revision")
+    return str(revision) if revision else None
+
+
+def eighth_digit_given_up(history, rules):
+    scope = eighth_digit_scope(rules)
+    return scope is not None and history.get("eighth_digit_given_up") == scope
+
+
+def note_eighth_digit_search(history, rules, now):
+    """Remember when the search for this frame began; True once it has run too long."""
+    scope = eighth_digit_scope(rules)
+    if scope is None:
+        return False
+    if eighth_digit_given_up(history, rules):
+        return True
+    since = history.get("eighth_digit_search_since")
+    if history.get("eighth_digit_search_scope") != scope or type(since) not in (int, float) or since > now:
+        history["eighth_digit_search_scope"] = scope
+        history["eighth_digit_search_since"] = now
+        return False
+    if now - since >= EIGHTH_DIGIT_GIVE_UP_SECONDS:
+        history["eighth_digit_given_up"] = scope
+        return True
+    return False
+
+
+def eighth_digit_retry_due(rules, source, history, now):
+    """Can a saved seven-digit setup attempt its optional eighth digit again?"""
+    deadline = history.get("eighth_digit_retry_at", 0)
+    return (stationary_partial_active(rules, source)
+            and rules.get("fraction_digits") == 3
+            and not eighth_digit_given_up(history, rules)
+            and (type(deadline) not in (int, float) or now >= deadline))
+
+
+def resume_optional_eighth_digit(history, rules, source, now, begin):
+    """Start one bounded fine-check and persist its next allowable retry time."""
+    if not eighth_digit_retry_due(rules, source, history, now):
+        return False
+    if note_eighth_digit_search(history, rules, now) or not begin():
+        return False
+    history["eighth_digit_retry_at"] = now + EIGHTH_DIGIT_RETRY_SECONDS
+    return True
+
+
+# Fine tilt of the digit row, measured on every check and applied once it is consistent.
+SKEW_SAMPLES = 7
+SKEW_MIN_CHANGE = 0.2
+SKEW_STEP = 0.7
+SKEW_MAX_SPREAD = 1.0
+SKEW_LIMIT = 2.0
+
+
+def skew_offset(state):
+    offset = state.get("offset", 0.0) if isinstance(state, dict) else 0.0
+    if type(offset) not in (int, float) or offset != offset or abs(offset) > SKEW_LIMIT:
+        return 0.0
+    return float(offset)
+
+
+def setup_tilt(tilts, fine):
+    """Split the tilt measured during setup into the saved fine angle and a start offset.
+
+    The fine angle stays within ±0.5°; the rest seeds the routine tilt correction so the
+    first automatic checks already use the measured angle.
+    """
+    values = [value for value in tilts if type(value) in (int, float) and abs(value) <= 4]
+    if len(values) < 2:
+        return fine, 0.0
+    measured = round(median(values), 1)
+    kept = max(-0.5, min(0.5, measured))
+    return kept, max(-SKEW_LIMIT, min(SKEW_LIMIT, round(measured - kept, 1)))
+
+
+def initial_skew_state(key, seed):
+    """Tilt state for a new geometry; start from the setup's measurement when it matches."""
+    start = skew_offset(seed) if isinstance(seed, dict) and seed.get("key") == key else 0.0
+    return {"key": key, "offset": start, "samples": []}
+
+
+def note_skew(state, measured):
+    """Collect one tilt measurement; adopt the median once several agree.
+
+    Single images vary by up to about ±0.7° (a turning roller moves its digit), so the offset
+    only moves when the median of the last measurements is clearly off level and they agree.
+    """
+    state = dict(state) if isinstance(state, dict) else {}
+    offset = skew_offset(state)
+    samples = [value for value in state.get("samples", []) if type(value) in (int, float)][-SKEW_SAMPLES:]
+    if type(measured) in (int, float) and abs(measured) <= 4:
+        samples = (samples + [round(float(measured), 2)])[-SKEW_SAMPLES:]
+    if len(samples) >= SKEW_SAMPLES:
+        middle = median(samples)
+        ordered = sorted(samples)
+        quarter = len(ordered) // 4
+        spread = ordered[-1 - quarter] - ordered[quarter]  # interquartile range
+        if abs(middle) >= SKEW_MIN_CHANGE and spread <= SKEW_MAX_SPREAD:
+            # Move most of the way, not all of it: the tilt keeps settling instead of overshooting.
+            offset = max(-SKEW_LIMIT, min(SKEW_LIMIT, round(offset + middle * SKEW_STEP, 1)))
+            samples = []  # older measurements were taken before this correction
+    state.update(offset=offset, samples=samples)
+    return state
+
+
+def relocate_last_digit_due(history, rules, now):
+    """Should the frame of the eighth digit be searched again after repeated unclear checks?"""
+    blocked_until = history.get("last_digit_relocate_at", 0)
+    return (history.get("last_digit_relocate_due") is True
+            and rules.get("decimals") == 3 and rules.get("fraction_digits") == 3
+            and (type(blocked_until) not in (int, float) or now >= blocked_until))
+
+
+def setup_deadlines(rules, source):
+    completed = rules.get("setup_completed")
+    if isinstance(completed, dict) and completed.get("source") == setup_source_id(source):
+        stamp = completed.get("time")
+        if type(stamp) in (int, float) and 0 < stamp < 10 ** 12:
+            return stamp + SETUP_STABILIZATION_SECONDS, stamp + SETUP_OPTIMIZATION_PAUSE_SECONDS
+    return 0, 0
+
+
+def stabilization_interval(interval, until, now):
+    return min(interval, SETUP_CHECK_INTERVAL_MINUTES) if now < until else interval
+
+
+def automatic_interval_minutes(interval_minutes, source_mode):
+    """Observe SLFork's regular cadence while retaining the user's configured interval."""
+    return max(RETRY_INTERVAL // 60, interval_minutes) if source_mode == "slfork" else interval_minutes
+
+
+def defer_duplicate_cycle(history, fetched_at, interval_minutes):
+    """Wait for a fresh cycle without changing the outcome, counters or last check."""
+    checked_at = last_check_at(history)
+    suppressed = history.get("retry_suppressed", False)
+    seventh_wait = bool(history.get("seventh_digit_wait"))
+    wait = _check_delay(history["check_status"], interval_minutes, suppressed,
+                        seventh_digit_wait=seventh_wait, pause=history.get("failure_pause_minutes"))
+    if not suppressed and not seventh_wait:
+        wait = min(wait, RETRY_INTERVAL)
+    if checked_at is not None:
+        history["last_check_at"] = checked_at
+    history["next_check_at"] = fetched_at + wait
+    history["check_interval_minutes"] = interval_minutes
+
+
+def failure_pause_seconds(value):
+    """Pause after three failed checks, from the setting in minutes (default 30)."""
+    if type(value) is int and MIN_FAILURE_PAUSE_MINUTES <= value <= MAX_FAILURE_PAUSE_MINUTES:
+        return value * 60
+    return FAILURE_COOLDOWN_INTERVAL
+
+
+def _check_delay(outcome, interval_minutes, retry_suppressed=False, *, seventh_digit_wait=False, pause=None):
+    interval = interval_minutes * 60
+    if outcome == "match_with_warning" and seventh_digit_wait:
+        return SEVENTH_DIGIT_WAIT_SECONDS
+    if outcome == STANDALONE_PENDING:
+        return STANDALONE_SECOND_CAPTURE_DELAY
+    if outcome in SUCCESSFUL_CHECKS:
+        return interval
+    if retry_suppressed:
+        return failure_pause_seconds(pause)
+    return min(interval, QUICK_RETRY_INTERVAL if system_idle() else RETRY_INTERVAL)
+
+
+def schedule_next_check(history, outcome, checked_at, interval_minutes=DEFAULT_INTERVAL_MINUTES):
+    history["check_status"] = outcome
+    history["last_check_at"] = checked_at
+    if outcome in (*SUCCESSFUL_CHECKS, STANDALONE_PENDING):
+        history.pop("failure_since", None)
+        history.pop("failure_attempts", None)
+        history.pop("retry_suppressed", None)
+    elif history.get("check_detail") in MOVING_NOTICES or str(history.get("check_detail") or "").endswith(
+            LOWER_PENDING_NOTICE):
+        # Also a reading that only lies below a probably misread stored value (the correction is
+        # still collecting agreeing lower readings) is no failed check: no 30-minute pause (20.11.).
+        # Only the last compared roller(s) were turning: everything else was read. That is no
+        # reason for a warning or a long pause; simply look again soon.
+        history.setdefault("failure_since", checked_at)
+        history.pop("retry_suppressed", None)
+    else:
+        history.setdefault("failure_since", checked_at)
+        history["failure_attempts"] = history.get("failure_attempts", 0) + 1
+        if history["failure_attempts"] >= FAILURE_RETRY_LIMIT:
+            history["retry_suppressed"] = True
+    if outcome == "capture_unavailable":
+        history.setdefault("capture_failure_since", checked_at)
+    else:
+        history.pop("capture_failure_since", None)
+    history["next_check_at"] = checked_at + _check_delay(
+        outcome, interval_minutes, history.get("retry_suppressed", False),
+        seventh_digit_wait=bool(history.get("seventh_digit_wait")),
+        pause=history.get("failure_pause_minutes"),
+    )
+    history["check_interval_minutes"] = interval_minutes
+    history.pop("wait_reason", None)
+    if outcome in SUCCESSFUL_CHECKS:
+        if history.get("check_detail") not in REDUCED_NOTICES:
+            # A full reading ends the series: the next coarser check may look again soon.
+            history.pop("turning_retry_used", None)
+        elif not history.get("turning_retry_used") and interval_minutes * 60 > TURNING_RETRY_SECONDS:
+            history["turning_retry_used"] = True
+            history["wait_reason"] = TURNING_RETRY_REASON
+            history["next_check_at"] = checked_at + TURNING_RETRY_SECONDS
+
+
+def wait_reason_text(history, language="de"):
+    """Why the next check comes earlier than the interval, for the overview (empty: no reason)."""
+    if history.get("wait_reason") != TURNING_RETRY_REASON:
+        return ""
+    if language == "en":
+        return ("Short wait: the last roller was turning, so this check is one decimal place coarser. "
+                "In about half a minute it stands still again; then the app takes a new picture pair for the full value.")
+    return ("Kurze Wartezeit: Die letzte Rolle drehte sich gerade, darum ist diese Prüfung eine Nachkommastelle gröber. "
+            "In etwa einer halben Minute steht sie wieder, dann holt die App ein neues Bildpaar für den vollen Wert.")
+
+
+def last_check_at(history):
+    stored = history.get("last_check_at")
+    if type(stored) in (int, float) and stored > 0:
+        return stored
+    deadline = history.get("next_check_at")
+    outcome = history.get("check_status")
+    if not deadline or not outcome:
+        return None
+    interval_minutes = history.get("check_interval_minutes", LEGACY_INTERVAL_MINUTES)
+    if not valid_interval_minutes(interval_minutes):
+        interval_minutes = LEGACY_INTERVAL_MINUTES
+    return deadline - _check_delay(
+        outcome, interval_minutes, history.get("retry_suppressed", False),
+        seventh_digit_wait=bool(history.get("seventh_digit_wait")),
+        pause=history.get("failure_pause_minutes"),
+    )
+
+
+def reschedule_next_check(history, interval_minutes):
+    """Apply a new interval relative to the same last check, including older schedules."""
+    if history.get("check_interval_minutes", LEGACY_INTERVAL_MINUTES) == interval_minutes:
+        return False
+    checked_at = last_check_at(history)
+    if checked_at is None:
+        return False
+    history["next_check_at"] = checked_at + _check_delay(
+        history["check_status"], interval_minutes, history.get("retry_suppressed", False),
+        seventh_digit_wait=bool(history.get("seventh_digit_wait")),
+        pause=history.get("failure_pause_minutes"),
+    )
+    history["check_interval_minutes"] = interval_minutes
+    history.pop("wait_reason", None)
+    return True

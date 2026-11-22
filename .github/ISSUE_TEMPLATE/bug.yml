@@ -1,0 +1,50 @@
+name: Fehler melden / Report a problem
+description: Etwas funktioniert nicht wie erwartet / Something does not work as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Danke für die Meldung! Am einfachsten startest du sie in der App unter **Werkzeuge → Debug-Protokoll → Fehler melden**; dann sind Version und Fehlquote schon eingetragen.
+        Bitte **keine** Passwörter, Tokens, Adressen oder privaten Fotos einfügen.
+
+        Thanks for reporting! The easiest way is **Tools → Debug log → Report a problem** in the app; version and failure rate are then filled in.
+        Please do **not** include passwords, tokens, addresses or private photos.
+  - type: textarea
+    id: what
+    attributes:
+      label: Was ist passiert? / What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Was hast du erwartet? / What did you expect?
+  - type: input
+    id: version
+    attributes:
+      label: App-Version / App version
+      placeholder: z. B. 0.2.0
+    validations:
+      required: true
+  - type: dropdown
+    id: source
+    attributes:
+      label: Bildquelle / Image source
+      options:
+        - AI on the Edge / SLFork
+        - ESP nur als Kamera / ESP as camera only
+        - ESPHome-/Home-Assistant-Kamera / ESPHome or Home Assistant camera
+        - Andere / Other
+  - type: textarea
+    id: log
+    attributes:
+      label: Debug-Protokoll / Debug log
+      description: Werkzeuge → Debug-Protokoll → Protokoll herunterladen, Datei hier anhängen / Tools → Debug log → Download log, attach the file here
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Datenschutz / Privacy
+      options:
+        - label: Ich habe keine Zugangsdaten oder privaten Fotos angehängt / I did not attach credentials or private photos
+          required: true

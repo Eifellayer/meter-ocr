@@ -1,0 +1,40 @@
+# Deutsche Namen und Beschreibungen in der Home-Assistant-App-Konfiguration (0.5.18)
+configuration:
+  zeitzone:
+    name: Zeitzone
+    description: >-
+      Zeitzone für Prüfplan, Verbrauchsstatistik und Zeitangaben, z. B. Europe/Berlin.
+      Alles andere – Kamera, Zählwerk, Prüfungen, Benachrichtigungen – richtest du direkt
+      in der App ein (Seitenleiste „AI Meter Reader“ bzw. „Benutzeroberfläche öffnen“).
+  esp_url:
+    name: "Altwert: ESP-Adresse"
+    description: >-
+      Nur für Installationen vor Version 0.5. Die Bildquelle wählst du heute in der App
+      unter Einrichtung. Leer lassen.
+  kamera_entitaet:
+    name: "Altwert: Kamera-Entität"
+    description: Nur für Installationen vor Version 0.5. Die Kamera wählst du in der App. Leer lassen.
+  referenz_entitaet:
+    name: "Altwert: Vergleichssensor"
+    description: Nur für Installationen vor Version 0.5. Einen Vergleichswert legst du in der App fest. Leer lassen.
+  push_dienst:
+    name: "Altwert: Push-Dienst"
+    description: Nur für Installationen vor Version 0.5. Benachrichtigungen stellst du in der App ein. Leer lassen.
+  ausschnitt:
+    name: "Altwert: Bildausschnitt"
+    description: Nur für Installationen vor Version 0.5. Den Ziffernbereich findet die App selbst. Leer lassen.
+  vorkomma_breite:
+    name: "Altwert: Breite der vollen Kubikmeter"
+    description: Nur für Installationen vor Version 0.5. Leer lassen.
+  helle_ziffern:
+    name: "Altwert: Helle Ziffern"
+    description: Nur für Installationen vor Version 0.5. Die Ziffernfarbe erkennt die App selbst. Leer lassen.
+  vergleich_nachkommastellen:
+    name: "Altwert: Nachkommastellen"
+    description: Nur für Installationen vor Version 0.5. Die Genauigkeit stellst du in der App ein. Leer lassen.
+  ocr_versuche:
+    name: "Altwert: Leseversuche"
+    description: Nur für Installationen vor Version 0.5. Leer lassen.
+  intervall_sekunden:
+    name: "Altwert: Prüfintervall"
+    description: Wird nicht mehr verwendet; die App plant ihre Prüfungen selbst. Leer lassen.

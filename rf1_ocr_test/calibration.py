@@ -1154,7 +1154,8 @@ class Calibration:
                 "duration": INTENSIVE_VERIFICATION_SECONDS if self.verification_deadline is not None else self.duration,
                 "attempts": self.attempts, "max_attempts": self.attempt_limit, "automatic": self.automatic,
                 "confirmations": self.confirmations, "required": MIN_IMAGES,
-                "reflected_confirmations": self.reflected_confirmations,
+                "reflected_confirmations": self.glare_hits(),
+                "glare_prompt": self.glare_prompt(),
                 "row_found": self.row_found, "agreement_threshold": self.agreement_threshold,
                 "coarse_threshold": COARSE_AGREEMENT, "digit_found_threshold": DIGIT_FOUND_COARSE,
                 "full_hits": self.full_hits, "partial_hits": self.partial_hits,
@@ -1173,6 +1174,30 @@ class Calibration:
                 "rejected": list(self.rejected),
                 "candidate_agreement": selected_score[0] if len(selected_score) == 3 else None,
                 "seconds": max(0, ceil(self.remaining(now)))}
+
+    def glare_prompt(self):
+        """A reflection found but not yet accepted: ask the user to confirm it (0.5.17)."""
+        glare = self.auto_glare
+        if (self.reflected_layout is not None or not glare or self.automatic or self.intensive
+                or self.state not in ("waiting", "testing")):
+            return None
+        positions = [slot + 1 for slot in glare["positions"]]
+        return {"id": ",".join(map(str, positions)), "positions": positions, "visible": glare.get("visible", "")}
+
+    def confirm_glare(self):
+        """The user confirmed the reflection: take the frame without waiting for three pictures."""
+        glare = self.auto_glare
+        if not glare:
+            return False
+        self.reflected_layout = glare["layout"]
+        self.reflected_positions = tuple(glare["positions"])
+        self.reflected_confirmations = MIN_IMAGES
+        self.auto_reflection = True
+        return True
+
+    def glare_hits(self):
+        """Pictures that confirmed the frame with a hidden digit so far."""
+        return max(self.reflected_confirmations, (self.auto_glare or {}).get("count", 0))
 
     def threshold_for(self, layout):
         """Reading agreement a frame needs: lower once a glyph was found in its digit fields."""
@@ -1268,6 +1293,16 @@ class Calibration:
                          "hits": len(group["hits"]), "merged": max(0, len(group["layouts"]) - 1),
                          "found": self.digit_found.get(layout),
                          "role": "hint" if percent is not None and percent < self.threshold_for(layout) else "confirm"})
+        # 0.5.17 (Stefan 22.11., 15:18): the frame confirmed with a hidden digit (reflection) was
+        # missing from the list – it has no reading score, so it never entered the shortlist.
+        glare = self.reflected_layout or (self.auto_glare or {}).get("layout")
+        if glare is not None and not any(row["selected"] for row in rows):
+            positions = self.reflected_positions or (self.auto_glare or {}).get("positions") or ()
+            rows.append({"number": 0, "percent": None,
+                         "reading": (self.auto_glare or {}).get("visible") or self.candidate_readings.get(glare, ""),
+                         "rotation": glare.rotation, "box": list(glare.box), "selected": True,
+                         "hits": self.glare_hits(), "merged": 0, "found": self.digit_found.get(glare),
+                         "role": "confirm", "reflected": [slot + 1 for slot in positions]})
         # Registers with hits first, then by percentage; numbers follow the shown order.
         rows.sort(key=lambda row: (-(row["hits"] or 0), -(row["percent"] or 0)))
         for number, row in enumerate(rows, 1):

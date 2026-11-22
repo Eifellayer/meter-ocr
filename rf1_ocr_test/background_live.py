@@ -31,13 +31,20 @@ TEXT = {
         "with_check": "läuft parallel zur automatischen Prüfung",
         "wait_cpu": "Startet, sobald das Gerät zwischen zwei Prüfungen Kapazität frei hat.",
         "wait_images": "Wertet die Bilder der regulären Prüfungen aus, wenn das Gerät nicht ausgelastet ist.",
-        "reason_experiment": "Neues Leseverfahren nachträglich testen (während der Prüfung war das Gerät ausgelastet)",
+        "reason_experiment": "Neues Leseverfahren mit dem Bild der letzten Prüfung testen",
         "reason_unclear_check": "Unklare Stellen der letzten Prüfung erneut lesen",
         "reason_control": "Kontrolllesung",
         "busy": "Gerät war ausgelastet (Last {load}); der Test wird in der Wartezeit nachgeholt",
         "stable": "Bewährtes Verfahren", "no_result": "kein Ergebnis", "same": "gleich", "different": "abweichend",
         "reread": "Stelle {position}: {digit}", "nothing": "Seit dem Start der App gab es noch keine Hintergrundaufgaben.",
         "confirmed": "nicht nötig, Prüfung war bestätigt", "plan": "Versuch {done} von {total}",
+        "reasons": {"hidden_known": "Nicht nötig: Die verdeckte Stelle ergänzt die App aus dem Zählerstand. Andere unklare Stellen liest sie in der Pause bis zur nächsten Prüfung noch einmal.",
+                    "too_many_unclear": "Zu viele Stellen unklar – die nächste Prüfung versucht es mit einem neuen Bild.",
+                    "matched": "nicht nötig, Prüfung war bestätigt", "disabled": "ausgeschaltet",
+                    "paused": "Automatik pausiert", "no_capture_time": "Die Aufnahmezeit des Bildes fehlt.",
+                    "fallback_reference": "Kein frischer Vergleichswert vorhanden."},
+        "deferred": "läuft nur in der Pause zwischen zwei Prüfungen",
+        "after_check": "wird nach dieser Prüfung ausgewertet",
         "results": {"shifted": "Rahmen verschoben, Wert gefunden", "timeout": "Zeitbudget aufgebraucht",
                     "found": "Wert gefunden", "none": "nichts gefunden"},
         "confirmations": "Bestätigungen {done} von {required}", "images": "Bilder: {images}",
@@ -50,13 +57,20 @@ TEXT = {
         "with_check": "runs alongside the automatic check",
         "wait_cpu": "Starts as soon as the device has spare capacity between two checks.",
         "wait_images": "Evaluates the pictures of the regular checks when the device is not busy.",
-        "reason_experiment": "Testing a new reading method afterwards (the device was busy during the check)",
+        "reason_experiment": "Testing a new reading method with the picture of the last check",
         "reason_unclear_check": "Re-reading unclear digits of the last check",
         "reason_control": "Control reading",
         "busy": "Device was busy (load {load}); the test is caught up in the waiting time",
         "stable": "Proven method", "no_result": "no result", "same": "same", "different": "different",
         "reread": "Position {position}: {digit}", "nothing": "No background tasks since the app started.",
         "confirmed": "not needed, the check was confirmed", "plan": "Attempt {done} of {total}",
+        "reasons": {"hidden_known": "Not needed: the app fills in the hidden digit from the meter reading. Other unclear digits are read again in the pause before the next check.",
+                    "too_many_unclear": "Too many digits unclear – the next check tries again with a new picture.",
+                    "matched": "not needed, the check was confirmed", "disabled": "switched off",
+                    "paused": "automatic checks paused", "no_capture_time": "The capture time of the picture is missing.",
+                    "fallback_reference": "No fresh comparison value available."},
+        "deferred": "runs only in the pause between two checks",
+        "after_check": "evaluated after this check",
         "results": {"shifted": "frame shifted, value found", "timeout": "time budget used up",
                     "found": "value found", "none": "nothing found"},
         "confirmations": "Confirmations {done} of {required}", "images": "Images: {images}",
@@ -154,8 +168,9 @@ def shadow(record, automatic_running, language="de"):
     if record is None:
         return None
     experiment = record.get("experiment") or {}
-    if automatic_running:
-        return _entry("shadow", text["shadow"], "running", text, step=text["with_check"])
+    if experiment.get("skipped") == "deferred":
+        return _entry("shadow", text["shadow"], "waiting", text, image=record.get("image"),
+                      step=text["deferred"], at=record.get("at"))
     state = "skipped" if experiment.get("skipped") else "done"
     return _entry("shadow", text["shadow"], state, text, image=record.get("image"),
                   reading=str(experiment.get("stable") or record.get("stable") or ""),
@@ -167,15 +182,14 @@ def recovery(record, automatic_running, language="de"):
     text = _text(language)
     if record is None:
         return None
-    if automatic_running:
-        return _entry("recovery", text["recovery"], "running", text, step=text["with_check"])
     log = record.get("recovery") or {}
     plan = log.get("plan") or {}
     if not log.get("tried"):
         reason = log.get("reason")
         return _entry("recovery", text["recovery"], "skipped", text, image=record.get("image"),
                       reading=record.get("ocr") or "",
-                      result=text["confirmed"] if reason == "confirmed" else str(reason or ""), at=record.get("at"))
+                      result=text["confirmed"] if reason == "confirmed" else text["reasons"].get(reason, str(reason or "")),
+                      at=record.get("at"))
     step = text["plan"].format(done=plan.get("done", 0), total=plan.get("total", 0)) if plan else ""
     result = text["results"].get(log.get("result"), str(log.get("result") or ""))
     return _entry("recovery", text["recovery"], "done", text, step=step, image=record.get("image"),

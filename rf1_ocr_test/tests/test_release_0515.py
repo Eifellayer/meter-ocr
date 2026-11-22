@@ -53,3 +53,55 @@ class LookTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReflectedCandidateTests(unittest.TestCase):
+    """0.5.17 (Stefan 22.11.2026, 15:18): the frame confirmed with a hidden digit was not listed."""
+
+    def test_frame_with_hidden_digit_is_listed_and_counted(self):
+        from calibration import Calibration, Layout
+        job = Calibration(limit=20, started=0)
+        layout = Layout((10, 20, 300, 80), -10, 290)
+        job.auto_glare = {"layout": layout, "positions": (5,), "visible": "10512?2", "count": 1}
+        rows = job.candidate_rows()
+        self.assertEqual(1, len(rows))
+        self.assertEqual([6], rows[0]["reflected"])
+        self.assertTrue(rows[0]["selected"])
+        self.assertEqual(1, rows[0]["hits"])
+        self.assertEqual(1, job.status(0)["reflected_confirmations"])
+
+
+class GlareConfirmTests(unittest.TestCase):
+    """0.5.17 (Stefan 22.11.2026, 15:23): confirm a detected reflection and enter the reading."""
+
+    def test_prompt_and_confirmation(self):
+        from calibration import MIN_IMAGES, Calibration, Layout
+        job = Calibration(limit=20, started=0)
+        job.state = "testing"
+        self.assertIsNone(job.glare_prompt())
+        layout = Layout((10, 20, 300, 80), -10, 290)
+        job.auto_glare = {"layout": layout, "positions": (5,), "visible": "10512?2", "count": 1}
+        self.assertEqual({"id": "6", "positions": [6], "visible": "10512?2"}, job.glare_prompt())
+        self.assertFalse(job.reflection_crop_ready())
+        self.assertTrue(job.confirm_glare())
+        self.assertTrue(job.reflection_crop_ready())
+        self.assertEqual(MIN_IMAGES, job.glare_hits())
+        self.assertIsNone(job.glare_prompt())
+
+    def test_page_has_the_prompt_and_the_close_button(self):
+        self.assertEqual(2, PANEL.count('class="reflection-suggestion action-needed glare-confirm"'))
+        self.assertIn('value="confirm-reflection"', PANEL)
+        self.assertIn('id="setup-success-close"', PANEL)
+        self.assertIn("'Felder mit Ziffer '", PANEL)
+
+
+class PromptOnceTests(unittest.TestCase):
+    """0.5.17 (Stefan 22.11.2026, 15:36/15:39): ask for the reading once, optionally never again."""
+
+    def test_option_is_saved(self):
+        self.assertIn('name="hide_prompt"', PANEL)
+        self.assertIn('"hidden_digit_prompt_hidden": True', PANEL)
+
+    def test_run_does_not_ask_again_after_an_entry(self):
+        source = (Path(__file__).resolve().parents[1] / "run.py").read_text(encoding="utf-8")
+        self.assertIn('entered_once = (manual_reading_anchor(active_rules, zone) is not None', source)

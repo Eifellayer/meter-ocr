@@ -1845,7 +1845,9 @@ def main():
             get_auto_rules(), get_source()[0], attempt, layout, calibration_tilts.get(calibration_tilt_key(layout), []),
             provisional=provisional, verified=verified, reflected=reflected))
 
-    def control_calibration(action, limit, region=None, *, verification_id=None, trigger="user"):
+    glare_confirmed = {"id": None}
+
+    def control_calibration(action, limit, region=None, *, verification_id=None, trigger="user", reading=None):
         nonlocal calibration, calibration_configuration, calibration_next
         with settings_lock:
             if action == "repair":
@@ -1856,6 +1858,21 @@ def main():
             if action == "cancel":
                 if running:
                     calibration.state = "cancelled"
+            elif action == "confirm-reflection":
+                # 0.5.17 (Stefan 22.11., 15:23): the user confirms the reflection and enters the
+                # reading; the frame is taken with the next picture and the reading anchors the checks.
+                prompt = calibration.glare_prompt() if running else None
+                if not prompt or prompt["id"] != verification_id or reading is None:
+                    raise ValueError("No matching reflection to confirm")
+                value, stamp = reading
+                save_auto_rules({**get_auto_rules(), "fallback_value": value, "fallback_time": stamp,
+                                 "reflection_estimate_enabled": True}, request_check=False)
+                # Saving the reading must not look like a changed configuration to the running setup.
+                calibration_configuration = calibration_configuration_now()
+                glare_confirmed["id"] = verification_id
+                calibration_next = time.monotonic()
+                wake_worker.set()
+                debug_log.record(kind="setup_glare_confirmed", positions=prompt["positions"])
             elif action == "skip-verification":
                 current_id = calibration.skippable_verification_id() if calibration else None
                 if (not current_id or verification_id != current_id
@@ -2389,6 +2406,11 @@ def main():
                             elif attempt.stationary_crop_ready():
                                 selected = attempt.candidate
                                 provisional = True
+                            elif (glare_confirmed["id"] and attempt.glare_prompt()
+                                  and attempt.glare_prompt()["id"] == glare_confirmed["id"] and attempt.confirm_glare()):
+                                glare_confirmed["id"] = None
+                                selected = attempt.reflected_layout
+                                provisional = reflected = True
                             elif attempt.reflection_crop_ready():
                                 selected = attempt.reflected_layout
                                 provisional = reflected = True
@@ -2407,7 +2429,7 @@ def main():
                 if entry.get("kind") == "setup_image":
                     attempt.rounds.append({"image": entry["images"], "reason": entry["reason"],
                                            "reading": entry["reading"], "seconds": entry["round_s"],
-                                           "confirmations": max(attempt.confirmations, attempt.reflected_confirmations)})
+                                           "confirmations": max(attempt.confirmations, attempt.glare_hits())})
                     del attempt.rounds[:-12]
             if attempt.searching_since is not None:
                 attempt.spent += now - attempt.searching_since
@@ -3597,6 +3619,14 @@ def main():
                             if not anchored and hidden_slots:
                                 anchor = newest_anchor(anchor, manual_reading_anchor(active_rules, zone),
                                                        read_state["captured"])
+                                # 0.5.17 (Stefan 22.11., 15:36): every confirmed check is a fresh anchor too, so
+                                # the hidden digit stays fillable from check to check without asking again.
+                                counted_now = history.get("consumption") or {}
+                                if (type(counted_now.get("reading_litres")) is int
+                                        and type(counted_now.get("timestamp")) in (int, float)):
+                                    anchor = newest_anchor(anchor, {"value": counted_now["reading_litres"],
+                                                                    "time": counted_now["timestamp"]},
+                                                           read_state["captured"])
                                 # 0.5.10: with the configured maximum flow several values of a hidden
                                 # first decimal were always reachable and nothing was ever filled.
                                 anchor_flow = hidden_roller_flow(history, active_rules["max_flow_lph"])
@@ -3633,9 +3663,17 @@ def main():
                                     # possible value) to fill the hidden digit from: ask for the reading.
                                     asked = history.get("hidden_digit_since") or time.time()
                                     updated["hidden_digit_since"] = asked
-                                    updated["hidden_digit_prompt"] = {
-                                        "positions": [slot + 1 for slot in hidden_slots], "time": time.time(),
-                                        "image_time": read_state["captured"]}
+                                    # 0.5.17 (Stefan 22.11., 15:36): once a reading was entered, never ask again;
+                                    # if the gap since the last confirmed reading is too long, estimate at once.
+                                    entered_once = (manual_reading_anchor(active_rules, zone) is not None
+                                                    or active_rules.get("hidden_digit_prompt_hidden"))
+                                    if entered_once:
+                                        asked = time.time() - HIDDEN_ESTIMATE_AFTER
+                                        updated.pop("hidden_digit_prompt", None)
+                                    else:
+                                        updated["hidden_digit_prompt"] = {
+                                            "positions": [slot + 1 for slot in hidden_slots], "time": time.time(),
+                                            "image_time": read_state["captured"]}
                                     # 0.5.12 (Stefan 13:46/13:47): do not wait for the entry for ever. After
                                     # five minutes a hidden decimal is estimated (never full cubic metres).
                                     known = [value for value in (
@@ -4357,11 +4395,10 @@ def main():
                   f"OCR: {ocr or '?'} ({data['ocr_attempts']} Durchläufe) | "
                   f"SLFork: {data['actual_value']} | Ergebnis: {outcome}")
             local = locals()
-            experiment = shadow_experiments(
-                active_rules, manual, local.get("register"),
-                [*(local.get("whole_boxes") or []), *(local.get("fraction_boxes") or [])], ocr,
-                options["helle_ziffern"] if active_rules["polarity"] == "auto" else active_rules["polarity"] == "light",
-                active_rules["polarity"] != "auto")
+            # 0.5.17 (Stefan 22.11., 15:33): new reading methods are tested only in the pause between
+            # two checks, never right after a check – that kept every check longer than needed.
+            experiment = ({"skipped": "deferred"} if not manual and local.get("register") is not None
+                          and experiments.enabled_experiments(active_rules) else None)
             library_filled = digit_library.LIBRARY.take_filled()
             if not manual:
                 # Kept for work between the checks; never fetched specially for it (idle_work).

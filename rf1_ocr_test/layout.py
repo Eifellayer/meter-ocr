@@ -1079,47 +1079,78 @@ GLARE_STREAK_SHARE = .04
 DIGIT_PRESENCE_CONTRAST = 28
 
 
+def _field_holds_glyph(gray, box):
+    """True/False whether one digit frame holds a glyph, None when it cannot be judged."""
+    left, top, right, bottom = box
+    left, top = max(0, left), max(0, top)
+    right, bottom = min(gray.width, right), min(gray.height, bottom)
+    if right - left < 3 or bottom - top < 4:
+        return None
+    cell = gray.crop((left, top, right, bottom)).resize((24, 36), Image.Resampling.BILINEAR)
+    pixels = cell.tobytes()
+    levels = sorted(pixels)
+    low, high = levels[len(levels) // 20], levels[len(levels) * 19 // 20]
+    if high - low < DIGIT_PRESENCE_CONTRAST:
+        return False
+    middle = (low + high) / 2
+    light = [value >= middle for value in pixels]
+    share = sum(light) / len(light)
+    glyph = light if share <= .5 else [not value for value in light]
+    share = min(share, 1 - share)
+    if not .05 <= share <= .45:
+        return False
+    rows = [any(glyph[y * 24:(y + 1) * 24]) for y in range(36)]
+    columns = [any(glyph[x::24]) for x in range(24)]
+    # Parts of two neighbouring digits (frame shifted by half a field) touch both side edges.
+    if columns[0] and columns[-1]:
+        return False
+    used_rows = [y for y, used in enumerate(rows) if used]
+    used_columns = [x for x, used in enumerate(columns) if used]
+    return used_rows[-1] - used_rows[0] + 1 >= 16 and used_columns[-1] - used_columns[0] + 1 >= 4
+
+
 def digit_presence(register, boxes, skip=()):
     """Share (0–100) of the digit frames that really hold a glyph – without any OCR.
 
-    First of the two percentages (0.5.11): "is there a digit in every field?". A frame holds a
-    glyph when it has clear contrast and its rarer tone forms a compact shape that covers a
-    small part of the frame, yet spans much of its height. Frames in ``skip`` (hidden by a
-    reflection) are left out. Returns None when no frame can be judged.
+    First of the two percentages (0.5.11): "is there a digit in every field?". Frames in
+    ``skip`` (hidden by a reflection) are left out. Returns None when no frame can be judged.
     """
     gray = register.convert("L")
-    judged = found = 0
-    for index, (left, top, right, bottom) in enumerate(boxes):
-        if index in skip:
-            continue
-        left, top = max(0, left), max(0, top)
-        right, bottom = min(gray.width, right), min(gray.height, bottom)
-        if right - left < 3 or bottom - top < 4:
-            continue
-        judged += 1
-        cell = gray.crop((left, top, right, bottom)).resize((24, 36), Image.Resampling.BILINEAR)
-        pixels = cell.tobytes()
-        levels = sorted(pixels)
-        low, high = levels[len(levels) // 20], levels[len(levels) * 19 // 20]
-        if high - low < DIGIT_PRESENCE_CONTRAST:
-            continue
-        middle = (low + high) / 2
-        light = [value >= middle for value in pixels]
-        share = sum(light) / len(light)
-        glyph = light if share <= .5 else [not value for value in light]
-        share = min(share, 1 - share)
-        if not .05 <= share <= .45:
-            continue
-        rows = [any(glyph[y * 24:(y + 1) * 24]) for y in range(36)]
-        columns = [any(glyph[x::24]) for x in range(24)]
-        used_rows = [y for y, used in enumerate(rows) if used]
-        used_columns = [x for x, used in enumerate(columns) if used]
-        # Parts of two neighbouring digits (frame shifted by half a field) touch both side edges.
-        if columns[0] and columns[-1]:
-            continue
-        if used_rows[-1] - used_rows[0] + 1 >= 16 and used_columns[-1] - used_columns[0] + 1 >= 4:
-            found += 1
-    return round(100 * found / judged) if judged else None
+    judged = [_field_holds_glyph(gray, box) for index, box in enumerate(boxes) if index not in skip]
+    judged = [value for value in judged if value is not None]
+    return round(100 * sum(judged) / len(judged)) if judged else None
+
+
+def empty_digit_slots(register, boxes, skip=()):
+    """Digit frames that clearly hold no glyph while most of the others do (0.5.16).
+
+    Stefan 22.11.2026, 15:05: a frame row shifted by one field put its first frame on the bare
+    housing left of the counter, and the OCR still read a "1" there. Such a frame must not count
+    as a read digit. Returns the indices, or an empty list when the strip as a whole is unclear.
+    """
+    gray = register.convert("L")
+    blank = {index: _field_center_blank(gray, box) for index, box in enumerate(boxes) if index not in skip}
+    judged = [value for value in blank.values() if value is not None]
+    if len(judged) < 3 or sum(judged) > len(judged) / 2:
+        return []
+    return [index for index, value in blank.items() if value]
+
+
+def _field_center_blank(gray, box):
+    """True when the middle of a digit frame is plain (no stroke at all), None if too small.
+
+    Only the middle is judged: the dark gaps between the rollers or the edge of the housing may
+    reach into the sides of a frame, the digit itself always sits in the middle.
+    """
+    left, top, right, bottom = box
+    left, top = max(0, left), max(0, top)
+    right, bottom = min(gray.width, right), min(gray.height, bottom)
+    if right - left < 5 or bottom - top < 6:
+        return None
+    width, height = right - left, bottom - top
+    middle = gray.crop((left + width // 4, top + height // 8, right - width // 4, bottom - height // 8))
+    levels = sorted(middle.resize((12, 28), Image.Resampling.BILINEAR).tobytes())
+    return levels[len(levels) * 19 // 20] - levels[len(levels) // 20] < DIGIT_PRESENCE_CONTRAST
 
 
 def glare_slots(register, boxes):

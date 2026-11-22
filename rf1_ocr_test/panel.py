@@ -37,7 +37,7 @@ from checks import (DEFAULT_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, WARNING_DETA
                     OCR_PROFILES, crop_register, read_register, LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, REFLECTION_SUGGEST_AFTER, STANDALONE_PENDING, STANDALONE_REJECTED_NOTICE,
                     STANDALONE_VERIFIED_NOTICE, last_check_at, recommended_comparison_decimals, reschedule_next_check,
                     setup_deadlines, setup_source_id, stabilization_interval, stationary_partial_active, valid_interval_minutes,
-                    eighth_digit_given_up)
+                    eighth_digit_given_up, wait_reason_text)
 QUIET_FAILURES = status_view.QUIET_FAILURES
 from checks import (DEFAULT_FAILURE_PAUSE_MINUTES, MAX_FAILURE_PAUSE_MINUTES, MIN_FAILURE_PAUSE_MINUTES,
                     FRAME_OFF_NOTICE, FRAME_OFF_WAIT_NOTICE, MOVING_DIGIT_NOTICE, MOVING_NOTICES)
@@ -275,6 +275,13 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .setup-step-result{{color:var(--muted);font-size:.85rem;font-variant-numeric:tabular-nums}}
 .setup-step-detail{{grid-column:2;font-size:.88rem;font-variant-numeric:tabular-nums;color:light-dark(#243b4b,#e5edf5)}}
 .setup-step-head{{display:flex;flex-wrap:wrap;gap:.2rem .6rem;align-items:baseline;justify-content:space-between;min-width:0}}
+.setup-substeps{{grid-column:2;margin:.2rem 0 0;font-size:.86rem}}
+.setup-substeps summary{{cursor:pointer;color:var(--muted)}}
+.setup-substeps ul{{list-style:none;margin:.2rem 0 0;padding:0}}
+.setup-substeps li{{margin:.1rem 0;font-variant-numeric:tabular-nums}}
+.setup-substeps li[data-sub="todo"]{{color:var(--muted)}}
+.setup-substeps li[data-sub="current"]{{font-weight:700}}
+.setup-substeps li[data-sub="warn"]{{color:light-dark(#8a5a00,#ffd27a)}}
 .setup-timeline-stats{{margin:.1rem 0 0;color:var(--muted);font-size:.85rem;font-variant-numeric:tabular-nums}}
 @keyframes setup-pulse{{0%,100%{{box-shadow:0 0 0 0 light-dark(#0b8f7c55,#38c9b055)}}50%{{box-shadow:0 0 0 .4rem light-dark(#0b8f7c00,#38c9b000)}}}}
 @keyframes setup-tick{{from{{transform:scale(.4);opacity:0}}to{{transform:scale(1);opacity:1}}}}
@@ -390,6 +397,17 @@ section{{display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(min(
 section>div{{background:var(--surface);border:1px solid var(--edge);border-radius:1rem;padding:1rem;overflow:hidden}}
 section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 .stamp,#countdown{{font-variant-numeric:tabular-nums}}
+.meter-hero-wait{{margin:.35rem 0 0;font-size:.88rem;color:var(--muted)}}
+.background-work-box{{margin:.5rem 0 .75rem}}
+.background-work-toggle{{display:inline-flex;gap:.45rem;align-items:center;font-size:.92rem;cursor:pointer}}
+.background-live{{margin-top:.5rem}}
+.background-job{{margin:0 0 .6rem;padding:.6rem .85rem;border:1px solid var(--edge);border-radius:.75rem}}
+.background-job[data-state="running"]{{border-color:var(--accent)}}
+.background-job p{{margin:.15rem 0 0;font-size:.9rem;overflow-wrap:anywhere}}
+.background-job .background-job-head{{margin:0;font-size:1rem}}
+.background-job .background-job-state{{color:var(--muted);font-weight:500}}
+.background-job[data-state="running"] .background-job-state{{color:var(--accent);font-weight:700}}
+.background-job progress{{width:100%;margin-top:.35rem}}
 @media(max-width:500px){{body{{padding:.8rem .7rem 2rem}}.panel{{padding:.9rem}}dl{{grid-template-columns:minmax(5.5rem,1fr) minmax(0,1.7fr);gap:.5rem .85rem}}form:not(.language-bar) button{{width:100%;min-height:2.75rem}}}}
 /* ---------- Design system 0.7: tokens ---------- */
 :root{{font:15px/1.5 "Inter","Segoe UI Variable","Segoe UI",system-ui,-apple-system,sans-serif;
@@ -691,6 +709,7 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 <progress class="hero-search-progress" id="hero-search-progress" aria-label="Fortschritt der Hintergrundsuche" hidden></progress>
 <p class="meter-hero-meta"><span>Letzte Prüfung <strong id="hero-last-check">–</strong></span>
 <span>Nächste Prüfung <strong id="hero-countdown">–</strong></span></p>
+<p class="meter-hero-wait" id="hero-wait-reason" role="status" hidden></p>
 <p class="meter-hero-stale" id="hero-stale" role="status" hidden><span id="hero-stale-text"></span><button type="button" class="secondary" id="reload-view">Neu laden</button></p>
 </div>
 <div class="check-card-heading"><h2>Automatische Kontrolle</h2></div>
@@ -714,6 +733,13 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 <p class="settings-note">Ziffern je Versuch und Stelle aus der zuletzt beendeten Prüfung. Die Liste bleibt bis zur nächsten Prüfung stehen.</p>
 <div class="digit-grid-wrap" id="automatic-last-digit-grid" hidden><table class="digit-grid" aria-label="Gelesene Ziffern je Versuch und Stelle"><thead></thead><tbody></tbody></table></div>
 </details>
+</div>
+<div class="background-work-box">
+<label class="background-work-toggle"><input type="checkbox" id="show-background-work"> Hintergrundarbeit anzeigen</label>
+<section id="background-live" class="background-live" aria-label="Hintergrundarbeit" hidden>
+<p class="settings-note">Was die App neben der automatischen Prüfung tut: Feinsuche, Wartezeit-Arbeit, Schattenmodus und Nacharbeit. Nur zur Ansicht, du musst nichts tun.</p>
+<div id="background-live-list"></div>
+</section>
 </div>
 <div class="crop-actions" id="setup-start-actions" {resume_setup_hidden}>
 <button type="button" id="resume-setup">Einrichtung fortsetzen</button>
@@ -1508,6 +1534,7 @@ Bei anhaltenden Problemen benachrichtigen
 </footer>
 <script>
 let next = {next_check};
+let lastBackgroundWork = [];
 const lang = '{language}';
 let automaticStatusFailures = 0;
 const pageInstance = '{instance_id}';
@@ -2667,9 +2694,55 @@ function setupProgressModel(status) {{
   ];
   if (status.simplified) steps.push({{key: 'background', optional: true,
     label: en ? 'In the background: refine the last digit (optional)' : 'Im Hintergrund: letzte Stelle verfeinern (optional)', result: ''}});
+  // Sub-steps (Stefan 22.11., 11:43): the running step unfolds its small intermediate steps,
+  // finished steps can be opened again.
+  const tested = Number(status.tested || 0);
+  const sub = (label, done, running, extra) => ({{label, state: done ? 'done' : running ? 'current' : 'todo', extra: extra || ''}});
+  const hintNames = {{dark: en ? 'dark' : 'dunkel', bright: en ? 'very bright' : 'sehr hell', low_contrast: en ? 'low contrast' : 'wenig Kontrast'}};
+  const hints = (status.image_hints || []).map(hint => hintNames[hint] || hint).join(', ');
+  const plural = count => count === 1 ? (en ? ' image' : ' Bild') : (en ? ' images' : ' Bilder');
+  const substeps = {{
+    image: [
+      sub(en ? 'Request picture' : 'Bild anfordern', tested > 0 || stage !== 'capture', stage === 'capture'),
+      sub(en ? 'Check light and brightness' : 'Licht und Helligkeit prüfen', tested > 0, false,
+        tested ? (hints ? (en ? 'Note: ' : 'Hinweis: ') + hints : (en ? 'fine' : 'in Ordnung')) : ''),
+      sub(en ? 'Picture received' : 'Bild empfangen', tested > 0, false, tested ? tested + plural(tested) : ''),
+    ],
+    find: [
+      sub(en ? 'Search the counter window' : 'Zählwerkfenster suchen', current > 1 || !!status.row_found, current === 1,
+        status.row_found ? (en ? 'digit row ' : 'Ziffernreihe ') + status.row_found + ' %' : ''),
+      sub(en ? 'Collect frame candidates' : 'Rahmen-Kandidaten sammeln', current > 1, current === 1 && !!status.row_found,
+        candidates.length ? candidates.length + (en ? ' found' : ' gefunden') : ''),
+    ],
+    check: [
+      sub((en ? 'Test frames' : 'Rahmen testen') + (candidates.length ? ' (' + Math.min(selected ? selected.number : Number(status.variant) || 1, candidates.length) + (en ? ' of ' : ' von ') + candidates.length + ')' : ''),
+        current > 2, current === 2 && ['ocr', 'shortlist'].includes(stage), (status.attempts || 0) + (en ? ' tested' : ' getestet')),
+      sub(en ? 'Check rotation' : 'Drehung prüfen', current > 2, current === 2 && stage === 'angle',
+        status.rotation != null ? String(status.rotation).replace('-', '−') + '°' : ''),
+      sub(en ? 'Fine-tune frames' : 'Rahmen fein nachjustieren', current > 2, current === 2 && ['refine', 'digit_probe'].includes(stage)),
+      sub(en ? 'Read digits' : 'Ziffern lesen', current > 2 || !!selected?.reading, false,
+        selected?.reading ? (en ? 'candidate ' : 'Kandidat ') + selected.reading : ''),
+    ],
+    confirm: [
+      ...Array.from({{length: required}}, (_, index) => sub((en ? 'Confirmation ' : 'Bestätigung ') + (index + 1) + (en ? ' of ' : ' von ') + required,
+        confirmations > index || saved, current === 3 && confirmations === index && stage !== 'verify_wait')),
+      ...(stage === 'verify_wait' ? [sub(en ? 'Waiting for a new picture' : 'Wartet auf ein neues Bild', false, true)] : []),
+      ...(status.partial_hits ? [sub(en ? 'Partial hits (last digit unclear)' : 'Teiltreffer (letzte Stelle unklar)', true, false, String(status.partial_hits))] : []),
+    ],
+    save: [
+      sub(en ? 'Take over the starting value' : 'Startwert übernehmen', saved, !!status.awaiting_start_value),
+      sub(en ? 'Save setup' : 'Einrichtung speichern', saved, false),
+    ],
+  }};
+  if (status.state === 'image_timeout' || status.state === 'timeout') {{
+    const key = ['image', 'find', 'check', 'confirm', 'save'][Math.min(current, 4)];
+    substeps[key].push({{label: status.state === 'image_timeout' ? (en ? 'No new camera image, repeating' : 'Kein neues Kamerabild – wird wiederholt')
+      : (en ? 'Time limit reached' : 'Zeitlimit erreicht'), state: 'warn', extra: ''}});
+  }}
   steps.forEach((step, index) => {{
     step.state = step.optional ? 'optional' : index < current ? 'done' : index === current ? 'current' : 'todo';
     step.detail = step.state === 'current' ? detail.join(' · ') : '';
+    step.substeps = step.state === 'done' || step.state === 'current' ? (substeps[step.key] || []) : [];
     if (step.state !== 'done') step.result = '';
   }});
   const stats = (en ? 'Images: ' : 'Bilder: ') + (status.tested || 0) +
@@ -2678,6 +2751,7 @@ function setupProgressModel(status) {{
     (best ? (en ? ' · Best match: ' : ' · Beste Übereinstimmung: ') + best + ' %' : '');
   return {{active, current: Math.min(current, 3), steps, stats, candidates}};
 }}
+const setupSubstepsOpen = new Map();
 function renderSetupTimeline(box, model) {{
   const list = box.querySelector('.setup-timeline');
   const key = JSON.stringify(model.steps);
@@ -2712,6 +2786,29 @@ function renderSetupTimeline(box, model) {{
         detail.className = 'setup-step-detail';
         detail.textContent = step.detail;
         row.append(detail);
+      }}
+      if (step.substeps?.length) {{
+        const fold = document.createElement('details');
+        fold.className = 'setup-substeps';
+        const remembered = setupSubstepsOpen.get(step.key);
+        fold.open = remembered ?? step.state === 'current';
+        const summary = document.createElement('summary');
+        summary.textContent = lang === 'en' ? 'Intermediate steps' : 'Zwischenschritte';
+        const items = document.createElement('ul');
+        items.append(...step.substeps.map(part => {{
+          const item = document.createElement('li');
+          item.dataset.sub = part.state;
+          item.textContent = (part.state === 'done' ? '✓ ' : part.state === 'current' ? '▸ ' : part.state === 'warn' ? '! ' : '○ ') +
+            part.label + (part.extra ? ' – ' + part.extra : '');
+          return item;
+        }}));
+        fold.append(summary, items);
+        fold.addEventListener('toggle', () => {{
+          // A user's choice wins; a step that just became current opens by itself.
+          if (fold.open !== (step.state === 'current')) setupSubstepsOpen.set(step.key, fold.open);
+          else setupSubstepsOpen.delete(step.key);
+        }});
+        row.append(fold);
       }}
       return row;
     }}));
@@ -3470,6 +3567,75 @@ function tick() {{
 function formatStamp(epoch) {{
   return new Intl.DateTimeFormat(lang === 'en' ? 'en-GB' : 'de-DE', {{day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'}}).format(new Date(epoch * 1000));
 }}
+function renderBackgroundWork(items) {{
+  const box = document.querySelector('#background-live');
+  const toggle = document.querySelector('#show-background-work');
+  if (!box || !toggle) return;
+  box.hidden = !toggle.checked;
+  if (box.hidden) return;
+  const list = document.querySelector('#background-live-list');
+  const key = JSON.stringify(items);
+  if (list.dataset.items === key) return;
+  list.dataset.items = key;
+  const en = lang === 'en';
+  if (!items.length) {{
+    const empty = document.createElement('p');
+    empty.className = 'settings-note';
+    empty.textContent = en ? 'No background work since the app started.' : 'Noch keine Hintergrundarbeit seit dem Start der App.';
+    list.replaceChildren(empty);
+    return;
+  }}
+  list.replaceChildren(...items.map(item => {{
+    const card = document.createElement('div');
+    card.className = 'background-job';
+    card.dataset.state = item.state;
+    card.dataset.job = item.id;
+    const head = document.createElement('p');
+    head.className = 'background-job-head';
+    head.setAttribute('role', 'status');
+    const title = document.createElement('strong');
+    title.textContent = item.title + ': ';
+    const state = document.createElement('span');
+    state.className = 'background-job-state';
+    state.textContent = item.state_label;
+    head.append(title, state);
+    card.append(head);
+    const line = (label, value) => {{
+      if (value == null || value === '') return;
+      const row = document.createElement('p');
+      row.textContent = label + value;
+      card.append(row);
+    }};
+    line(en ? 'Step: ' : 'Schritt: ', item.step);
+    if (item.image) {{
+      const stamp = Date.parse(item.image);
+      line(en ? 'Picture: ' : 'Bild: ', Number.isNaN(stamp) ? item.image : formatStamp(stamp / 1000));
+    }}
+    line(en ? 'Read: ' : 'Gelesen: ', item.reading);
+    if (Number.isInteger(item.total) && item.total > 0) {{
+      const bar = document.createElement('progress');
+      bar.max = item.total;
+      bar.value = Math.min(item.total, Number(item.completed) || 0);
+      bar.setAttribute('aria-label', item.title);
+      card.append(bar);
+      line(en ? 'Progress: ' : 'Fortschritt: ', (Number(item.completed) || 0) + (en ? ' of ' : ' von ') + item.total);
+    }}
+    line(item.state === 'running' || item.state === 'waiting' ? (en ? 'Status: ' : 'Stand: ') : (en ? 'Result: ' : 'Ergebnis: '), item.result);
+    if (item.at) line(en ? 'Last activity: ' : 'Zuletzt aktiv: ', formatStamp(item.at));
+    return card;
+  }}));
+}}
+{{
+  const toggle = document.querySelector('#show-background-work');
+  if (toggle) {{
+    try {{ toggle.checked = localStorage.getItem('rf1-show-background-work') === '1'; }} catch (error) {{}}
+    toggle.addEventListener('change', () => {{
+      try {{ localStorage.setItem('rf1-show-background-work', toggle.checked ? '1' : '0'); }} catch (error) {{}}
+      document.querySelector('#background-live-list').dataset.items = '';
+      renderBackgroundWork(lastBackgroundWork);
+    }});
+  }}
+}}
 function renderReferenceNote(kind, epoch, fallback) {{
   const note = document.querySelector('#' + kind + '-reference-note');
   note.hidden = !epoch && !fallback;
@@ -3880,6 +4046,11 @@ async function refreshAutomatic() {{
     if (routineOk) calibrationNoticeUntil = 0;
     updateCalibrationNotice();
     next = sample.next_check;
+    const waitReason = document.querySelector('#hero-wait-reason');
+    if (waitReason.textContent !== (sample.wait_reason || '')) waitReason.textContent = sample.wait_reason || '';
+    waitReason.hidden = !sample.wait_reason;
+    lastBackgroundWork = sample.background_work || [];
+    renderBackgroundWork(lastBackgroundWork);
     renderConsumption(sample.consumption);
     comparedDecimals = Number.isInteger(sample.decimals) ? sample.decimals : null;
     configuredDecimals = Number.isInteger(sample.configured_decimals) ? sample.configured_decimals : comparedDecimals;
@@ -3949,6 +4120,8 @@ async function refreshAutomatic() {{
     }} else if (!sample.paused && next) {{
       refreshDelay = Math.min(15000, Math.max(1000, next * 1000 - Date.now()));
     }}
+    // Background work is shown live: refresh more often while the box is ticked.
+    if (document.querySelector('#show-background-work')?.checked) refreshDelay = Math.min(refreshDelay, 3000);
     const geometryStatus = document.querySelector('#geometry-repair-warning');
     geometryStatus.hidden = !sample.geometry_warning;
     geometryStatus.textContent = sample.geometry_warning;
@@ -4172,7 +4345,7 @@ def start_panel(
     get_auto_rules, save_auto_rules, default_crop, default_width, test_image,
     load_language_modes, save_language_modes, get_delivery, save_delivery, get_source, save_source,
     wake_worker=None, *, address=("0.0.0.0", 8099), test_source_image=None, automatic_preview=None,
-    request_factory_reset=None, get_reset_status=None, skip_setup=None, get_activity=None,
+    request_factory_reset=None, get_reset_status=None, skip_setup=None, get_activity=None, get_background_work=None,
     get_auto_paused=None, save_auto_paused=None, discover_sources=None,
     settings_lock=None, get_calibration=None, control_calibration=None, get_calibration_image=None,
     has_calibration_backup=None, get_wizard_image=None, real_demo=None, statistics_zone=timezone.utc,
@@ -4437,6 +4610,8 @@ def start_panel(
             "reference_is_fallback": history.get("last_reference_is_fallback", False),
             "image_time": history.get("last_epoch") or 0,
             "next_check": None if activity.get("state") == "setup_wait" else history.get("next_check_at"),
+            "wait_reason": "" if activity.get("state") == "setup_wait" or paused else wait_reason_text(history, language),
+            "background_work": get_background_work(language) if get_background_work else [],
             "last_check": last_check_at(history),
             "last_match": history.get("last_match_at"),
             "readings": history.get("ocr_readings", []) if show_attempts else [],

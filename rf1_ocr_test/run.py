@@ -58,6 +58,8 @@ from checks import (without_light, unclear_trailing_decimals, last_two_compared_
 import debug_log
 import experiments
 import demo
+import background_live
+import stationary
 import idle_work
 import system_monitor
 import read_plan
@@ -833,7 +835,7 @@ def idle_job(reason, register, boxes, ocr, light, forced, image, now):
             "light": light, "forced": forced, "image": image, "at": now}
 
 
-def idle_step(job, rules, now, next_check, used, *, sample=None):
+def idle_step(job, rules, now, next_check, used, *, sample=None, on_start=None):
     """One small piece of work between two checks; returns (reads used so far, debug record or None).
 
     Works only with the picture of the last check (no new image, no light), only with a reason
@@ -844,6 +846,8 @@ def idle_step(job, rules, now, next_check, used, *, sample=None):
                                system_monitor.snapshot() if sample is None else sample, job["reason"], used)
     if not allowed:
         return used, None
+    if on_start is not None and not (job["reason"] == "experiment" and used):
+        on_start(job)
     if job["reason"] == "experiment":
         if used:
             return used, None
@@ -1702,6 +1706,28 @@ def main():
                            "Einrichtung erforderlich: Lege zuerst die Bildquelle fest." if setup_pending else
                            "App läuft. Wartet auf die nächste automatische Prüfung.")}
 
+    # Live state of the background work for the overview box "Hintergrundarbeit anzeigen" (0.5.7).
+    background_state = {"idle": None, "shadow": None, "recovery": None}
+    # Register strip of the previous automatic check, for the standstill comparison (shadow mode).
+    stationary_state = {"last": None}
+
+    def idle_started(job):
+        background_state["idle"] = {"state": "running", "reason": job["reason"], "image": job.get("image"),
+                                    "stable": job.get("stable"), "at": time.time()}
+
+    def idle_finished(job, record):
+        background_state["idle"] = {"state": "done", "reason": job["reason"], "image": job.get("image"),
+                                    "stable": job.get("stable"), "at": time.time(), **record}
+        if isinstance(record.get("experiment"), dict):
+            background_state["shadow"] = {"experiment": record["experiment"], "image": job.get("image"),
+                                          "stable": job.get("stable"), "at": time.time()}
+
+    def get_background_work(language="de"):
+        pending = next((job for job in idle_state["jobs"] if job), None)
+        return background_live.entries(background_state, calibration_status(),
+                                       {"reason": pending["reason"], "image": pending.get("image")} if pending else None,
+                                       activity.get("state") == "working", language)
+
     def set_activity(state, detail, *, completed=None, total=None, reading=None, candidates=None, readings=None):
         # readings: every attempt of the running check, for the per-digit table under "Prüfdetails".
         activity.update(state=state, detail=detail, updated_at=time.time(), completed=completed, total=total,
@@ -2425,7 +2451,7 @@ def main():
         discover_sources=partial(discover_ha_sources, token),
         get_wizard_image=partial(wizard_camera_preview, token=token, zone=zone),
         real_demo=partial(demo.run_real_demo, select=select_register, read=read_visible_digits),
-        get_activity=get_automatic_activity,
+        get_activity=get_automatic_activity, get_background_work=get_background_work,
         get_auto_paused=get_auto_paused, save_auto_paused=save_auto_paused,
         settings_lock=settings_lock, get_calibration=calibration_status, control_calibration=control_calibration,
         get_calibration_image=calibration_image, has_calibration_backup=lambda: read_geometry_backup() is not None,
@@ -2691,8 +2717,10 @@ def main():
             if waiting is not None and (calibration is None or calibration.background
                                         or calibration.state not in ("waiting", "testing")):
                 idle_state["used"], idle_record = idle_step(
-                    waiting, active_rules, time.time(), time.time() + remaining, idle_state["used"])
+                    waiting, active_rules, time.time(), time.time() + remaining, idle_state["used"],
+                    on_start=idle_started)
                 if idle_record is not None:
+                    idle_finished(waiting, idle_record)
                     idle_state["jobs"][idle_state["jobs"].index(waiting)] = None
                     debug_log.record(kind="idle", reason=waiting["reason"], image=waiting["image"], **idle_record)
             wake_worker.wait(timeout=min(remaining, RETRY_INTERVAL,
@@ -4239,6 +4267,26 @@ def main():
                 planned = read_plan.after_check(read_plan_state, active_rules, outcome, taken_over, ocr, time.time())
                 read_plan_state.clear()
                 read_plan_state.update(planned)
+            stationary_record = None
+            if not manual and local.get("register") is not None:
+                # Shadow mode only (Stefan 22.11., 11:48): measure whether the rollers stood still
+                # since the previous check; nothing is decided from it yet.
+                try:
+                    current_strip = {"register": local["register"].copy(), "image": data.get("esp_timestamp"),
+                                     "boxes": [tuple(box) for box in [*(local.get("whole_boxes") or []),
+                                                                      *(local.get("fraction_boxes") or [])]]}
+                    stationary_record = stationary.compare(stationary_state["last"], current_strip)
+                    stationary_state["last"] = current_strip
+                except (AttributeError, OSError, ValueError, TypeError):
+                    stationary_record = None
+                    stationary_state["last"] = None
+            if not manual:
+                if isinstance(experiment, dict):
+                    background_state["shadow"] = {"experiment": experiment, "image": data.get("esp_timestamp"),
+                                                  "stable": ocr, "at": time.time()}
+                if isinstance(local.get("recovery_log"), dict):
+                    background_state["recovery"] = {"recovery": local["recovery_log"], "ocr": ocr,
+                                                    "image": data.get("esp_timestamp"), "at": time.time()}
             debug_log.record(
                 assumed_whole=(local.get("assumed_whole") or None) if not manual else None,
                 image_hints=(register_light_hints(local["register"])
@@ -4246,7 +4294,7 @@ def main():
                 library={"filled": library_filled, "learned": local.get("library_learned", 0),
                          "samples": digit_library.LIBRARY.samples()}
                 if (library_filled or local.get("library_learned")) else None,
-                experiment=experiment, recovery=local.get("recovery_log"),
+                experiment=experiment, recovery=local.get("recovery_log"), stationary=stationary_record,
                 kind="manual" if manual else "automatic", image=data.get("esp_timestamp"), crop=source,
                 ocr=ocr, readings=local.get("ocr_readings"), attempts=data.get("ocr_attempts"),
                 method=local.get("ocr_method"), outcome=outcome, detail=updated.get("check_detail"),

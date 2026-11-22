@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.7
+
+- **Nach einer gröberen Prüfung schaut die App schnell noch einmal hin.** Drehte sich bei der Gegenprüfung gerade die letzte Rolle, bestätigt die App den Stand mit einer Nachkommastelle weniger. Bisher wartete sie dann das volle Prüfintervall. Jetzt holt sie nach etwa 45 Sekunden ein neues Bildpaar, wenn die Rolle wieder steht, damit schnell der volle Wert dasteht – vor allem direkt nach der Einrichtung. Das passiert einmal pro Serie, damit ein laufender Zähler nicht doppelt so oft geprüft wird. Unter dem Zählerstand steht, warum die App so kurz wartet.
+- **Häkchen „Hintergrundarbeit anzeigen“ auf der Übersicht.** Ist es gesetzt, zeigt die Übersicht alles, was die App neben der automatischen Prüfung tut: Feinsuche der letzten Stelle, Wartezeit-Arbeit, Schattenmodus und Nacharbeit – jeweils mit Zustand (läuft, wartet, fertig), Schritt, Bild, gelesenem Wert, Fortschritt und Ergebnis. Die Anzeige aktualisiert sich alle paar Sekunden.
+- **Zwischenschritte in der Einrichtung.** Der laufende Punkt der Schrittliste klappt auf und zeigt seine kleinen Schritte, z. B. Bild angefordert, Licht geprüft, Zählwerk gesucht, gelesener Kandidat, Bestätigung 1 von 3 oder „Kein neues Kamerabild – wird wiederholt“. Erledigte Punkte lassen sich wieder aufklappen.
+- **Schattenmodus: Stillstand per Bildvergleich.** Die App vergleicht jede Rolle mit derselben Rolle der vorigen Prüfung und schreibt die Differenz ins Debug-Protokoll (`stationary`). Sie entscheidet damit noch nichts, erst werden echte Werte gesammelt.
+- *English:* A check that was one decimal coarser because the last roller was turning now gets a new picture pair after about 45 seconds (once per series) instead of waiting the full interval; the overview says why. New box “Show background work” on the overview lists fine search, waiting-time work, shadow mode and follow-up live with state, step, picture, reading, progress and result. The running setup step unfolds its intermediate steps. Shadow mode logs a per-roller picture comparison with the previous check (`stationary`).
+
 ## 0.5.6
 
 - **Die Suche nach der letzten Rolle blockiert nichts mehr.** Im Hintergrund suchte die App bisher immer weiter nach der achten Ziffer und brauchte dafür nach jeder Prüfung bis zu einer halben Minute Rechenzeit. Der Schattenmodus fiel deshalb fast immer wegen Auslastung aus, und die Nacharbeit in der Wartezeit lief gar nicht. Jetzt haben Schattenmodus und Nacharbeit Vorrang. Die Suche läuft nur noch, wenn das Gerät Luft hat.

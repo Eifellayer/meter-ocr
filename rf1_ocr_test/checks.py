@@ -29,6 +29,11 @@ MIN_FAILURE_PAUSE_MINUTES, MAX_FAILURE_PAUSE_MINUTES = 5, 240
 DEFAULT_FAILURE_PAUSE_MINUTES = FAILURE_COOLDOWN_INTERVAL // 60
 # When the host has spare capacity, retry sooner: a failed check usually just met a turning roller.
 QUICK_RETRY_INTERVAL = 2 * 60
+# Stefan (22.11., 11:45): a check that was only coarser because the last roller was turning gets a
+# new picture pair soon (the roller stands still again after half a minute or so) instead of
+# waiting the full interval. Once per series of coarser checks, so a steadily running meter does
+# not double the number of checks.
+TURNING_RETRY_SECONDS = 45
 IDLE_LOAD_PER_CPU = 0.6
 
 
@@ -503,6 +508,8 @@ MOVING_DIGITS_NOTICE = ("Nur die letzten zwei verglichenen Stellen waren unklar 
 REDUCED_PRECISION2_NOTICE = ("Die letzten zwei verglichenen Rollen waren unklar, vermutlich drehten sie sich gerade. Diese Prüfung "
                              "wurde deshalb mit zwei Nachkommastellen weniger bestätigt. Die nächste Prüfung vergleicht wieder alle Stellen.")
 MOVING_NOTICES = (MOVING_DIGIT_NOTICE, MOVING_DIGITS_NOTICE)
+REDUCED_NOTICES = (REDUCED_PRECISION_NOTICE, REDUCED_PRECISION2_NOTICE)
+TURNING_RETRY_REASON = "turning_retry"
 # Reading below a probably misread stored value; the lower-series correction is collecting.
 LOWER_PENDING_NOTICE = ("Zählerstand liegt unter dem letzten gültigen Wert. Bestätigen weitere stimmige "
                         "Ablesungen den niedrigeren Stand, wird er übernommen.")
@@ -1289,6 +1296,26 @@ def schedule_next_check(history, outcome, checked_at, interval_minutes=DEFAULT_I
         pause=history.get("failure_pause_minutes"),
     )
     history["check_interval_minutes"] = interval_minutes
+    history.pop("wait_reason", None)
+    if outcome in SUCCESSFUL_CHECKS:
+        if history.get("check_detail") not in REDUCED_NOTICES:
+            # A full reading ends the series: the next coarser check may look again soon.
+            history.pop("turning_retry_used", None)
+        elif not history.get("turning_retry_used") and interval_minutes * 60 > TURNING_RETRY_SECONDS:
+            history["turning_retry_used"] = True
+            history["wait_reason"] = TURNING_RETRY_REASON
+            history["next_check_at"] = checked_at + TURNING_RETRY_SECONDS
+
+
+def wait_reason_text(history, language="de"):
+    """Why the next check comes earlier than the interval, for the overview (empty: no reason)."""
+    if history.get("wait_reason") != TURNING_RETRY_REASON:
+        return ""
+    if language == "en":
+        return ("Short wait: the last roller was turning, so this check is one decimal place coarser. "
+                "In about half a minute it stands still again; then the app takes a new picture pair for the full value.")
+    return ("Kurze Wartezeit: Die letzte Rolle drehte sich gerade, darum ist diese Prüfung eine Nachkommastelle gröber. "
+            "In etwa einer halben Minute steht sie wieder, dann holt die App ein neues Bildpaar für den vollen Wert.")
 
 
 def last_check_at(history):
@@ -1322,4 +1349,5 @@ def reschedule_next_check(history, interval_minutes):
         pause=history.get("failure_pause_minutes"),
     )
     history["check_interval_minutes"] = interval_minutes
+    history.pop("wait_reason", None)
     return True

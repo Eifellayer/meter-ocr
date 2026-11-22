@@ -5,7 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from checks import (anchored_hidden_digits, hidden_fill_reachable, hidden_roller_flow,  # noqa: E402
-                    hidden_roller_interval, hidden_roller_span)
+                    hidden_roller_interval, hidden_roller_span, hidden_fill_with_turning_roller)
 
 
 class HiddenRollerTests(unittest.TestCase):
@@ -46,3 +46,27 @@ class HiddenRollerTests(unittest.TestCase):
         self.assertFalse(hidden_fill_reachable(anchor, 1000.0 + 15 * 60, [5], 5, 2, 1500))
         self.assertFalse(hidden_fill_reachable(None, 2000.0, [5], 5, 2, 1500))
         self.assertIsNone(anchored_hidden_digits(["10511.?6", "10511.?6"], anchor, 1000.0 + 15 * 60, 2, 5, 1500, [5]))
+
+
+class TurningLastRollerTests(unittest.TestCase):
+    """0.5.11, live 22.11.2026 13:28: reading entered as 10511,534, the check read "10511.?3?"."""
+
+    anchor = {"time": 1000.0, "value": 10511534}
+
+    def test_hidden_digit_is_filled_and_the_turning_roller_stays_open(self):
+        rows = ["10511.?3?"] * 5
+        self.assertIsNone(anchored_hidden_digits(rows, self.anchor, 1037.0, 3, 5, 1500, [5]))
+        self.assertEqual("10511.53?", hidden_fill_with_turning_roller(rows, self.anchor, 1037.0, 3, 5, 1500, [5]))
+
+    def test_no_fill_when_the_anchor_is_too_old(self):
+        rows = ["10511.?3?"] * 5
+        self.assertIsNone(hidden_fill_with_turning_roller(rows, self.anchor, 1000.0 + 3600, 3, 5, 1500, [5]))
+
+    def test_no_fill_without_anchor_or_hidden_slot(self):
+        rows = ["10511.?3?"] * 5
+        self.assertIsNone(hidden_fill_with_turning_roller(rows, None, 1037.0, 3, 5, 1500, [5]))
+        self.assertIsNone(hidden_fill_with_turning_roller(rows, self.anchor, 1037.0, 3, 5, 1500, []))
+
+    def test_other_unreadable_digit_is_not_filled(self):
+        rows = ["1051?.?3?"] * 5
+        self.assertIsNone(hidden_fill_with_turning_roller(rows, self.anchor, 1037.0, 3, 5, 1500, [5]))

@@ -19,6 +19,9 @@ EN_UI = {
     "Hier siehst du, was die App zwischen den regulären Prüfungen selbstständig erledigt: die letzte Nachkommastelle genauer bestimmen, unklare Ergebnisse nachprüfen und neue Leseverfahren testen. Nur zur Information – du musst nichts tun.":
         "What the app takes care of on its own between the regular checks: pinning down the last decimal, re-checking unclear results and testing new reading methods. For information only – no action needed.",
     ">So weit ist die Einrichtung<": ">Setup progress<",
+    ">Bilder bisher<": ">Pictures so far<",
+    "Zählerstand übernommen. Die nächste Prüfung startet jetzt.": "Meter reading taken over. The next check starts now.",
+    ">Eingabe nötig: Zählerstand einmal eintragen<": ">Input needed: enter the meter reading once<",
     "<summary>Gefundene Rahmen (Kandidaten)</summary>": "<summary>Frames found (candidates)</summary>",
     'aria-label="Gelesene Ziffern je Versuch und Stelle"': 'aria-label="Digits read per attempt and position"',
     "Klappt es dauerhaft nicht? <a": "Still not working? <a",
@@ -190,6 +193,8 @@ EN_UI = {
     "Die sichtbaren Ziffern stützen den markierten Rahmen. Die verdeckten Stellen bleiben offen.": "The visible digits support the marked crop. The obscured digits remain open.",
     "Markierter Rahmen mit sichtbaren Ziffern geprüft. Verdeckte Stellen bleiben offen.": "Marked crop checked using the visible digits. Obscured digits remain open.",
     "Ziffernzeile gefunden · ": "Digit row found · ",
+    "Ziffernzeile gefunden · gelesen ": "Digit row found · read ",
+    " %, weil in den Feldern Ziffern erkannt wurden": " %, because digits were detected in the fields",
     "Schwelle ": "Threshold ",
     " Ohne Vergleichswert braucht die App einen plausiblen Anstieg oder einen Startwert.": " Without a reference, the app needs a plausible increase or a starting reading.",
     "Die Automatik läuft. Rahmen und Winkel verbessert die App automatisch im Hintergrund mit den normalen Prüfbildern weiter.":

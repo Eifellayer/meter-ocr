@@ -87,7 +87,7 @@ class BackgroundWorkTest(unittest.TestCase):
 
 class SetupSubstepsTest(unittest.TestCase):
     def test_running_step_unfolds_intermediate_steps(self):
-        self.assertIn("step.substeps = step.state === 'done' || step.state === 'current'", PANEL)
+        self.assertIn("step.substeps = running ? cycle : step.state === 'done' || step.state === 'current'", PANEL)
         self.assertIn("fold.open = remembered ?? step.state === 'current'", PANEL)
         self.assertIn("'Zwischenschritte'", PANEL)
         self.assertIn("'Kein neues Kamerabild – wird wiederholt'", PANEL)

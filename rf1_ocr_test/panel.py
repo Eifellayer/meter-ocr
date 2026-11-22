@@ -143,6 +143,8 @@ header{{display:flex;align-items:baseline;justify-content:space-between;gap:.5re
 .setting-link::after{{content:" ›";opacity:.7}}
 .setting-highlight{{outline:3px solid var(--accent, #2ec4a6);outline-offset:2px}}
 .reflection-suggestion{{margin:.65rem 0;color:var(--muted);font-size:.92rem}}
+/* 0.5.11: an input the app is waiting for sits at the top of the overview and stands out. */
+.reflection-suggestion.action-needed{{padding:.75rem .9rem;border:2px solid light-dark(#b26a00,#ffb74d);border-radius:.7rem;background:var(--surface-2);color:inherit;font-size:1rem}}
 .reflection-actions{{display:flex;align-items:center;gap:.65rem;flex-wrap:wrap}}
 .reflection-actions form{{display:inline}}
 .reflection-settings{{padding:.75rem .9rem;border:1px solid var(--edge);border-radius:.65rem}}
@@ -263,6 +265,17 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .setup-timeline-box{{display:block;margin:.75rem 0}}
 .setup-timeline-box h3{{margin:0 0 .5rem;font-size:1rem}}
 .setup-timeline{{list-style:none;margin:0;padding:0}}
+/* 0.5.11: the free space on the right holds the checklist of the pictures evaluated so far. */
+.setup-timeline-grid{{display:grid;gap:.8rem 1.6rem}}
+@media(min-width:900px){{.setup-timeline-grid{{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);align-items:start}}}}
+.setup-rounds-box h4{{margin:0 0 .4rem;font-size:.92rem}}
+.setup-rounds{{list-style:none;margin:0;padding:0;display:grid;gap:.3rem;font-size:.86rem;font-variant-numeric:tabular-nums}}
+.setup-rounds li{{display:grid;grid-template-columns:1.3rem minmax(0,1fr);gap:.45rem;padding:.35rem .55rem;border-radius:.5rem;background:var(--surface-2);border:1px solid var(--edge)}}
+.setup-rounds .setup-round-mark{{font-weight:800;text-align:center}}
+.setup-rounds li[data-result="ok"] .setup-round-mark{{color:light-dark(#1e7a43,#5fd18c)}}
+.setup-rounds li[data-result="fail"] .setup-round-mark{{color:light-dark(#b3261e,#ff8a80)}}
+.setup-rounds li[data-result="wait"] .setup-round-mark{{color:var(--muted)}}
+.setup-rounds small{{display:block;color:var(--muted);overflow-wrap:anywhere}}
 .setup-timeline li{{position:relative;display:grid;grid-template-columns:1.6rem 1fr;column-gap:.6rem;padding:0 0 .75rem}}
 .setup-timeline li::before{{content:"";position:absolute;left:.75rem;top:1.1rem;bottom:-.1rem;border-left:2px solid var(--edge)}}
 .setup-timeline li:last-child::before{{display:none}}
@@ -405,6 +418,8 @@ section>div{{background:var(--surface);border:1px solid var(--edge);border-radiu
 section img{{width:100%;height:auto;display:block;border-radius:.55rem}}
 .stamp,#countdown{{font-variant-numeric:tabular-nums}}
 .meter-hero-wait{{margin:.35rem 0 0;font-size:.88rem;color:var(--muted)}}
+.meter-hero-action{{margin:.5rem 0 0}}
+.meter-hero-action a{{display:inline-block;padding:.4rem .8rem;border-radius:.6rem;border:2px solid light-dark(#b26a00,#ffb74d);font-weight:700;color:inherit;text-decoration:none}}
 .background-work-box{{margin:.5rem 0 .75rem}}
 .background-work-toggle{{display:inline-flex;gap:.45rem;align-items:center;font-size:.92rem;cursor:pointer}}
 .background-live{{margin-top:.5rem}}
@@ -717,6 +732,7 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 <p class="meter-hero-meta"><span>Letzte Prüfung <strong id="hero-last-check">–</strong></span>
 <span>Nächste Prüfung <strong id="hero-countdown">–</strong></span></p>
 <p class="meter-hero-wait" id="hero-wait-reason" role="status" hidden></p>
+<p class="meter-hero-action" id="hero-action" role="status" hidden><a href="#hidden-digit-prompt">Eingabe nötig: Zählerstand einmal eintragen</a></p>
 <p class="meter-hero-stale" id="hero-stale" role="status" hidden><span id="hero-stale-text"></span><button type="button" class="secondary" id="reload-view">Neu laden</button></p>
 </div>
 <div class="check-card-heading"><h2>Automatische Kontrolle</h2></div>
@@ -726,6 +742,15 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 <p id="setup-duration" {setup_duration_hidden}>{setup_duration}</p>
 <p>Die Automatik läuft. Rahmen und Winkel verbessert die App automatisch im Hintergrund mit den normalen Prüfbildern weiter.</p></div>
 </div>
+<div class="reflection-suggestion action-needed" id="hidden-digit-prompt" hidden>
+<p><strong>Ziffer verdeckt.</strong> <span id="hidden-digit-text">Eine Stelle ist durch eine Spiegelung verdeckt.</span> Trag einmal den aktuellen Zählerstand ein. Danach ergänzt die App die verdeckte Stelle selbst, solange nur ein Wert zum Verbrauch passt.</p>
+<form method="post" action="fallback" class="reflection-actions" id="hidden-digit-form">
+<input type="hidden" name="lang" value="{language}"><input type="hidden" name="mode" value="{language_mode}">
+<input type="hidden" name="csrf" value="{csrf}"><input type="hidden" name="return_to" value="overview">
+<input type="hidden" name="fallback_time" id="hidden-digit-time" value="">
+<label>Aktueller Zählerstand<input name="fallback_value" inputmode="decimal" maxlength="16" placeholder="z. B. 10486,16" required></label>
+<button type="submit">Zählerstand übernehmen</button>
+</form></div>
 <div class="activity-status" data-state="{automatic_activity_state}" data-routine-ok="{automatic_routine_ok}">
 <p role="status" aria-live="polite"><strong>Automatik:</strong> <span id="automatic-activity">{automatic_activity}</span></p>
 <progress id="automatic-progress" class="setup-progress" aria-label="Fortschritt der automatischen Prüfung" {automatic_progress_hidden}></progress>
@@ -799,8 +824,16 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 <p class="calibration-last-digit-note settings-note" hidden></p>
 <div class="setup-timeline-box" role="group" aria-labelledby="setup-timeline-title" hidden>
 <h3 id="setup-timeline-title">So weit ist die Einrichtung</h3>
+<div class="setup-timeline-grid">
+<div class="setup-timeline-main">
 <ol class="setup-timeline" aria-live="polite"></ol>
 <p class="setup-timeline-stats"></p>
+</div>
+<div class="setup-rounds-box" hidden>
+<h4>Bilder bisher</h4>
+<ol class="setup-rounds"></ol>
+</div>
+</div>
 </div>
 <details class="setup-help calibration-candidate-panel" open hidden><summary>Gefundene Rahmen (Kandidaten)</summary><ol class="calibration-candidates"></ol></details>
 {calibration_skip_html}
@@ -866,15 +899,6 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 <strong>Vorläufig ergänzt</strong> <span id="reflection-live-reading"></span>
 <small>Gelb markierte Ziffern sind berechnet. Der Wert dient der Orientierung.</small>
 </p>
-<div class="reflection-suggestion" id="hidden-digit-prompt" hidden>
-<p><strong>Ziffer verdeckt.</strong> <span id="hidden-digit-text">Eine Stelle ist durch eine Spiegelung verdeckt.</span> Trag einmal den aktuellen Zählerstand ein. Danach ergänzt die App die verdeckte Stelle selbst, solange nur ein Wert zum Verbrauch passt.</p>
-<form method="post" action="fallback" class="reflection-actions" id="hidden-digit-form">
-<input type="hidden" name="lang" value="{language}"><input type="hidden" name="mode" value="{language_mode}">
-<input type="hidden" name="csrf" value="{csrf}"><input type="hidden" name="return_to" value="overview">
-<input type="hidden" name="fallback_time" id="hidden-digit-time" value="">
-<label>Aktueller Zählerstand<input name="fallback_value" inputmode="decimal" maxlength="16" placeholder="z. B. 10486,16" required></label>
-<button type="submit">Zählerstand übernehmen</button>
-</form></div>
 <div id="reflection-estimate" class="reflection-estimate" {reflection_estimate_hidden}>
 <strong>Eindeutig ergänzter Zwischenstand</strong>
 <p><span id="reflection-value-left">{reflection_left}</span><mark id="reflection-value-digit" title="Berechnete Ziffer">{reflection_digit}</mark><span id="reflection-value-right">{reflection_right}</span>
@@ -2665,6 +2689,8 @@ function updateCalibrationNotice() {{
   notice.hidden = routineOk || !document.querySelector('#setup-success').hidden ||
     Date.now() >= calibrationNoticeUntil;
 }}
+let setupReached = 0;
+let setupReachedTested = -1;
 // One progress state for the step plan, the timeline and the candidate list (0.3.0).
 function setupProgressModel(status) {{
   const en = lang === 'en';
@@ -2679,6 +2705,17 @@ function setupProgressModel(status) {{
     ['verify', 'verify_wait'].includes(stage) || confirmations > 0 ? 3 :
     ['shortlist', 'refine', 'angle', 'digit_probe', 'ocr'].includes(stage) || candidates.length ? 2 : 1;
   if (saved) current = 5;
+  // 0.5.11 (Stefan 22.11., 13:12): the list jumped back to "find the counter" with every new
+  // picture. A step reached once in this run stays ticked; the cycle of the single picture
+  // is shown below the running step instead.
+  const rawCurrent = current;
+  const testedNow = Number(status.tested || 0);
+  if ((!active && !saved) || testedNow < setupReachedTested) setupReached = 0;
+  setupReachedTested = testedNow;
+  if (active) {{
+    setupReached = Math.max(setupReached, current);
+    current = setupReached;
+  }}
   const elapsed = Math.max(0, Number(status.duration || 0) - Number(status.seconds || 0));
   const clock = Math.floor(elapsed / 60) + ':' + String(elapsed % 60).padStart(2, '0');
   const selected = candidates.find(item => item.selected);
@@ -2754,17 +2791,53 @@ function setupProgressModel(status) {{
     substeps[key].push({{label: status.state === 'image_timeout' ? (en ? 'No new camera image, repeating' : 'Kein neues Kamerabild – wird wiederholt')
       : (en ? 'Time limit reached' : 'Zeitlimit erreicht'), state: 'warn', extra: ''}});
   }}
+  // The cycle every single picture runs through, shown below the running step.
+  const cycleIndex = ['queued', 'capture'].includes(stage) ? 0 : ['shortlist', 'ocr'].includes(stage) ? 2 :
+    stage === 'angle' ? 3 : ['refine', 'digit_probe'].includes(stage) ? 4 :
+    ['verify', 'verify_wait', 'waiting'].includes(stage) ? 5 : 1;
+  const cycleLabels = en ?
+    ['Request picture', 'Search the counter in the picture', 'Test frames', 'Check rotation', 'Fine-tune the frame', 'Rate the result'] :
+    ['Bild anfordern', 'Zählwerk im Bild suchen', 'Rahmen testen', 'Drehung prüfen', 'Rahmen fein nachjustieren', 'Ergebnis bewerten'];
+  const cycleExtra = [
+    '', status.row_found ? (en ? 'digit row ' : 'Ziffernreihe ') + status.row_found + ' %' : '',
+    (status.attempts || 0) + (en ? ' tested in total' : ' insgesamt getestet'),
+    status.rotation != null ? String(status.rotation).replace('-', '−') + '°' : '', '',
+    cycleIndex === 5 ? (en ? 'waiting for the next picture' : 'wartet auf das nächste Bild') : ''];
+  const cycle = cycleLabels.map((label, index) => sub(label, index < cycleIndex, index === cycleIndex,
+    index <= cycleIndex ? cycleExtra[index] : ''));
+  const pictureNumber = tested + (cycleIndex === 0 ? 1 : 0);
   steps.forEach((step, index) => {{
     step.state = step.optional ? 'optional' : index < current ? 'done' : index === current ? 'current' : 'todo';
     step.detail = step.state === 'current' ? detail.join(' · ') : '';
-    step.substeps = step.state === 'done' || step.state === 'current' ? (substeps[step.key] || []) : [];
+    const running = step.state === 'current' && active;
+    step.substeps = running ? cycle : step.state === 'done' || step.state === 'current' ? (substeps[step.key] || []) : [];
+    step.substepsTitle = running ? (en ? 'Current picture (no. ' : 'Aktuelles Bild (Nr. ') + Math.max(1, pictureNumber) + ')' : '';
     if (step.state !== 'done') step.result = '';
   }});
+  const roundText = {{
+    accepted: [en ? 'Frame confirmed' : 'Rahmen bestätigt', 'ok'],
+    accepted_partial: [en ? 'Frame confirmed (last digit open)' : 'Rahmen bestätigt (letzte Stelle offen)', 'ok'],
+    verified: [en ? 'Cross-check passed' : 'Gegenprobe bestanden', 'ok'],
+    accepted_geometry: [en ? 'Frame fits' : 'Rahmen passt', 'ok'],
+    reflected_geometry: [en ? 'Frame fits, one digit hidden (reflection)' : 'Rahmen passt, eine Stelle verdeckt (Spiegelung)', 'ok'],
+    await_clear_roller: [en ? 'A roller was turning – not counted' : 'Rolle drehte sich gerade – zählt nicht', 'wait'],
+    await_movement: [en ? 'Waiting for the meter to move' : 'Wartet auf Zählerbewegung', 'wait'],
+    unclear: [en ? 'Not read clearly' : 'Nicht eindeutig gelesen', 'fail'],
+    no_region: [en ? 'Counter not found' : 'Zählwerk nicht gefunden', 'fail'],
+  }};
+  const rounds = (Array.isArray(status.rounds) ? status.rounds : []).map(round => {{
+    const [text, result] = roundText[round.reason] || [en ? 'No result' : 'Kein Ergebnis', 'fail'];
+    const count = Number(round.confirmations || 0);
+    return {{number: round.image, result,
+      text: text + (result === 'ok' && count ? ' (' + Math.min(count, required) + '/' + required + ')' : ''),
+      reading: round.reading && round.reading !== '?' ? String(round.reading).replace('.', en ? '.' : ',') : '',
+      seconds: Math.round(Number(round.seconds) || 0)}};
+  }}).reverse();
   const stats = (en ? 'Images: ' : 'Bilder: ') + (status.tested || 0) +
     (en ? ' · Frames tested: ' : ' · Rahmen getestet: ') + (status.attempts || 0) +
     (en ? ' · Time so far: ' : ' · Bisherige Dauer: ') + clock + ' min' +
     (best ? (en ? ' · Best match: ' : ' · Beste Übereinstimmung: ') + best + ' %' : '');
-  return {{active, current: Math.min(current, 3), steps, stats, candidates}};
+  return {{active, current: Math.min(rawCurrent, 3), steps, stats, candidates, rounds}};
 }}
 const setupSubstepsOpen = new Map();
 function renderSetupTimeline(box, model) {{
@@ -2808,7 +2881,7 @@ function renderSetupTimeline(box, model) {{
         const remembered = setupSubstepsOpen.get(step.key);
         fold.open = remembered ?? step.state === 'current';
         const summary = document.createElement('summary');
-        summary.textContent = lang === 'en' ? 'Intermediate steps' : 'Zwischenschritte';
+        summary.textContent = step.substepsTitle || (lang === 'en' ? 'Intermediate steps' : 'Zwischenschritte');
         const items = document.createElement('ul');
         items.append(...step.substeps.map(part => {{
           const item = document.createElement('li');
@@ -2831,6 +2904,32 @@ function renderSetupTimeline(box, model) {{
   }}
   const stats = box.querySelector('.setup-timeline-stats');
   if (stats.textContent !== model.stats) stats.textContent = model.stats;
+  const roundsBox = box.querySelector('.setup-rounds-box');
+  if (roundsBox) {{
+    const en = lang === 'en';
+    roundsBox.hidden = !model.rounds.length;
+    const roundList = roundsBox.querySelector('.setup-rounds');
+    const roundKey = JSON.stringify(model.rounds);
+    if (roundList.dataset.values !== roundKey) {{
+      roundList.replaceChildren(...model.rounds.map(round => {{
+        const row = document.createElement('li');
+        row.dataset.result = round.result;
+        const mark = document.createElement('span');
+        mark.className = 'setup-round-mark';
+        mark.setAttribute('aria-hidden', 'true');
+        mark.textContent = round.result === 'ok' ? '✓' : round.result === 'fail' ? '✗' : '○';
+        const body = document.createElement('span');
+        body.textContent = (en ? 'Picture ' : 'Bild ') + round.number + ': ' + round.text;
+        const more = document.createElement('small');
+        more.textContent = [round.reading ? (en ? 'read ' : 'gelesen ') + round.reading : '',
+          round.seconds ? round.seconds + ' s' : ''].filter(Boolean).join(' · ');
+        if (more.textContent) body.append(more);
+        row.append(mark, body);
+        return row;
+      }}));
+      roundList.dataset.values = roundKey;
+    }}
+  }}
 }}
 function renderSetupCandidates(list, candidates) {{
   const en = lang === 'en';
@@ -2842,7 +2941,9 @@ function renderSetupCandidates(list, candidates) {{
     const parts = [];
     if (candidate.number) parts.push((en ? 'Frame ' : 'Rahmen ') + candidate.number);
     if (candidate.rotation != null) parts.push(String(candidate.rotation).replace('-', '−') + '°');
-    if (candidate.percent != null) parts.push(candidate.percent + ' %');
+    // 0.5.11: two percentages – glyph found in the digit fields / agreement of the readings.
+    if (candidate.found != null) parts.push((en ? 'digits found ' : 'Ziffern gefunden ') + candidate.found + ' %');
+    if (candidate.percent != null) parts.push((candidate.found != null ? (en ? 'read ' : 'gelesen ') : '') + candidate.percent + ' %');
     parts.push(candidate.reading || '–');
     // 0.4.0 status fields; older status data has none of them.
     const hits = Number(candidate.hits);
@@ -3138,8 +3239,10 @@ function refreshCalibration(status) {{
     }}
   }}
   if (active && ['shortlist', 'refine', 'waiting'].includes(status.stage) && status.row_found) {{
-    message = 'Ziffernzeile gefunden · ' + status.row_found + ' % (' +
-      'Schwelle ' + status.agreement_threshold + ' %). ' + message;
+    const lowered = status.coarse_threshold && status.row_found < status.agreement_threshold;
+    message = 'Ziffernzeile gefunden · gelesen ' + status.row_found + ' % (' +
+      'Schwelle ' + (lowered ? status.coarse_threshold + ' %, weil in den Feldern Ziffern erkannt wurden' :
+        status.agreement_threshold + ' %') + '). ' + message;
   }}
   if (active && reason === 'reflected_geometry') {{
     message = 'Markierter Rahmen mit sichtbaren Ziffern geprüft. Verdeckte Stellen bleiben offen.' +
@@ -4147,6 +4250,7 @@ async function refreshAutomatic() {{
     recovery.textContent = sample.recovery_notice;
     const hiddenPrompt = sample.hidden_digit_prompt;
     document.querySelector('#hidden-digit-prompt').hidden = !hiddenPrompt;
+    document.querySelector('#hero-action').hidden = !hiddenPrompt;
     if (hiddenPrompt) {{
       document.querySelector('#hidden-digit-text').textContent =
         'Stelle ' + hiddenPrompt.positions.join(' und ') + ' ist durch eine Spiegelung verdeckt.';
@@ -4903,6 +5007,7 @@ def start_panel(
                 "Einrichtung gespeichert." if saved in ("setup", "setup-calibration") else
                 "Gesicherter Ausschnitt wiederhergestellt." if saved == "crop-restored" else
                 "Fallback-Wert gespeichert." if saved == "fallback" else
+                "Zählerstand übernommen. Die nächste Prüfung startet jetzt." if saved == "reading" else
                 "Automatische Prüfregeln gespeichert." if saved == "1" else
                 "Getesteten Bildausschnitt für die Automatik übernommen." if saved == "crop" else
                 "Ausschnitt zurückgesetzt. Die Automatik sucht die Ziffernreihe wieder selbst." if saved == "crop-reset" else
@@ -5107,7 +5212,7 @@ def start_panel(
                 failure_pause_minutes=auto_rules.get("failure_pause_minutes", DEFAULT_FAILURE_PAUSE_MINUTES),
                 auto_rotation_value=editable_rotation(auto_rules),
                 auto_saved_notice=auto_saved_notice if saved in ("1", "crop-reset") else "",
-                overview_saved_notice=auto_saved_notice if saved == "crop" else "",
+                overview_saved_notice=auto_saved_notice if saved in ("crop", "reading") else "",
                 manual_reference=html.escape(str(settings.get("manual_reference", auto_rules["fallback_value"])),
                                              quote=True),
                 test_source_preview=test_source_preview,
@@ -5644,7 +5749,8 @@ def start_panel(
                     problem(503)
                     return
                 if field("return_to") == "overview":
-                    self.redirect("?saved=fallback" + keep_mode)
+                    # Stefan 22.11., 13:28: stay on the overview and say that the value was taken over.
+                    self.redirect("?saved=reading&ui=overview" + keep_mode)
                     return
                 self.redirect("?saved=fallback&ui=settings" + keep_mode + "#fallback-form")
                 return

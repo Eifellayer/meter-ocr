@@ -34,7 +34,7 @@ from checks import (
     STANDALONE_CACHED_CAPTURE_DELAY, MAX_OCR_ATTEMPTS, DEFAULT_FAILURE_PAUSE_MINUTES, MAX_FAILURE_PAUSE_MINUTES, MIN_FAILURE_PAUSE_MINUTES, SHIFTED_DIGIT_POSITIONS, ROW_SHIFT_READS, ROW_SHIFT_TRIALS, plausible_integer_digits, note_skew, skew_offset, SHIFTED_DIGIT_READS, missing_digit_pattern, single_missing_digit, disputed_digit_pattern, resolve_ocr_readings,
     compare_sample, crop_register, lighting_ocr_profiles, read_register, read_with_retries, record_sample,
     anchored_leading_digits, anchored_hidden_digits, within_anchor_bounds, anchor_bounds,
-    learned_flow_limit, slow_roller_digit, hidden_roller_flow, hidden_roller_interval, hidden_fill_reachable,
+    learned_flow_limit, slow_roller_digit, hidden_roller_flow, hidden_roller_interval, hidden_fill_reachable, hidden_fill_with_turning_roller,
     automatic_interval_minutes, defer_duplicate_cycle,
     LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, LAST_DIGIT_RETRIES, SUCCESSFUL_CHECKS,
     SEVENTH_DIGIT_WAIT_NOTICE,
@@ -2379,6 +2379,11 @@ def main():
             for entry in setup_entries:
                 entry["reason"] = calibration_preview.get("reason")
                 entry["reading"] = calibration_preview.get("reading")
+                if entry.get("kind") == "setup_image":
+                    attempt.rounds.append({"image": entry["images"], "reason": entry["reason"],
+                                           "reading": entry["reading"], "seconds": entry["round_s"],
+                                           "confirmations": max(attempt.confirmations, attempt.reflected_confirmations)})
+                    del attempt.rounds[:-12]
             if attempt.searching_since is not None:
                 attempt.spent += now - attempt.searching_since
                 attempt.searching_since = None
@@ -3568,7 +3573,21 @@ def main():
                                     ocr_readings, anchor, read_state["captured"], comparison_decimals,
                                     integer_digits, anchor_flow, hidden_slots,
                                 )
-                                if anchored:
+                                partly_filled = None
+                                if not anchored:
+                                    # 0.5.11 (seen live 22.11., 13:28: "10511.?3?"): while gas flows the last
+                                    # roller is turning as well. Fill the hidden digit with fewer compared
+                                    # decimals and leave the turning roller open; the check is then
+                                    # confirmed one decimal coarser like any check with a turning roller.
+                                    partly_filled = hidden_fill_with_turning_roller(
+                                        ocr_readings, anchor, read_state["captured"], comparison_decimals,
+                                        integer_digits, anchor_flow, hidden_slots)
+                                    if partly_filled:
+                                        print(f"Verdeckte Stelle aus eingetragenem/bestätigtem Stand ergänzt, "
+                                              f"letzte Rolle dreht: {ocr} -> {partly_filled}")
+                                        ocr, ocr_readings = partly_filled, [partly_filled] * len(ocr_readings)
+                                        ocr_method = "anchored"
+                                if anchored or partly_filled:
                                     updated.pop("hidden_digit_prompt", None)
                                 elif not hidden_fill_reachable(anchor, read_state["captured"], hidden_slots,
                                                                integer_digits, comparison_decimals, anchor_flow):

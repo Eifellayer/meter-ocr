@@ -61,6 +61,8 @@ HOPELESS_DIGITS = 3
 SETUP_FLOW_SHARE = .5
 # Two frames on the same digits whose turns differ by 180° ± this many degrees (0.5.29).
 HALF_TURN_TOLERANCE = 30
+# Sideways frames read turned by 180° on a picture where nothing read reliably (0.5.31).
+SIDEWAYS_TWINS = 2
 SETUP_FLOW_FLOOR_LPH = 1500
 
 
@@ -721,6 +723,16 @@ def baseline_litres(baseline):
     return reading, lowest if type(lowest) is int else reading
 
 
+def digit_count(readings):
+    """How many digits the best of the readings shows (0.5.31)."""
+    return max((sum(char.isdigit() for char in str(value)) for value in readings), default=0)
+
+
+def near_turn(rotation, turn):
+    """Two rotations within HALF_TURN_TOLERANCE of each other, across ±180° (0.5.31)."""
+    return abs((rotation - turn + 180) % 360 - 180) <= HALF_TURN_TOLERANCE
+
+
 def half_turned(layout, other):
     """Two frames on the same digits, turned by about 180° against each other (0.5.29)."""
     if layout is None or other is None:
@@ -979,6 +991,9 @@ class Calibration:
     rejected: list = field(default_factory=list)
     skews: list = field(default_factory=list)
     current_stamp: float = 0
+    # 0.5.31: turns the user marked as upside down ("Steht auf dem Kopf?"); frames near them are
+    # tested turned by another 180°.
+    wrong_turns: list = field(default_factory=list)
 
     def measured_skew(self, frame):
         """Median of the tilt measured on the last images (None until one was measured)."""
@@ -1052,6 +1067,50 @@ class Calibration:
                 seen.append(group)
             yield layout
 
+    def turned_wrong(self, layout):
+        """The frame lies in a direction the user marked as upside down (0.5.31)."""
+        return layout is not None and any(near_turn(layout.rotation, turn) for turn in self.wrong_turns)
+
+    def oriented(self, layout, slots):
+        """The frame turned the way the user wants it (0.5.31)."""
+        return half_turn_layout(layout, slots) if self.turned_wrong(layout) else layout
+
+    def flip_orientation(self, slots):
+        """The user saw the tested frame upside down: test it turned by 180° from now on (0.5.31).
+
+        A second flip turns it back. Everything counted in the old direction starts anew, frames
+        found so far keep their place in the list, turned.
+        """
+        reference = self.candidate or self.best or next(iter(self.shortlist), None)
+        turn = reference.rotation if reference is not None else self.rotation
+        if turn is None:
+            return False
+        back = [wrong for wrong in self.wrong_turns if near_turn(turn, wrong + 180)]
+        self.wrong_turns = ([wrong for wrong in self.wrong_turns if wrong not in back] if back
+                            else [*self.wrong_turns, turn])
+
+        def flip(layout):
+            return half_turn_layout(layout, slots) if layout is not None and near_turn(layout.rotation, turn) else layout
+
+        self.candidate = flip(self.candidate)
+        self.shortlist = {flip(layout): score for layout, score in self.shortlist.items()}
+        self.candidate_readings = {}
+        self.score_stamps = {}
+        self.groups = []
+        self.rotation = flip(reference).rotation if reference is not None else None
+        self.counter = {}
+        self.best, self.best_confirmations = None, 0
+        self.confirmations = self.full_hits = self.partial_hits = self.unclear_frames = 0
+        self.partial_prefix = None
+        self.anchored = self.advanced = self.focused = False
+        self.verification_pending, self.verification_deadline = False, None
+        self.reference_reading = None
+        self.fine_evidence = None
+        self.stress_weak_slots, self.confirmed_quality = [], []
+        self.angle_compared, self.refinement_seen = set(), set()
+        self.rejected_regions = []
+        return True
+
     def half_turn_closer(self, frame, layout, reading, tried, tested, baseline, precision, digits, slots, read,
                          stop, score_layout):
         """True when the frame turned by 180° on the same digits reads closer to the last reading.
@@ -1061,6 +1120,9 @@ class Calibration:
         the loop that accepts frames checks it next (0.5.29).
         """
         if layout in (self.known_good_layout, self.candidate) or self.intensive or self.followup:
+            return False
+        if self.wrong_turns and self.turned_wrong(half_turn_layout(layout, slots)):
+            # The user turned the frame this way (0.5.31): their direction wins.
             return False
         if closer_half_turn(layout, reading, tried, baseline, precision, digits) is not None:
             return True
@@ -1381,6 +1443,7 @@ class Calibration:
                 "shortlist": [score[0] for score in self.shortlist.values() if len(score) == 3],
                 "candidates": self.candidate_rows(),
                 "rejected": list(self.rejected),
+                "turned_by_user": bool(self.wrong_turns),
                 "candidate_agreement": selected_score[0] if len(selected_score) == 3 else None,
                 "seconds": max(0, ceil(self.remaining(now)))}
 
@@ -1940,6 +2003,7 @@ class Calibration:
         if reference_pending:
             has_reference = False
         required_slots = digits + precision
+        slots = digits + rules["fraction_digits"]
         reference = meter_prefix(sample.get("actual_value"), precision, digits) if has_reference else None
         reference_digits = str(reference).zfill(required_slots) if reference is not None else None
 
@@ -1991,8 +2055,8 @@ class Calibration:
                     # a mistaken tap on a region proposal must never replace a working setup.
                     a, b, c, d = known.box
                     if 0 <= a < c <= frame.width and 0 <= b < d <= frame.height:
-                        yield known
-                found = list(detect(len(self.seen) - 1, seed, on_regions))
+                        yield self.oriented(known, slots)
+                found = [self.oriented(layout, slots) for layout in detect(len(self.seen) - 1, seed, on_regions)]
                 kept = skip_small_labels(found)
                 for layout in found:
                     if layout not in kept:
@@ -2014,7 +2078,8 @@ class Calibration:
                         and not stop() and not any(reliable(score) for score, _, _ in coarse)
                         and (has_reference or not upright_seen)):
                     # Search the complete photo at right angles before asking for another image.
-                    yield from quarter_turn_layouts(frame, rules, self.region)
+                    yield from (self.oriented(layout, slots)
+                                for layout in quarter_turn_layouts(frame, rules, self.region))
 
             candidates = search_candidates()
         examined = False
@@ -2103,6 +2168,32 @@ class Calibration:
                 break
             if reliable(score) and layout in (self.known_good_layout, self.candidate):
                 break
+
+        if (not self.confirmations and not (committed or preferred or self.followup or self.intensive)
+                and not any(reliable(score) for score, _, _ in coarse) and not stop()):
+            # 0.5.31: a meter hanging sideways was found upside down on the first picture and only
+            # that direction stayed in the list; it never read clearly, and its turned twin was
+            # never read again. While nothing reads reliably, the best sideways frames are also
+            # read turned by 180° on this picture, so the right direction can enter the list.
+            sideways = sorted((item for item in coarse if abs(item[1].rotation) >= 45),
+                              key=lambda item: digit_count(item[2]), reverse=True)[:SIDEWAYS_TWINS]
+            for _, layout, _ in sideways:
+                twin = half_turn_layout(layout, slots)
+                left, top, right, bottom = twin.box
+                if (twin in tested or self.turned_wrong(twin) or self.region_rejected(twin)
+                        or not (0 <= left < right <= frame.width and 0 <= top < bottom <= frame.height)
+                        or self.attempts >= min(self.attempt_limit, frame_ceiling) or stop()):
+                    continue
+                tested.add(twin)
+                self.attempts += 1
+                if on_attempt is not None:
+                    on_attempt(len(tested), twin.rotation)
+                try:
+                    values = [read(twin, OCR_PROFILES[0]), read(twin, OCR_PROFILES[1])]
+                except (OSError, ValueError, subprocess.SubprocessError):
+                    continue
+                values = self.mask_empty_fields(frame, twin, values)
+                coarse.append((score_layout(twin, values), twin, values))
 
         if self.reflected_layout is not None and not any(reliable(score) for score, _, _ in coarse):
             for _, layout, readings in coarse:

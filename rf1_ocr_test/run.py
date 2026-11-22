@@ -23,7 +23,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageOps
 from websocket import WebSocketException
 
 from app_channel import APP_NAME, CHECK_ENTITY, LABEL_SUFFIX, NAMESPACE
@@ -1222,7 +1222,34 @@ def glyph_whole_range(history, rules, zone, captured):
     return (bounds[0] // 1000, bounds[1] // 1000) if bounds else None
 
 
-def wizard_camera_preview(source, token, zone, *, full_size=False):
+def mirrored_picture(content):
+    """The picture mirrored left to right, in its own format; the original when it cannot be read."""
+    try:
+        with Image.open(io.BytesIO(content)) as image:
+            if image.width * image.height > MAX_IMAGE_PIXELS:
+                return content
+            kind = "PNG" if image.format == "PNG" else "JPEG"
+            turned = ImageOps.mirror(image.convert("RGBA" if kind == "PNG" else "RGB"))
+        with io.BytesIO() as buffer:
+            turned.save(buffer, kind, **({} if kind == "PNG" else {"quality": 95}))
+            return buffer.getvalue()
+    except (OSError, ValueError, Image.DecompressionBombError):
+        return content
+
+
+def mirror_capture(result, rules):
+    """A captured picture (and its overlay) mirrored when the setup says so (0.5.31).
+
+    Some cameras deliver the picture mirror-inverted; the digits then cannot be read in any
+    rotation. The user mirrors it once in the setup, every picture after that is mirrored.
+    """
+    if result is None or not rules.get("image_mirrored"):
+        return result
+    picture, drawn, sample = result
+    return mirrored_picture(picture), (mirrored_picture(drawn) if drawn else drawn), sample
+
+
+def wizard_camera_preview(source, token, zone, *, full_size=False, mirrored=False):
     mode = source["mode"]
     if mode == "slfork":
         base = source["url"].rstrip("/")
@@ -1244,6 +1271,8 @@ def wizard_camera_preview(source, token, zone, *, full_size=False):
             if reason:
                 raise CameraOffline(reason) from error
             raise
+    if mirrored:
+        picture = mirrored_picture(picture)
     try:
         with Image.open(io.BytesIO(picture)) as frame:
             if frame.width * frame.height > MAX_IMAGE_PIXELS:
@@ -1903,6 +1932,8 @@ def main():
             provisional=provisional, verified=verified, reflected=reflected))
 
     glare_confirmed = {"id": None}
+    # 0.5.31: "Steht auf dem Kopf?" during the setup; the worker turns the frames with its next picture.
+    orientation_flip = {"requested": False}
 
     def control_calibration(action, limit, region=None, *, verification_id=None, trigger="user", reading=None):
         nonlocal calibration, calibration_configuration, calibration_next
@@ -1912,9 +1943,34 @@ def main():
                 if time.time() < optimization_until:
                     return False
             running = calibration is not None and calibration.state in ("waiting", "testing") and not calibration.expired(time.monotonic())
+            mirrored_restart = None
+            if action == "mirror":
+                # 0.5.31: a mirror-inverted camera picture cannot be read in any rotation. Mirror
+                # every picture from now on and run this setup again from the start: all frames
+                # found so far belong to the unmirrored picture.
+                if not running or calibration.background or calibration.intensive or calibration.automatic:
+                    raise ValueError("No running setup to mirror")
+                rules_now = get_auto_rules()
+                save_auto_rules({**rules_now, "image_mirrored": rules_now.get("image_mirrored") is not True},
+                                request_check=False)
+                mirrored_restart = calibration.limit, calibration.region
+                calibration.state = "cancelled"
+                calibration = None
+                orientation_flip["requested"] = False
+                running = False
+                action = "start"
+                limit, region = mirrored_restart
             if action == "cancel":
                 if running:
                     calibration.state = "cancelled"
+            elif action == "flip":
+                if not running or calibration.background or calibration.intensive or calibration.automatic:
+                    raise ValueError("No running setup to turn")
+                # A second click before the next picture cancels the first.
+                orientation_flip["requested"] = not orientation_flip["requested"]
+                calibration_next = time.monotonic()
+                wake_worker.set()
+                return True
             elif action == "confirm-reflection":
                 # 0.5.17: the user confirms the reflection and enters the
                 # reading; the frame is taken with the next picture and the reading anchors the checks.
@@ -1991,6 +2047,10 @@ def main():
                 calibration, known_good = setup_flow.new_job(
                     action, limit, region, configuration, history, setup_store, previous, now,
                     simplified=simplified, intensive=intensive, make=Calibration)
+                if mirrored_restart is not None:
+                    # The frame confirmed earlier belongs to the unmirrored picture.
+                    calibration.known_good_layout = calibration.previous_layout = None
+                    known_good = None
                 # 0.5.14 (B2): a digit marked as hidden by hand is known to
                 # the setup from the first picture; before, only reflections it detected itself counted.
                 calibration.marked_positions = tuple(hidden_reflection_slots(rules, source))
@@ -2006,7 +2066,8 @@ def main():
                 # Who started which search: a setup must never start unnoticed.
                 debug_log.record(kind="setup_start", action=action, trigger=trigger,
                                  region=bool(region), known_good=known_good is not None,
-                                 decimals=rules["decimals"], simplified=simplified)
+                                 decimals=rules["decimals"], simplified=simplified,
+                                 mirrored=rules.get("image_mirrored") is True)
             wake_worker.set()
             return True
 
@@ -2016,6 +2077,7 @@ def main():
                 return None
             status = calibration.status(time.monotonic())
             status["preview"] = dict(calibration_preview)
+            status["flip_pending"] = bool(orientation_flip["requested"]) and status["state"] in ("waiting", "testing")
             relocated_at = auto_rules.get("last_frame_relocated_at")
             if calibration.purpose == "relocate" and type(relocated_at) in (int, float):
                 status["relocated_at"] = relocated_at
@@ -2086,6 +2148,11 @@ def main():
             job.state = "testing"
             job.stage = "capture"
             attempt = deepcopy(job)
+            if orientation_flip["requested"]:
+                orientation_flip["requested"] = False
+                if attempt.flip_orientation(active_rules["integer_digits"] + active_rules.get("fraction_digits", 3)):
+                    print("Einrichtung: Ausrichtung auf Wunsch um 180° gedreht")
+                    debug_log.record(kind="setup_flip", wrong_turns=list(attempt.wrong_turns))
         if attempt.intensive:
             active_rules = {**active_rules, "decimals": 3}
         deadline = time.monotonic() + 30
@@ -2157,6 +2224,7 @@ def main():
             elif camera:
                 result = capture_camera(camera, reference, token, zone, fetch=fetch,
                                         light=capture_light(get_source()[0], camera, token))
+            result = mirror_capture(result, active_rules)
             round_log["fetch_seconds"] = time.monotonic() - round_started
             if result is not None and not stopped():
                 round_log["captured"] = True
@@ -2592,7 +2660,8 @@ def main():
         confirm_kit_camera=lambda flow_id: kit_camera.safe_add(token, flow_id, post=post_json),
         get_kit_extras=partial(kit_camera.safe_extras, token),
         set_kit_extra=partial(kit_camera.safe_set_extra, token),
-        get_wizard_image=partial(wizard_camera_preview, token=token, zone=zone),
+        get_wizard_image=lambda source, **options: wizard_camera_preview(
+            source, token=token, zone=zone, mirrored=get_auto_rules().get("image_mirrored") is True, **options),
         real_demo=partial(demo.run_real_demo, select=select_register, read=read_visible_digits),
         get_activity=get_automatic_activity, get_background_work=get_background_work,
         get_auto_paused=get_auto_paused, save_auto_paused=save_auto_paused,
@@ -2997,6 +3066,8 @@ def main():
                 else:
                     set_activity("working", SLFORK_RAW_NOTICE)
                 result = capture_slfork_raw(base, zone)
+            if not manual_upload:
+                result = mirror_capture(result, active_rules)
             if result is not None and not manual and not manual_upload and not raw_fallback:
                 with settings_lock:
                     automatic_capture.update(seq=automatic_capture["seq"] + 1, result=result)
@@ -3195,11 +3266,11 @@ def main():
                                 remaining = live_deadline - time.monotonic()
                                 if remaining <= 0:
                                     return "?"
-                                latest = capture_camera(
+                                latest = mirror_capture(capture_camera(
                                     camera, reference, token, zone,
                                     timeout=min(8, max(0.2, remaining)),
                                     light=capture_light(active_source, camera, token),
-                                )
+                                ), active_rules)
                                 if latest is None:
                                     return "?"
                                 latest_picture, latest_overlay, latest_sample = latest

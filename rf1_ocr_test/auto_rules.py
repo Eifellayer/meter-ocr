@@ -51,7 +51,7 @@ def default_rules(options):
                   "precision_mode": default_decimals == 3, "fine_alignment_enabled": False, "adaptive_interval_enabled": True, "self_repair_enabled": False,
                   "experiments_enabled": False, "experiments": {},
                   "reflection_estimate_enabled": False, "reflection_suggestion_hidden": False,
-            "quality_hint_hidden": False,
+            "quality_hint_hidden": False, "image_mirrored": False,
             "hidden_digit_prompt_hidden": False,
                   "reflection_confirmed_id": "",
                   "crop_mode": "auto", "crop": options["ausschnitt"],
@@ -164,6 +164,7 @@ def stored_rules(saved_rules, options):
                       "reflection_estimate_enabled": saved_rules.get("reflection_estimate_enabled") is True,
                       "reflection_suggestion_hidden": saved_rules.get("reflection_suggestion_hidden") is True,
                 "quality_hint_hidden": saved_rules.get("quality_hint_hidden") is True,
+                "image_mirrored": saved_rules.get("image_mirrored") is True,
                 "hidden_digit_prompt_hidden": saved_rules.get("hidden_digit_prompt_hidden") is True,
                       "reflection_confirmed_id": str(saved_rules.get("reflection_confirmed_id", ""))[:80],
                       "fallback_time": fallback_time, "decimals": decimals}
@@ -229,6 +230,7 @@ def changed_rules(auto_rules, values):
                      "reflection_estimate_enabled": reflection_estimate_enabled,
                      "reflection_suggestion_hidden": reflection_suggestion_hidden,
                      "quality_hint_hidden": values.get("quality_hint_hidden", auto_rules.get("quality_hint_hidden")) is True,
+                     "image_mirrored": values.get("image_mirrored", auto_rules.get("image_mirrored")) is True,
                      "hidden_digit_prompt_hidden": values.get("hidden_digit_prompt_hidden", auto_rules.get("hidden_digit_prompt_hidden")) is True,
                      "reflection_confirmed_id": reflection_confirmed_id,
                      "fallback_value": fallback_value, "fallback_time": fallback_time}

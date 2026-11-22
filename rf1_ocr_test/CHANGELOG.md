@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.31
+
+- **Ausrichtung direkt in der Einrichtung korrigieren.** Unter dem geprüften Ausschnitt stehen zwei Knöpfe:
+  - „Steht auf dem Kopf? Um 180° drehen“: Die laufende Einrichtung prüft mit dem nächsten Bild in der gedrehten Richtung weiter. Ein zweiter Klick dreht wieder zurück. Die gewählte Richtung gilt auch dann, wenn der letzte bekannte Stand etwas anderes nahelegt.
+  - „Spiegelverkehrt? Bild spiegeln“: Für Kameras, die das Bild seitenverkehrt liefern. Ab dann spiegelt die App jedes Kamerabild, auch bei den späteren Prüfungen, und die Einrichtung sucht das Zählwerk neu. Ein zweiter Klick hebt das Spiegeln wieder auf.
+- **Seitlich hängender Zähler wird nicht mehr nur kopfüber gesucht.** Fand die Einrichtung einen seitlichen Zähler beim ersten Bild in der falschen Richtung, blieb nur diese Richtung in der Liste. Sie las nie eindeutig, und die richtige Richtung wurde nicht mehr geprüft. Solange nichts eindeutig gelesen ist, liest die App seitliche Rahmen jetzt auf jedem Bild auch um 180° gedreht. So kommt die richtige Richtung in die Liste.
+- *English:* Correct the orientation right in the setup: below the tested cut-out, “Upside down? Turn by 180°” makes the running setup continue in the turned direction with the next picture (a second click turns it back, and the chosen direction wins even if the last known reading suggests otherwise), and “Mirror-inverted? Mirror the picture” mirrors every camera picture from then on, also for the later checks, and makes the setup search the counter again (a second click undoes it). A meter hanging sideways is no longer searched only upside down: when the first picture found it in the wrong direction, only that direction stayed in the list, never read clearly, and the right one was not tested again. While nothing reads clearly, sideways frames are now also read turned by 180° on every picture.
+
 ## 0.5.30
 
 - **Angezeigter Zählerstand springt nicht mehr zurück.** Nach einer neuen Einrichtung konnte die App eine verdeckte Stelle aus einem später eingetragenen, aber niedrigeren Stand ergänzen. Der angezeigte Zählerstand fiel dann unter den zuvor angezeigten. Ein eingetragener oder noch unbestätigter Stand, der unter einem bereits gezählten liegt, ersetzt diesen jetzt nicht mehr als Untergrenze. Der Zähler läuft nie rückwärts. Der angezeigte Zählerstand geht nur noch zurück, wenn die App einen früheren Wert nachweislich als Lesefehler erkannt hat. Der Gesamtverbrauch war davon nie betroffen.

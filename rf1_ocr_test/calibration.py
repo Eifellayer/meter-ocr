@@ -672,6 +672,12 @@ def meter_like(readings, minimum=5):
     return any(sum(char.isdigit() for char in str(value)) >= minimum for value in readings)
 
 
+def whole_like(readings, digits):
+    """Were most whole digits read (e.g. "1049?.???"), not just scattered digits like "?11?5.11?"? (0.5.23)"""
+    needed = max(3, digits - 1)
+    return any(sum(char.isdigit() for char in str(value).split(".")[0]) >= needed for value in readings)
+
+
 def upright_layout(layout):
     """A frame turned less than 45°: only its reading shows that the picture is upright (0.5.22).
 
@@ -1863,12 +1869,17 @@ class Calibration:
                 # angles by the automatic repair; it is the only way to widen a frame that cuts off the
                 # decimals of a counter hanging a few degrees askew.
                 sideways_setup = "crop" in rules and abs(rules.get("rotation") or 0) >= 45
+                # 0.5.23: labels and the serial number read as scattered digits ("?11?5.11?"), so only
+                # mostly read whole digits of an upright frame show that the picture is upright. For a
+                # meter already set up turned, an upright read never does; only a reliable one counts.
+                upright_seen = not sideways_setup and any(
+                    meter_like(readings, max(4, digits + rules["fraction_digits"] - 3))
+                    and whole_like(readings, digits)
+                    for _, tried, readings in coarse if upright_layout(tried))
                 if (len(self.seen) == 1 and not self.intensive and (not self.automatic or sideways_setup)
                         and self.size_reference() is None
                         and not stop() and not any(reliable(score) for score, _, _ in coarse)
-                        and (has_reference or not any(
-                            meter_like(readings, max(4, digits + rules["fraction_digits"] - 3))
-                            for _, tried, readings in coarse if upright_layout(tried)))):
+                        and (has_reference or not upright_seen)):
                     # Search the complete photo at right angles before asking for another image.
                     yield from quarter_turn_layouts(frame, rules, self.region)
 

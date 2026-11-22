@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.23
+
+- **Schrift auf dem Typenschild hält die Suche nicht mehr auf.** Las ein aufrechter Rahmen auf dem Typenschild ein paar verstreute Ziffern, etwa fünf Ziffern mit zweien hinter dem Komma, galt das Bild schon als richtig herum, und die Einrichtung probierte keine gedrehten Rahmen aus. Jetzt zählen dafür nur fast vollständig gelesene volle Kubikmeter. Bei einem schon quer oder auf dem Kopf eingerichteten Zähler hält nur noch eine übereinstimmend gelesene aufrechte Zählerreihe die Suche auf.
+- *English:* Digits on the label no longer stop the search: when an upright frame read a few scattered digits on the label (for example five digits, two of them decimals), the picture already counted as upright and the setup tried no turned frames. Only mostly read whole cubic metres count for that now. For a counter already set up sideways or upside down, only an upright row read consistently stops the search.
+
 ## 0.5.22
 
 - **Neue Suche auch bei schon quer eingerichtetem Zähler.** War der Zähler schon um 90 Grad gedreht eingerichtet, las der alte Rahmen oft die vollen Kubikmeter. Die Einrichtung hielt die Suche damit für erledigt und probierte keine gedrehten Rahmen mehr aus – auch nicht die mit Schräglage aus 0.5.21. Jetzt zählt dafür nur noch ein aufrechter Rahmen. Außerdem darf die automatische Nachjustierung bei einem quer oder auf dem Kopf eingerichteten Zähler ebenfalls nach gedrehten Rahmen suchen.

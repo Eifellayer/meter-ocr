@@ -1,47 +1,75 @@
 name: Prüftests
 
+# Stefan (22.11.): schneller – ein Lauf pro PR (nicht zusätzlich bei jedem Push auf den Branch),
+# keine Tests bei reinen Plan-/README-Änderungen, Tests auf 4 Rechner verteilt.
 on:
   push:
+    branches: [main]
     paths:
       - "rf1_ocr_test/**"
       - "repository.yaml"
-      - "README.md"
-      - "README.en.md"
-      - "docs/**"
-      - "RELEASE-PLAN.md"
       - ".github/workflows/prueftests.yml"
   pull_request:
     paths:
       - "rf1_ocr_test/**"
       - "repository.yaml"
-      - "README.md"
-      - "README.en.md"
-      - "docs/**"
-      - "RELEASE-PLAN.md"
       - ".github/workflows/prueftests.yml"
 
 permissions:
   contents: read
 
+concurrency:
+  group: prueftests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
+          cache-dependency-path: .github/workflows/prueftests.yml
       - name: Installiere Testabhängigkeiten
         run: |
           sudo apt-get update
-          sudo apt-get install -y tesseract-ocr-eng tesseract-ocr fonts-dejavu-core
+          sudo apt-get install -y --no-install-recommends tesseract-ocr-eng tesseract-ocr fonts-dejavu-core
           python -m pip install pillow websocket-client playwright pyyaml
           python -m playwright install --with-deps --only-shell chromium
       - name: Prüfe Python-Syntax
+        if: matrix.shard == 0
         run: python -m compileall -q rf1_ocr_test
-      - name: Prüfe OCR-Regeln, Konfiguration und Weboberfläche
-        run: python -m unittest discover -s rf1_ocr_test/tests -v
+      - name: Prüfe OCR-Regeln, Konfiguration und Weboberfläche (Teil ${{ matrix.shard }} von 4)
+        env:
+          SHARD: ${{ matrix.shard }}
+          SHARDS: "4"
+        run: |
+          python - <<'PY'
+          import os, sys, unittest
+
+          def flatten(suite):
+              for item in suite:
+                  if isinstance(item, unittest.TestSuite):
+                      yield from flatten(item)
+                  else:
+                      yield item
+
+          loader = unittest.TestLoader()
+          tests = sorted(flatten(loader.discover("rf1_ocr_test/tests")), key=lambda test: test.id())
+          shard, shards = int(os.environ["SHARD"]), int(os.environ["SHARDS"])
+          mine = unittest.TestSuite(test for index, test in enumerate(tests) if index % shards == shard)
+          print(f"Teil {shard}: {mine.countTestCases()} von {len(tests)} Tests", flush=True)
+          result = unittest.TextTestRunner(verbosity=2).run(mine)
+          sys.exit(0 if result.wasSuccessful() and not loader.errors else 1)
+          PY
       - name: Prüfe JavaScript-Syntax
+        if: matrix.shard == 0
         run: |
           python rf1_ocr_test/tests/test_release.py --write-js /tmp/meter-ocr-panel.js
           node --check /tmp/meter-ocr-panel.js

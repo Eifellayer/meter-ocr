@@ -5,7 +5,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from checks import (anchored_hidden_digits, hidden_fill_reachable, hidden_roller_flow,  # noqa: E402
-                    hidden_roller_interval, hidden_roller_span, hidden_fill_with_turning_roller)
+                    hidden_roller_interval, hidden_roller_span, hidden_fill_with_turning_roller,
+                    estimated_hidden_digits)
 
 
 class HiddenRollerTests(unittest.TestCase):
@@ -70,3 +71,25 @@ class TurningLastRollerTests(unittest.TestCase):
     def test_other_unreadable_digit_is_not_filled(self):
         rows = ["1051?.?3?"] * 5
         self.assertIsNone(hidden_fill_with_turning_roller(rows, self.anchor, 1037.0, 3, 5, 1500, [5]))
+
+
+class EstimatedHiddenDecimalTests(unittest.TestCase):
+    """0.5.12 (Stefan 22.11.2026, 13:46): estimate a hidden decimal instead of failing for good."""
+
+    def test_lowest_digit_not_below_the_last_reading(self):
+        self.assertEqual(("10511.53", [5]), estimated_hidden_digits(["10511.?3"] * 3, 10511500, 2, 5, [5]))
+        self.assertEqual(("10511.63", [5]), estimated_hidden_digits(["10511.?3"] * 3, 10511540, 2, 5, [5]))
+
+    def test_turning_last_roller_stays_open(self):
+        self.assertEqual(("10511.53?", [5]), estimated_hidden_digits(["10511.?3?"] * 5, 10511100, 3, 5, [5])[0:2]
+                         if False else estimated_hidden_digits(["10511.?3?"] * 5, 10511500, 3, 5, [5]))
+
+    def test_without_known_reading_the_lowest_digit_is_taken(self):
+        self.assertEqual(("10511.03", [5]), estimated_hidden_digits(["10511.?3"] * 3, None, 2, 5, [5]))
+
+    def test_full_cubic_metres_are_never_estimated(self):
+        self.assertIsNone(estimated_hidden_digits(["1051?.23"] * 3, 10510000, 2, 5, [4]))
+        self.assertIsNone(estimated_hidden_digits(["1051?.?3"] * 3, 10510000, 2, 5, [5]))
+
+    def test_no_value_at_or_above_the_last_reading(self):
+        self.assertIsNone(estimated_hidden_digits(["10511.?3"] * 3, 10511950, 2, 5, [5]))

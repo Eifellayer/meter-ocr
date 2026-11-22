@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.12
+
+- **Bild des Zählwerks unter der Eingabe „Ziffer verdeckt“.** Wenn die App nach dem Zählerstand fragt, zeigt sie darunter das ausgeschnittene Zählwerk der letzten Aufnahme – ohne Rahmen und Beschriftung. Der eingetragene Stand wird der Aufnahmezeit dieses Bildes zugeordnet.
+- **Verdeckte Nachkommastelle wird notfalls geschätzt.** Trägt fünf Minuten lang niemand den Zählerstand ein, scheitert die Prüfung nicht mehr dauerhaft: Die App setzt für die verdeckte Nachkommastelle den kleinsten Wert ein, der nicht unter dem letzten bekannten Stand liegt, und weist im Ergebnis darauf hin. Stellen der vollen Kubikmeter werden nie geschätzt.
+- **Eingabe verschwindet nach der Übernahme.** Nach „Zählerstand übernehmen“ wird die Eingabe ausgeblendet und kommt nur wieder, wenn eine spätere Prüfung die Stelle erneut nicht ergänzen kann.
+- *English:* When the app asks for the meter reading, it now shows the cut-out counter of the last picture below the input, without frames. The entered reading is assigned to the time that picture was taken. The input disappears once the reading was taken over. If nobody enters the reading for five minutes, a hidden decimal is estimated (lowest value not below the last known reading); digits of the full cubic metres are never estimated.
+
 ## 0.5.11
 
 - **Eingetragener Zählerstand wird jetzt wirklich übernommen.** Ist eine Stelle durch eine Spiegelung verdeckt und dreht sich gleichzeitig die letzte Rolle (bei laufendem Gas der Normalfall, z. B. „10511.?3?“), blieb die Prüfung trotz eingetragenem Zählerstand „unklar“. Die App ergänzt die verdeckte Stelle nun auch dann und bestätigt diese Prüfung mit einer Nachkommastelle weniger.

@@ -813,6 +813,58 @@ def hidden_fill_with_turning_roller(readings, anchor, stamp, decimals, integer_d
     return None
 
 
+HIDDEN_ESTIMATE_AFTER = 5 * 60
+HIDDEN_ESTIMATE_NOTICE = ("Eine Nachkommastelle ist durch eine Spiegelung verdeckt und wurde geschätzt, weil kein "
+                          "Zählerstand eingetragen wurde. Die vollen Kubikmeter sind gelesen. Für einen genauen Wert "
+                          "den Zählerstand einmal in den Einstellungen eintragen.")
+
+
+def estimated_hidden_digits(readings, floor_litres, decimals, integer_digits, positions):
+    """Replace a hidden decimal by the lowest plausible digit instead of failing for good.
+
+    0.5.12 (Stefan 22.11.2026, 13:46): after a waiting time a hidden decimal that cannot be
+    determined is estimated – never a digit of the full cubic metres. The lowest completion
+    that does not fall below the last known reading is taken, so the meter never runs
+    backwards. Turning last rollers stay open. Returns (reading, filled slots) or None.
+    """
+    if not readings or not positions or min(positions) < integer_digits:
+        return None
+    for drop in (0, 1, 2):
+        fewer = decimals - drop
+        if fewer < 1 or max(positions) >= integer_digits + fewer:
+            return None
+        length = integer_digits + fewer + 1
+        rows = [str(value)[:length] for value in readings]
+        if any(len(row) != length or not re.fullmatch(r"[0-9?]+\.[0-9?]+", row) for row in rows):
+            return None
+        majority = len(rows) // 2 + 1
+        pattern = []
+        for index in range(length):
+            if index == integer_digits:
+                pattern.append(".")
+                continue
+            votes = Counter(row[index] for row in rows if row[index].isdigit())
+            digit, count = votes.most_common(1)[0] if votes else ("?", 0)
+            pattern.append(digit if count >= majority else "?")
+        allowed = {slot + 1 for slot in positions}
+        hidden = [index for index, char in enumerate(pattern) if char == "?"]
+        if not hidden:
+            return None
+        if not set(hidden) <= allowed:
+            continue
+        step = 10 ** (3 - fewer)
+        floor = (floor_litres // step) * step if type(floor_litres) is int else None
+        for digits in product("0123456789", repeat=len(hidden)):
+            chars = list(pattern)
+            for index, digit in zip(hidden, digits):
+                chars[index] = digit
+            reading = "".join(chars)
+            if floor is None or int(reading.replace(".", "")) * step >= floor:
+                return reading + "?" * drop, [index - 1 for index in hidden]
+        return None
+    return None
+
+
 def within_anchor_bounds(ocr, anchor, stamp, decimals, integer_digits, max_flow_lph):
     """Accept an anchored result only inside the physically reachable range."""
     bounds = anchor_bounds(anchor, stamp, decimals, max_flow_lph)

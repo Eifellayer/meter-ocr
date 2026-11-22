@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.28
+
+- **Einrichtungsansicht nutzt die Breite.** Auf breiten Bildschirmen steht links die Schrittliste und rechts das gerade geprüfte Kamerabild mit Ausschnitt, darunter „Bilder bisher“. Vorher blieb die rechte Hälfte oft leer, und das Bild stand ganz unten. Der Fortschrittsbalken steht jetzt oben unter der Statuszeile. Die Liste der gefundenen Rahmen ist eingeklappt und steht am Ende. Auf dem Handy liegt alles untereinander.
+- **Rahmen im Kamerabild springt nicht mehr.** Der gelbe Rahmen erschien beim Laden eines neuen Bildes kurz als Punkt unter dem Bild, bevor er an seinen Platz rückte.
+- **Bildqualitäts-Hinweis über die volle Breite.** Der Text stand in einer schmalen Spalte neben dem Schalter.
+- *English:* The setup view uses its width: on wide screens the steps sit on the left and the picture being tested on the right, with the pictures so far below it – before, the right half often stayed empty and the picture sat at the very bottom. The progress bar moved up under the status line, and the list of found frames is folded away at the end. On phones everything stacks. The yellow frame in the camera picture no longer flashes as a dot below a newly loaded picture, and the image quality note spans the full width.
+
 ## 0.5.27
 
 - **App startet wieder.** Seit 0.5.25 fehlte eine neue Programmdatei im App-Image, die App brach beim Start sofort ab. Die Datei ist jetzt enthalten. Ein neuer Test prüft künftig vor jeder Version, dass alles, was die App lädt, auch im Image landet.

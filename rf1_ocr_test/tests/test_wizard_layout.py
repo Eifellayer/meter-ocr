@@ -200,6 +200,10 @@ class ReleaseUi040Test(IngressFixture):
                     page = self.new_page(browser, width, locale)
                     page.goto(self.base + "/?ui=overview")
                     panel_box = page.locator("#calibration-overview .calibration-candidate-panel")
+                    # 0.5.28: the frame list starts folded away below the steps and the picture.
+                    panel_box.wait_for(state="visible")
+                    self.assertFalse(panel_box.evaluate("node => node.open"))
+                    panel_box.locator("summary").first.click()
                     panel_box.locator("li").first.wait_for()
                     rejected = panel_box.locator(".calibration-rejected")
                     self.assertFalse(page.evaluate(
@@ -218,6 +222,8 @@ class ReleaseUi040Test(IngressFixture):
             page = self.new_page(browser, 390)
             page.goto(self.base + "/?ui=overview")
             panel_box = page.locator("#calibration-overview .calibration-candidate-panel")
+            panel_box.wait_for(state="visible")
+            panel_box.locator("summary").first.click()
             panel_box.locator("li").first.wait_for()
             text = panel_box.inner_text()
             for absent in ("Treffer", "zusammengefasst", "Suchhilfe", "Verworfen"):

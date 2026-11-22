@@ -1,6 +1,6 @@
 # AI Meter Reader
 
-**Version 0.5.23** · [English](README.en.md) · [Anleitung](rf1_ocr_test/DOCS.md) · [Änderungen](rf1_ocr_test/CHANGELOG.md) · [Roadmap](RELEASE-PLAN.md)
+**Version 0.5.24** · [English](README.en.md) · [Anleitung](rf1_ocr_test/DOCS.md) · [Änderungen](rf1_ocr_test/CHANGELOG.md) · [Roadmap](RELEASE-PLAN.md)
 
 <img src="assets/project-logo.png" alt="AI Meter Reader" width="110">
 
@@ -12,8 +12,10 @@ Home-Assistant-App, die mechanische Zähler (vor allem Gaszähler mit Ziffernrol
 
 1. Repository hinzufügen (Link oben oder `https://github.com/Eifellayer/meter-ocr` unter **Einstellungen → Apps → App installieren → ⋮ → Repositories**).
 2. **AI Meter Reader** installieren, starten, Weboberfläche öffnen.
-3. Im Einrichtungsassistenten die Bildquelle wählen: ESPHome-/Home-Assistant-Kamera, AI on the Edge / SLFork oder **ESP nur als Kamera**.
+3. Im Einrichtungsassistenten die Bildquelle wählen: **Zählerkamera bauen**, ESPHome-/Home-Assistant-Kamera, AI on the Edge / SLFork oder **ESP nur als Kamera**.
 4. Selbsteinrichtung starten. Die App sucht den Ziffernbereich, bestätigt ihn mit mehreren Bildern und prüft danach automatisch.
+
+Noch keine Kamera? Ein ESP32 mit Kamera (ESP32-CAM, ESP32-S3-CAM von Freenove oder AI-Thinker, XIAO ESP32S3 Sense, Waveshare ESP32-S3-ETH) wird mit der [Installer-Seite](https://eifellayer.github.io/meter-ocr/) in wenigen Minuten zur fertigen **Zählerkamera** – direkt aus dem Browser, ohne ESPHome-Kenntnisse. Details stehen in der [Anleitung](rf1_ocr_test/DOCS.md#zählerkamera-mit-einem-klick).
 
 ## Was die App macht
 

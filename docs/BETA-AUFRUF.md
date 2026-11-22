@@ -14,6 +14,7 @@ ich entwickle eine Home-Assistant-App (früher „Add-on“), die mechanische Ga
 - **Richtet sich selbst ein:** findet das Zählwerk, die Drehung und die Ziffernrahmen allein – auch bei schräg hängender Kamera, gespiegeltem Bild oder Blitzreflex auf einer Ziffer.
 - **Läuft komplett lokal:** Texterkennung auf deinem Home-Assistant-Rechner, keine Cloud.
 - **Nutzt vorhandene Hardware:** ESP mit AI on the Edge (auch nur als Kamera), eine ESPHome-Kamera oder jede Kamera in Home Assistant; Blitz/Licht wird bei jeder Aufnahme kurz geschaltet.
+- **Kamera mit einem Klick:** Noch keine Kamera? Ein ESP32-CAM oder ESP32-S3-CAM (ab ca. 10 €) wird über die Installer-Seite direkt aus dem Browser zur fertigen Zählerkamera mit Blitz – ohne ESPHome-Kenntnisse: https://eifellayer.github.io/meter-ocr/
 - **Liefert Zählerstand und Verbrauch** für das Energie-Dashboard, prüft Werte gegen und lernt im Betrieb nach.
 
 Ich suche **Beta-Tester mit mechanischem Gaszähler** (Rollenzählwerk). Fehler meldest du direkt in der App über „Fehler melden“; das Debug-Protokoll enthält keine Bilder und keine Zugangsdaten.
@@ -33,6 +34,7 @@ I'm building a Home Assistant app (formerly “add-on”) that reads mechanical 
 - **Self-setup:** finds the register, rotation and digit boxes on its own – also with a tilted camera, a mirrored image or a flash reflection on one digit.
 - **Fully local:** OCR runs on your Home Assistant host, no cloud.
 - **Uses what you have:** an ESP with AI on the Edge (camera only is fine), an ESPHome camera or any Home Assistant camera; a flash/light is switched on briefly for every capture.
+- **Camera in one click:** no camera yet? An ESP32-CAM or ESP32-S3-CAM (about 10 €) becomes a ready-made meter camera with flash straight from the browser via the installer page – no ESPHome knowledge needed: https://eifellayer.github.io/meter-ocr/
 - **Provides meter reading and consumption** for the Energy dashboard, cross-checks values and keeps learning while running.
 
 Looking for **beta testers with a mechanical (roller) gas meter**. Report problems right from the app via “Report a bug”; the debug log contains no images and no credentials.

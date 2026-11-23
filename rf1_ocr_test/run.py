@@ -50,7 +50,8 @@ from checks import (
 )
 from calibration import (Calibration, Layout, CAPTURE_INTERVAL, PERFECT_CONFIRMATION_INTERVAL, DEFAULT_LIMIT, MIN_IMAGES, MIN_IMAGE_LIMIT, MAX_IMAGES, MAX_ATTEMPTS,
                          DEFAULT_INTENSIVE_AGREEMENT, SHORTLIST_LIMIT, TIME_LIMIT, LAST_DIGIT_CAPTURE_INTERVAL,
-                         image_quality_hints, register_light_hints, two_decimal_reading, uncertain_slots, valid_intensive_agreement)
+                         image_quality_hints, orientation_agreement, register_light_hints, two_decimal_reading,
+                         uncertain_slots, valid_intensive_agreement)
 from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, LOWER_PENDING, LOWER_RECOVERED, MAX_FLOW_LPH,
                          CALORIFIC_RANGE, CONVERSION_RANGE, STATE_FACTOR_RANGE, ImplausibleReading, energy_kwh, plausible_lower_drop, track_lower_series,
                          valid_energy_factor,
@@ -138,6 +139,8 @@ def learnable_shift(enabled, key, rotation, boxes, size, prefix):
 
 
 SETUP_READ_LOG_LIMIT = 24
+# Free readings of a frame and its 180° twin per setup image in the debug log (0.5.35).
+SETUP_ORIENTATION_LOG_LIMIT = 8
 
 
 def setup_round_log(attempt, round_log, started, now):
@@ -171,6 +174,7 @@ def setup_round_log(attempt, round_log, started, now):
         "attempts": attempt.attempts,
         "simplified": attempt.simplified,
         "reads": round_log.get("reads") or None,
+        "orientation": round_log.get("orientation") or None,
     }
     attempt.image_stats = {}
     return [entry]
@@ -2227,7 +2231,8 @@ def main():
         reflected = False
         stream_pictures = []
         round_started = time.monotonic()
-        round_log = {"fetch_seconds": None, "accepted_at": None, "error": None, "captured": False, "reads": []}
+        round_log = {"fetch_seconds": None, "accepted_at": None, "error": None, "captured": False, "reads": [],
+                     "orientation": []}
         try:
             if shared_result is not None:
                 result = shared_result
@@ -2407,14 +2412,17 @@ def main():
                                 digit_boxes=layout.digit_boxes,
                             )
 
-                        def recognize(layout, profile, register, ocr_deadline=None, *, full_precision=False):
+                        def recognize(layout, profile, register, ocr_deadline=None, *, full_precision=False,
+                                      free=False):
+                            # 0.5.35: ``free`` reads without the known reading's help (no whole cubic
+                            # metres completed from it), to tell the right direction.
                             reduced = (attempt.simplified or active_rules["decimals"] == 2) and not full_precision
                             value = read_visible_digits(
                                 *register[:4], options["helle_ziffern"], active_rules["polarity"], profile=profile,
                                 whole_digits=whole, fraction_digits=2 if reduced else fraction,
                                 deadline=deadline if ocr_deadline is None else ocr_deadline,
                                 prefer_boxes=bool(layout.digit_boxes), recognize=cached_digit,
-                                whole_range=glyph_range, parallel=True,
+                                whole_range=None if free else glyph_range, parallel=True,
                             )
                             return two_decimal_reading(value) if reduced else value
 
@@ -2453,6 +2461,16 @@ def main():
                             if fine_deadline is None:
                                 fine_deadline = min(deadline, time.monotonic() + 12)
                             report_calibration("refine", variant, rotation, positions)
+
+                        def orientation_score(layout, profile):
+                            # 0.5.35: how well the free reading fits the meter; see orientation_agreement.
+                            value = recognize(layout, profile, register_for(layout), fine_deadline, free=True)
+                            score = orientation_agreement(value, glyph_range, whole)
+                            if len(round_log["orientation"]) < SETUP_ORIENTATION_LOG_LIMIT:
+                                box = layout.box
+                                round_log["orientation"].append(
+                                    f"{box[0]},{box[1]},{box[2]},{box[3]} {layout.rotation}° {value} {score:+d}")
+                            return score
 
                         def read_calibration_slot(layout, index, profile):
                             register, width, whole_boxes, fraction_boxes, _ = register_for(layout)
@@ -2574,6 +2592,7 @@ def main():
                                 on_selected=show_selected,
                                 read_slot=read_calibration_slot,
                                 angle_read=read,
+                                orientation_score=orientation_score,
                                 on_angle=lambda variant, rotation: report_calibration("angle", variant, rotation),
                                 on_shortlist=lambda variant, rotation: report_calibration(
                                     "shortlist", variant, rotation),

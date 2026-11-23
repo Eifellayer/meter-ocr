@@ -63,6 +63,11 @@ SETUP_FLOW_SHARE = .5
 HALF_TURN_TOLERANCE = 30
 # Sideways frames read turned by 180° on a picture where nothing read reliably (0.5.31).
 SIDEWAYS_TWINS = 2
+# 0.5.35: a direction counts as clearly better readable with this lead in fitting digits, read
+# without the known reading's help (``orientation_agreement``).
+ORIENTATION_MARGIN = 2
+# A reading this far (plus its own step) below the newest reading seen lies behind it.
+BEHIND_SLACK_LITRES = 100
 SETUP_FLOW_FLOOR_LPH = 1500
 
 
@@ -768,11 +773,15 @@ def closer_half_turn(layout, reading, tried, baseline, precision, digits):
     known reading is the meter. ``tried`` holds (score, layout, readings) of this picture.
     0.5.32: when the turned frame's decimals stay unclear ("10517.?7?"), its whole cubic metres
     are compared; before, it counted as no evidence and the wrong frame was confirmed.
+    0.5.35: a turned frame reading clearly below the newest reading seen is never the closer one:
+    upside down, a frame read 10517.12 with 10516.24 booked and 10517.80 seen, the right one
+    10517.83, and the lower wrong reading won.
     """
     known = baseline_litres(baseline)
     if known is None:
         return None
     last, lowest = known
+    newest = newest_seen(baseline)
     for compared in dict.fromkeys((precision, 0)):
         prefix = meter_prefix(reading, compared, digits)
         if prefix is None:
@@ -784,9 +793,70 @@ def closer_half_turn(layout, reading, tried, baseline, precision, digits):
                 continue
             value = meter_prefix(values[0], compared, digits)
             if (value is not None and value * step + step > lowest // step * step
+                    and value * step + step + BEHIND_SLACK_LITRES > newest
                     and abs(value * step - last) + (step if compared < precision else 0) < distance):
                 return other
     return None
+
+
+def orientation_agreement(value, whole_range=None, digits=5):
+    """How well a reading made without the known reading's help fits the meter (0.5.35).
+
+    Upside down, a frame shows the digits in reverse order and turned, and only few of them
+    still fit the whole cubic metres the meter can show now (``whole_range``: lowest and highest
+    value). Each read digit that fits counts +1, each that does not -1, with the row shifted by
+    up to one slot (a frame may sit one roller off); a position any digit fits counts nothing.
+    Without a usable range the number of read digits counts.
+    """
+    text = str(value or "")
+    whole, _, fraction = text.partition(".")
+    slots = whole + fraction
+    count = sum(char.isdigit() for char in slots)
+    if (not isinstance(whole_range, (tuple, list)) or len(whole_range) != 2
+            or not all(type(bound) is int for bound in whole_range) or len(whole) != digits):
+        return count
+    low, high = max(0, whole_range[0]), whole_range[1]
+    if not 0 <= high - low <= 1000 or len(str(high)) > digits:
+        return count
+    allowed = [set() for _ in range(digits)]
+    for number in range(low, high + 1):
+        for index, char in enumerate(str(number).zfill(digits)):
+            allowed[index].add(char)
+    best = None
+    for offset in (-1, 0, 1):
+        score = 0
+        for index, char in enumerate(slots):
+            position = index - offset
+            if char.isdigit() and 0 <= position < digits and len(allowed[position]) < 10:
+                score += 1 if char in allowed[position] else -1
+        best = score if best is None else max(best, score)
+    return best
+
+
+def newest_seen(baseline):
+    """The newest reading a setup baseline knows, in litres, or None (0.5.35).
+
+    Besides the last booked reading this is the reading the camera saw last, which is not yet
+    proven but read the meter as it is now.
+    """
+    known = baseline_litres(baseline)
+    values = [known[0]] if known is not None else []
+    if isinstance(baseline, dict):
+        values += [baseline[key] for key in ("reading_litres", "pending_litres") if type(baseline.get(key)) is int]
+    return max(values, default=None)
+
+
+def behind_newest(reading, baseline, precision, digits):
+    """True when a reading lies clearly below the newest reading seen before (0.5.35)."""
+    newest = newest_seen(baseline)
+    if newest is None:
+        return False
+    for compared in range(precision, -1, -1):
+        prefix = meter_prefix(reading, compared, digits)
+        if prefix is not None:
+            step = 10 ** (3 - compared)
+            return prefix * step + step + BEHIND_SLACK_LITRES <= newest
+    return False
 
 
 def skip_small_labels(candidates):
@@ -1120,42 +1190,97 @@ class Calibration:
         self.rejected_regions = []
         return True
 
-    def half_turn_closer(self, frame, layout, reading, tried, tested, baseline, precision, digits, slots, read,
-                         stop, score_layout):
-        """True when the frame turned by 180° on the same digits reads closer to the last reading.
+    def orientation_evidence(self, layout, twin, orientation_score, stop):
+        """Scores of a frame and its 180° twin read without the known reading's help (0.5.35).
 
-        A meter hanging sideways also reads as a plausible number upside down. When this
-        picture did not test the turned frame yet, it is read once and added to ``tried``, so
-        the loop that accepts frames checks it next (0.5.29).
+        The normal reading completes the whole cubic metres from the known reading, so a frame
+        upside down read "10517" as well and only its decimals were garbage; the comparison
+        with the last reading then preferred the wrong frame. Returns (frame, twin) or None.
         """
-        if layout in (self.known_good_layout, self.candidate) or self.intensive or self.followup:
-            return False
-        if self.wrong_turns and self.turned_wrong(half_turn_layout(layout, slots)):
-            # The user turned the frame this way (0.5.31): their direction wins.
-            return False
-        if closer_half_turn(layout, reading, tried, baseline, precision, digits) is not None:
-            return True
+        scores = []
+        for trial in (layout, twin):
+            if stop():
+                return None
+            try:
+                scores.append(orientation_score(trial, OCR_PROFILES[0]))
+            except (OSError, ValueError, subprocess.SubprocessError):
+                return None
+        self.attempts += 1
+        return tuple(scores)
+
+    def half_turn_closer(self, frame, layout, reading, tried, tested, baseline, precision, digits, slots, read,
+                         stop, score_layout, orientation_score=None):
+        """Why this frame must give way to the same digits turned by 180°, or None.
+
+        A meter hanging sideways also reads as a plausible number upside down. 0.5.35: first
+        the direction whose free reading fits the meter clearly better wins ("half_turn"). Only
+        when that stays open, a frame reading clearly below the newest reading seen is not taken
+        ("behind"), and the reading closer to the last reading decides as before (0.5.29). When
+        this picture did not test the turned frame yet, it is read and added to ``tried``, so the
+        loop that accepts frames checks it next.
+        """
+        if layout == self.candidate or self.intensive or self.followup:
+            return None
         twin = half_turn_layout(layout, slots)
+        if self.wrong_turns and self.turned_wrong(twin):
+            # The user turned the frame this way (0.5.31): their direction wins.
+            return None
+        left, top, right, bottom = twin.box
+        inside = 0 <= left < right <= frame.width and 0 <= top < bottom <= frame.height
+        evidence = (self.orientation_evidence(layout, twin, orientation_score, stop)
+                    if orientation_score is not None and inside else None)
+        if evidence is not None and evidence[0] >= evidence[1] + ORIENTATION_MARGIN:
+            return None
+        reason = ("half_turn" if evidence is not None and evidence[1] >= evidence[0] + ORIENTATION_MARGIN
+                  else None)
+        if reason is None:
+            # A frame confirmed before keeps its direction unless the twin reads clearly better.
+            if layout == self.known_good_layout or not baseline:
+                return None
+            if behind_newest(reading, baseline, precision, digits):
+                reason = "behind"
+            elif closer_half_turn(layout, reading, tried, baseline, precision, digits) is not None:
+                return "half_turn"
         # 0.5.32: other frames on the same digits turned by 180° may have read garbage (a box of
         # another size); only the exact twin of this frame decides.
-        if stop() or any(other == twin for _, other, _ in tried):
-            return False
-        left, top, right, bottom = twin.box
-        if twin in tested or not (0 <= left < right <= frame.width and 0 <= top < bottom <= frame.height):
-            return False
+        if any(other == twin for _, other, _ in tried) or stop() or twin in tested or not inside:
+            return reason
         tested.add(twin)
         self.attempts += 1
         try:
             values = [read(twin, OCR_PROFILES[0])]
-            if meter_prefix(values[0], 0, digits) is None or stop():
-                return False
+            if reason is None and meter_prefix(values[0], 0, digits) is None or stop():
+                return reason
             values.append(read(twin, OCR_PROFILES[1]))
         except (OSError, ValueError, subprocess.SubprocessError):
-            return False
+            return reason
         values = self.mask_empty_fields(frame, twin, values)
-        if closer_half_turn(layout, reading, [(None, twin, values)], baseline, precision, digits) is None:
-            return False
+        if reason is None:
+            if closer_half_turn(layout, reading, [(None, twin, values)], baseline, precision, digits) is None:
+                return None
+            reason = "half_turn"
         tried.append((score_layout(twin, values), twin, values))
+        return reason
+
+    def gives_way(self, frame, layout, reading, coarse, tested, baseline, precision, digits, rules, read, stop,
+                  score_layout, orientation_score, sample, sample_precision):
+        """True when this frame is not taken because its 180° twin is the meter (0.5.35).
+
+        Notes the reason for the list of rejected frames and keeps the twin read for the
+        comparison of candidates; the twin itself is checked next in the loop that accepts frames.
+        """
+        if not baseline and orientation_score is None:
+            return False
+        known = len(coarse)
+        reason = self.half_turn_closer(frame, layout, reading, coarse, tested, baseline, precision, digits,
+                                       digits + rules["fraction_digits"], read, stop, score_layout,
+                                       orientation_score)
+        if reason is None:
+            return False
+        if self.rank_candidates and len(coarse) > known:
+            _, twin, values = coarse[-1]
+            self.record_intermediate(twin, values, sample, sample_precision, digits, rules["fraction_digits"], frame)
+        self.note_rejection(layout, reason, reading)
         return True
 
     def note_rejection(self, layout, reason, reading=None):
@@ -1995,7 +2120,7 @@ class Calibration:
     def examine(self, frame, overlay, sample, stamp, rules, read, stop, baseline=None, on_attempt=None,
                 on_image=None, on_decision=lambda reason: None, refine_read=None, on_refine=None, on_regions=None,
                 on_selected=None, angle_read=None, on_angle=None, on_shortlist=None,
-                read_slot=None):
+                read_slot=None, orientation_score=None):
         """Return a verified layout, checking two OCR profiles per distinct image."""
         if not self.remember_image(frame, stamp):
             return None
@@ -2417,10 +2542,17 @@ class Calibration:
                             if trial != layout and reliable(score_layout(trial, values)):
                                 recovery = trial, values
                         if recovery is None:
-                            if (self.simplified and not (self.automatic or self.intensive or self.followup)
-                                    and precision == 2 and weak == [required_slots - 1]
-                                    and self.partial_hit(layout, required_rows(readings), stamp, flow,
-                                                         baseline, setup_flow_limit(rules))):
+                            partial = (self.simplified and not (self.automatic or self.intensive or self.followup)
+                                       and precision == 2 and weak == [required_slots - 1])
+                            if (partial and self.candidate is None and self.gives_way(
+                                    frame, layout, readings[0], coarse, tested, baseline, precision, digits,
+                                    rules, read, stop, score_layout, orientation_score, sample, precision)):
+                                # 0.5.35: the first partial hit made a frame the candidate without
+                                # checking its direction; a frame upside down could collect it.
+                                on_decision("implausible")
+                                continue
+                            if partial and self.partial_hit(layout, required_rows(readings), stamp, flow,
+                                                            baseline, setup_flow_limit(rules)):
                                 self.note_group(layout, readings, True, digits + rules["fraction_digits"])
                                 if on_selected is not None:
                                     on_selected(layout, readings)
@@ -2524,17 +2656,9 @@ class Calibration:
                 # another frame, so the right frame turned by 180° counted as "lower reading".
                 plain = self.simplified and not (self.intensive or self.followup)
                 continuing = same or (recovered_slot and bool(self.counter) and not plain)
-                known = len(coarse)
-                if baseline and not continuing and self.half_turn_closer(
-                        frame, layout, readings[0], coarse, tested, baseline, image_precision, digits,
-                        digits + rules["fraction_digits"], read, stop, score_layout):
-                    # The same digits turned by 180° read closer to the last reading; that frame
-                    # is checked next in this loop and kept for the next pictures.
-                    if self.rank_candidates and len(coarse) > known:
-                        _, twin, values = coarse[-1]
-                        self.record_intermediate(twin, values, sample, precision, digits,
-                                                 rules["fraction_digits"], frame)
-                    self.note_rejection(layout, "half_turn", readings[0])
+                if not continuing and self.gives_way(
+                        frame, layout, readings[0], coarse, tested, baseline, image_precision, digits, rules,
+                        read, stop, score_layout, orientation_score, sample, precision):
                     on_decision("implausible")
                     continue
                 if stop():

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.41
+
+- **Vorsortierung der Rahmen im Schattenmodus.** Die Einrichtung probiert auf jedem Bild mehrere mögliche Rahmen nacheinander aus, und jedes Lesen kostet einige Sekunden. Jetzt zählt die App zur Probe vor dem Lesen, wie viele Ziffernfelder eines Rahmens überhaupt ein Zeichen zeigen. Im Schattenmodus-Protokoll steht dann, an welcher Stelle der gefundene Rahmen geprüft wurde und an welcher er stünde, wenn die Rahmen mit den meisten gefüllten Feldern zuerst drankämen. Die Reihenfolge der Einrichtung ändert sich dadurch noch nicht. Das läuft nur mit „Experimentelle Funktionen testen“.
+- *English:* Presorting the frames in shadow mode: the setup tries several possible frames per picture one after another, and each reading costs seconds. On trial, the app now counts before reading how many digit fields of a frame show a character at all; the shadow mode log shows at which place the found frame was tested and where it would be if frames with the most filled fields came first. The order of the setup does not change yet. Runs only with “Test experimental functions”.
+
 ## 0.5.40
 
 - **Farbige Leseversuche.** In der Tabelle der Leseversuche ist jetzt zu sehen, was je Versuch zählte. Grüne Ziffern gehen in den Stand ein. Rote, durchgestrichene Ziffern wurden verworfen, weil die anderen Versuche etwas anderes lasen. Blasse Stellen wurden nicht gelesen. Die Ergebniszeile zeigt den Stand wie auf dem Zählwerk: volle Kubikmeter auf dunklen, Nachkommastellen auf roten Rollen. Der Rahmen jeder Rolle ist grün, wenn alle Versuche übereinstimmen, gelb, wenn sie schwankten, und rot, wenn die Stelle unklar blieb.

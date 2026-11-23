@@ -769,6 +769,7 @@ EN_UI = {
     "Perspektivkorrektur": "Perspective correction",
     "Sieben-Segment-Erkennung": "Seven-segment recognition",
     "Ausrichtung des Kamerabilds": "Orientation of the camera picture",
+    "Vorsortierung nach Feldern mit Ziffer": "Presorting by fields with a digit",
     '>Fehler melden<': '>Report a problem<',
     'Öffnet auf GitHub ein vorausgefülltes Fehlerformular mit App-Version, Art der Bildquelle und Fehlquote. Es wird nichts automatisch gesendet; hänge das heruntergeladene Protokoll selbst an.':
         'Opens a prefilled bug report on GitHub with the app version, the kind of image source and the failure rate. Nothing is sent automatically; attach the downloaded log yourself.',

@@ -50,7 +50,7 @@ from checks import (
 )
 from calibration import (Calibration, Layout, CAPTURE_INTERVAL, PERFECT_CONFIRMATION_INTERVAL, DEFAULT_LIMIT, MIN_IMAGES, MIN_IMAGE_LIMIT, MAX_IMAGES, MAX_ATTEMPTS,
                          DEFAULT_INTENSIVE_AGREEMENT, SHORTLIST_LIMIT, TIME_LIMIT, LAST_DIGIT_CAPTURE_INTERVAL,
-                         image_quality_hints, orientation_agreement, register_light_hints, two_decimal_reading,
+                         image_quality_hints, orientation_agreement, presort_ranks, register_light_hints, two_decimal_reading,
                          uncertain_slots, valid_intensive_agreement)
 from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, LOWER_PENDING, LOWER_RECOVERED, MAX_FLOW_LPH,
                          CALORIFIC_RANGE, CONVERSION_RANGE, STATE_FACTOR_RANGE, ImplausibleReading, energy_kwh, plausible_lower_drop, track_lower_series,
@@ -869,6 +869,19 @@ def hidden_estimate_due(history, now):
     if due <= now or (type(planned) in (int, float) and planned <= due):
         return None
     return due
+
+
+def log_presort(attempt, image):
+    """0.5.41, shadow mode only: would frames with more filled digit fields first have found it sooner?"""
+    seen = list(attempt.presort_seen)
+    ranks = presort_ranks(seen, attempt.candidate) if len(seen) >= 2 else None
+    if ranks is None:
+        return
+    tested, presorted = ranks
+    shadow_log.record("presort", image=image,
+                      shadow={"rank": presorted, "fields": [fields for _, fields in seen]},
+                      established={"rank": tested, "frames": len(seen), "confirmations": attempt.confirmations},
+                      agree=presorted <= tested)
 
 
 def orientation_shadow(picture, layout, rules):
@@ -2653,6 +2666,7 @@ def main():
                                                       on_image=on_image, on_decision=report_decision)
                         else:
                             report_calibration("search")
+                            attempt.presort_shadow = shadow_log.enabled(active_rules) and not attempt.automatic
                             candidate = attempt.examine(
                                 frame, overlay, sample, captured,
                                 {**active_rules, "learned_flow_lph": learned_flow_limit(
@@ -2672,6 +2686,8 @@ def main():
                                 on_shortlist=lambda variant, rotation: report_calibration(
                                     "shortlist", variant, rotation),
                             )
+                            if attempt.presort_shadow:
+                                log_presort(attempt, sample.get("esp_timestamp") or captured)
                             if candidate is not None:
                                 if attempt.automatic:
                                     attempt.begin_verification(time.monotonic())

@@ -17,6 +17,31 @@ EXPERIMENTS = {
     "perspective": "Perspektivkorrektur (Kippung)",
     "seven_segment": "Digitalanzeige: Segmente direkt lesen",
 }
+# 0.5.45: procedures that only run beside the established ones and write the shadow log, each
+# selectable like the experiments. Unlike those they are on by default once experimental functions
+# are switched on (as they ran since 0.5.36).
+SHADOW_PROCEDURES = {
+    "decimal_estimate": "Unklare Nachkommastellen schätzen",
+    "standstill": "Stillstand per Bildvergleich erkennen",
+    "orientation": "Ausrichtung des Kamerabilds erkennen",
+    "presort": "Rahmen nach Feldern mit Ziffer vorsortieren",
+}
+SHADOW_PROCEDURES_EN = {
+    "decimal_estimate": "Estimate unclear decimals",
+    "standstill": "Detect standstill by picture comparison",
+    "orientation": "Detect the orientation of the camera picture",
+    "presort": "Presort frames by fields with a digit",
+}
+
+
+def shadow_active(rules, name):
+    """Whether one shadow procedure or experiment runs: experimental functions on and it chosen."""
+    if not isinstance(rules, dict) or not rules.get("experiments_enabled"):
+        return False
+    value = (rules.get("experiments") or {}).get(name)
+    return value is not False if name in SHADOW_PROCEDURES else value is True
+
+
 # A trapezoid below this difference in glyph height is treated as level.
 MIN_KEYSTONE = 0.03
 MAX_KEYSTONE = 0.35

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.45
+
+- **Alle Schattenverfahren einzeln wählbar.** Unter „Experimentelle Funktionen (Schattenbetrieb)“ stehen jetzt neben den beiden Experimenten auch die vier Verfahren, die ins Schattenmodus-Protokoll schreiben: unklare Nachkommastellen schätzen, Stillstand per Bildvergleich erkennen, Ausrichtung des Kamerabilds erkennen und Rahmen nach Feldern mit Ziffer vorsortieren. Jedes lässt sich auf „Aus“ oder „Schattenmodus“ stellen. Die vier sind wie bisher an, sobald experimentelle Funktionen eingeschaltet sind. Bisher liefen sie nur mit dem Hauptschalter und tauchten in der Auswahl gar nicht auf.
+- *English:* All shadow procedures can be chosen one by one: below “Experimental functions (shadow mode)” the four procedures that write the shadow mode log now appear next to the two experiments (estimate unclear decimals, detect standstill by picture comparison, detect the orientation of the camera picture, presort frames by fields with a digit), each set to “Off” or “Shadow mode”. As before they are on as soon as experimental functions are switched on; until now they only followed the main switch and did not appear in the choice at all.
+
 ## 0.5.44
 
 - **Kamera-Diagnose zählt richtig.** Das erste Bild einer Gegenprüfung, das noch auf die zweite Aufnahme wartet, zählt nicht mehr als fehlgeschlagene Prüfung. Es hat noch kein Ergebnis. Die Erfolgsquote in der Diagnose war dadurch zu niedrig.

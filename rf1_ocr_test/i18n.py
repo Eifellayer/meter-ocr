@@ -749,6 +749,8 @@ EN_UI = {
     "Die letzten Prüfungen mit allen OCR-Durchläufen, Entscheidung und Verbrauchsstand. Ohne Bilder und Zugangsdaten. Hilfreich für Fehlermeldungen.":
         "The latest checks with all OCR runs, decision and consumption state. No images or credentials. Useful for bug reports.",
     '>Protokoll herunterladen<': '>Download log<',
+    "<p>Die vier unteren Verfahren schreiben ihr Ergebnis neben das der bewährten Prüfung ins Schattenmodus-Protokoll (Werkzeuge › Debug-Protokoll › Schattenmodus-Protokoll). Sie sind an, sobald experimentelle Funktionen eingeschaltet sind, und lassen sich hier einzeln abschalten.</p>":
+        "<p>The four lower methods write their result next to that of the established check into the shadow mode log (Tools › Debug log › Shadow mode log). They are on as soon as experimental functions are switched on and can be switched off here one by one.</p>",
     '<summary>Kamera-Diagnose</summary>': '<summary>Camera diagnosis</summary>',
     "Wie gut das Bild der letzten Prüfung zum Lesen taugt, und wie oft die Bildquelle in den letzten 24 Stunden ausfiel. Die App holt dafür kein neues Bild und schaltet kein Licht.":
         "How well the picture of the last check can be read, and how often the image source failed in the last 24 hours. The app fetches no new picture for this and switches no light.",

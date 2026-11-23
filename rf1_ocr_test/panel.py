@@ -27,6 +27,7 @@ import system_monitor
 import background_view
 from auto_rules import frames_locked, user_frames
 import debug_log
+import experiments
 import shadow_log
 import support_log
 import camera_diagnosis
@@ -1506,12 +1507,10 @@ name: Zählerstand (OCR)</code></pre>
 <summary>Experimentelle Funktionen (Schattenbetrieb)</summary>
 <input type="hidden" name="experiments_option_present" value="1">
 <label class="check-option"><input type="checkbox" name="experiments_enabled" value="1" {experiments_checked}> Experimentelle Funktionen testen</label>
-<label class="experiment-option">Perspektivkorrektur (Kippung)
-<select name="experiment_perspective">{experiment_perspective_levels}</select></label>
-<label class="experiment-option">Digitalanzeige: Segmente direkt lesen
-<select name="experiment_seven_segment">{experiment_seven_segment_levels}</select></label>
+{experiment_options}
 <p>Schattenmodus: Die App liest jedes Bild zusätzlich mit dem Experiment, aber nur, wenn der Rechner gerade Leistung frei hat. Es zählt weiterhin nur das bewährte Ergebnis. Den Vergleich findest du unter Werkzeuge › Schattenmodus und Arbeit im Hintergrund. Die meisten brauchen das nicht.</p>
 <p>Aktiv testen (das Experiment bestimmt das Ergebnis mit, zeitlich begrenzt) ist in dieser Version noch für kein Experiment freigegeben.</p>
+<p>Die vier unteren Verfahren schreiben ihr Ergebnis neben das der bewährten Prüfung ins Schattenmodus-Protokoll (Werkzeuge › Debug-Protokoll › Schattenmodus-Protokoll). Sie sind an, sobald experimentelle Funktionen eingeschaltet sind, und lassen sich hier einzeln abschalten.</p>
 <p>Du kannst das jederzeit unter Einstellungen › Automatische Prüfung wieder ändern.</p>
 </details>
 <div class="setup-controls"><button type="button" class="setup-back">Zurück</button><span class="setup-count"></span><button type="submit">Speichern und prüfen</button></div>
@@ -1636,12 +1635,10 @@ name: Zählerstand (OCR)</code></pre>
 <details class="help setup-help experiments-box" id="experiments-settings">
 <summary>Experimentelle Funktionen (Schattenbetrieb)</summary>
 <label class="check-option"><input type="checkbox" name="experiments_enabled" value="1" {experiments_checked}> Experimentelle Funktionen testen</label>
-<label class="experiment-option">Perspektivkorrektur (Kippung)
-<select name="experiment_perspective">{experiment_perspective_levels}</select></label>
-<label class="experiment-option">Digitalanzeige: Segmente direkt lesen
-<select name="experiment_seven_segment">{experiment_seven_segment_levels}</select></label>
+{experiment_options}
 <p>Schattenmodus: Die App liest jedes Bild zusätzlich mit dem Experiment, aber nur, wenn der Rechner gerade Leistung frei hat. Es zählt weiterhin nur das bewährte Ergebnis. Den Vergleich findest du unter Werkzeuge › Schattenmodus und Arbeit im Hintergrund. Die meisten brauchen das nicht.</p>
 <p>Aktiv testen (das Experiment bestimmt das Ergebnis mit, zeitlich begrenzt) ist in dieser Version noch für kein Experiment freigegeben.</p>
+<p>Die vier unteren Verfahren schreiben ihr Ergebnis neben das der bewährten Prüfung ins Schattenmodus-Protokoll (Werkzeuge › Debug-Protokoll › Schattenmodus-Protokoll). Sie sind an, sobald experimentelle Funktionen eingeschaltet sind, und lassen sich hier einzeln abschalten.</p>
 </details>
 <div class="reflection-settings setup-help" id="reflection-settings">
 <label class="check-option"><input type="checkbox" name="reflection_estimate_enabled" value="1" {reflection_enabled_checked}> Verdeckte Ziffern ergänzen</label>
@@ -2468,7 +2465,9 @@ document.querySelectorAll('input[name="precision_mode"]').forEach(box => {{
   }});
 }});
 // The setup wizard and the settings show the same experiment switches; keep both in step.
-for (const name of ['experiments_enabled', 'experiment_perspective', 'experiment_seven_segment']) {{
+const experimentFields = ['experiments_enabled',
+  ...new Set([...document.querySelectorAll('.experiments-box select[name^="experiment_"]')].map(field => field.name))];
+for (const name of experimentFields) {{
   const boxes = [...document.querySelectorAll('.experiments-box [name="' + name + '"]:not([type="hidden"])')];
   for (const box of boxes) box.addEventListener('change', () => {{
     for (const other of boxes) {{
@@ -5111,14 +5110,31 @@ def experiment_level_options(shadow, language="de"):
                    for value, german, english in EXPERIMENT_LEVELS)
 
 
+EXPERIMENT_LABELS_EN = {"perspective": "Perspective correction (keystone)",
+                         "seven_segment": "Digital display: read the segments directly"}
+
+
+def experiment_options(auto_rules, language="de"):
+    """One level choice per experiment and shadow procedure (0.5.45: all shadow procedures)."""
+    chosen = auto_rules.get("experiments") or {}
+    rows = []
+    for name, german in [*experiments.EXPERIMENTS.items(), *experiments.SHADOW_PROCEDURES.items()]:
+        label = (EXPERIMENT_LABELS_EN.get(name) or experiments.SHADOW_PROCEDURES_EN.get(name, german)
+                 if language == "en" else german)
+        shadow = chosen.get(name) is not False if name in experiments.SHADOW_PROCEDURES else chosen.get(name) is True
+        rows.append(f'<label class="experiment-option">{html.escape(label)}\n'
+                    f'<select name="experiment_{name}">{experiment_level_options(shadow, language)}</select></label>')
+    return "\n".join(rows)
+
+
 def experiment_settings(field):
     """Levels of the experiments; the setup wizard and the settings send the same fields.
 
     Only "off" and shadow mode ("1") are stored; a forged "active" counts as off.
     """
     return {"experiments_enabled": field("experiments_enabled") == "1",
-            "experiments": {"perspective": field("experiment_perspective") == "1",
-                            "seven_segment": field("experiment_seven_segment") == "1"}}
+            "experiments": {name: field(f"experiment_{name}") == "1"
+                            for name in [*experiments.EXPERIMENTS, *experiments.SHADOW_PROCEDURES]}}
 
 
 def parse_failure_pause(text):
@@ -5975,10 +5991,7 @@ def start_panel(
                 fine_alignment_checked="checked" if auto_rules.get("fine_alignment_enabled") else "",
                 adaptive_interval_checked="checked" if auto_rules.get("adaptive_interval_enabled") else "",
                 experiments_checked="checked" if auto_rules.get("experiments_enabled") else "",
-                experiment_seven_segment_levels=experiment_level_options(
-                    (auto_rules.get("experiments") or {}).get("seven_segment"), language),
-                experiment_perspective_levels=experiment_level_options(
-                    (auto_rules.get("experiments") or {}).get("perspective"), language),
+                experiment_options=experiment_options(auto_rules, language),
                 reflection_hide_checked="checked" if auto_rules.get("reflection_suggestion_hidden") else "",
                 quality_hint_checked="checked" if auto_rules.get("quality_hint_hidden") else "",
                 quality_hint_hidden="hidden" if auto_rules.get("quality_hint_hidden") else "",

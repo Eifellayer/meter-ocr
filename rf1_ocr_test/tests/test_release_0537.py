@@ -94,7 +94,7 @@ class WorkerTests(unittest.TestCase):
 
     def test_only_in_shadow_mode(self):
         source = (ROOT / "run.py").read_text(encoding="utf-8")
-        self.assertIn("if shadow_log.enabled(get_auto_rules()) and not attempt.automatic:", source)
+        self.assertIn('if shadow_log.enabled(get_auto_rules(), "orientation") and not attempt.automatic:', source)
         self.assertIn("orientation_check.py", (ROOT / "Dockerfile").read_text(encoding="utf-8"))
 
 

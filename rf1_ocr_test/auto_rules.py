@@ -39,7 +39,10 @@ def frames_locked(rules):
 def valid_experiments(value):
     """Only known experiments, each switched on or off."""
     value = value if isinstance(value, dict) else {}
-    return {name: value.get(name) is True for name in experiments.EXPERIMENTS}
+    chosen = {name: value.get(name) is True for name in experiments.EXPERIMENTS}
+    # 0.5.45: the shadow procedures are on unless switched off.
+    chosen.update({name: value.get(name) is not False for name in experiments.SHADOW_PROCEDURES})
+    return chosen
 
 
 def valid_image_rotation(value):

@@ -879,13 +879,19 @@ class IngressTests(IngressFixture):
         import panel as module
         self.assertIn('<option value="active" disabled>', module.experiment_level_options(True))
         chosen = {"experiments_enabled": "1", "experiment_perspective": "active", "experiment_seven_segment": "1"}
-        self.assertEqual({"experiments_enabled": True, "experiments": {"perspective": False, "seven_segment": True}},
-                         module.experiment_settings(lambda name: chosen.get(name, "")))
+        # 0.5.45: the shadow procedures are sent as well; missing fields count as off.
+        self.assertEqual({"experiments_enabled": True, "experiments": {
+            "perspective": False, "seven_segment": True, "decimal_estimate": False, "standstill": False,
+            "orientation": False, "presort": False}}, module.experiment_settings(lambda name: chosen.get(name, "")))
         english = self.request("/", accept="en")[0]
         self.assertIn('<option value="1">Shadow mode</option>', english)
         self.assertIn("Active testing (not released yet)", english)
 
     def test_wizard_and_settings_show_and_save_the_same_experiments(self):
+        def picked():
+            return self.rules["experiments_enabled"], {name: self.rules["experiments"].get(name, False)
+                                                       for name in ("perspective", "seven_segment")}
+
         self.rules.update(experiments_enabled=True, experiments={"perspective": True, "seven_segment": False})
         page = self.request("/")[0]
         for section in self.experiment_boxes(page):
@@ -906,21 +912,21 @@ class IngressTests(IngressFixture):
         }
         # An older wizard form without the experiments box keeps the saved switches.
         self.assertEqual((303, "./?saved=setup&ui=overview"), self.submit("/einrichtung", **values))
-        self.assertEqual((True, {"perspective": True, "seven_segment": False}), (self.rules["experiments_enabled"], self.rules["experiments"]))
+        self.assertEqual((True, {"perspective": True, "seven_segment": False}), picked())
         # The wizard box switches both off, the settings show the same values afterwards.
         self.assertEqual((303, "./?saved=setup&ui=overview"),
                          self.submit("/einrichtung", experiments_option_present=1, **values))
-        self.assertEqual((False, {"perspective": False, "seven_segment": False}), (self.rules["experiments_enabled"], self.rules["experiments"]))
+        self.assertEqual((False, {"perspective": False, "seven_segment": False}), picked())
         for section in self.experiment_boxes(self.request("/")[0]):
             self.assertNotIn("checked", section)
         self.assertEqual((303, "./?saved=setup&ui=overview"),
                          self.submit("/einrichtung", experiments_option_present=1, experiments_enabled=1,
                                      experiment_perspective=1, **values))
-        self.assertEqual((True, {"perspective": True, "seven_segment": False}), (self.rules["experiments_enabled"], self.rules["experiments"]))
+        self.assertEqual((True, {"perspective": True, "seven_segment": False}), picked())
         # The settings save the same fields with the same logic.
         form = dict(decimals=0, attempts=3, crop_mode="auto", polarity="auto", experiments_enabled=1)
         self.assertEqual((303, "./?saved=1"), self.submit("/automatik", **form))
-        self.assertEqual((True, {"perspective": False, "seven_segment": False}), (self.rules["experiments_enabled"], self.rules["experiments"]))
+        self.assertEqual((True, {"perspective": False, "seven_segment": False}), picked())
         wizard, settings = self.experiment_boxes(self.request("/")[0])
         for section in (wizard, settings):
             self.assertIn('name="experiments_enabled" value="1" checked', section)

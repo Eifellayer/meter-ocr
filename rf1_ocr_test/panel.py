@@ -34,7 +34,7 @@ from calibration import (
     DEFAULT_INTENSIVE_AGREEMENT, DEFAULT_LIMIT, MIN_IMAGE_LIMIT, MAX_IMAGES,
     layouts, search_region, valid_intensive_agreement,
 )
-from checks import (DEFAULT_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, WARNING_DETAIL_AFTER, meter_prefix,
+from checks import (HIDDEN_ESTIMATE_AFTER, DEFAULT_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, WARNING_DETAIL_AFTER, meter_prefix,
                     OCR_PROFILES, crop_register, read_register, LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, REFLECTION_SUGGEST_AFTER, STANDALONE_PENDING, STANDALONE_REJECTED_NOTICE,
                     STANDALONE_VERIFIED_NOTICE, activity_phase, last_check_at, recommended_comparison_decimals,
                     reschedule_next_check,
@@ -838,6 +838,7 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 </div>
 <div class="reflection-suggestion action-needed" id="hidden-digit-prompt" hidden>
 <p><strong>Ziffer verdeckt.</strong> <span id="hidden-digit-text">Eine Stelle ist durch eine Spiegelung verdeckt.</span> Trag einmal den aktuellen Zählerstand ein. Danach ergänzt die App die verdeckte Stelle selbst, solange nur ein Wert zum Verbrauch passt.</p>
+<p class="hidden-digit-countdown" id="hidden-digit-countdown" role="timer" hidden></p>
 <form method="post" action="fallback" class="reflection-actions" id="hidden-digit-form">
 <input type="hidden" name="lang" value="{language}"><input type="hidden" name="mode" value="{language_mode}">
 <input type="hidden" name="csrf" value="{csrf}"><input type="hidden" name="return_to" value="overview">
@@ -4245,6 +4246,25 @@ async function refreshTestStatus() {{
 }}
 refreshTestStatus();
 setInterval(refreshTestStatus, 1000);
+// 0.5.38: time left until the app fills a hidden digit itself when no reading is entered.
+// var: the status refresh may set it before this line runs.
+var hiddenEstimateAt;
+function showHiddenCountdown() {{
+  const box = document.querySelector('#hidden-digit-countdown');
+  if (!box) return;
+  box.hidden = hiddenEstimateAt == null;
+  if (hiddenEstimateAt == null) return;
+  const en = lang === 'en';
+  const left = Math.max(0, Math.round(hiddenEstimateAt - Date.now() / 1000));
+  const clock = Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0');
+  box.dataset.state = left ? 'running' : 'expired';
+  box.textContent = left
+    ? (en ? 'No entry? In ' + clock + ' min the app fills the digit itself: with a 0, or with the smallest digit that keeps the reading from falling below the last known one.'
+          : 'Keine Eingabe? In ' + clock + ' Min. setzt die App die Stelle selbst ein: eine 0 oder die kleinste Ziffer, mit der der Stand nicht unter den letzten bekannten fällt.')
+    : (en ? 'Time is up: the next check fills the digit itself and goes on with that value.'
+          : 'Die Zeit ist abgelaufen: Die nächste Prüfung setzt die Stelle selbst ein und rechnet damit weiter.');
+}}
+setInterval(showHiddenCountdown, 1000);
 function tick() {{
   const out = document.querySelector('#countdown');
   if (!next) {{
@@ -4904,6 +4924,9 @@ async function refreshAutomatic() {{
     const hiddenPrompt = sample.hidden_digit_prompt && !(readingEnteredAt && Number(sample.hidden_digit_prompt.image_time || sample.hidden_digit_prompt.time) <= readingEnteredAt)
       ? sample.hidden_digit_prompt : null;
     document.querySelector('#hidden-digit-prompt').hidden = !hiddenPrompt;
+    hiddenEstimateAt = hiddenPrompt && Number.isFinite(Number(sample.hidden_digit_estimate_at))
+      ? Number(sample.hidden_digit_estimate_at) : null;
+    showHiddenCountdown();
     document.querySelector('#hero-action').hidden = !hiddenPrompt;
     if (hiddenPrompt) {{
       document.querySelector('#hidden-digit-text').textContent =
@@ -5448,6 +5471,9 @@ def start_panel(
             "hidden_digit_prompt": (history.get("hidden_digit_prompt")
                                     if auto_rules.get("reflection_estimate_enabled")
                                     and not auto_rules.get("hidden_digit_prompt_hidden") else None),
+            # 0.5.38: when the app fills the hidden digit itself if nothing is entered.
+            "hidden_digit_estimate_at": (history["hidden_digit_since"] + HIDDEN_ESTIMATE_AFTER
+                                         if type(history.get("hidden_digit_since")) in (int, float) else None),
             "reflection_live_estimate": (history.get("reflection_live_estimate")
                                         if auto_rules.get("reflection_estimate_enabled") else None),
             "reflection_suggestion": reflection_suggestion,

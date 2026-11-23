@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.43
+
+- **Stillstand im Schattenmodus vergleichbar.** Der Stillstand per Bildvergleich wird jetzt mit den Stellen verglichen, die beide Prüfungen gelesen haben. Dafür müssen die vollen Kubikmeter und mindestens eine Nachkommastelle gelesen sein. Bisher zählte kein Eintrag, weil bei zwei verglichenen Nachkommastellen die dritte nie gelesen wird.
+- **Kamera-Diagnose nennt eine niedrige Erfolgsquote.** Waren in den letzten 24 Stunden weniger als die Hälfte der Prüfungen erfolgreich, steht das jetzt mit Zahlen bei den Hinweisen, samt Verweis auf die Leseversuche.
+- *English:* Standstill in shadow mode can be compared now: the picture comparison is checked against the digits both checks read (whole cubic metres and at least one decimal); before, no entry counted because with two compared decimals the third one is never read. The camera diagnosis names a low success rate: when fewer than half of the checks of the last 24 hours succeeded, the hints say so with numbers and point to the reading attempts.
+
 ## 0.5.42
 
 - **Kamera-Diagnose.** Unter den Werkzeugen steht jetzt „Kamera-Diagnose“. Sie zeigt, wie gut das Bild der letzten Prüfung zum Lesen taugt: Größe und Zeit des Bildes sowie Helligkeit, Kontrast und Schärfe des Zählwerks. Dazu kommt, wie viele Prüfungen in den letzten 24 Stunden liefen, wie viele davon erfolgreich waren und wie oft die Bildquelle kein neues Bild lieferte. Darüber stehen klare Hinweise, etwa „Zählwerk sehr dunkel: Licht oder Belichtung der Kamera prüfen“ oder „Keine Auffälligkeiten“. Die App holt dafür kein neues Bild und schaltet kein Licht.

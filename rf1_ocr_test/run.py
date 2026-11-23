@@ -925,13 +925,24 @@ def log_experiments(record, job):
 
 
 def standstill_agrees(record, before, now):
-    """Standstill measured versus the readings of both checks: None unless both read completely."""
+    """Standstill measured versus the readings of both checks, or None when they cannot tell.
+
+    0.5.43: compared on the positions both checks read; the whole cubic metres and at least one
+    decimal must be read in both (with two compared decimals the third one is never read).
+    """
     if not isinstance(record, dict) or type(record.get("stationary")) is not bool:
         return None
-    digits = [re.sub(r"[^0-9?]", "", str(value or "")) for value in (before, now)]
-    if not all(digits) or any("?" in value for value in digits):
+    pairs = []
+    for value in (before, now):
+        whole, _, fraction = str(value or "").partition(".")
+        pairs.append((whole, fraction))
+    (whole_a, fraction_a), (whole_b, fraction_b) = pairs
+    if (not whole_a or len(whole_a) != len(whole_b) or not (whole_a + whole_b).isdigit()):
         return None
-    return record["stationary"] == (digits[0] == digits[1])
+    common = [(a, b) for a, b in zip(fraction_a, fraction_b) if a.isdigit() and b.isdigit()]
+    if not common:
+        return None
+    return record["stationary"] == (whole_a == whole_b and all(a == b for a, b in common))
 
 
 def estimate_agrees(estimate, outcome, reading, decimals, integer_digits):

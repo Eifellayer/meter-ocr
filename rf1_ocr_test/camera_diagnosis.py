@@ -17,6 +17,8 @@ DARK, BRIGHT, LOW_CONTRAST = 45, 215, 32
 SOFT_RATIO = 0.04
 OLD_PICTURE = 30 * 60
 FAILED_OUTCOMES = ("capture_unavailable", "stale_sample")
+# 0.5.43: below this share of successful checks (with enough checks) the page says so.
+LOW_SUCCESS_SHARE, LOW_SUCCESS_CHECKS = 0.5, 10
 SUCCESS_OUTCOMES = ("match", "match_with_warning", "ocr_only")
 
 TEXTS = {
@@ -33,6 +35,10 @@ TEXTS = {
     "capture_failures": ("Die Bildquelle lieferte in den letzten 24 Stunden {count}-mal kein neues Bild.",
                          "The image source delivered no new picture {count} times in the last 24 hours."),
     "dark_pictures": ("{count}-mal war das Bild trotz Licht zu dunkel.", "{count} times the picture was too dark despite the light."),
+    "low_success": ("Nur {successful} von {checks} Prüfungen der letzten 24 Stunden waren erfolgreich. Die Leseversuche "
+                    "unter „Automatische Prüfung“ zeigen, welche Stellen unklar bleiben.",
+                    "Only {successful} of {checks} checks of the last 24 hours succeeded. The reading attempts under "
+                    "“Automatic check” show which digits stay unclear."),
     "ok": ("Keine Auffälligkeiten.", "Nothing unusual."),
 }
 
@@ -115,6 +121,8 @@ def diagnose(picture, picture_time, counter, log_text, now=None, language="de"):
         keys.append(("capture_failures", {"count": counts["capture_failures"]}))
     if counts["dark_pictures"]:
         keys.append(("dark_pictures", {"count": counts["dark_pictures"]}))
+    if counts["checks"] >= LOW_SUCCESS_CHECKS and counts["successful"] < LOW_SUCCESS_SHARE * counts["checks"]:
+        keys.append(("low_success", {"successful": counts["successful"], "checks": counts["checks"]}))
     hints = [TEXTS[key][index].format(**values) for key, values in keys] or [TEXTS["ok"][index]]
     return {"picture": whole, "picture_time": picture_time, "counter": cut_out, "counts": counts,
             "hints": hints, "problems": [key for key, _ in keys]}

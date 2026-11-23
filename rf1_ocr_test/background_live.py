@@ -182,6 +182,10 @@ def recovery(record, automatic_running, language="de"):
     text = _text(language)
     if record is None:
         return None
+    if automatic_running:
+        # 0.5.33: while a check runs, the record still belongs to the previous check; its result
+        # ("time budget used up") read as the result of the check that had only just started.
+        return _entry("recovery", text["recovery"], "waiting", text, step=text["after_check"])
     log = record.get("recovery") or {}
     plan = log.get("plan") or {}
     if not log.get("tried"):

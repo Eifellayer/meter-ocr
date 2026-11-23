@@ -35,7 +35,8 @@ from calibration import (
 )
 from checks import (DEFAULT_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES, WARNING_DETAIL_AFTER, meter_prefix,
                     OCR_PROFILES, crop_register, read_register, LAST_DIGIT_NOTICE, LAST_DIGIT_PASS, REFLECTION_SUGGEST_AFTER, STANDALONE_PENDING, STANDALONE_REJECTED_NOTICE,
-                    STANDALONE_VERIFIED_NOTICE, last_check_at, recommended_comparison_decimals, reschedule_next_check,
+                    STANDALONE_VERIFIED_NOTICE, activity_phase, last_check_at, recommended_comparison_decimals,
+                    reschedule_next_check,
                     setup_deadlines, setup_source_id, stabilization_interval, stationary_partial_active, valid_interval_minutes,
                     eighth_digit_given_up, wait_reason_text)
 QUIET_FAILURES = status_view.QUIET_FAILURES
@@ -287,6 +288,12 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .calibration-crop-region{{position:absolute;border:2px solid #ffcd60;border-radius:.1rem;box-shadow:0 0 0 1px #151c23;pointer-events:none}}
 .calibration-crop-region[data-state="testing"]{{border-style:dashed}}
 .calibration-orientation{{display:flex;flex-wrap:wrap;gap:.4rem;margin:.5rem 0 0}}
+.check-layout{{display:grid;gap:.8rem 1.4rem}}
+@media(min-width:900px){{.check-layout:has(> .check-timeline-box:not([hidden])){{grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);align-items:start}}}}
+.check-timeline-box{{margin:.4rem 0}}
+.check-timeline-box h3{{margin:0 0 .5rem;font-size:1rem}}
+.setup-timeline li[data-state="failed"] .setup-dot{{background:light-dark(#fdeceb,#3b2222);color:light-dark(#a3271b,#ffb4a8);border:2px solid light-dark(#c0392b,#e57364)}}
+.setup-timeline li[data-state="failed"] .setup-step-label{{color:light-dark(#a3271b,#ffb4a8)}}
 .calibration-orientation button{{font-size:.85rem;padding:.35rem .75rem}}
 .calibration-candidates{{font-variant-numeric:tabular-nums;padding-inline-start:1.8rem;margin:.45rem 0}}
 .calibration-candidates li{{margin:.2rem 0}}
@@ -962,11 +969,18 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 <form method="post" action="automatik-pause" id="pause-auto-form" {pause_button_hidden}><input type="hidden" name="lang" value="{language}"><input type="hidden" name="mode" value="{language_mode}"><input type="hidden" name="csrf" value="{csrf}"><input type="hidden" name="paused" value="1"><button type="submit">Automatik pausieren</button></form>
 </div>
 <div class="automatic-interval-hint" id="automatic-interval-hint" hidden><span>Wiederholte Fehlablesung? Ein kürzeres Prüfintervall kann helfen, wenn sich der Zähler nach einer Weile wieder klarer ablesen lässt.</span><button type="button" id="open-interval-settings">Prüfintervall ändern</button></div>
-<span id="preview-home" hidden></span><details class="automatic-images" id="automatic-images" open><summary>Letztes Testbild</summary>
+<span id="preview-home" hidden></span><details class="automatic-images" id="automatic-images" open><summary>Aktuelle Prüfung</summary>
+<div class="check-layout">
+<div class="check-timeline-box" id="check-timeline-box" role="group" aria-labelledby="check-timeline-title" hidden>
+<h3 id="check-timeline-title">So läuft die Prüfung</h3>
+<ol class="setup-timeline" aria-live="polite"></ol>
+<p class="setup-timeline-stats"></p>
+</div>
+<div class="check-picture">
 <p id="preview-empty" class="legend" {preview_empty_hidden}>Noch kein Testbild verfügbar.</p>
 <div class="preview" id="test-preview" {automatic_preview_hidden}>
-<h2 id="preview-heading">Letztes Testbild</h2>
-<img id="test-preview-image"{automatic_preview_src} alt="Letztes Testbild">
+<h2 id="preview-heading">Aktuelles Testbild</h2>
+<img id="test-preview-image"{automatic_preview_src} alt="Aktuelles Testbild">
 <p id="preview-time" class="settings-note" hidden></p>
 <p id="ocr-method" class="settings-note" hidden></p>
 <details id="ocr-candidate-details" hidden>
@@ -974,6 +988,8 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 <ol id="ocr-candidates"></ol>
 </details>
 <p class="legend" id="preview-legend" {preview_legend_hidden}><span class="green-key">Grün:</span> Ziffer gelesen · <span class="yellow-key">Gelb:</span> Ziffer schwankte zwischen OCR-Versuchen oder wurde aus mehreren Versuchen zusammengesetzt · <span class="red-key">Rot:</span> Ziffer weiterhin unklar · <span class="grey-key">Grau:</span> Stelle wurde nicht verglichen (z. B. drehende letzte Rolle). Die Farben zeigen OCR-Sicherheit, nicht die Übereinstimmung mit dem Referenzstand. Ohne automatisch erkannte Ziffernrahmen sind die Bereiche nur näherungsweise aufgeteilt.</p>
+</div>
+</div>
 </div>
 </details>
 <div class="background-work-box">
@@ -1671,11 +1687,21 @@ Bei anhaltenden Problemen benachrichtigen
 </div>
 <p id="demo-status" role="status"></p>
 <div id="demo-results" hidden>
-<p id="demo-reading"></p><p id="demo-estimate"></p>
-<div class="demo-grid">
-<figure><img id="demo-original" alt="Zählerbild der Demo"><figcaption>Originalbild</figcaption></figure>
-<figure><img id="demo-aligned" alt="Gerader Ausschnitt mit Ziffernrahmen"><figcaption>Ausgerichteter Ausschnitt</figcaption></figure>
+<div class="check-layout">
+<div class="check-timeline-box" id="demo-timeline-box" role="group" aria-labelledby="demo-timeline-title">
+<h3 id="demo-timeline-title">So lief die Prüfung</h3>
+<ol class="setup-timeline" aria-live="polite"></ol>
+<p class="setup-timeline-stats"></p>
 </div>
+<div class="check-picture">
+<div class="demo-grid">
+<figure><img id="demo-original" alt="Zählerbild der Demo"><figcaption>Kamerabild</figcaption></figure>
+<figure><img id="demo-aligned" alt="Gelesene Ziffern wie bei der automatischen Prüfung"><figcaption>Gelesene Ziffern wie bei der automatischen Prüfung</figcaption></figure>
+</div>
+<p class="legend"><span class="green-key">Grün:</span> Ziffer gelesen · <span class="yellow-key">Gelb:</span> Ziffer schwankte zwischen den Leseversuchen · <span class="red-key">Rot:</span> Ziffer unklar · <span class="grey-key">Grau:</span> Stelle wird nicht verglichen (drehende letzte Rolle).</p>
+</div>
+</div>
+<p id="demo-reading"></p><p id="demo-estimate"></p>
 </div>
 </dialog>
 <dialog class="setup-dialog" id="reset-dialog" aria-labelledby="reset-title">
@@ -1848,6 +1874,7 @@ async function checkDemo(reflection, picture = '') {{
     const result = await reply.json();
     document.querySelector('#demo-original').src = 'data:image/jpeg;base64,' + result.image;
     document.querySelector('#demo-aligned').src = 'data:image/jpeg;base64,' + result.aligned;
+    renderSetupTimeline(document.querySelector('#demo-timeline-box'), demoTimelineModel(result, picture));
     document.querySelector('#demo-reading').textContent =
       'Abgelesen ' + result.reading + ' m³ · Drehung ' + result.angle + '° · ' +
       (result.real ? (result.complete ? 'Alle geprüften Ziffern erkannt. ' : 'Mindestens eine Ziffer blieb offen. ') +
@@ -3015,6 +3042,7 @@ function refreshCalibrationImages(preview) {{
 }}
 
 let calibrationWasActive = false;
+let lastAutomaticCheck = 0;
 let lastDigitSearching = false;
 let lastDigitProgress = null;
 let frameRelocating = false;
@@ -3215,7 +3243,7 @@ function renderSetupTimeline(box, model) {{
       const dot = document.createElement('span');
       dot.className = 'setup-dot';
       dot.setAttribute('aria-hidden', 'true');
-      dot.textContent = step.state === 'done' ? '✓' : '';
+      dot.textContent = step.state === 'done' ? '✓' : step.state === 'failed' ? '✕' : '';
       // Animate only a step that was just completed, not every refresh.
       if (step.state === 'done' && previous[index]?.state === 'done') dot.style.animation = 'none';
       const head = document.createElement('div');
@@ -3292,6 +3320,89 @@ function renderSetupTimeline(box, model) {{
       roundList.dataset.values = roundKey;
     }}
   }}
+}}
+// 0.5.33: the automatic check shows its steps like the setup: what runs now, what is done, where
+// the last check stopped.
+function stepClock(epoch) {{
+  if (!epoch) return '';
+  const taken = new Date(epoch * 1000);
+  return [taken.getHours(), taken.getMinutes(), taken.getSeconds()].map(value => String(value).padStart(2, '0')).join(':');
+}}
+function automaticTimelineModel(sample) {{
+  const en = lang === 'en';
+  const working = ['working', 'queued'].includes(sample.activity_state);
+  const status = String(sample.check_status || '');
+  const shown = value => value ? (en ? String(value) : String(value).replace('.', ',')) : '';
+  const ocr = sample.ocr && sample.ocr !== '–' ? shown(sample.ocr) : '';
+  const recovery = (sample.background_work || []).find(entry => entry.id === 'recovery');
+  const steps = [
+    {{key: 'image', label: en ? 'Get camera image' : 'Kamerabild holen'}},
+    {{key: 'read', label: en ? 'Read digits' : 'Ziffern lesen'}},
+    {{key: 'recheck', label: en ? 'Re-check unclear digits' : 'Unklare Stellen nachprüfen'}},
+    {{key: 'compare', label: en ? 'Compare with the last reading' : 'Mit dem letzten Stand abgleichen'}},
+    {{key: 'save', label: en ? 'Take over the meter reading' : 'Zählerstand übernehmen'}},
+  ];
+  const set = (index, state, result = '', detail = '') => Object.assign(steps[index], {{state, result, detail}});
+  let stats = '';
+  if (working) {{
+    const current = sample.activity_phase === 'read' ? 1 : sample.activity_phase === 'recheck' ? 2 : 0;
+    steps.forEach((step, index) => set(index, index < current ? 'done' : index === current ? 'current' : 'todo'));
+    if (current > 0) steps[0].result = stepClock(sample.image_time);
+    if (current === 1) {{
+      const total = Number(sample.activity_total) || 0;
+      steps[1].detail = total ? (en ? 'Attempt ' : 'Versuch ') + Math.min(total, (Number(sample.activity_completed) || 0) + 1) +
+        (en ? ' of ' : ' von ') + total : '';
+      if (sample.activity_reading) steps[1].result = shown(sample.activity_reading);
+    }} else if (current > 1) {{
+      steps[1].result = shown(sample.activity_reading);
+    }}
+    // The activity line above already says the same; the step shows it only where it adds the phase.
+    if (current !== 1) steps[current].detail = steps[current].detail || sample.activity || '';
+    stats = en ? 'Check running' : 'Prüfung läuft';
+  }} else {{
+    const failedAt = ['capture_unavailable', 'stale_sample'].includes(status) ? 0 :
+      ['ocr_unclear', 'slfork_unclear'].includes(status) ? 1 : status === 'difference' ? 3 : -1;
+    const passed = ['match', 'match_with_warning', 'ocr_only'].includes(status);
+    const pending = status === 'standalone_pending';
+    steps.forEach((step, index) => set(index, failedAt >= 0 && index > failedAt ? 'todo' : 'done'));
+    steps[0].result = stepClock(sample.image_time);
+    steps[1].result = ocr;
+    if (failedAt >= 0) set(failedAt, 'failed', failedAt === 1 ? ocr : '', failedAt === 0 ? (sample.detail || '') : '');
+    // The re-check only runs for unclear digits.
+    const rechecked = recovery && recovery.state === 'done';
+    if (failedAt !== 0) {{
+      if (rechecked) set(2, 'done', recovery.result || '');
+      else if (failedAt === 1) set(2, 'optional', '', recovery?.result || '');
+      else set(2, 'optional', en ? 'not needed' : 'nicht nötig');
+    }}
+    if (failedAt === 3) steps[3].detail = sample.detail || '';
+    else if (passed) steps[3].result = status === 'match' ? (en ? 'fits the comparison value' : 'passt zum Vergleichswert')
+      : (en ? 'plausible' : 'plausibel');
+    if (passed) steps[4].result = ocr ? ocr + ' m³' : '';
+    if (pending) set(4, 'todo', '', en ? 'Waiting for the next picture to confirm the reading.' :
+      'Wartet auf das nächste Bild, das den Stand bestätigt.');
+    const next = sample.next_check ? stepClock(sample.next_check).slice(0, 5) : '';
+    stats = [sample.last_check ? (en ? 'Last check: ' : 'Letzte Prüfung: ') + stepClock(sample.last_check).slice(0, 5) : '',
+      next ? (en ? 'Next check: ' : 'Nächste Prüfung: ') + next : ''].filter(Boolean).join(' · ');
+  }}
+  return {{steps, stats, rounds: []}};
+}}
+function demoTimelineModel(result, picture) {{
+  const en = lang === 'en';
+  const reading = String(result.reading || '');
+  const complete = result.real ? result.complete : reading === result.expected;
+  const attempts = (result.attempts || []).map(value => en ? value : String(value).replace('.', ',')).join(' | ');
+  const steps = [
+    {{key: 'image', label: en ? 'Load the picture' : 'Bild laden', state: 'done',
+     result: picture ? (en ? 'real picture ' : 'echtes Bild ') + picture : (en ? 'generated picture' : 'künstliches Bild')}},
+    {{key: 'align', label: en ? 'Straighten the counter' : 'Zählwerk ausrichten', state: 'done',
+     result: (en ? 'rotation ' : 'Drehung ') + String(result.angle).replace('-', '−') + '°'}},
+    {{key: 'read', label: en ? 'Read digits' : 'Ziffern lesen', state: complete ? 'done' : 'failed',
+     result: (result.attempts || []).length + (en ? ' attempts' : ' Leseversuche'), detail: attempts}},
+    {{key: 'result', label: en ? 'Result' : 'Ergebnis', state: complete ? 'done' : 'failed',
+     result: (en ? reading : reading.replace('.', ',')) + ' m³'}},
+  ];
+  return {{steps, stats: '', rounds: []}};
 }}
 function renderGlareConfirm(status, active, background) {{
   const prompt = active && !background && status && status.glare_prompt;
@@ -4073,17 +4184,25 @@ async function refreshTestStatus() {{
     const previewTime = document.querySelector('#preview-time');
     const stampNs = Number(showManual ? job.checked_at * 1e9 : automaticVersion);
     const running = ['working', 'queued'].includes(document.querySelector('.activity-status')?.dataset.state);
+    // 0.5.33: the running check stores its cut-out at once; a picture newer than the last finished
+    // check belongs to the check that is running now and is shown as such, not dimmed.
+    const currentCheck = running && !showManual && Number.isFinite(stampNs) && lastAutomaticCheck > 0
+      && stampNs / 1e9 > lastAutomaticCheck + 1;
     let timeText = '';
     if (Number.isFinite(stampNs) && stampNs > 1e17) {{
       const taken = new Date(stampNs / 1e6);
       const clock = [taken.getHours(), taken.getMinutes(), taken.getSeconds()].map(value => String(value).padStart(2, '0')).join(':');
-      timeText = running && !showManual
+      timeText = currentCheck
+        ? (lang === 'en' ? 'Picture of this check (' + clock + '). The digits are being read …'
+           : 'Bild dieser Prüfung (' + clock + ' Uhr). Die Ziffern werden gerade gelesen …')
+        : running && !showManual
         ? 'Bild der vorigen Prüfung (' + clock + ' Uhr). Die laufende Prüfung ist noch nicht fertig.'
         : 'Bild der letzten Prüfung (' + clock + ' Uhr).';
     }}
     if (previewTime.textContent !== timeText) previewTime.textContent = timeText;
     previewTime.hidden = !timeText;
-    document.querySelector('#test-preview-image').classList.toggle('preview-outdated', running && !showManual);
+    document.querySelector('#test-preview-image').classList.toggle('preview-outdated', running && !showManual && !currentCheck);
+    previewLegend.hidden = !marked || currentCheck;
     const candidateList = document.querySelector('#ocr-candidates');
     renderOcrCandidates(candidateList, showManual || !job.automatic_preview ? [] : job.ocr_candidates);
     document.querySelector('#ocr-candidate-details').hidden = candidateList.hidden;
@@ -4645,6 +4764,10 @@ async function refreshAutomatic() {{
     waitReason.hidden = !sample.wait_reason;
     lastBackgroundWork = sample.background_work || [];
     renderBackgroundWork(lastBackgroundWork);
+    const checkBox = document.querySelector('#check-timeline-box');
+    checkBox.hidden = sample.activity_state === 'setup_wait' || sample.paused
+      || !(['working', 'queued'].includes(sample.activity_state) || sample.check_status);
+    if (!checkBox.hidden) renderSetupTimeline(checkBox, automaticTimelineModel(sample));
     renderConsumption(sample.consumption);
     comparedDecimals = Number.isInteger(sample.decimals) ? sample.decimals : null;
     configuredDecimals = Number.isInteger(sample.configured_decimals) ? sample.configured_decimals : comparedDecimals;
@@ -4785,6 +4908,7 @@ async function refreshAutomatic() {{
     document.querySelector('#automatic-reference').textContent = sample.reference;
     renderReferenceNote('automatic', sample.reference_time, sample.reference_is_fallback);
     renderAttempts(document.querySelector('#automatic-ocr-details'), sample.readings, sample.decimals);
+    lastAutomaticCheck = Number(sample.last_check) || 0;
     for (const [id, value] of [['image-time', sample.image_time], ['last-check', sample.last_check],
         ['last-match', sample.last_match]]) {{
       document.querySelector('#automatic-' + id).textContent = value ? formatStamp(value) : '–';
@@ -4983,7 +5107,7 @@ def start_panel(
     get_auto_paused=None, save_auto_paused=None, discover_sources=None,
     find_kit_cameras=None, confirm_kit_camera=None, get_kit_extras=None, set_kit_extra=None,
     settings_lock=None, get_calibration=None, control_calibration=None, get_calibration_image=None,
-    has_calibration_backup=None, get_wizard_image=None, real_demo=None, statistics_zone=timezone.utc,
+    has_calibration_backup=None, get_wizard_image=None, real_demo=None, synthetic_demo=None, statistics_zone=timezone.utc,
     can_start_automatic=None, start_automatic_check=None,
 ):
     images = {"/aktuell.jpg": current_image, "/treffer.jpg": good_image,
@@ -5210,6 +5334,7 @@ def start_panel(
         failure_attempts, retry_suppressed, recovery_notice = status_view.recovery(
             history, language, paused, statistics_zone)
         activity = get_activity() if get_activity else {"detail": "Wartet auf die nächste automatische Prüfung."}
+        phase = activity.get("phase") or activity_phase(activity.get("state"), activity.get("detail"))
         if activity.get("state") == "setup_wait":
             tone, icon, incident, routine_ok = "neutral", "", "", False
             heading = "Automatik wartet auf Einrichtung" if language == "de" else "Automatic checks are waiting for setup"
@@ -5281,6 +5406,8 @@ def start_panel(
             "precision_suggestion": precision_suggestion, "precision_suggestion_label": precision_label,
             "activity_completed": activity.get("completed"),
             "activity_total": activity.get("total"),
+            "activity_phase": phase,
+            "check_status": status or "",
             "activity_reading": activity.get("reading"),
             "activity_candidates": activity.get("candidates"),
             "activity_readings": activity.get("readings"),
@@ -6012,7 +6139,7 @@ def start_panel(
                         problem(503)
                         return
                     result = (real_demo(int(picture)) if picture.isdigit()
-                              else run_demo(field("reflection") == "1"))
+                              else (synthetic_demo or run_demo)(field("reflection") == "1"))
                     self.reply(json.dumps(result).encode("utf-8"), "application/json")
                 except (OSError, ValueError, subprocess.SubprocessError):
                     problem(503)

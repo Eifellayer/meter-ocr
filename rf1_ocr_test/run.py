@@ -62,6 +62,7 @@ import debug_log
 import experiments
 import demo
 import background_live
+import orientation_check
 import shadow_log
 import stationary
 import idle_work
@@ -856,6 +857,21 @@ def shadow_experiments(rules, manual, register, boxes, stable, light, forced):
         except (OSError, ValueError, subprocess.SubprocessError) as error:
             record[name] = {"error": type(error).__name__}
     return record
+
+
+def orientation_shadow(picture, layout, rules):
+    """0.5.37, shadow mode only: labels and red rollers versus the frame a setup saved."""
+    try:
+        with Image.open(io.BytesIO(picture)) as frame:
+            frame.load()
+            register, _, whole_boxes, fraction_boxes, _ = select_register(
+                frame.convert("RGB"), None, layout.box, layout.width, layout.rotation,
+                rules["integer_digits"], rules["fraction_digits"], digit_boxes=layout.digit_boxes)
+        shadow, established, agree = orientation_check.check(
+            picture, register, whole_boxes, fraction_boxes, layout.rotation, rules)
+    except (OSError, ValueError, TypeError, KeyError, Image.DecompressionBombError) as error:
+        shadow, established, agree = {"error": type(error).__name__}, None, None
+    shadow_log.record("orientation", shadow=shadow, established=established, agree=agree)
 
 
 def experiment_agrees(stable, result):
@@ -2718,6 +2734,15 @@ def main():
                         # The setup itself confirmed the reading three times.
                         history["last_match_at"] = time.time()
                     attempt.state = "saved_reflection" if reflected else "saved_stationary" if provisional else "saved"
+                    if shadow_log.enabled(get_auto_rules()) and not attempt.automatic:
+                        # 0.5.37, shadow mode only: do labels and red rollers agree with the saved frame?
+                        try:
+                            saved_picture = picture
+                        except NameError:
+                            saved_picture = None
+                        if saved_picture:
+                            Thread(target=orientation_shadow, args=(saved_picture, selected, dict(get_auto_rules())),
+                                   daemon=True).start()
                     if (attempt.simplified and not provisional and not reflected and not attempt.automatic
                             and get_auto_rules()["decimals"] == 3):
                         calibration = Calibration(

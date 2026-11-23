@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.37
+
+- **Ausrichtung des Kamerabilds im Schattenmodus.** Nach jeder gespeicherten Einrichtung prüft die App zur Probe, ob das Bild richtig gedreht und gespiegelt ist. Dazu nutzt sie zwei Hinweise: die Beschriftung auf dem Zähler, deren Leserichtung die Texterkennung bestimmt, auch gespiegelt, und die roten Nachkommarollen vieler Gaszähler, die aufrecht rechts liegen. Das Ergebnis steht im Schattenmodus-Protokoll neben der gespeicherten Drehung. Die App ändert dabei nichts. Das läuft nur mit „Experimentelle Funktionen testen“.
+- *English:* Orientation of the camera picture in shadow mode: after every saved setup the app checks on trial whether the picture is turned and mirrored correctly, from the labels on the meter (the text recognition tells their reading direction, also mirrored) and from the red decimal rollers of many gas meters, which sit on the right when upright. The result goes to the shadow mode log next to the saved rotation; nothing is changed. Runs only with “Test experimental functions”.
+
 ## 0.5.36
 
 - **Eigenes Schattenmodus-Protokoll.** Neue Verfahren, die nur zur Probe mitlaufen, schreiben jetzt in ein eigenes Protokoll statt ins Debug-Protokoll. Jeder Eintrag zeigt, was das Verfahren gefunden hat, was die bewährte Prüfung mit demselben Bild ergab und ob beides zusammenpasst. Unter „Schattenmodus-Protokoll“ steht für jedes Verfahren, wie oft es lief und wie oft es passte oder abwich. Das Protokoll lässt sich herunterladen.

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.39
+
+- **Protokoll für den Support teilen.** Unter „Debug-Protokoll“ steht jetzt „Für den Support herunterladen“ mit Wahl des Zeitraums: letzte Stunde, 6 Stunden, 24 Stunden, 3 Tage oder alles. Die Datei enthält Zählerstände, Uhrzeiten und Leseergebnisse der Prüfungen. Gerätenamen, Namen und Adressen der Bildquelle, Netzwerk- und E-Mail-Adressen und alles, was nach einem Schlüssel aussieht, ersetzt die App vorher selbst. So lässt sich das Protokoll öffentlich an eine Fehlermeldung hängen, ohne selbst etwas zu schwärzen. Das Fehlerformular verweist darauf.
+- *English:* Share the log with the support: below “Debug log”, “Download for the support” takes a period (last hour, 6 hours, 24 hours, 3 days or everything). The file holds meter readings, times and reading results of the checks; device names, names and addresses of the image source, network and e-mail addresses and anything that looks like a key are replaced by the app first, so the log can be attached to a public bug report without blacking out anything. The bug report form points to it.
+
 ## 0.5.38
 
 - **Countdown bei verdeckter Stelle.** Die Karte „Ziffer verdeckt“ zeigt jetzt, wie lange die App noch auf den eingetragenen Zählerstand wartet. Danach setzt sie die verdeckte Nachkommastelle selbst ein: eine 0 oder die kleinste Ziffer, mit der der Stand nicht unter den letzten bekannten fällt. Alle anderen Stellen werden weiter gelesen, volle Kubikmeter nie geschätzt. Die Prüfung dafür kommt direkt nach Ablauf der Zeit und nicht erst mit der nächsten planmäßigen Prüfung.

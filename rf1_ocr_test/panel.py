@@ -28,6 +28,7 @@ import background_view
 from auto_rules import frames_locked, user_frames
 import debug_log
 import shadow_log
+import support_log
 
 INSTANCE_ID = token_urlsafe(8)
 from calibration import (
@@ -1096,6 +1097,15 @@ name: Zählerstand (OCR)</code></pre>
 <p><a class="button-link" id="debug-log-download" href="debug-protokoll" download="ai-meter-reader-debug.jsonl">Protokoll herunterladen</a>
 <a class="button-link" id="report-bug" href="fehler-melden" target="_blank" rel="noopener noreferrer">Fehler melden</a></p>
 <p class="settings-note" id="report-bug-note">Öffnet auf GitHub ein vorausgefülltes Fehlerformular mit App-Version, Art der Bildquelle und Fehlquote. Es wird nichts automatisch gesendet; hänge das heruntergeladene Protokoll selbst an.</p>
+<div class="support-log">
+<p><strong>Für den Support teilen</strong></p>
+<p class="settings-note">Lädt das Protokoll eines Zeitraums so herunter, dass du es öffentlich anhängen kannst: mit Zählerständen, Uhrzeiten und Leseergebnissen der Prüfungen, aber ohne Gerätenamen, Adressen und Zugangsdaten. Die App ersetzt sie vorher selbst.</p>
+<p class="reflection-actions"><label>Zeitraum <select id="support-log-period">
+<option value="1">letzte Stunde</option><option value="6">letzte 6 Stunden</option>
+<option value="24" selected>letzte 24 Stunden</option><option value="72">letzte 3 Tage</option>
+<option value="all">alles</option></select></label>
+<a class="button-link" id="support-log-download" href="support-protokoll?stunden=24" download="ai-meter-reader-support.jsonl">Für den Support herunterladen</a></p>
+</div>
 <pre id="debug-log-text" class="debug-log-text">–</pre>
 </details>
 <details id="shadow-log">
@@ -4687,6 +4697,9 @@ document.querySelector('#debug-log').addEventListener('toggle', async (event) =>
     target.textContent = lang === 'en' ? 'Log could not be loaded.' : 'Protokoll konnte nicht geladen werden.';
   }}
 }});
+document.querySelector('#support-log-period').addEventListener('change', (event) => {{
+  document.querySelector('#support-log-download').href = 'support-protokoll?stunden=' + encodeURIComponent(event.target.value);
+}});
 document.querySelector('#shadow-log').addEventListener('toggle', async (event) => {{
   if (!event.target.open) return;
   const rows = document.querySelector('#shadow-log-rows');
@@ -5570,6 +5583,15 @@ def start_panel(
                 except ValueError:
                     limit = 600
                 self.reply(debug_log.read_text(limit).encode("utf-8"), "text/plain; charset=utf-8")
+                return
+            if path == "/support-protokoll":
+                # 0.5.39: a chosen period for the support, without device names or addresses.
+                period = query.get("stunden", ["24"])[0]
+                if period not in support_log.PERIODS:
+                    period = "24"
+                names = support_log.source_names(get_source()[0] if get_source else {})
+                content = support_log.export(debug_log.read_text(), support_log.PERIODS[period], names)
+                self.reply(content.encode("utf-8"), "text/plain; charset=utf-8")
                 return
             if path == "/schattenmodus-protokoll":
                 # 0.5.36: shadow procedures beside the established ones, apart from the debug log.

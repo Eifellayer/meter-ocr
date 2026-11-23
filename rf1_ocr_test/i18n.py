@@ -749,6 +749,13 @@ EN_UI = {
     "Die letzten Prüfungen mit allen OCR-Durchläufen, Entscheidung und Verbrauchsstand. Ohne Bilder und Zugangsdaten. Hilfreich für Fehlermeldungen.":
         "The latest checks with all OCR runs, decision and consumption state. No images or credentials. Useful for bug reports.",
     '>Protokoll herunterladen<': '>Download log<',
+    '<p><strong>Für den Support teilen</strong></p>': '<p><strong>Share with the support</strong></p>',
+    "Lädt das Protokoll eines Zeitraums so herunter, dass du es öffentlich anhängen kannst: mit Zählerständen, Uhrzeiten und Leseergebnissen der Prüfungen, aber ohne Gerätenamen, Adressen und Zugangsdaten. Die App ersetzt sie vorher selbst.":
+        "Downloads the log of a period so you can attach it publicly: with meter readings, times and reading results of the checks, but without device names, addresses and credentials. The app replaces them itself first.",
+    '<label>Zeitraum <select id="support-log-period">': '<label>Period <select id="support-log-period">',
+    '>letzte Stunde<': '>last hour<', '>letzte 6 Stunden<': '>last 6 hours<', '>letzte 24 Stunden<': '>last 24 hours<',
+    '>letzte 3 Tage<': '>last 3 days<', '<option value="all">alles</option>': '<option value="all">everything</option>',
+    '>Für den Support herunterladen<': '>Download for the support<',
     '<summary>Schattenmodus-Protokoll</summary>': '<summary>Shadow mode log</summary>',
     "Neue Verfahren laufen hier nur zur Probe mit, das Ergebnis der bewährten Prüfung steht daneben. Sie ändern keine Werte. Sie laufen nur, solange „Experimentelle Funktionen testen“ eingeschaltet ist.":
         "New methods only run here on trial, next to the result of the established check. They change no values. They run only while “Test experimental functions” is switched on.",

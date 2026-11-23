@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.44
+
+- **Kamera-Diagnose zählt richtig.** Das erste Bild einer Gegenprüfung, das noch auf die zweite Aufnahme wartet, zählt nicht mehr als fehlgeschlagene Prüfung. Es hat noch kein Ergebnis. Die Erfolgsquote in der Diagnose war dadurch zu niedrig.
+- *English:* The camera diagnosis counts correctly: the first picture of a cross-check that still waits for the second one no longer counts as a failed check, as it has no result yet. The success rate in the diagnosis was too low because of it.
+
 ## 0.5.43
 
 - **Stillstand im Schattenmodus vergleichbar.** Der Stillstand per Bildvergleich wird jetzt mit den Stellen verglichen, die beide Prüfungen gelesen haben. Dafür müssen die vollen Kubikmeter und mindestens eine Nachkommastelle gelesen sein. Bisher zählte kein Eintrag, weil bei zwei verglichenen Nachkommastellen die dritte nie gelesen wird.

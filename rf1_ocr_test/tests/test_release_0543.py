@@ -39,6 +39,14 @@ class SuccessRateTests(unittest.TestCase):
         self.assertIn("low_success", result["problems"])
         self.assertIn("Nur 43 von 187 Prüfungen", " ".join(result["hints"]))
 
+    def test_a_first_picture_waiting_for_the_second_is_no_failure(self):
+        text = self.log(10, 0) + "\n" + "\n".join(json.dumps({"time": NOW.isoformat(), "kind": "automatic",
+                                                              "outcome": "standalone_pending"}) for _ in range(10))
+        result = camera_diagnosis.diagnose(None, None, None, text, NOW)
+        self.assertEqual((10, 10, 10), (result["counts"]["checks"], result["counts"]["successful"],
+                                        result["counts"]["waiting"]))
+        self.assertNotIn("low_success", result["problems"])
+
     def test_a_good_rate_or_few_checks_are_not(self):
         self.assertNotIn("low_success", camera_diagnosis.diagnose(None, None, None, self.log(8, 2), NOW)["problems"])
         self.assertNotIn("low_success", camera_diagnosis.diagnose(None, None, None, self.log(1, 5), NOW)["problems"])

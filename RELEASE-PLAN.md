@@ -1,6 +1,6 @@
 # Roadmap
 
-Stand: November 2026 · Version **0.5.43**
+Stand: November 2026 · Version **0.5.44**
 
 AI Meter Reader liest mechanische Zähler (zuerst Gaszähler) über ein Kamerabild aus – lokal, ohne Cloud. Leitbild ist „Fire and Forget“: Zähler und Kamera auswählen, alles andere erledigt die App selbst und zeigt Unsicherheit offen an.
 

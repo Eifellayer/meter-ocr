@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.40
+
+- **Farbige Leseversuche.** In der Tabelle der Leseversuche ist jetzt zu sehen, was je Versuch zählte. Grüne Ziffern gehen in den Stand ein. Rote, durchgestrichene Ziffern wurden verworfen, weil die anderen Versuche etwas anderes lasen. Blasse Stellen wurden nicht gelesen. Die Ergebniszeile zeigt den Stand wie auf dem Zählwerk: volle Kubikmeter auf dunklen, Nachkommastellen auf roten Rollen. Der Rahmen jeder Rolle ist grün, wenn alle Versuche übereinstimmen, gelb, wenn sie schwankten, und rot, wenn die Stelle unklar blieb.
+- *English:* Coloured reading attempts: the table of reading attempts now shows what counted per attempt – green digits count for the reading, red struck-through digits were rejected because the other attempts read something else, faint positions were not read. The result row shows the reading like the counter (whole cubic metres on dark rollers, decimals on red ones), each roller framed green when all attempts agreed, yellow when they varied and red when the position stayed unclear.
+
 ## 0.5.39
 
 - **Protokoll für den Support teilen.** Unter „Debug-Protokoll“ steht jetzt „Für den Support herunterladen“ mit Wahl des Zeitraums: letzte Stunde, 6 Stunden, 24 Stunden, 3 Tage oder alles. Die Datei enthält Zählerstände, Uhrzeiten und Leseergebnisse der Prüfungen. Gerätenamen, Namen und Adressen der Bildquelle, Netzwerk- und E-Mail-Adressen und alles, was nach einem Schlüssel aussieht, ersetzt die App vorher selbst. So lässt sich das Protokoll öffentlich an eine Fehlermeldung hängen, ohne selbst etwas zu schwärzen. Das Fehlerformular verweist darauf.

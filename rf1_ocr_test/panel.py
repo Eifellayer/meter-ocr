@@ -376,6 +376,16 @@ input{{font:inherit;border-radius:.55rem;padding:.62rem .8rem;min-height:2.55rem
 .digit-grid tr.digit-result td[data-tone="ok"]{{color:light-dark(#185d35,#9ce5b5);font-weight:750}}
 .digit-grid tr.digit-result td[data-tone="warn"]{{color:light-dark(#8a5a00,#ffd27a);font-weight:750}}
 .digit-grid tr.digit-result td[data-tone="bad"]{{color:light-dark(#a1262d,#ffb6bb);font-weight:750}}
+.digit-grid td[data-vote="used"]{{color:light-dark(#185d35,#9ce5b5);font-weight:650}}
+.digit-grid td[data-vote="rejected"]{{color:light-dark(#a1262d,#ffb6bb);text-decoration:line-through}}
+.digit-grid td[data-vote="unread"]{{opacity:.5}}
+.digit-grid tr.digit-result td{{padding-top:.35rem}}
+.digit-grid tr.digit-result .roller{{display:inline-block;min-width:1.25em;padding:.12rem .2rem;border:2px solid #6b6b6b;border-radius:.25rem;background:#1c1c1c;color:#fff;font-weight:750;line-height:1.2}}
+.digit-grid tr.digit-result td[data-part="fraction"] .roller{{background:#a4231b}}
+.digit-grid tr.digit-result td[data-tone="ok"] .roller{{border-color:#3f9a68}}
+.digit-grid tr.digit-result td[data-tone="warn"] .roller{{border-color:#d29b2a}}
+.digit-grid tr.digit-result td[data-tone="bad"] .roller{{border-color:#d9534f;background:#5a5a5a}}
+.digit-grid-legend{{margin:.25rem 0 0;font-size:.82rem}}
 .calibration-photo-grid figcaption{{margin-top:.35rem;color:var(--muted)}}
 .calibration-photo-panel .calibration-preview-help{{font-size:.83rem;color:var(--muted);margin:.35rem 0 0}}
 .calibration-photo-panel .calibration-preview-reading{{overflow-wrap:anywhere;font-weight:650;font-variant-numeric:tabular-nums;margin:.25rem 0 0}}
@@ -856,12 +866,12 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 <summary>Prüfdetails</summary>
 <p id="automatic-attempt-info"></p>
 <p id="automatic-live-reading"></p><ol id="live-ocr-candidates" hidden></ol>
-<div class="digit-grid-wrap" id="automatic-digit-grid" hidden><table class="digit-grid" aria-label="Gelesene Ziffern je Versuch und Stelle"><thead></thead><tbody></tbody></table></div>
+<div class="digit-grid-wrap" id="automatic-digit-grid" hidden><table class="digit-grid" aria-label="Gelesene Ziffern je Versuch und Stelle"><thead></thead><tbody></tbody></table><p class="legend digit-grid-legend"><span class="green-key">Grün:</span> geht in den Stand ein · <span class="red-key">Rot, durchgestrichen:</span> verworfen · <span class="grey-key">Blass:</span> nicht gelesen. Die Ergebniszeile zeigt den Stand wie auf dem Zählwerk; ihr Rahmen ist grün bei einhelliger Lesung, gelb bei schwankender, rot bei unklarer.</p></div>
 </details>
 <details id="automatic-last-readings" class="activity-details last-readings" open hidden>
 <summary>Die letzten Leseversuche</summary>
 <p class="settings-note">Ziffern je Versuch und Stelle aus der zuletzt beendeten Prüfung. Die Liste bleibt bis zur nächsten Prüfung stehen.</p>
-<div class="digit-grid-wrap" id="automatic-last-digit-grid" hidden><table class="digit-grid" aria-label="Gelesene Ziffern je Versuch und Stelle"><thead></thead><tbody></tbody></table></div>
+<div class="digit-grid-wrap" id="automatic-last-digit-grid" hidden><table class="digit-grid" aria-label="Gelesene Ziffern je Versuch und Stelle"><thead></thead><tbody></tbody></table><p class="legend digit-grid-legend"><span class="green-key">Grün:</span> geht in den Stand ein · <span class="red-key">Rot, durchgestrichen:</span> verworfen · <span class="grey-key">Blass:</span> nicht gelesen. Die Ergebniszeile zeigt den Stand wie auf dem Zählwerk; ihr Rahmen ist grün bei einhelliger Lesung, gelb bei schwankender, rot bei unklarer.</p></div>
 </details>
 </div>
 <div class="crop-actions" id="setup-start-actions" {resume_setup_hidden}>
@@ -3609,6 +3619,15 @@ function renderDigitGrid(wrap, readings, decimals) {{
   }}
   const body = table.tBodies[0];
   body.replaceChildren();
+  // 0.5.40: the digit each position takes (most attempts), so every attempt shows what counted.
+  const winners = [];
+  for (let index = 0; index < total; index++) {{
+    const counts = {{}};
+    for (const values of cells) if (/[0-9]/.test(values[index])) counts[values[index]] = (counts[values[index]] || 0) + 1;
+    winners.push(Object.entries(counts).sort((a, b) => b[1] - a[1]));
+  }}
+  const votes = en ? {{used: 'counts for the reading', rejected: 'rejected', unread: 'not read'}}
+    : {{used: 'geht in den Stand ein', rejected: 'verworfen', unread: 'nicht gelesen'}};
   cells.forEach((values, attempt) => {{
     const row = body.insertRow();
     const label = document.createElement('th');
@@ -3620,6 +3639,9 @@ function renderDigitGrid(wrap, readings, decimals) {{
       cell.textContent = digit;
       if (index === wholeCount) cell.className = 'digit-sep';
       if (index >= wholeCount + compared) cell.dataset.uncompared = 'true';
+      const winner = winners[index].length ? winners[index][0][0] : null;
+      cell.dataset.vote = !/[0-9]/.test(digit) ? 'unread' : digit === winner ? 'used' : 'rejected';
+      cell.title = votes[cell.dataset.vote];
     }});
   }});
   const result = body.insertRow();
@@ -3629,12 +3651,15 @@ function renderDigitGrid(wrap, readings, decimals) {{
   label.textContent = en ? 'Result' : 'Ergebnis';
   result.append(label);
   for (let index = 0; index < total; index++) {{
-    const counts = {{}};
-    for (const values of cells) if (/[0-9]/.test(values[index])) counts[values[index]] = (counts[values[index]] || 0) + 1;
-    const ranked = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    const ranked = winners[index];
     const cell = result.insertCell();
-    cell.textContent = ranked.length ? ranked[0][0] : '?';
+    // Shown like the counter: black rollers for whole cubic metres, red ones for the decimals.
+    const roller = document.createElement('span');
+    roller.className = 'roller';
+    roller.textContent = ranked.length ? ranked[0][0] : '?';
+    cell.append(roller);
     cell.dataset.tone = !ranked.length ? 'bad' : ranked.length === 1 ? 'ok' : 'warn';
+    cell.dataset.part = index < wholeCount ? 'whole' : 'fraction';
     if (index === wholeCount) cell.className = 'digit-sep';
     if (index >= wholeCount + compared) cell.dataset.uncompared = 'true';
   }}

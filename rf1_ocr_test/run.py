@@ -62,6 +62,7 @@ import debug_log
 import experiments
 import demo
 import background_live
+import shadow_log
 import stationary
 import idle_work
 import system_monitor
@@ -855,6 +856,52 @@ def shadow_experiments(rules, manual, register, boxes, stable, light, forced):
         except (OSError, ValueError, subprocess.SubprocessError) as error:
             record[name] = {"error": type(error).__name__}
     return record
+
+
+def experiment_agrees(stable, result):
+    """Whether an experiment read the same digits as the check itself, or None when no comparison."""
+    if not isinstance(result, dict) or not result.get("reading"):
+        return None
+    stable_digits, digits = (re.sub(r"[^0-9?]", "", str(value or "")) for value in (stable, result["reading"]))
+    if not stable_digits or "?" in stable_digits or "?" in digits:
+        return None
+    return stable_digits == digits
+
+
+def log_experiments(record, job):
+    """0.5.36: experiment results go to the shadow log; the debug log keeps only that one ran."""
+    experiment = record.get("experiment")
+    if not isinstance(experiment, dict) or experiment.get("skipped"):
+        return record
+    stable = experiment.get("stable")
+    for name in experiments.EXPERIMENTS:
+        if name in experiment:
+            shadow_log.record(name, image=job.get("image"), shadow=experiment[name],
+                              established={"reading": stable}, agree=experiment_agrees(stable, experiment[name]),
+                              load=experiment.get("load"))
+    return {**record, "experiment": {"shadow_log": sorted(name for name in experiments.EXPERIMENTS
+                                                          if name in experiment)}}
+
+
+def standstill_agrees(record, before, now):
+    """Standstill measured versus the readings of both checks: None unless both read completely."""
+    if not isinstance(record, dict) or type(record.get("stationary")) is not bool:
+        return None
+    digits = [re.sub(r"[^0-9?]", "", str(value or "")) for value in (before, now)]
+    if not all(digits) or any("?" in value for value in digits):
+        return None
+    return record["stationary"] == (digits[0] == digits[1])
+
+
+def estimate_agrees(estimate, outcome, reading, decimals, integer_digits):
+    """Whether the confirmed reading of the same check lies within the estimated range, or None."""
+    if outcome not in SUCCESSFUL_CHECKS or type(decimals) is not int or not isinstance(estimate, dict):
+        return None
+    value = meter_prefix(reading, decimals, integer_digits)
+    low, high = (meter_prefix(estimate.get(key), decimals, integer_digits) for key in ("lowest", "highest"))
+    if None in (value, low, high):
+        return None
+    return low <= value <= high
 
 
 IDLE_PENDING_NOTICE = "App läuft. Wartet auf die nächste automatische Prüfung. Im Hintergrund ist noch eine Nacharbeit offen."
@@ -2827,6 +2874,8 @@ def main():
         reminder.configure(enabled=active_delivery["enabled"], push=active_delivery["push"], target=active_delivery["target"],
                            delay=active_delivery["delivery_hours"] * 60 * 60)
         stationary_partial = stationary_partial_active(active_rules, active_source)
+        # 0.5.36: what the estimate of unclear decimals found on this check, for the shadow log.
+        decimal_shadow = None
         decimals = 2 if stationary_partial else active_rules["decimals"]
         precision_mode = active_rules["precision_mode"]
         integer_digits = active_rules["integer_digits"]
@@ -2991,7 +3040,8 @@ def main():
                 if idle_record is not None:
                     idle_finished(waiting, idle_record)
                     idle_state["jobs"][idle_state["jobs"].index(waiting)] = None
-                    debug_log.record(kind="idle", reason=waiting["reason"], image=waiting["image"], **idle_record)
+                    debug_log.record(kind="idle", reason=waiting["reason"], image=waiting["image"],
+                                     **log_experiments(idle_record, waiting))
             wake_worker.wait(timeout=min(remaining, RETRY_INTERVAL,
                                          CAPTURE_INTERVAL if calibration is not None
                                          and calibration.state in ("waiting", "testing") else RETRY_INTERVAL))
@@ -3956,7 +4006,9 @@ def main():
                                     ocr_method = "slow_roller"
                             # 0.5.19, shadow mode only: how well unclear decimals could be estimated from
                             # the last confirmed reading and the flow. Nothing is changed or published.
-                            if not ocr_confirmed and not hidden_slots:
+                            # 0.5.36: only with experimental functions on, logged at the end of the check
+                            # in the shadow log beside what the check itself found.
+                            if shadow_log.enabled(active_rules) and not ocr_confirmed and not hidden_slots:
                                 counted_now = history.get("consumption") or {}
                                 if (type(counted_now.get("reading_litres")) is int
                                         and type(counted_now.get("timestamp")) in (int, float)):
@@ -3966,7 +4018,7 @@ def main():
                                         read_state["captured"], comparison_decimals, integer_digits,
                                         hidden_roller_flow(history, active_rules["max_flow_lph"]))
                                     if shadow:
-                                        debug_log.record(kind="shadow_decimal_estimate", read=ocr, **shadow)
+                                        decimal_shadow = {"read": ocr, **shadow}
                         register = read_state["register"]
                         integer_width = read_state["integer_width"]
                         whole_boxes = read_state["whole_boxes"]
@@ -4672,19 +4724,32 @@ def main():
                 planned = read_plan.after_check(read_plan_state, active_rules, outcome, taken_over, ocr, time.time())
                 read_plan_state.clear()
                 read_plan_state.update(planned)
-            stationary_record = None
-            if not manual and local.get("register") is not None:
+            shadow_on = shadow_log.enabled(active_rules)
+            if not shadow_on:
+                stationary_state["last"] = None
+            elif not manual and local.get("register") is not None:
                 # Shadow mode only: measure whether the rollers stood still
                 # since the previous check; nothing is decided from it yet.
+                stationary_record = None
                 try:
                     current_strip = {"register": local["register"].copy(), "image": data.get("esp_timestamp"),
+                                     "ocr": ocr,
                                      "boxes": [tuple(box) for box in [*(local.get("whole_boxes") or []),
                                                                       *(local.get("fraction_boxes") or [])]]}
                     stationary_record = stationary.compare(stationary_state["last"], current_strip)
+                    before = (stationary_state["last"] or {}).get("ocr")
                     stationary_state["last"] = current_strip
                 except (AttributeError, OSError, ValueError, TypeError):
-                    stationary_record = None
                     stationary_state["last"] = None
+                if isinstance(stationary_record, dict):
+                    shadow_log.record("standstill", image=data.get("esp_timestamp"), shadow=stationary_record,
+                                      established={"before": before, "now": ocr},
+                                      agree=standstill_agrees(stationary_record, before, ocr))
+            if shadow_on and not manual and local.get("decimal_shadow"):
+                shadow_log.record("decimal_estimate", image=data.get("esp_timestamp"), shadow=local["decimal_shadow"],
+                                  established={"outcome": outcome, "reading": ocr, "method": local.get("ocr_method")},
+                                  agree=estimate_agrees(local["decimal_shadow"], outcome, ocr,
+                                                        local.get("comparison_decimals"), integer_digits))
             if not manual:
                 if isinstance(experiment, dict):
                     background_state["shadow"] = {"experiment": experiment, "image": data.get("esp_timestamp"),
@@ -4699,7 +4764,7 @@ def main():
                 library={"filled": library_filled, "learned": local.get("library_learned", 0),
                          "samples": digit_library.LIBRARY.samples()}
                 if (library_filled or local.get("library_learned")) else None,
-                experiment=experiment, recovery=local.get("recovery_log"), stationary=stationary_record,
+                experiment=experiment, recovery=local.get("recovery_log"),
                 kind="manual" if manual else "automatic", image=data.get("esp_timestamp"), crop=source,
                 ocr=ocr, readings=local.get("ocr_readings"), attempts=data.get("ocr_attempts"),
                 method=local.get("ocr_method"), outcome=outcome, detail=updated.get("check_detail"),

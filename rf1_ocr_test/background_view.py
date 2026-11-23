@@ -38,8 +38,12 @@ def _count(result, stable, entry):
         entry["seconds"] += result["seconds"]
 
 
-def summary(text):
-    """Evaluate debug-log text (one JSON object per line); broken lines are skipped."""
+def summary(text, shadow_text=""):
+    """Evaluate debug-log text (one JSON object per line); broken lines are skipped.
+
+    0.5.36: experiment results are in the shadow log (``shadow_text``); older debug-log lines
+    with results still count.
+    """
     tested = {name: {"label": label, "runs": 0, "same": 0, "different": 0, "unclear": 0, "no_result": 0,
                      "errors": 0, "seconds": 0.0} for name, label in EXPERIMENTS.items()}
     result = {"checks": 0, "skipped_busy": 0, "experiments": tested, "last": None, "image_hints": {},
@@ -77,6 +81,14 @@ def summary(text):
             if name in record:
                 _count(record[name], record.get("stable"), entry_count)
                 result["last"] = entry.get("time")
+    for line in str(shadow_text or "").splitlines():
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(entry, dict) and entry.get("function") in tested:
+            _count(entry.get("shadow"), (entry.get("established") or {}).get("reading"), tested[entry["function"]])
+            result["last"] = entry.get("time")
     for entry_count in tested.values():
         runs = entry_count["runs"] - entry_count["errors"]
         entry_count["seconds"] = round(entry_count.pop("seconds") / runs, 2) if runs > 0 else None

@@ -130,7 +130,8 @@ class StationaryShadowTest(unittest.TestCase):
         self.assertIsNone(stationary.compare(None, before))
 
     def test_only_logged(self):
-        self.assertIn("stationary=stationary_record", RUN)
+        # 0.5.36: logged in the shadow log, beside the readings of both checks.
+        self.assertIn('shadow_log.record("standstill"', RUN)
         self.assertIn("stationary.py", DOCKERFILE)
         self.assertIn("background_live.py", DOCKERFILE)
 

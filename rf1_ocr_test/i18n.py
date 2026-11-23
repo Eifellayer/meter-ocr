@@ -749,6 +749,17 @@ EN_UI = {
     "Die letzten Prüfungen mit allen OCR-Durchläufen, Entscheidung und Verbrauchsstand. Ohne Bilder und Zugangsdaten. Hilfreich für Fehlermeldungen.":
         "The latest checks with all OCR runs, decision and consumption state. No images or credentials. Useful for bug reports.",
     '>Protokoll herunterladen<': '>Download log<',
+    '<summary>Schattenmodus-Protokoll</summary>': '<summary>Shadow mode log</summary>',
+    "Neue Verfahren laufen hier nur zur Probe mit, das Ergebnis der bewährten Prüfung steht daneben. Sie ändern keine Werte. Sie laufen nur, solange „Experimentelle Funktionen testen“ eingeschaltet ist.":
+        "New methods only run here on trial, next to the result of the established check. They change no values. They run only while “Test experimental functions” is switched on.",
+    "<th>Verfahren</th><th>Einträge</th><th>passend</th><th>abweichend</th><th>zuletzt</th>":
+        "<th>Method</th><th>Entries</th><th>matching</th><th>differing</th><th>last</th>",
+    '>Schattenmodus-Protokoll herunterladen<': '>Download shadow mode log<',
+    "Schätzung unklarer Nachkommastellen": "Estimate of unclear decimals",
+    "Stillstand per Bildvergleich": "Standstill by picture comparison",
+    "Perspektivkorrektur": "Perspective correction",
+    "Sieben-Segment-Erkennung": "Seven-segment recognition",
+    "Ausrichtung des Kamerabilds": "Orientation of the camera picture",
     '>Fehler melden<': '>Report a problem<',
     'Öffnet auf GitHub ein vorausgefülltes Fehlerformular mit App-Version, Art der Bildquelle und Fehlquote. Es wird nichts automatisch gesendet; hänge das heruntergeladene Protokoll selbst an.':
         'Opens a prefilled bug report on GitHub with the app version, the kind of image source and the failure rate. Nothing is sent automatically; attach the downloaded log yourself.',

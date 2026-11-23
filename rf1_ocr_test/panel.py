@@ -27,6 +27,7 @@ import system_monitor
 import background_view
 from auto_rules import frames_locked, user_frames
 import debug_log
+import shadow_log
 
 INSTANCE_ID = token_urlsafe(8)
 from calibration import (
@@ -1095,6 +1096,14 @@ name: Zählerstand (OCR)</code></pre>
 <a class="button-link" id="report-bug" href="fehler-melden" target="_blank" rel="noopener noreferrer">Fehler melden</a></p>
 <p class="settings-note" id="report-bug-note">Öffnet auf GitHub ein vorausgefülltes Fehlerformular mit App-Version, Art der Bildquelle und Fehlquote. Es wird nichts automatisch gesendet; hänge das heruntergeladene Protokoll selbst an.</p>
 <pre id="debug-log-text" class="debug-log-text">–</pre>
+</details>
+<details id="shadow-log">
+<summary>Schattenmodus-Protokoll</summary>
+<p class="settings-note">Neue Verfahren laufen hier nur zur Probe mit, das Ergebnis der bewährten Prüfung steht daneben. Sie ändern keine Werte. Sie laufen nur, solange „Experimentelle Funktionen testen“ eingeschaltet ist.</p>
+<table class="shadow-log-table"><thead><tr><th>Verfahren</th><th>Einträge</th><th>passend</th><th>abweichend</th><th>zuletzt</th></tr></thead>
+<tbody id="shadow-log-rows"><tr><td colspan="5">–</td></tr></tbody></table>
+<p class="settings-note" id="shadow-log-state"></p>
+<p><a class="button-link" id="shadow-log-download" href="schattenmodus-protokoll" download="ai-meter-reader-schattenmodus.jsonl">Schattenmodus-Protokoll herunterladen</a></p>
 </details>
 <details id="system-monitor">
 <summary>Systemauslastung</summary>
@@ -4658,6 +4667,41 @@ document.querySelector('#debug-log').addEventListener('toggle', async (event) =>
     target.textContent = lang === 'en' ? 'Log could not be loaded.' : 'Protokoll konnte nicht geladen werden.';
   }}
 }});
+document.querySelector('#shadow-log').addEventListener('toggle', async (event) => {{
+  if (!event.target.open) return;
+  const rows = document.querySelector('#shadow-log-rows');
+  const state = document.querySelector('#shadow-log-state');
+  const en = lang === 'en';
+  try {{
+    const response = await fetch('schattenmodus-uebersicht' + (en ? '?lang=en' : ''), {{cache: 'no-store'}});
+    if (!response.ok) throw Error();
+    const data = await response.json();
+    const functions = Object.values(data.functions || {{}});
+    rows.replaceChildren(...functions.map(item => {{
+      const row = document.createElement('tr');
+      const last = item.last ? new Date(item.last).toLocaleString(en ? 'en-GB' : 'de-DE', {{dateStyle: 'short', timeStyle: 'short'}}) : '–';
+      for (const value of [item.label, item.entries, item.agree, item.differ, last]) {{
+        const cell = document.createElement('td');
+        cell.textContent = String(value);
+        row.append(cell);
+      }}
+      return row;
+    }}));
+    if (!functions.length) {{
+      const row = document.createElement('tr');
+      const cell = document.createElement('td');
+      cell.colSpan = 5;
+      cell.textContent = en ? 'No entries yet.' : 'Noch keine Einträge.';
+      row.append(cell);
+      rows.replaceChildren(row);
+    }}
+    state.textContent = data.enabled ? '' : (en
+      ? 'Off: “Test experimental functions” is switched off, so nothing runs in shadow mode.'
+      : 'Aus: „Experimentelle Funktionen testen“ ist ausgeschaltet, im Schattenmodus läuft nichts mit.');
+  }} catch (_) {{
+    state.textContent = en ? 'Log could not be loaded.' : 'Protokoll konnte nicht geladen werden.';
+  }}
+}});
 let systemMonitorTimer = null;
 async function refreshSystemMonitor() {{
   const set = (id, text) => {{ document.querySelector(id).textContent = text; }};
@@ -5485,7 +5529,7 @@ def start_panel(
                     self.reply(content, "image/jpeg")
                 return
             if path == "/hintergrund":
-                overview = background_view.summary(debug_log.read_text())
+                overview = background_view.summary(debug_log.read_text(), shadow_log.read_text())
                 if language == "en":
                     for tested in overview["experiments"].values():
                         tested["label"] = EN_UI.get(tested["label"], tested["label"])
@@ -5500,6 +5544,22 @@ def start_panel(
                 except ValueError:
                     limit = 600
                 self.reply(debug_log.read_text(limit).encode("utf-8"), "text/plain; charset=utf-8")
+                return
+            if path == "/schattenmodus-protokoll":
+                # 0.5.36: shadow procedures beside the established ones, apart from the debug log.
+                try:
+                    limit = max(1, min(shadow_log.MAX_ENTRIES, int(query.get("limit", [str(shadow_log.MAX_ENTRIES)])[0])))
+                except ValueError:
+                    limit = shadow_log.MAX_ENTRIES
+                self.reply(shadow_log.read_text(limit).encode("utf-8"), "text/plain; charset=utf-8")
+                return
+            if path == "/schattenmodus-uebersicht":
+                overview = shadow_log.summary(shadow_log.read_text())
+                if language == "en":
+                    for counted in overview.values():
+                        counted["label"] = EN_UI.get(counted["label"], counted["label"])
+                self.reply(json.dumps({"enabled": shadow_log.enabled(read_auto_rules()), "functions": overview}).encode("utf-8"),
+                           "application/json")
                 return
             if path == "/testbild-streifen":
                 # Only the cropped digit window, as Base64 text (the HA proxy mangles binary images).

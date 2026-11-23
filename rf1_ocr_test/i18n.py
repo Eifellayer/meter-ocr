@@ -749,6 +749,8 @@ EN_UI = {
     "Die letzten Prüfungen mit allen OCR-Durchläufen, Entscheidung und Verbrauchsstand. Ohne Bilder und Zugangsdaten. Hilfreich für Fehlermeldungen.":
         "The latest checks with all OCR runs, decision and consumption state. No images or credentials. Useful for bug reports.",
     '>Protokoll herunterladen<': '>Download log<',
+    '<span class="green-key">Grün:</span> geht in den Stand ein · <span class="red-key">Rot, durchgestrichen:</span> verworfen · <span class="grey-key">Blass:</span> nicht gelesen. Die Ergebniszeile zeigt den Stand wie auf dem Zählwerk; ihr Rahmen ist grün bei einhelliger Lesung, gelb bei schwankender, rot bei unklarer.':
+        '<span class="green-key">Green:</span> counts for the reading · <span class="red-key">Red, struck through:</span> rejected · <span class="grey-key">Faint:</span> not read. The result row shows the reading like the counter; its frame is green when all attempts agree, yellow when they varied, red when unclear.',
     '<p><strong>Für den Support teilen</strong></p>': '<p><strong>Share with the support</strong></p>',
     "Lädt das Protokoll eines Zeitraums so herunter, dass du es öffentlich anhängen kannst: mit Zählerständen, Uhrzeiten und Leseergebnissen der Prüfungen, aber ohne Gerätenamen, Adressen und Zugangsdaten. Die App ersetzt sie vorher selbst.":
         "Downloads the log of a period so you can attach it publicly: with meter readings, times and reading results of the checks, but without device names, addresses and credentials. The app replaces them itself first.",

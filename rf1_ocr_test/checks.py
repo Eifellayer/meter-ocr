@@ -1508,6 +1508,18 @@ def wait_reason_text(history, language="de"):
             "In etwa einer halben Minute steht sie wieder, dann holt die App ein neues Bildpaar für den vollen Wert.")
 
 
+def activity_phase(state, detail):
+    """The step of the automatic check that runs, for its step overview (0.5.33)."""
+    if state != "working":
+        return None
+    text = str(detail or "")
+    if text.startswith("Zählerbild wird gelesen"):
+        return "read"
+    if text.startswith(("Automatik-Nachprüfung", "Nachprüfung", "Intensivtest")):
+        return "recheck"
+    return "capture"
+
+
 def last_check_at(history):
     stored = history.get("last_check_at")
     if type(stored) in (int, float) and stored > 0:

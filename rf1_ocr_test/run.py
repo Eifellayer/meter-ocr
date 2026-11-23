@@ -34,7 +34,7 @@ from checks import (
     STANDALONE_CACHED_CAPTURE_DELAY, MAX_OCR_ATTEMPTS, DEFAULT_FAILURE_PAUSE_MINUTES, MAX_FAILURE_PAUSE_MINUTES, MIN_FAILURE_PAUSE_MINUTES, SHIFTED_DIGIT_POSITIONS, ROW_SHIFT_READS, ROW_SHIFT_TRIALS, plausible_integer_digits, note_skew, skew_offset, SHIFTED_DIGIT_READS, missing_digit_pattern, single_missing_digit, disputed_digit_pattern, resolve_ocr_readings,
     compare_sample, crop_register, lighting_ocr_profiles, read_register, read_with_retries, record_sample,
     anchored_leading_digits, anchored_hidden_digits, within_anchor_bounds, anchor_bounds,
-    learned_flow_limit, slow_roller_digit, hidden_roller_flow, hidden_roller_interval, hidden_fill_reachable, hidden_fill_with_turning_roller,
+    learned_flow_limit, slow_roller_digit, activity_phase, hidden_roller_flow, hidden_roller_interval, hidden_fill_reachable, hidden_fill_with_turning_roller,
                     estimated_hidden_digits, shadow_decimal_estimate, HIDDEN_ESTIMATE_AFTER, HIDDEN_ESTIMATE_NOTICE,
                     only_known_hidden_unclear, HIDDEN_FILLED_NOTICE, HIDDEN_FILLED_TURNING_NOTICE,
     automatic_interval_minutes, defer_duplicate_cycle,
@@ -1848,7 +1848,7 @@ def main():
     def set_activity(state, detail, *, completed=None, total=None, reading=None, candidates=None, readings=None):
         # readings: every attempt of the running check, for the per-digit table under "Prüfdetails".
         activity.update(state=state, detail=detail, updated_at=time.time(), completed=completed, total=total,
-                        reading=reading, candidates=candidates,
+                        reading=reading, candidates=candidates, phase=activity_phase(state, detail),
                         readings=[str(value) for value in readings][-12:] if readings else None)
 
     def ready_for_automatic(rules, source):
@@ -2667,7 +2667,9 @@ def main():
         set_kit_extra=partial(kit_camera.safe_set_extra, token),
         get_wizard_image=lambda source, **options: wizard_camera_preview(
             source, token=token, zone=zone, mirrored=get_auto_rules().get("image_mirrored") is True, **options),
-        real_demo=partial(demo.run_real_demo, select=select_register, read=read_visible_digits),
+        real_demo=partial(demo.run_real_demo, select=select_register, read=read_visible_digits,
+                          draw=draw_test_preview),
+        synthetic_demo=partial(demo.run_demo, draw=draw_test_preview),
         get_activity=get_automatic_activity, get_background_work=get_background_work,
         get_auto_paused=get_auto_paused, save_auto_paused=save_auto_paused,
         settings_lock=settings_lock, get_calibration=calibration_status, control_calibration=control_calibration,
@@ -3218,6 +3220,18 @@ def main():
                         register, integer_width, whole_boxes, fraction_boxes, source = prepare_register(
                             frame, selected_overlay
                         )
+                        if not manual:
+                            # 0.5.33: the overview shows the cut-out of the running check at once
+                            # ("Aktuelles Testbild"); the coloured result replaces it at the end.
+                            try:
+                                early_preview = draw_test_preview(
+                                    register, integer_width, whole_boxes, fraction_boxes, None,
+                                    integer_digits, fraction_digits, pending=True)
+                                with io.BytesIO() as buffer:
+                                    early_preview.save(buffer, "JPEG", quality=88, optimize=True)
+                                    atomic_write(AUTOMATIC_PREVIEW, buffer.getvalue(), 0o600)
+                            except (OSError, ValueError):
+                                pass
                         tilt_measured, tilt_skip = None, None
                         if skew_key is None:
                             tilt_skip = ("user_frames" if frames_fixed else

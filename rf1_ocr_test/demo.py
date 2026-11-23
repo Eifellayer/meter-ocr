@@ -17,29 +17,31 @@ DEMO_SECONDS = 40
 _complete = {}
 
 
-def run_demo(reflection=False):
+def run_demo(reflection=False, draw=None):
     """Read the generated meter; only a complete result is kept for the next call.
 
     A result cut short by a busy machine used to be cached for good and the first
     request could run into the time limit ("Die Demo konnte nicht geladen werden").
+    ``draw`` is the automatic check's own picture of the read digits (0.5.33); without it the
+    digit frames are only outlined.
     """
     reflection = bool(reflection)
-    if reflection in _complete:
-        return _complete[reflection]
+    if (reflection, draw is not None) in _complete:
+        return _complete[reflection, draw is not None]
     digits = DEMO_READING.replace(".", "")
     image = Image.new("RGB", (600, 128), "#263844")
-    draw = ImageDraw.Draw(image)
-    draw.rounded_rectangle((7, 12, 592, 116), radius=12, fill="#344d5b")
+    canvas = ImageDraw.Draw(image)
+    canvas.rounded_rectangle((7, 12, 592, 116), radius=12, fill="#344d5b")
     font = ImageFont.truetype("DejaVuSansMono-Bold.ttf", 62)
     boxes = []
     for index, digit in enumerate(digits):
         left = 32 + 68 * index + (12 if index >= 5 else 0)
         box = (left, 24, left + 61, 104)
         boxes.append(box)
-        draw.rectangle(box, fill="#742d2c" if index >= 5 else "#0e1821")
-        draw.text((left + 30, 64), digit, font=font, fill="#f6f6ed", anchor="mm")
+        canvas.rectangle(box, fill="#742d2c" if index >= 5 else "#0e1821")
+        canvas.text((left + 30, 64), digit, font=font, fill="#f6f6ed", anchor="mm")
     if reflection:
-        draw.rectangle(boxes[-1], fill="#fffaf0")
+        canvas.rectangle(boxes[-1], fill="#fffaf0")
     slanted = turn_crop(image, DEMO_ANGLE)
     straight = turn_crop(slanted, -DEMO_ANGLE)
     dx, dy = (straight.width - image.width) // 2, (straight.height - image.height) // 2
@@ -59,17 +61,20 @@ def run_demo(reflection=False):
             picture.save(buffer, "JPEG", quality=90)
             return base64.b64encode(buffer.getvalue()).decode()
 
-    marked = straight.copy()
-    overlay = ImageDraw.Draw(marked)
-    for index, box in enumerate(boxes):
-        overlay.rectangle(box, outline="#e9ac47" if result.replace(".", "")[index] == "?" else "#6ee7ae", width=2)
+    if draw is not None:
+        marked = draw(straight, boxes[5][0], boxes[:5], boxes[5:], result, 5, 3, readings=reads)
+    else:
+        marked = straight.copy()
+        overlay = ImageDraw.Draw(marked)
+        for index, box in enumerate(boxes):
+            overlay.rectangle(box, outline="#e9ac47" if result.replace(".", "")[index] == "?" else "#6ee7ae", width=2)
 
     answer = {"image": encode(slanted), "aligned": encode(marked), "reading": result,
               "angle": -DEMO_ANGLE, "attempts": reads, "expected": DEMO_READING,
-              "estimate": estimate["reading"] if estimate else None}
+              "estimate": estimate["reading"] if estimate else None, "styled": draw is not None}
     hidden = 1 if reflection else 0
     if result.count("?") <= hidden and time.monotonic() < deadline:
-        _complete[reflection] = answer
+        _complete[reflection, draw is not None] = answer
     return answer
 
 
@@ -94,7 +99,7 @@ def _jpeg(picture):
         return base64.b64encode(buffer.getvalue()).decode()
 
 
-def run_real_demo(number, select, read, seconds=REAL_SECONDS):
+def run_real_demo(number, select, read, seconds=REAL_SECONDS, draw=None):
     """Read one of the real pictures the way the automatic check does.
 
     ``select`` and ``read`` are the app's own ``select_register`` and ``read_visible_digits``
@@ -103,8 +108,8 @@ def run_real_demo(number, select, read, seconds=REAL_SECONDS):
     """
     if type(number) is not int or not 1 <= number <= REAL_COUNT:
         raise ValueError("unbekanntes Demobild")
-    if number in _real_complete:
-        return _real_complete[number]
+    if (number, draw is not None) in _real_complete:
+        return _real_complete[number, draw is not None]
     with Image.open(REAL_IMAGES / f"gas-{number}.png") as stored:
         strip = stored.convert("RGB")
     frame = Image.new("RGB", (800, 600), (188, 190, 196))
@@ -118,15 +123,20 @@ def run_real_demo(number, select, read, seconds=REAL_SECONDS):
              for profile in OCR_PROFILES[:2]]
     result = "".join(a if a == b else "?" for a, b in zip(*reads)) if len(set(map(len, reads))) == 1 else reads[0]
     digits = result.replace(".", "")
-    marked = register.copy()
-    overlay = ImageDraw.Draw(marked)
-    for index, box in enumerate([*whole_boxes, *fraction_boxes]):
-        skipped = index >= len(digits)
-        overlay.rectangle(tuple(box), width=2, outline="#8a97a0" if skipped else
-                          "#e9ac47" if digits[index] == "?" else "#6ee7ae")
+    if draw is not None:
+        # 0.5.33: the same picture as the automatic check; the turning last roller is grey.
+        marked = draw(register, width, whole_boxes, fraction_boxes, result, 5, 3, readings=reads,
+                      quiet_slots=range(5 + REAL_DECIMALS, 8))
+    else:
+        marked = register.copy()
+        overlay = ImageDraw.Draw(marked)
+        for index, box in enumerate([*whole_boxes, *fraction_boxes]):
+            skipped = index >= len(digits)
+            overlay.rectangle(tuple(box), width=2, outline="#8a97a0" if skipped else
+                              "#e9ac47" if digits[index] == "?" else "#6ee7ae")
     answer = {"image": _jpeg(strip), "aligned": _jpeg(marked), "reading": result, "attempts": reads,
               "angle": REAL_LAYOUT["rotation"], "expected": None, "estimate": None, "real": True,
-              "complete": "?" not in result}
+              "complete": "?" not in result, "styled": draw is not None}
     if answer["complete"] and time.monotonic() < deadline:
-        _real_complete[number] = answer
+        _real_complete[number, draw is not None] = answer
     return answer

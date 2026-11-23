@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.33
+
+- **Die automatische Prüfung zeigt ihre Schritte wie die Einrichtung.** Neben dem Testbild steht jetzt „So läuft die Prüfung“ mit fünf Schritten: Kamerabild holen, Ziffern lesen, unklare Stellen nachprüfen, mit dem letzten Stand abgleichen, Zählerstand übernehmen. Während einer Prüfung ist der laufende Schritt markiert, beim Lesen mit dem aktuellen Versuch. Danach sieht man, wo die letzte Prüfung stehen geblieben ist, etwa bei unklaren Ziffern. Bei einer bestätigten Prüfung ist alles abgehakt, samt übernommenem Stand.
+- **„Aktuelles Testbild“ statt „Letztes Testbild“.** Sobald eine Prüfung den Zählwerkausschnitt hat, zeigt die Übersicht ihn, beschriftet als „Bild dieser Prüfung“. Am Ende ersetzt ihn das farbige Ergebnis. Vorher stand dort während einer Prüfung das abgeblendete Bild der vorigen, und das hat verwirrt.
+- **Zähler-Demo im selben Stil.** Die Demo zeigt die gelesenen Ziffern mit derselben Grafik wie die automatische Prüfung: grün gelesen, gelb schwankend, rot unklar, grau nicht verglichen. Daneben steht eine Schrittübersicht: Bild laden, Zählwerk ausrichten, Ziffern lesen, Ergebnis.
+- **Hintergrundaufgaben:** „Unklares Ergebnis nachprüfen“ zeigt während einer laufenden Prüfung nicht mehr das Ergebnis der vorigen Prüfung (etwa „Zeitbudget aufgebraucht“), sondern „wird nach dieser Prüfung ausgewertet“.
+- *English:* The automatic check shows its steps like the setup: beside the test image, “How the check runs” lists getting the camera image, reading the digits, re-checking unclear digits, comparing with the last reading and taking over the meter reading – the running step is marked (with the current attempt while reading), and afterwards you see where the last check stopped. “Current test image” replaces “Latest test image”: as soon as a check has its cut-out, the overview shows it as the picture of this check, replaced by the coloured result at the end (before, the dimmed picture of the previous check stood there during a check). The meter demo uses the same picture of the read digits as the automatic check and a step overview. In the background tasks, “Re-checking an unclear result” no longer shows the previous check's result while a check runs.
+
 ## 0.5.32
 
 - **„Um 180° drehen“ wirkt sofort.** Der Klick bricht die Prüfung des aktuellen Bildes ab und holt direkt ein neues Bild. Bisher wartete die App, bis das laufende Bild fertig ausgewertet war, und das konnte einige Minuten dauern. Die neue Richtung steht sofort in der Anzeige. Das nächste Bild prüft zuerst nur den gedrehten Rahmen, statt wieder alle Rahmen zu durchsuchen. Liest der gedrehte Rahmen nicht, sucht die App wie gewohnt weiter.

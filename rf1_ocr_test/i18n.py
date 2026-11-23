@@ -275,6 +275,7 @@ EN_UI = {
     "Nach dem Komma: ": "After the decimal: ",
     "Erkennungsbild": "Recognition image",
     "Letztes Testbild": "Latest test image",
+    "Aktuelles Testbild": "Current test image",
     "Noch kein Testbild verfügbar.": "No test image available yet.",
     "Eindeutig ergänzter Zwischenstand": "Reconstructed intermediate reading",
     "Berechnete Ziffer": "Calculated digit",

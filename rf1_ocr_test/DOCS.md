@@ -4,7 +4,7 @@
 
 ## Deutsch
 
-**Version 0.5.45.** Die App liest deinen Zähler lokal aus dem Kamerabild. Sie ist keine geeichte Messung.
+**Version 0.5.46.** Die App liest deinen Zähler lokal aus dem Kamerabild. Sie ist keine geeichte Messung.
 
 ### Einrichtung
 
@@ -114,6 +114,9 @@ light:
 | `sensor.rf1_ocr_zaehlerstand` | erkannter Zählerstand |
 | `sensor.rf1_verbrauch_gesamt` | Gesamtverbrauch für das Energie-Dashboard (als Gas auswählen) |
 | `sensor.rf1_verbrauch_gesamt_kwh` | Gesamtverbrauch in kWh, wenn Zustandszahl und Brennwert oder der Umrechnungsfaktor eingetragen sind |
+| `sensor.rf1_verbrauch_heute`, `…_diesen_monat`, `…_dieses_jahr` | Verbrauch des laufenden Tages, Monats und Jahres in m³; beginnt um Mitternacht bzw. zum Monats- und Jahreswechsel neu |
+| `sensor.rf1_verbrauch_heute_kwh`, `…_diesen_monat_kwh`, `…_dieses_jahr_kwh` | dasselbe in kWh, wenn die Umrechnungswerte eingetragen sind |
+| `sensor.rf1_gaskosten_heute`, `…_diesen_monat`, `…_dieses_jahr` | Gaskosten in Euro (kWh × Arbeitspreis plus anteiliger Grundpreis), wenn zusätzlich der Arbeitspreis eingetragen ist |
 | `sensor.rf1_pruefstatus` | Ergebnis der letzten Prüfung |
 | `sensor.rf1_kontrollbild` | letztes Kontrollbild |
 
@@ -121,7 +124,7 @@ Nach einem App-Update oder Neustart lädt die geöffnete Weboberfläche selbst n
 
 ## English
 
-**Version 0.5.45.** The app reads your meter locally from a camera image. It is not a certified measurement.
+**Version 0.5.46.** The app reads your meter locally from a camera image. It is not a certified measurement.
 
 ### Setup
 
@@ -231,6 +234,9 @@ light:
 | `sensor.rf1_ocr_zaehlerstand` | recognised meter reading |
 | `sensor.rf1_verbrauch_gesamt` | total consumption for the Energy dashboard (select as gas) |
 | `sensor.rf1_verbrauch_gesamt_kwh` | total consumption in kWh once gas state factor and calorific value, or the conversion factor, are set |
+| `sensor.rf1_verbrauch_heute`, `…_diesen_monat`, `…_dieses_jahr` | consumption of the current day, month and year in m³; starts again at midnight and at the change of month and year |
+| `sensor.rf1_verbrauch_heute_kwh`, `…_diesen_monat_kwh`, `…_dieses_jahr_kwh` | the same in kWh once the conversion values are set |
+| `sensor.rf1_gaskosten_heute`, `…_diesen_monat`, `…_dieses_jahr` | gas costs in euros (kWh × energy price plus the share of the standing charge) once the energy price is set as well |
 | `sensor.rf1_pruefstatus` | result of the last check |
 | `sensor.rf1_kontrollbild` | latest control image |
 

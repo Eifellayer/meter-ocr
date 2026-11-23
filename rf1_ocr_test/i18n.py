@@ -83,6 +83,14 @@ EN_UI = {
     "Die Werte stehen auf der Gasabrechnung oder beim Netzbetreiber. Entweder Zustandszahl und Brennwert eintragen oder nur den fertigen Umrechnungsfaktor (er hat Vorrang). Dann gibt es zusätzlich":
         "The values are on your gas bill or available from the grid operator. Enter either the gas state factor and calorific value or just the finished conversion factor (it takes precedence). There is then also",
     "oder Umrechnungsfaktor": "or conversion factor",
+    "Arbeitspreis (Cent/kWh)": "Energy price (cents/kWh)",
+    "Grundpreis (€/Jahr)": "Standing charge (€/year)",
+    "z. B. 10,59": "e.g. 10.59",
+    "z. B. 209,87": "e.g. 209.87",
+    " Mit den Preisen von der Abrechnung rechnet die App auch die Gaskosten für heute, diesen Monat und dieses Jahr aus.":
+        " With the prices from your bill the app also works out the gas costs for today, this month and this year.",
+    "<dt>Diesen Monat</dt>": "<dt>This month</dt>",
+    "<dt>Dieses Jahr</dt>": "<dt>This year</dt>",
     "z. B. 10,84": "e.g. 10.84",
     "für das Energie-Dashboard. Leer lassen schaltet es ab.": "for the Energy dashboard. Leave empty to switch it off.",
     "Automatische Prüfung angefordert.": "Automatic check requested.",

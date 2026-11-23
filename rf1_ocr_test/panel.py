@@ -49,7 +49,8 @@ from checks import (DEFAULT_FAILURE_PAUSE_MINUTES, MAX_FAILURE_PAUSE_MINUTES, MI
                     FRAME_OFF_NOTICE, FRAME_OFF_WAIT_NOTICE, MOVING_DIGIT_NOTICE, MOVING_NOTICES)
 from consumption import (DEFAULT_FLOW_LPH, EXCESSIVE_INCREASE, LOWER_PENDING, LOWER_READING,
                          CALORIFIC_RANGE, CONVERSION_RANGE, STATE_FACTOR_RANGE, consumption_statistics, format_cubic_metres,
-                         parse_energy_factor, parse_flow_limit)
+                         BASE_PRICE_RANGE, WORK_PRICE_RANGE, parse_energy_factor, parse_flow_limit, parse_price,
+                         kwh_factor, period_values, valid_energy_factor, valid_price)
 from demo import run_demo
 from i18n import EN_UI, english_progress, english_result, translate_page
 from language import MODES, SUPPORTED, USER_ID, browser_locale, profile_script
@@ -1070,6 +1071,8 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 <dl class="consumption-summary">
 <div><dt>Diese Stunde</dt><dd id="consumption-hour">–</dd></div>
 <div><dt>Heute</dt><dd id="consumption-day">–</dd></div>
+<div id="consumption-month-box" hidden><dt>Diesen Monat</dt><dd id="consumption-month">–</dd></div>
+<div id="consumption-year-box" hidden><dt>Dieses Jahr</dt><dd id="consumption-year">–</dd></div>
 </dl>
 <div class="consumption-chart" id="consumption-chart" role="img" aria-label="Verbrauch je Stunde, letzte 24 Stunden" hidden></div>
 <p class="consumption-chart-axis" id="consumption-chart-axis" hidden><span>vor 24 h</span><span id="consumption-chart-peak"></span><span>jetzt</span></p>
@@ -1457,8 +1460,10 @@ name: Zählerstand (OCR)</code></pre>
 <label>Zustandszahl<input name="gas_state_factor" type="text" inputmode="decimal" maxlength="7" placeholder="z. B. 0,9636" value="{gas_state_factor}"></label>
 <label>Brennwert (kWh/m³)<input name="calorific_value" type="text" inputmode="decimal" maxlength="7" placeholder="z. B. 11,25" value="{calorific_value}"></label>
 <label>oder Umrechnungsfaktor<input name="kwh_conversion_factor" type="text" inputmode="decimal" maxlength="7" placeholder="z. B. 10,84" value="{kwh_conversion_factor}"></label>
+<label>Arbeitspreis (Cent/kWh)<input name="gas_work_price" type="text" inputmode="decimal" maxlength="8" placeholder="z. B. 10,59" value="{gas_work_price}"></label>
+<label>Grundpreis (€/Jahr)<input name="gas_base_price" type="text" inputmode="decimal" maxlength="9" placeholder="z. B. 209,87" value="{gas_base_price}"></label>
 </div>
-<p>Die Werte stehen auf der Gasabrechnung oder beim Netzbetreiber. Entweder Zustandszahl und Brennwert eintragen oder nur den fertigen Umrechnungsfaktor (er hat Vorrang). Dann gibt es zusätzlich <code>sensor.rf1_verbrauch_gesamt_kwh</code> für das Energie-Dashboard. Leer lassen schaltet es ab.</p>
+<p>Die Werte stehen auf der Gasabrechnung oder beim Netzbetreiber. Entweder Zustandszahl und Brennwert eintragen oder nur den fertigen Umrechnungsfaktor (er hat Vorrang). Dann gibt es zusätzlich <code>sensor.rf1_verbrauch_gesamt_kwh</code> für das Energie-Dashboard. Leer lassen schaltet es ab. Mit den Preisen von der Abrechnung rechnet die App auch die Gaskosten für heute, diesen Monat und dieses Jahr aus.</p>
 </details>
 <div class="setup-help" id="wizard-manual-draw" hidden>
 <p>1. Lade ein Bild deiner Kamera oder wähle ein Testbild derselben Kamera.</p>
@@ -1622,8 +1627,10 @@ name: Zählerstand (OCR)</code></pre>
 <label>Zustandszahl<input name="gas_state_factor" type="text" inputmode="decimal" maxlength="7" placeholder="z. B. 0,9636" value="{gas_state_factor}"></label>
 <label>Brennwert (kWh/m³)<input name="calorific_value" type="text" inputmode="decimal" maxlength="7" placeholder="z. B. 11,25" value="{calorific_value}"></label>
 <label>oder Umrechnungsfaktor<input name="kwh_conversion_factor" type="text" inputmode="decimal" maxlength="7" placeholder="z. B. 10,84" value="{kwh_conversion_factor}"></label>
+<label>Arbeitspreis (Cent/kWh)<input name="gas_work_price" type="text" inputmode="decimal" maxlength="8" placeholder="z. B. 10,59" value="{gas_work_price}"></label>
+<label>Grundpreis (€/Jahr)<input name="gas_base_price" type="text" inputmode="decimal" maxlength="9" placeholder="z. B. 209,87" value="{gas_base_price}"></label>
 </div>
-<small>Die Werte stehen auf der Gasabrechnung oder beim Netzbetreiber. Entweder Zustandszahl und Brennwert eintragen oder nur den fertigen Umrechnungsfaktor (er hat Vorrang). Dann gibt es zusätzlich <code>sensor.rf1_verbrauch_gesamt_kwh</code> für das Energie-Dashboard. Leer lassen schaltet es ab.</small>
+<small>Die Werte stehen auf der Gasabrechnung oder beim Netzbetreiber. Entweder Zustandszahl und Brennwert eintragen oder nur den fertigen Umrechnungsfaktor (er hat Vorrang). Dann gibt es zusätzlich <code>sensor.rf1_verbrauch_gesamt_kwh</code> für das Energie-Dashboard. Leer lassen schaltet es ab. Mit den Preisen von der Abrechnung rechnet die App auch die Gaskosten für heute, diesen Monat und dieses Jahr aus.</small>
 </details>
 <details class="help setup-help">
 <summary>ⓘ Automatik im Hintergrund verbessern</summary>
@@ -4650,6 +4657,20 @@ function renderConsumption(data) {{
   }}
   document.querySelector('#consumption-hour').textContent = volume(data.hours[0]);
   document.querySelector('#consumption-day').textContent = volume(data.days[0]);
+  const periods = data.periods || {{}};
+  const money = new Intl.NumberFormat(lang, {{style: 'currency', currency: 'EUR'}});
+  const energy = new Intl.NumberFormat(lang, {{maximumFractionDigits: 0}});
+  for (const period of ['month', 'year']) {{
+    const value = periods[period];
+    const box = document.querySelector('#consumption-' + period + '-box');
+    box.hidden = !value;
+    if (!value) continue;
+    let text = consumptionFormat.format(value.litres / 1000) + ' m³';
+    if (value.kwh != null) text += ' · ' + energy.format(value.kwh) + ' kWh';
+    if (value.cost != null) text += ' · ' + money.format(value.cost);
+    if (value.since) text += lang === 'en' ? ' (since the app started counting)' : ' (seit Beginn der Zählung)';
+    document.querySelector('#consumption-' + period).textContent = text;
+  }}
   const available = [...data.hours, ...data.days].some(bucket => bucket.litres != null);
   const chart = document.querySelector('#consumption-chart');
   const chartKey = JSON.stringify(data.hours);
@@ -5088,6 +5109,22 @@ refreshAutomatic();
 </script></html>"""
 
 
+def overview_periods(history, rules, now, zone):
+    """This month and this year for the overview, from the bookkeeping the worker keeps (0.5.46)."""
+    counter = history.get("consumption")
+    if not isinstance(counter, dict):
+        return {}
+    rules = rules if isinstance(rules, dict) else {}
+    factor = kwh_factor(valid_energy_factor(rules.get("gas_state_factor"), STATE_FACTOR_RANGE),
+                        valid_energy_factor(rules.get("calorific_value"), CALORIFIC_RANGE),
+                        valid_energy_factor(rules.get("kwh_conversion_factor"), CONVERSION_RANGE))
+    values = period_values(history.get("consumption_periods"), counter.get("total_litres"), now, zone, factor,
+                           valid_price(rules.get("gas_work_price"), WORK_PRICE_RANGE),
+                           valid_price(rules.get("gas_base_price"), BASE_PRICE_RANGE))
+    return {period: {key: value[key] for key in ("litres", "kwh", "cost", "since")}
+            for period, value in values.items()}
+
+
 def wizard_energy_factors(field, old_rules):
     """kWh factors from the setup wizard; fields the form did not send keep their saved value."""
     values = {}
@@ -5095,6 +5132,9 @@ def wizard_energy_factors(field, old_rules):
                         ("kwh_conversion_factor", CONVERSION_RANGE)):
         text = field(key, None)
         values[key] = old_rules.get(key) if text is None else parse_energy_factor(text, limits)
+    for key, limits in (("gas_work_price", WORK_PRICE_RANGE), ("gas_base_price", BASE_PRICE_RANGE)):
+        text = field(key, None)
+        values[key] = old_rules.get(key) if text is None else parse_price(text, limits)
     return values
 
 
@@ -5799,6 +5839,8 @@ def start_panel(
                 summary["consumption"] = consumption_statistics(
                     series, source_scope, time.time(), statistics_zone,
                 )
+                summary["consumption"]["periods"] = overview_periods(history, auto_rules, time.time(),
+                                                                     statistics_zone)
                 summary["instance"] = INSTANCE_ID
                 payload = json.dumps(summary)
                 self.reply(payload.encode("utf-8"), "application/json; charset=utf-8")
@@ -6090,6 +6132,8 @@ def start_panel(
                 gas_state_factor=format_factor(auto_rules.get("gas_state_factor"), language),
                 calorific_value=format_factor(auto_rules.get("calorific_value"), language),
                 kwh_conversion_factor=format_factor(auto_rules.get("kwh_conversion_factor"), language),
+                gas_work_price=format_factor(auto_rules.get("gas_work_price"), language),
+                gas_base_price=format_factor(auto_rules.get("gas_base_price"), language),
                 max_interval_minutes=MAX_INTERVAL_MINUTES,
                 slfork_interval_hidden="" if source["mode"] == "slfork" else "hidden",
                 interval_minutes=auto_rules.get("interval_minutes", DEFAULT_INTERVAL_MINUTES),
@@ -6488,6 +6532,8 @@ def start_panel(
                         "gas_state_factor": parse_energy_factor(field("gas_state_factor"), STATE_FACTOR_RANGE),
                         "calorific_value": parse_energy_factor(field("calorific_value"), CALORIFIC_RANGE),
                         "kwh_conversion_factor": parse_energy_factor(field("kwh_conversion_factor"), CONVERSION_RANGE),
+                        "gas_work_price": parse_price(field("gas_work_price"), WORK_PRICE_RANGE),
+                        "gas_base_price": parse_price(field("gas_base_price"), BASE_PRICE_RANGE),
                         "precision_mode": precise,
                         "self_repair_enabled": field("self_repair_enabled") == "1",
                         "fine_alignment_enabled": (field("fine_alignment_enabled") == "1"

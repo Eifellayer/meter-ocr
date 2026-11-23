@@ -11,7 +11,7 @@ from calibration import DEFAULT_INTENSIVE_AGREEMENT, valid_intensive_agreement
 from checks import (DEFAULT_FAILURE_PAUSE_MINUTES, DEFAULT_INTERVAL_MINUTES, MAX_FAILURE_PAUSE_MINUTES,
                     MIN_FAILURE_PAUSE_MINUTES, meter_prefix, valid_interval_minutes)
 from consumption import (CALORIFIC_RANGE, CONVERSION_RANGE, DEFAULT_FLOW_LPH, MAX_FLOW_LPH, STATE_FACTOR_RANGE,
-                         valid_energy_factor)
+                         BASE_PRICE_RANGE, WORK_PRICE_RANGE, valid_energy_factor, valid_price)
 import experiments
 from layout import crop_coordinates, digit_box_settings, fine_rotation as valid_fine_rotation
 
@@ -145,6 +145,8 @@ def stored_rules(saved_rules, options):
                                                              CALORIFIC_RANGE),
                       "kwh_conversion_factor": valid_energy_factor(saved_rules.get("kwh_conversion_factor"),
                                                                    CONVERSION_RANGE),
+                      "gas_work_price": valid_price(saved_rules.get("gas_work_price"), WORK_PRICE_RANGE),
+                      "gas_base_price": valid_price(saved_rules.get("gas_base_price"), BASE_PRICE_RANGE),
                       "last_frame_relocated_at": (saved_rules.get("last_frame_relocated_at")
                                                   if type(saved_rules.get("last_frame_relocated_at")) in (int, float)
                                                   else None),

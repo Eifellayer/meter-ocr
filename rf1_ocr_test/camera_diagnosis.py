@@ -20,6 +20,7 @@ FAILED_OUTCOMES = ("capture_unavailable", "stale_sample")
 # 0.5.43: below this share of successful checks (with enough checks) the page says so.
 LOW_SUCCESS_SHARE, LOW_SUCCESS_CHECKS = 0.5, 10
 SUCCESS_OUTCOMES = ("match", "match_with_warning", "ocr_only")
+WAITING_FOR_SECOND = "standalone_pending"
 
 TEXTS = {
     "picture_missing": ("Noch kein Bild einer Prüfung vorhanden.", "No picture of a check yet."),
@@ -81,7 +82,8 @@ def counter_hints(values):
 def log_counts(text, now):
     """Checks of the last 24 hours from the debug log: total, successful, failed captures, dark pictures."""
     since = now - timedelta(hours=24)
-    counts = {"checks": 0, "successful": 0, "capture_failures": 0, "dark_pictures": 0, "exposure_changes": 0}
+    counts = {"checks": 0, "successful": 0, "capture_failures": 0, "dark_pictures": 0, "exposure_changes": 0,
+              "waiting": 0}
     for line in str(text or "").splitlines():
         try:
             entry = json.loads(line)
@@ -94,6 +96,10 @@ def log_counts(text, now):
             continue
         kind = entry.get("kind")
         if kind == "automatic":
+            if entry.get("outcome") == WAITING_FOR_SECOND:
+                # 0.5.44: the first picture of a cross-check, waiting for the second one: no result yet.
+                counts["waiting"] += 1
+                continue
             counts["checks"] += 1
             counts["successful"] += entry.get("outcome") in SUCCESS_OUTCOMES
             counts["capture_failures"] += entry.get("outcome") in FAILED_OUTCOMES

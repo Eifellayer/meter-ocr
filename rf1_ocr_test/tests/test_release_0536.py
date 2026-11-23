@@ -62,7 +62,8 @@ class ComparisonTests(unittest.TestCase):
         self.assertTrue(run.standstill_agrees({"stationary": True}, "10517.845", "10517.845"))
         self.assertFalse(run.standstill_agrees({"stationary": True}, "10517.845", "10517.851"))
         self.assertTrue(run.standstill_agrees({"stationary": False}, "10517.845", "10517.851"))
-        self.assertIsNone(run.standstill_agrees({"stationary": True}, "10517.84?", "10517.845"))
+        # 0.5.43: compared on the positions both read.
+        self.assertTrue(run.standstill_agrees({"stationary": True}, "10517.84?", "10517.845"))
         self.assertIsNone(run.standstill_agrees({"stationary": True}, None, "10517.845"))
 
     def test_experiments_move_to_the_shadow_log(self):

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.36
+
+- **Eigenes Schattenmodus-Protokoll.** Neue Verfahren, die nur zur Probe mitlaufen, schreiben jetzt in ein eigenes Protokoll statt ins Debug-Protokoll. Jeder Eintrag zeigt, was das Verfahren gefunden hat, was die bewährte Prüfung mit demselben Bild ergab und ob beides zusammenpasst. Unter „Schattenmodus-Protokoll“ steht für jedes Verfahren, wie oft es lief und wie oft es passte oder abwich. Das Protokoll lässt sich herunterladen.
+- **Nur mit „Experimentelle Funktionen testen“.** Die Schätzung unklarer Nachkommastellen und der Stillstand per Bildvergleich laufen jetzt nur noch, wenn der Schalter an ist, so wie die Experimente schon bisher. Ist er aus, laufen sie nicht mit, erzeugen keine Last und schreiben nichts.
+- *English:* Own shadow mode log: methods that only run on trial now write to their own log instead of the debug log. Each entry shows what the method found, what the established check gave for the same picture and whether both agree; “Shadow mode log” lists per method how often it ran, matched or differed, and the log can be downloaded. The estimate of unclear decimals and the standstill comparison now run only with “Test experimental functions” switched on, like the experiments before; with the switch off they do not run, cause no load and write nothing.
+
 ## 0.5.35
 
 - **Die Richtung des Zählwerks entscheidet die freie Lesung.** Hängt ein Zähler seitlich, liefert derselbe Rahmen um 180° verdreht oft trotzdem einen passenden Stand. Beim Lesen ergänzt die App unklare volle Kubikmeter aus dem bekannten Stand. So las auch das kopfstehende Bild die richtigen vollen Kubikmeter, und nur die Nachkommastellen waren Unsinn. Der Vergleich mit dem letzten Stand behielt dann den falschen Rahmen. Jetzt liest die Einrichtung einen Rahmen und denselben Rahmen andersherum zusätzlich ohne diese Ergänzung. Es gewinnt die Richtung, deren Ziffern klar besser zum Zähler passen, auch wenn ein Rahmen eine Ziffer versetzt sitzt. Das gilt auch für einen schon bekannten Rahmen und für den ersten Teiltreffer.

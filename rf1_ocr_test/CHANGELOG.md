@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.34
+
+- **Kamerabild in 90°-Schritten drehen.** Unter dem geprüften Ausschnitt stehen jetzt „↺ Bild 90° nach links drehen“ und „↻ Bild 90° nach rechts drehen“. Sie ersetzen den Knopf „Um 180° drehen“, denn zwei Klicks ergeben 180°. Wie beim Spiegeln dreht die App ab dann jedes Kamerabild so, auch bei den Prüfungen danach, und die Einrichtung sucht das Zählwerk neu. Ein seitlich hängender Zähler liegt so waagerecht und wird mit der normalen Suche gefunden. Unter den Knöpfen steht, wie das Kamerabild gerade gedreht oder gespiegelt ist.
+- *English:* Turn the camera picture in quarter turns: below the tested cut-out, “Turn the picture 90° left” and “… right” replace the 180° button (two clicks make 180°). Like mirroring, every camera picture is turned that way from then on, also for the later checks, and the setup searches the counter again – a meter hanging sideways then lies level and is found by the normal search. A note below the buttons says how the camera picture is turned or mirrored now.
+
 ## 0.5.33
 
 - **Die automatische Prüfung zeigt ihre Schritte wie die Einrichtung.** Neben dem Testbild steht jetzt „So läuft die Prüfung“ mit fünf Schritten: Kamerabild holen, Ziffern lesen, unklare Stellen nachprüfen, mit dem letzten Stand abgleichen, Zählerstand übernehmen. Während einer Prüfung ist der laufende Schritt markiert, beim Lesen mit dem aktuellen Versuch. Danach sieht man, wo die letzte Prüfung stehen geblieben ist, etwa bei unklaren Ziffern. Bei einer bestätigten Prüfung ist alles abgehakt, samt übernommenem Stand.

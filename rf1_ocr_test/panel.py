@@ -87,8 +87,10 @@ CALIBRATION_PREVIEW_HTML = """<details class="calibration-photo-panel" open hidd
 <input type="hidden" name="lang" value="{language}">
 <input type="hidden" name="mode" value="{mode}">
 <input type="hidden" name="csrf" value="{csrf}">
-<button type="submit" name="action" value="flip">Steht auf dem Kopf? Um 180° drehen</button>
-<button type="submit" name="action" value="mirror">Spiegelverkehrt? Bild spiegeln</button>
+<button type="submit" name="action" value="turn-left">↺ Bild 90° nach links drehen</button>
+<button type="submit" name="action" value="turn-right">↻ Bild 90° nach rechts drehen</button>
+<button type="submit" name="action" value="mirror">⇋ Bild spiegeln</button>
+<p class="calibration-orientation-state" hidden></p>
 </form>
 </figure>
 </div>
@@ -3626,12 +3628,15 @@ function refreshCalibration(status) {{
     && !status.intensive && !status.automatic && !!status.preview?.crop;
   for (const form of document.querySelectorAll('.calibration-orientation')) {{
     form.hidden = !orientable;
-    const flip = form.querySelector('button[value="flip"]');
-    const pending = !!status?.flip_pending;
-    const flipText = pending ? (lang === 'en' ? 'Turning with the next picture …' : 'Wird mit dem nächsten Bild gedreht …')
-      : (lang === 'en' ? 'Upside down? Turn by 180°' : 'Steht auf dem Kopf? Um 180° drehen');
-    if (flip.textContent !== flipText) flip.textContent = flipText;
-    flip.setAttribute('aria-pressed', status?.turned_by_user ? 'true' : 'false');
+    // 0.5.34: say how the camera picture is turned now, so a second click is no guess.
+    const turn = Number(status?.image_rotation) || 0;
+    const parts = [];
+    if (turn) parts.push(lang === 'en' ? 'turned ' + turn + '° clockwise' : 'um ' + turn + '° nach rechts gedreht');
+    if (status?.image_mirrored) parts.push(lang === 'en' ? 'mirrored' : 'gespiegelt');
+    const note = form.querySelector('.calibration-orientation-state');
+    const noteText = parts.length ? (lang === 'en' ? 'Camera picture: ' : 'Kamerabild: ') + parts.join(lang === 'en' ? ', ' : ', ') : '';
+    if (note.textContent !== noteText) note.textContent = noteText;
+    note.hidden = !noteText;
   }}
   if (!status) return;
   const active = status.state === 'waiting' || status.state === 'testing';
@@ -5669,7 +5674,7 @@ def start_panel(
                 "Ausschnitt und Drehung für manuelle Tests gespeichert." if saved == "manual-crop" else
                 "Einrichtung gespeichert." if saved in ("setup", "setup-calibration") else
                 "Gesicherter Ausschnitt wiederhergestellt." if saved == "crop-restored" else
-                "Die Einrichtung prüft mit dem nächsten Bild um 180° gedreht weiter." if saved == "flip" else
+                "Das Kamerabild wird jetzt um 90° gedreht. Die Einrichtung sucht das Zählwerk neu." if saved == "turn" else
                 "Das Kamerabild wird jetzt gespiegelt. Die Einrichtung sucht das Zählwerk neu." if saved == "mirror" else
                 "Fallback-Wert gespeichert." if saved == "fallback" else
                 "Zählerstand übernommen. Die nächste Prüfung startet jetzt." if saved == "reading" else
@@ -5882,7 +5887,7 @@ def start_panel(
                 failure_pause_minutes=auto_rules.get("failure_pause_minutes", DEFAULT_FAILURE_PAUSE_MINUTES),
                 auto_rotation_value=editable_rotation(auto_rules),
                 auto_saved_notice=auto_saved_notice if saved in ("1", "crop-reset") else "",
-                overview_saved_notice=auto_saved_notice if saved in ("crop", "reading", "check-busy", "flip", "mirror") else "",
+                overview_saved_notice=auto_saved_notice if saved in ("crop", "reading", "check-busy", "turn", "mirror") else "",
                 manual_reference=html.escape(str(settings.get("manual_reference", auto_rules["fallback_value"])),
                                              quote=True),
                 test_source_preview=test_source_preview,
@@ -6451,7 +6456,7 @@ def start_panel(
                 action = field("action")
                 try:
                     if action not in ("start", "intensive", "cancel", "restore", "skip-verification", "confirm-reflection",
-                                      "flip", "mirror"):
+                                      "mirror", "turn-left", "turn-right"):
                         raise ValueError("Invalid calibration action")
                     starting = action in ("start", "intensive")
                     limit = int(field("image_limit", str(DEFAULT_LIMIT))) if starting else 0
@@ -6464,7 +6469,7 @@ def start_panel(
                                                    datetime.now(statistics_zone).strftime("%Y-%m-%dT%H:%M"),
                                                    rules["decimals"], rules["integer_digits"], rules["fraction_digits"])
                         control_calibration(action, 0, verification_id=field("glare_id"), reading=reading)
-                    elif action in ("flip", "mirror"):
+                    elif action in ("mirror", "turn-left", "turn-right"):
                         control_calibration(action, 0)
                     elif action == "skip-verification":
                         verification_id = field("verification_id")
@@ -6484,7 +6489,7 @@ def start_panel(
                         problem(409, "Die Gegenprobe für diesen Rahmen ist nicht mehr offen.",
                                 "Verification for this crop is no longer pending.")
                         return
-                    if action in ("flip", "mirror"):
+                    if action in ("mirror", "turn-left", "turn-right"):
                         problem(409, "Die Einrichtung läuft nicht mehr. Starte sie neu, um das Bild zu drehen oder zu spiegeln.",
                                 "The setup is no longer running. Start it again to turn or mirror the picture.")
                         return
@@ -6498,10 +6503,10 @@ def start_panel(
                 except OSError:
                     problem(503)
                     return
-                saved = ("crop-restored" if action == "restore" else action if action in ("flip", "mirror")
-                         else "calibration")
+                saved = ("crop-restored" if action == "restore" else "turn" if action in ("turn-left", "turn-right")
+                         else action if action == "mirror" else "calibration")
                 view = ("overview" if action in ("start", "intensive", "skip-verification", "confirm-reflection",
-                                                 "flip", "mirror") else "settings")
+                                                 "mirror", "turn-left", "turn-right") else "settings")
                 self.redirect(f"?saved={saved}&ui={view}" + keep_mode)
                 return
             if path == "/ziffernrahmen":

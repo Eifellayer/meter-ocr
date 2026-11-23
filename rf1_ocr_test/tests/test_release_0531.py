@@ -153,9 +153,12 @@ def jpeg(size):
 
 class OrientationButtonsTest(IngressFixture):
     def control_calibration(self, action, limit, region=None, **options):
-        if action in ("flip", "mirror"):
+        if action in ("turn-left", "turn-right", "mirror"):
             self.orientation_actions.append(action)
-            self.calibration["flip_pending"] = action == "flip"
+            if action == "turn-right":
+                self.calibration["image_rotation"] = 90
+            if action == "mirror":
+                self.calibration["image_mirrored"] = True
             return True
         return super().control_calibration(action, limit, region, **options)
 
@@ -171,7 +174,7 @@ class OrientationButtonsTest(IngressFixture):
             seconds=600, preview={"frame": 15, "crop": 15, "region": [0.3, 0.1, 0.1, 0.6], "angle": 95,
                                   "reading": "10521.90?", "reason": "unclear"})
 
-    def test_upside_down_and_mirrored_can_be_corrected_in_the_running_setup(self):
+    def test_turned_and_mirrored_pictures_can_be_corrected_in_the_running_setup(self):
         from playwright.sync_api import sync_playwright
 
         self.running_setup()
@@ -181,18 +184,23 @@ class OrientationButtonsTest(IngressFixture):
             page.set_default_timeout(7000)
             page.goto(self.base + "/?ui=overview")
             panel = page.locator("#calibration-overview .calibration-photo-panel")
-            flip = panel.get_by_role("button", name="Steht auf dem Kopf? Um 180° drehen")
-            flip.wait_for()
-            self.assertTrue(panel.get_by_role("button", name="Spiegelverkehrt? Bild spiegeln").is_visible())
-            flip.click()
-            page.get_by_text("Die Einrichtung prüft mit dem nächsten Bild um 180° gedreht weiter.").wait_for()
-            self.assertEqual(["flip"], self.orientation_actions)
+            # 0.5.34: quarter turns of the picture replace the 180° button.
+            right = panel.get_by_role("button", name="↻ Bild 90° nach rechts drehen")
+            right.wait_for()
+            self.assertTrue(panel.get_by_role("button", name="↺ Bild 90° nach links drehen").is_visible())
+            self.assertTrue(panel.get_by_role("button", name="⇋ Bild spiegeln").is_visible())
+            self.assertEqual(0, panel.get_by_role("button", name="Steht auf dem Kopf? Um 180° drehen").count())
+            right.click()
+            page.get_by_text("Das Kamerabild wird jetzt um 90° gedreht. Die Einrichtung sucht das Zählwerk neu.").wait_for()
+            self.assertEqual(["turn-right"], self.orientation_actions)
             self.assertIn("ui=overview", page.url)
-            page.locator("#calibration-overview .calibration-orientation button[value='flip']").filter(
-                has_text="Wird mit dem nächsten Bild gedreht").wait_for()
+            page.locator("#calibration-overview .calibration-orientation-state").filter(
+                has_text="Kamerabild: um 90° nach rechts gedreht").wait_for()
             page.locator("#calibration-overview .calibration-orientation button[value='mirror']").click()
             page.get_by_text("Das Kamerabild wird jetzt gespiegelt. Die Einrichtung sucht das Zählwerk neu.").wait_for()
-            self.assertEqual(["flip", "mirror"], self.orientation_actions)
+            self.assertEqual(["turn-right", "mirror"], self.orientation_actions)
+            page.locator("#calibration-overview .calibration-orientation-state").filter(
+                has_text="um 90° nach rechts gedreht, gespiegelt").wait_for()
             # Without a cut-out to look at, there is nothing to turn.
             self.calibration["preview"] = {"frame": 15}
             page.locator("#calibration-overview .calibration-orientation").wait_for(state="hidden")
@@ -208,8 +216,9 @@ class OrientationButtonsTest(IngressFixture):
             page.set_default_timeout(7000)
             page.goto(self.base + "/?ui=overview&lang=en")
             panel = page.locator("#calibration-overview .calibration-photo-panel")
-            panel.get_by_role("button", name="Upside down? Turn by 180°").wait_for()
-            self.assertTrue(panel.get_by_role("button", name="Mirror-inverted? Mirror the picture").is_visible())
+            panel.get_by_role("button", name="↻ Turn the picture 90° right").wait_for()
+            self.assertTrue(panel.get_by_role("button", name="↺ Turn the picture 90° left").is_visible())
+            self.assertTrue(panel.get_by_role("button", name="⇋ Mirror the picture").is_visible())
             browser.close()
 
 

@@ -1222,14 +1222,28 @@ def glyph_whole_range(history, rules, zone, captured):
     return (bounds[0] // 1000, bounds[1] // 1000) if bounds else None
 
 
-def mirrored_picture(content):
-    """The picture mirrored left to right, in its own format; the original when it cannot be read."""
+# Clockwise quarter turns of the camera picture (0.5.34) as lossless PIL transpositions.
+QUARTER_TURNS = {90: Image.Transpose.ROTATE_270, 180: Image.Transpose.ROTATE_180, 270: Image.Transpose.ROTATE_90}
+
+
+def oriented_picture(content, mirrored=False, rotation=0):
+    """The picture mirrored and/or turned clockwise by quarter turns, in its own format.
+
+    The original comes back when nothing is to be done or the picture cannot be read.
+    """
+    turn = QUARTER_TURNS.get(rotation)
+    if not mirrored and turn is None:
+        return content
     try:
         with Image.open(io.BytesIO(content)) as image:
             if image.width * image.height > MAX_IMAGE_PIXELS:
                 return content
             kind = "PNG" if image.format == "PNG" else "JPEG"
-            turned = ImageOps.mirror(image.convert("RGBA" if kind == "PNG" else "RGB"))
+            turned = image.convert("RGBA" if kind == "PNG" else "RGB")
+        if mirrored:
+            turned = ImageOps.mirror(turned)
+        if turn is not None:
+            turned = turned.transpose(turn)
         with io.BytesIO() as buffer:
             turned.save(buffer, kind, **({} if kind == "PNG" else {"quality": 95}))
             return buffer.getvalue()
@@ -1237,19 +1251,27 @@ def mirrored_picture(content):
         return content
 
 
-def mirror_capture(result, rules):
-    """A captured picture (and its overlay) mirrored when the setup says so (0.5.31).
+def mirrored_picture(content):
+    """The picture mirrored left to right (0.5.31)."""
+    return oriented_picture(content, mirrored=True)
 
-    Some cameras deliver the picture mirror-inverted; the digits then cannot be read in any
-    rotation. The user mirrors it once in the setup, every picture after that is mirrored.
+
+def mirror_capture(result, rules):
+    """A captured picture (and its overlay) mirrored and turned the way the setup says.
+
+    0.5.31: some cameras deliver the picture mirror-inverted; the digits then cannot be read in
+    any rotation. 0.5.34: a camera hanging sideways or upside down is turned in quarter turns, so
+    the counter lies upright for the search. Every picture after that is treated the same way.
     """
-    if result is None or not rules.get("image_mirrored"):
+    mirrored, rotation = rules.get("image_mirrored") is True, rules.get("image_rotation") or 0
+    if result is None or not (mirrored or rotation in QUARTER_TURNS):
         return result
     picture, drawn, sample = result
-    return mirrored_picture(picture), (mirrored_picture(drawn) if drawn else drawn), sample
+    return (oriented_picture(picture, mirrored, rotation),
+            oriented_picture(drawn, mirrored, rotation) if drawn else drawn, sample)
 
 
-def wizard_camera_preview(source, token, zone, *, full_size=False, mirrored=False):
+def wizard_camera_preview(source, token, zone, *, full_size=False, mirrored=False, rotation=0):
     mode = source["mode"]
     if mode == "slfork":
         base = source["url"].rstrip("/")
@@ -1271,8 +1293,7 @@ def wizard_camera_preview(source, token, zone, *, full_size=False, mirrored=Fals
             if reason:
                 raise CameraOffline(reason) from error
             raise
-    if mirrored:
-        picture = mirrored_picture(picture)
+    picture = oriented_picture(picture, mirrored, rotation)
     try:
         with Image.open(io.BytesIO(picture)) as frame:
             if frame.width * frame.height > MAX_IMAGE_PIXELS:
@@ -1944,15 +1965,20 @@ def main():
                     return False
             running = calibration is not None and calibration.state in ("waiting", "testing") and not calibration.expired(time.monotonic())
             mirrored_restart = None
-            if action == "mirror":
+            if action in ("mirror", "turn-left", "turn-right"):
                 # 0.5.31: a mirror-inverted camera picture cannot be read in any rotation. Mirror
                 # every picture from now on and run this setup again from the start: all frames
-                # found so far belong to the unmirrored picture.
+                # found so far belong to the unmirrored picture. 0.5.34: the same for quarter turns
+                # of the picture (a camera hanging sideways or upside down).
                 if not running or calibration.background or calibration.intensive or calibration.automatic:
-                    raise ValueError("No running setup to mirror")
+                    raise ValueError("No running setup to turn or mirror")
                 rules_now = get_auto_rules()
-                save_auto_rules({**rules_now, "image_mirrored": rules_now.get("image_mirrored") is not True},
-                                request_check=False)
+                if action == "mirror":
+                    changed = {"image_mirrored": rules_now.get("image_mirrored") is not True}
+                else:
+                    step = 90 if action == "turn-right" else 270
+                    changed = {"image_rotation": ((rules_now.get("image_rotation") or 0) + step) % 360}
+                save_auto_rules({**rules_now, **changed}, request_check=False)
                 mirrored_restart = calibration.limit, calibration.region
                 calibration.state = "cancelled"
                 calibration = None
@@ -2067,7 +2093,8 @@ def main():
                 debug_log.record(kind="setup_start", action=action, trigger=trigger,
                                  region=bool(region), known_good=known_good is not None,
                                  decimals=rules["decimals"], simplified=simplified,
-                                 mirrored=rules.get("image_mirrored") is True)
+                                 mirrored=rules.get("image_mirrored") is True,
+                                 image_rotation=rules.get("image_rotation") or 0)
             wake_worker.set()
             return True
 
@@ -2078,6 +2105,8 @@ def main():
             status = calibration.status(time.monotonic())
             status["preview"] = dict(calibration_preview)
             status["flip_pending"] = bool(orientation_flip["requested"]) and status["state"] in ("waiting", "testing")
+            status["image_mirrored"] = auto_rules.get("image_mirrored") is True
+            status["image_rotation"] = auto_rules.get("image_rotation") or 0
             relocated_at = auto_rules.get("last_frame_relocated_at")
             if calibration.purpose == "relocate" and type(relocated_at) in (int, float):
                 status["relocated_at"] = relocated_at
@@ -2666,7 +2695,8 @@ def main():
         get_kit_extras=partial(kit_camera.safe_extras, token),
         set_kit_extra=partial(kit_camera.safe_set_extra, token),
         get_wizard_image=lambda source, **options: wizard_camera_preview(
-            source, token=token, zone=zone, mirrored=get_auto_rules().get("image_mirrored") is True, **options),
+            source, token=token, zone=zone, mirrored=get_auto_rules().get("image_mirrored") is True,
+            rotation=get_auto_rules().get("image_rotation") or 0, **options),
         real_demo=partial(demo.run_real_demo, select=select_register, read=read_visible_digits,
                           draw=draw_test_preview),
         synthetic_demo=partial(demo.run_demo, draw=draw_test_preview),

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.38
+
+- **Countdown bei verdeckter Stelle.** Die Karte „Ziffer verdeckt“ zeigt jetzt, wie lange die App noch auf den eingetragenen Zählerstand wartet. Danach setzt sie die verdeckte Nachkommastelle selbst ein: eine 0 oder die kleinste Ziffer, mit der der Stand nicht unter den letzten bekannten fällt. Alle anderen Stellen werden weiter gelesen, volle Kubikmeter nie geschätzt. Die Prüfung dafür kommt direkt nach Ablauf der Zeit und nicht erst mit der nächsten planmäßigen Prüfung.
+- *English:* Countdown for a hidden digit: the “Digit hidden” card now shows how long the app still waits for an entered reading; then it fills the hidden decimal itself with a 0, or with the smallest digit that keeps the reading from falling below the last known one. All other digits are still read and whole cubic metres are never estimated. The check that does it comes right when the time is up, not only with the next scheduled check.
+
 ## 0.5.37
 
 - **Ausrichtung des Kamerabilds im Schattenmodus.** Nach jeder gespeicherten Einrichtung prüft die App zur Probe, ob das Bild richtig gedreht und gespiegelt ist. Dazu nutzt sie zwei Hinweise: die Beschriftung auf dem Zähler, deren Leserichtung die Texterkennung bestimmt, auch gespiegelt, und die roten Nachkommarollen vieler Gaszähler, die aufrecht rechts liegen. Das Ergebnis steht im Schattenmodus-Protokoll neben der gespeicherten Drehung. Die App ändert dabei nichts. Das läuft nur mit „Experimentelle Funktionen testen“.

@@ -859,6 +859,18 @@ def shadow_experiments(rules, manual, register, boxes, stable, light, forced):
     return record
 
 
+def hidden_estimate_due(history, now):
+    """When the check that fills a hidden digit is due, if sooner than the planned one (0.5.38)."""
+    since = history.get("hidden_digit_since")
+    if not history.get("hidden_digit_prompt") or type(since) not in (int, float):
+        return None
+    due = since + HIDDEN_ESTIMATE_AFTER + 5
+    planned = history.get("next_check_at")
+    if due <= now or (type(planned) in (int, float) and planned <= due):
+        return None
+    return due
+
+
 def orientation_shadow(picture, layout, rules):
     """0.5.37, shadow mode only: labels and red rollers versus the frame a setup saved."""
     try:
@@ -4672,6 +4684,10 @@ def main():
                 )
                 if delay is not None:
                     updated["next_check_at"] = updated["reflection_retry_at"] = now.timestamp() + delay
+        estimate_due = hidden_estimate_due(updated, now.timestamp())
+        if estimate_due is not None:
+            # 0.5.38: the check after the countdown fills the hidden digit, not one minutes later.
+            updated["next_check_at"] = estimate_due
         try:
             atomic_write(HISTORY, json.dumps(updated).encode("utf-8"), 0o600)
         except OSError as error:

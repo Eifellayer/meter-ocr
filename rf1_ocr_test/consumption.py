@@ -351,3 +351,115 @@ def consumption_statistics(series, source, now, zone):
     # only be 0 or 1 m³, which the page says instead of showing a meaningless chart.
     recent = [sample[2] for sample in samples if sample[0] >= hour_starts[-1]]
     return {"hours": hours, "days": days, "resolution_litres": max(recent) if recent else None}
+
+
+# 0.5.46: consumption of the current day, month and year (and its costs) directly from the app,
+# so it also works without utility meter helpers in Home Assistant.
+PERIODS = ("day", "month", "year")
+WORK_PRICE_RANGE = (0.0, 100.0)     # ct/kWh
+BASE_PRICE_RANGE = (0.0, 2000.0)    # €/year
+
+
+def parse_price(text, limits):
+    """Optional price from the settings form (ct/kWh or €/year); empty means "not set"."""
+    text = str(text or "").strip().replace(",", ".")
+    if not text:
+        return None
+    if not re.fullmatch(r"[0-9]{1,4}(?:\.[0-9]{1,4})?", text):
+        raise ValueError("Ungültiger Preis")
+    value = round(float(text), 4)
+    if not limits[0] <= value <= limits[1]:
+        raise ValueError("Preis außerhalb des üblichen Bereichs")
+    return value
+
+
+def valid_price(value, limits):
+    return (round(float(value), 4) if type(value) in (int, float) and limits[0] <= value <= limits[1]
+            else None)
+
+
+def period_start(local, period):
+    """Local midnight at the start of the day, month or year containing ``local``."""
+    day = local.date()
+    if period == "month":
+        day = day.replace(day=1)
+    elif period == "year":
+        day = day.replace(month=1, day=1)
+    return datetime.combine(day, time.min, local.tzinfo)
+
+
+def period_key(local, period):
+    return local.strftime({"day": "%Y-%m-%d", "month": "%Y-%m", "year": "%Y"}[period])
+
+
+def total_at(samples, stamp):
+    """Booked total at ``stamp`` from dated samples: the last sample at or before it."""
+    index = bisect_right(samples, stamp, key=lambda sample: sample[0])
+    return samples[index - 1][1] if index else None
+
+
+def update_periods(state, total_litres, now, zone, samples=()):
+    """Track the booked total at the start of the current day, month and year.
+
+    ``state`` is the saved bookkeeping (or None), ``total_litres`` the restart-safe
+    cumulative total. A new period starts with the last total seen before the change, so
+    consumption booked after midnight counts for the new day, like a utility meter.
+    Without saved bookkeeping the start comes from the dated samples (about a week);
+    an older start is unknown and the period is marked as counted since the first sample.
+    Returns the new state and whether it changed (and must be saved).
+    """
+    if type(total_litres) is not int:
+        return state, False
+    local = datetime.fromtimestamp(now, zone)
+    old = state if isinstance(state, dict) else {}
+    last_total = old.get("last_total") if type(old.get("last_total")) is int else None
+    samples = [sample for sample in (samples or []) if isinstance(sample, list) and len(sample) >= 2]
+    new = {"last_total": total_litres}
+    for period in PERIODS:
+        key = period_key(local, period)
+        saved = old.get(period)
+        if (isinstance(saved, dict) and saved.get("key") == key and type(saved.get("start")) is int
+                and saved["start"] <= total_litres):
+            new[period] = saved
+            continue
+        begin = period_start(local, period).timestamp()
+        since = None
+        if isinstance(saved, dict) and saved.get("key") != key and last_total is not None:
+            start = last_total          # the period changed while the app was running or stopped
+        else:
+            start = total_at(samples, begin)
+            if start is None:
+                start = samples[0][1] if samples else total_litres
+                since = samples[0][0] if samples else now
+        start = min(start, total_litres)
+        new[period] = {"key": key, "start": start, "begin": begin, "since": since}
+    changed = {key: value for key, value in new.items() if key != "last_total"} != {
+        key: value for key, value in old.items() if key != "last_total"} or old.get("last_total") != total_litres
+    return new, changed
+
+
+def period_values(state, total_litres, now, zone, kwh_per_m3=None, work_price=None, base_price=None):
+    """Consumption (litres, kWh) and costs (EUR) of the current day, month and year.
+
+    Costs follow the usual bill: kWh × working price (ct/kWh) plus the yearly base price
+    spread over the days of the period so far (today included).
+    """
+    if not isinstance(state, dict) or type(total_litres) is not int:
+        return {}
+    local = datetime.fromtimestamp(now, zone)
+    days_in_year = 366 if (local.year % 4 == 0 and local.year % 100 != 0) or local.year % 400 == 0 else 365
+    elapsed_days = {"day": 1, "month": local.day, "year": local.timetuple().tm_yday}
+    values = {}
+    for period in PERIODS:
+        entry = state.get(period)
+        if not isinstance(entry, dict) or type(entry.get("start")) is not int:
+            continue
+        litres = max(0, total_litres - entry["start"])
+        kwh = round(litres / 1000 * kwh_per_m3, 2) if kwh_per_m3 is not None else None
+        cost = None
+        if kwh is not None and work_price is not None:
+            base = (base_price or 0) / days_in_year * elapsed_days[period]
+            cost = round(kwh * work_price / 100 + base, 2)
+        values[period] = {"litres": litres, "kwh": kwh, "cost": cost,
+                          "begin": entry.get("begin"), "since": entry.get("since")}
+    return values

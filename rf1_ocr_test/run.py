@@ -54,7 +54,8 @@ from calibration import (Calibration, Layout, CAPTURE_INTERVAL, PERFECT_CONFIRMA
                          uncertain_slots, valid_intensive_agreement)
 from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, LOWER_PENDING, LOWER_RECOVERED, MAX_FLOW_LPH,
                          CALORIFIC_RANGE, CONVERSION_RANGE, STATE_FACTOR_RANGE, ImplausibleReading, energy_kwh, plausible_lower_drop, track_lower_series,
-                         valid_energy_factor,
+                         valid_energy_factor, BASE_PRICE_RANGE, WORK_PRICE_RANGE, kwh_factor, period_values,
+                         update_periods, valid_price,
                          accumulate_consumption, fallback_detail, format_cubic_metres, record_consumption_sample)
 from checks import (without_light, unclear_trailing_decimals, last_two_compared_unclear, setup_tilt, initial_skew_state, FRAME_OFF_NOTICE, FRAME_OFF_STREAK, FRAME_OFF_WAIT_NOTICE, MOVING_DIGIT_NOTICE,
                     REDUCED_PRECISION_NOTICE, REDUCED_PRECISION2_NOTICE, MOVING_DIGITS_NOTICE, only_last_compared_unclear)
@@ -1688,7 +1689,7 @@ def factory_reset_history(history, keep_statistics=False):
         return {}
     # 0.5.29: the learned flow belongs to the meter, not to the setup: it stays as well.
     retained = {key: deepcopy(history[key]) for key in ("consumption", "consumption_statistics",
-                                                       "flow_peaks", "flow_peak_samples")
+                                                       "consumption_periods", "flow_peaks", "flow_peak_samples")
                 if key in history}
     retained["statistics_preserved_after_reset"] = True
     return retained
@@ -1712,6 +1713,80 @@ def publish_energy(history, token, rules):
                     "umrechnungsfaktor": rules.get("kwh_conversion_factor"),
                 },
             }, token)
+
+
+PERIOD_ENTITIES = {
+    # period: (entity suffix, German label, English label)
+    "day": ("heute", "heute", "today"),
+    "month": ("diesen_monat", "diesen Monat", "this month"),
+    "year": ("dieses_jahr", "dieses Jahr", "this year"),
+}
+
+
+def period_sensor_payloads(values, rules, zone):
+    """State payloads of the day, month and year sensors (m³, kWh once factors are set, EUR once prices are set)."""
+    payloads = {}
+    for period, (suffix, label, _english) in PERIOD_ENTITIES.items():
+        value = values.get(period)
+        if not value:
+            continue
+        begin = value.get("begin")
+        since = value.get("since")
+        common = {"last_reset": datetime.fromtimestamp(begin, zone).isoformat() if begin is not None else None}
+        if since is not None:
+            # The app did not run for the whole period yet: counted only since then.
+            common["gezaehlt_seit"] = datetime.fromtimestamp(since, zone).isoformat()
+        payloads[f"sensor.{NAMESPACE}_verbrauch_{suffix}"] = {
+            "state": format_cubic_metres(value["litres"]) if value["litres"] else "0",
+            "attributes": {"friendly_name": f"Meter OCR Gasverbrauch {label}" + LABEL_SUFFIX,
+                           "unit_of_measurement": "m³", "device_class": "gas", "state_class": "total",
+                           "icon": "mdi:fire", **common},
+        }
+        if value.get("kwh") is not None:
+            payloads[f"sensor.{NAMESPACE}_verbrauch_{suffix}_kwh"] = {
+                "state": f"{value['kwh']:.2f}",
+                "attributes": {"friendly_name": f"Meter OCR Gasverbrauch {label} (kWh)" + LABEL_SUFFIX,
+                               "unit_of_measurement": "kWh", "device_class": "energy", "state_class": "total",
+                               **common},
+            }
+        if value.get("cost") is not None:
+            payloads[f"sensor.{NAMESPACE}_gaskosten_{suffix}"] = {
+                "state": f"{value['cost']:.2f}",
+                "attributes": {"friendly_name": f"Meter OCR Gaskosten {label}" + LABEL_SUFFIX,
+                               "unit_of_measurement": "EUR", "device_class": "monetary", "state_class": "total",
+                               "arbeitspreis_ct_kwh": rules.get("gas_work_price"),
+                               "grundpreis_eur_jahr": rules.get("gas_base_price"), **common},
+            }
+    return payloads
+
+
+def gas_period_values(history, rules, now, zone):
+    """Update the period bookkeeping in ``history``; returns the values and whether it must be saved."""
+    consumption = history.get("consumption")
+    if not isinstance(consumption, dict) or type(consumption.get("total_litres")) is not int:
+        return {}, False
+    total = consumption["total_litres"]
+    statistics = history.get("consumption_statistics")
+    samples = statistics.get("samples", []) if isinstance(statistics, dict) else []
+    state, changed = update_periods(history.get("consumption_periods"), total, now, zone, samples)
+    if changed:
+        history["consumption_periods"] = state
+    rules = rules if isinstance(rules, dict) else {}
+    factor = kwh_factor(valid_energy_factor(rules.get("gas_state_factor"), STATE_FACTOR_RANGE),
+                        valid_energy_factor(rules.get("calorific_value"), CALORIFIC_RANGE),
+                        valid_energy_factor(rules.get("kwh_conversion_factor"), CONVERSION_RANGE))
+    values = period_values(state, total, now, zone, factor,
+                           valid_price(rules.get("gas_work_price"), WORK_PRICE_RANGE),
+                           valid_price(rules.get("gas_base_price"), BASE_PRICE_RANGE))
+    return values, changed
+
+
+def publish_periods(history, token, rules, now, zone):
+    """Publish consumption and costs of today, this month and this year. Returns True if ``history`` changed."""
+    values, changed = gas_period_values(history, rules, now, zone)
+    for entity, payload in period_sensor_payloads(values, rules if isinstance(rules, dict) else {}, zone).items():
+        publish_state(f"http://supervisor/core/api/states/{entity}", payload, token)
+    return changed
 
 
 def publish_consumption(history, token):
@@ -3090,6 +3165,8 @@ def main():
                         published_standalone = standalone
                     publish_consumption(history, token)
                     publish_energy(history, token, get_auto_rules())
+                    if publish_periods(history, token, get_auto_rules(), time.time(), zone):
+                        atomic_write(HISTORY, json.dumps(history).encode("utf-8"), 0o600)
                 except OSError as error:
                     print(f"Prüfstatus konnte nicht übertragen werden: {error}")
                 check_reminder(reminder, history, now, review_after)
@@ -4856,6 +4933,8 @@ def main():
                 published_standalone = standalone
             publish_consumption(history, token)
             publish_energy(history, token, get_auto_rules())
+            if publish_periods(history, token, get_auto_rules(), time.time(), zone):
+                atomic_write(HISTORY, json.dumps(history).encode("utf-8"), 0o600)
         except OSError as error:
             print(f"Home Assistant konnte nicht aktualisiert werden: {error}")
         check_reminder(reminder, history, now, review_after)

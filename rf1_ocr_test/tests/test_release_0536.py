@@ -46,7 +46,7 @@ class ShadowLogTests(unittest.TestCase):
         self.assertTrue(shadow_log.enabled({"experiments_enabled": True}))
         self.assertFalse(shadow_log.enabled({"experiments_enabled": False}))
         self.assertFalse(shadow_log.enabled(None))
-        self.assertIn("if shadow_log.enabled(active_rules) and not ocr_confirmed and not hidden_slots:", RUN)
+        self.assertIn('if shadow_log.enabled(active_rules, "decimal_estimate") and not ocr_confirmed and not hidden_slots:', RUN)
         self.assertIn("if not shadow_on:\n                stationary_state[\"last\"] = None", RUN)
         self.assertNotIn('kind="shadow_decimal_estimate"', RUN)
 

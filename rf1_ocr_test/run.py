@@ -2677,7 +2677,7 @@ def main():
                                                       on_image=on_image, on_decision=report_decision)
                         else:
                             report_calibration("search")
-                            attempt.presort_shadow = shadow_log.enabled(active_rules) and not attempt.automatic
+                            attempt.presort_shadow = shadow_log.enabled(active_rules, "presort") and not attempt.automatic
                             candidate = attempt.examine(
                                 frame, overlay, sample, captured,
                                 {**active_rules, "learned_flow_lph": learned_flow_limit(
@@ -2773,7 +2773,7 @@ def main():
                         # The setup itself confirmed the reading three times.
                         history["last_match_at"] = time.time()
                     attempt.state = "saved_reflection" if reflected else "saved_stationary" if provisional else "saved"
-                    if shadow_log.enabled(get_auto_rules()) and not attempt.automatic:
+                    if shadow_log.enabled(get_auto_rules(), "orientation") and not attempt.automatic:
                         # 0.5.37, shadow mode only: do labels and red rollers agree with the saved frame?
                         try:
                             saved_picture = picture
@@ -4072,7 +4072,7 @@ def main():
                             # the last confirmed reading and the flow. Nothing is changed or published.
                             # 0.5.36: only with experimental functions on, logged at the end of the check
                             # in the shadow log beside what the check itself found.
-                            if shadow_log.enabled(active_rules) and not ocr_confirmed and not hidden_slots:
+                            if shadow_log.enabled(active_rules, "decimal_estimate") and not ocr_confirmed and not hidden_slots:
                                 counted_now = history.get("consumption") or {}
                                 if (type(counted_now.get("reading_litres")) is int
                                         and type(counted_now.get("timestamp")) in (int, float)):
@@ -4792,7 +4792,7 @@ def main():
                 planned = read_plan.after_check(read_plan_state, active_rules, outcome, taken_over, ocr, time.time())
                 read_plan_state.clear()
                 read_plan_state.update(planned)
-            shadow_on = shadow_log.enabled(active_rules)
+            shadow_on = shadow_log.enabled(active_rules, "standstill")
             if not shadow_on:
                 stationary_state["last"] = None
             elif not manual and local.get("register") is not None:
@@ -4813,7 +4813,7 @@ def main():
                     shadow_log.record("standstill", image=data.get("esp_timestamp"), shadow=stationary_record,
                                       established={"before": before, "now": ocr},
                                       agree=standstill_agrees(stationary_record, before, ocr))
-            if shadow_on and not manual and local.get("decimal_shadow"):
+            if not manual and local.get("decimal_shadow"):
                 shadow_log.record("decimal_estimate", image=data.get("esp_timestamp"), shadow=local["decimal_shadow"],
                                   established={"outcome": outcome, "reading": ocr, "method": local.get("ocr_method")},
                                   agree=estimate_agrees(local["decimal_shadow"], outcome, ocr,

@@ -15,6 +15,8 @@ import json
 from pathlib import Path
 from threading import Lock
 
+import experiments
+
 SHADOW_LOG = Path("/data/schattenmodus-protokoll.jsonl")
 MAX_ENTRIES = 1000
 _lock = Lock()
@@ -30,8 +32,13 @@ FUNCTIONS = {
 }
 
 
-def enabled(rules):
-    """Shadow procedures run only with "Experimentelle Funktionen testen" switched on."""
+def enabled(rules, name=None):
+    """Shadow procedures run only with "Experimentelle Funktionen testen" switched on.
+
+    With ``name`` (0.5.45), only when that procedure is chosen as well.
+    """
+    if name is not None:
+        return experiments.shadow_active(rules, name)
     return isinstance(rules, dict) and bool(rules.get("experiments_enabled"))
 
 

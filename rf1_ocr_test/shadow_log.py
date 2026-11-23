@@ -26,6 +26,7 @@ FUNCTIONS = {
     "perspective": "Perspektivkorrektur",
     "seven_segment": "Sieben-Segment-Erkennung",
     "orientation": "Ausrichtung des Kamerabilds",
+    "presort": "Vorsortierung nach Feldern mit Ziffer",
 }
 
 

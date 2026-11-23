@@ -799,6 +799,20 @@ def closer_half_turn(layout, reading, tried, baseline, precision, digits):
     return None
 
 
+def presort_ranks(seen, chosen):
+    """Rank of the chosen frame as tested and if frames with more filled digit fields came first (0.5.41).
+
+    ``seen`` holds (layout, filled fields or None) in the order the setup tested them. Returns
+    (tested rank, presorted rank) counted from 1, or None when the frame was not tested.
+    """
+    layouts = [layout for layout, _ in seen]
+    if chosen not in layouts:
+        return None
+    order = sorted(range(len(seen)), key=lambda index: -(seen[index][1] if seen[index][1] is not None else -1))
+    position = layouts.index(chosen)
+    return position + 1, order.index(position) + 1
+
+
 def orientation_agreement(value, whole_range=None, digits=5):
     """How well a reading made without the known reading's help fits the meter (0.5.35).
 
@@ -1070,6 +1084,9 @@ class Calibration:
     # 0.5.31: turns the user marked as upside down ("Steht auf dem Kopf?"); frames near them are
     # tested turned by another 180°.
     wrong_turns: list = field(default_factory=list)
+    # 0.5.41, shadow mode only: frames tested on the current picture with their filled digit fields.
+    presort_shadow: bool = False
+    presort_seen: list = field(default_factory=list)
 
     def measured_skew(self, frame):
         """Median of the tilt measured on the last images (None until one was measured)."""
@@ -1620,6 +1637,18 @@ class Calibration:
 
     def passes(self, layout):
         return self.shortlist.get(layout, (0,))[0] >= self.threshold_for(layout)
+
+    def filled_fields(self, frame, layout):
+        """How many digit fields of a frame show a glyph, before any OCR; None without fields (0.5.41)."""
+        if not layout.digit_boxes:
+            return None
+        try:
+            left, top, right, bottom = layout.box
+            register = turn_crop(frame.crop((left, top, right, bottom)), layout.rotation)
+            boxes = scale_digit_boxes(layout.digit_boxes, register.size)
+            return len(boxes) - len(set(empty_digit_slots(register, boxes)))
+        except (ValueError, TypeError, AttributeError):
+            return None
 
     def mask_empty_fields(self, frame, layout, readings):
         """Digits read in a frame without any glyph become "?" (0.5.16)."""
@@ -2220,6 +2249,7 @@ class Calibration:
             candidates = search_candidates()
         examined = False
         tested = set()
+        self.presort_seen = []
         frame_ceiling = self.attempts + FRAME_ATTEMPT_LIMIT
         coarse = []
         perfect = None
@@ -2263,6 +2293,8 @@ class Calibration:
                 continue
             tested.add(layout)
             examined = True
+            if self.presort_shadow:
+                self.presort_seen.append((layout, self.filled_fields(frame, layout)))
             if not confirming_followup:
                 self.attempts += 1
             if collecting:

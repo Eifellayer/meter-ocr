@@ -749,6 +749,12 @@ EN_UI = {
     "Die letzten Prüfungen mit allen OCR-Durchläufen, Entscheidung und Verbrauchsstand. Ohne Bilder und Zugangsdaten. Hilfreich für Fehlermeldungen.":
         "The latest checks with all OCR runs, decision and consumption state. No images or credentials. Useful for bug reports.",
     '>Protokoll herunterladen<': '>Download log<',
+    '<summary>Kamera-Diagnose</summary>': '<summary>Camera diagnosis</summary>',
+    "Wie gut das Bild der letzten Prüfung zum Lesen taugt, und wie oft die Bildquelle in den letzten 24 Stunden ausfiel. Die App holt dafür kein neues Bild und schaltet kein Licht.":
+        "How well the picture of the last check can be read, and how often the image source failed in the last 24 hours. The app fetches no new picture for this and switches no light.",
+    '<dt>Letztes Prüfbild</dt>': '<dt>Last check picture</dt>', '<dt>Zählwerk: Helligkeit</dt>': '<dt>Counter: brightness</dt>',
+    '<dt>Zählwerk: Kontrast</dt>': '<dt>Counter: contrast</dt>', '<dt>Zählwerk: Schärfe</dt>': '<dt>Counter: sharpness</dt>',
+    '<dt>Prüfungen in 24 Stunden</dt>': '<dt>Checks in 24 hours</dt>', '<dt>Ohne neues Bild</dt>': '<dt>Without a new picture</dt>',
     '<span class="green-key">Grün:</span> geht in den Stand ein · <span class="red-key">Rot, durchgestrichen:</span> verworfen · <span class="grey-key">Blass:</span> nicht gelesen. Die Ergebniszeile zeigt den Stand wie auf dem Zählwerk; ihr Rahmen ist grün bei einhelliger Lesung, gelb bei schwankender, rot bei unklarer.':
         '<span class="green-key">Green:</span> counts for the reading · <span class="red-key">Red, struck through:</span> rejected · <span class="grey-key">Faint:</span> not read. The result row shows the reading like the counter; its frame is green when all attempts agree, yellow when they varied, red when unclear.',
     '<p><strong>Für den Support teilen</strong></p>': '<p><strong>Share with the support</strong></p>',

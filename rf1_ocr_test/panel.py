@@ -29,6 +29,8 @@ from auto_rules import frames_locked, user_frames
 import debug_log
 import shadow_log
 import support_log
+import camera_diagnosis
+import idle_work
 
 INSTANCE_ID = token_urlsafe(8)
 from calibration import (
@@ -1135,6 +1137,19 @@ name: Zählerstand (OCR)</code></pre>
 <div><dt>Arbeitsspeicher belegt</dt><dd id="system-memory">–</dd></div>
 <div><dt>Arbeitsspeicher der App</dt><dd id="system-app-memory">–</dd></div>
 <div><dt>Temperatur</dt><dd id="system-temperature">–</dd></div>
+</dl>
+</details>
+<details id="camera-diagnosis">
+<summary>Kamera-Diagnose</summary>
+<p class="settings-note">Wie gut das Bild der letzten Prüfung zum Lesen taugt, und wie oft die Bildquelle in den letzten 24 Stunden ausfiel. Die App holt dafür kein neues Bild und schaltet kein Licht.</p>
+<ul id="camera-diagnosis-hints" class="camera-diagnosis-hints"><li>–</li></ul>
+<dl class="consumption-summary" id="camera-diagnosis-values">
+<div><dt>Letztes Prüfbild</dt><dd id="camera-picture">–</dd></div>
+<div><dt>Zählwerk: Helligkeit</dt><dd id="camera-brightness">–</dd></div>
+<div><dt>Zählwerk: Kontrast</dt><dd id="camera-contrast">–</dd></div>
+<div><dt>Zählwerk: Schärfe</dt><dd id="camera-sharpness">–</dd></div>
+<div><dt>Prüfungen in 24 Stunden</dt><dd id="camera-checks">–</dd></div>
+<div><dt>Ohne neues Bild</dt><dd id="camera-failures">–</dd></div>
 </dl>
 </details>
 <details id="background-work">
@@ -4722,6 +4737,37 @@ document.querySelector('#debug-log').addEventListener('toggle', async (event) =>
     target.textContent = lang === 'en' ? 'Log could not be loaded.' : 'Protokoll konnte nicht geladen werden.';
   }}
 }});
+document.querySelector('#camera-diagnosis').addEventListener('toggle', async (event) => {{
+  if (!event.target.open) return;
+  const en = lang === 'en';
+  const set = (id, value) => {{ document.querySelector(id).textContent = value; }};
+  try {{
+    const response = await fetch('kamera-diagnose' + (en ? '?lang=en' : ''), {{cache: 'no-store'}});
+    if (!response.ok) throw Error();
+    const data = await response.json();
+    const list = document.querySelector('#camera-diagnosis-hints');
+    list.replaceChildren(...(data.hints || []).map(hint => {{
+      const item = document.createElement('li');
+      item.textContent = hint;
+      return item;
+    }}));
+    list.dataset.state = (data.problems || []).length ? 'problem' : 'ok';
+    const picture = data.picture;
+    const taken = data.picture_time ? new Date(data.picture_time * 1000).toLocaleString(en ? 'en-GB' : 'de-DE',
+      {{dateStyle: 'short', timeStyle: 'short'}}) : '';
+    set('#camera-picture', picture ? picture.width + ' × ' + picture.height + ' px' + (taken ? ' · ' + taken : '') : '–');
+    const counter = data.counter;
+    set('#camera-brightness', counter ? counter.brightness + ' / 255' : '–');
+    set('#camera-contrast', counter ? String(counter.contrast) : '–');
+    set('#camera-sharpness', counter ? String(counter.sharpness) : '–');
+    const counts = data.counts || {{}};
+    set('#camera-checks', counts.checks != null ? counts.checks + (en ? ', successful ' : ', erfolgreich ') + counts.successful : '–');
+    set('#camera-failures', counts.capture_failures != null ? String(counts.capture_failures) : '–');
+  }} catch (_) {{
+    document.querySelector('#camera-diagnosis-hints').replaceChildren(Object.assign(document.createElement('li'),
+      {{textContent: en ? 'Diagnosis could not be loaded.' : 'Diagnose konnte nicht geladen werden.'}}));
+  }}
+}});
 document.querySelector('#support-log-period').addEventListener('change', (event) => {{
   document.querySelector('#support-log-download').href = 'support-protokoll?stunden=' + encodeURIComponent(event.target.value);
 }});
@@ -5608,6 +5654,21 @@ def start_panel(
                 except ValueError:
                     limit = 600
                 self.reply(debug_log.read_text(limit).encode("utf-8"), "text/plain; charset=utf-8")
+                return
+            if path == "/kamera-diagnose":
+                # 0.5.42: quality of the last check picture and failures of the source, nothing fetched.
+                newest = idle_work.image_paths(history_path.parent)[0]
+                try:
+                    picture, picture_time = newest.read_bytes(), newest.stat().st_mtime
+                except OSError:
+                    picture, picture_time = None, None
+                try:
+                    counter = history_path.with_name("ocr-zaehlwerk.jpg").read_bytes()
+                except OSError:
+                    counter = None
+                result = camera_diagnosis.diagnose(picture, picture_time, counter, debug_log.read_text(),
+                                                   language=language)
+                self.reply(json.dumps(result).encode("utf-8"), "application/json")
                 return
             if path == "/support-protokoll":
                 # 0.5.39: a chosen period for the support, without device names or addresses.

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.42
+
+- **Kamera-Diagnose.** Unter den Werkzeugen steht jetzt „Kamera-Diagnose“. Sie zeigt, wie gut das Bild der letzten Prüfung zum Lesen taugt: Größe und Zeit des Bildes sowie Helligkeit, Kontrast und Schärfe des Zählwerks. Dazu kommt, wie viele Prüfungen in den letzten 24 Stunden liefen, wie viele davon erfolgreich waren und wie oft die Bildquelle kein neues Bild lieferte. Darüber stehen klare Hinweise, etwa „Zählwerk sehr dunkel: Licht oder Belichtung der Kamera prüfen“ oder „Keine Auffälligkeiten“. Die App holt dafür kein neues Bild und schaltet kein Licht.
+- *English:* Camera diagnosis: below the tools, “Camera diagnosis” shows how well the picture of the last check can be read (size and time of the picture, brightness, contrast and sharpness of the counter), how many checks ran in the last 24 hours, how many succeeded and how often the image source delivered no new picture – with plain hints on top such as “Counter very dark: check the light or the exposure of the camera” or “Nothing unusual”. The app fetches no new picture for this and switches no light.
+
 ## 0.5.41
 
 - **Vorsortierung der Rahmen im Schattenmodus.** Die Einrichtung probiert auf jedem Bild mehrere mögliche Rahmen nacheinander aus, und jedes Lesen kostet einige Sekunden. Jetzt zählt die App zur Probe vor dem Lesen, wie viele Ziffernfelder eines Rahmens überhaupt ein Zeichen zeigen. Im Schattenmodus-Protokoll steht dann, an welcher Stelle der gefundene Rahmen geprüft wurde und an welcher er stünde, wenn die Rahmen mit den meisten gefüllten Feldern zuerst drankämen. Die Reihenfolge der Einrichtung ändert sich dadurch noch nicht. Das läuft nur mit „Experimentelle Funktionen testen“.

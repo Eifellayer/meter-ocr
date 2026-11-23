@@ -3485,8 +3485,10 @@ const rejectedReasons = {{
   quarter_turn: ['um 90° gedreht, passt nicht zur Zählerausrichtung', 'turned by 90°, does not match the meter orientation'],
   aspect: ['Seitenverhältnis passt nicht zu einem Zählwerk', 'aspect ratio does not fit a counter'],
   implausible: ['passt nicht zum letzten bekannten Zählerstand', 'does not fit the last known meter reading'],
-  half_turn: ['um 180° verdreht gelesen, der gegenüberliegende Rahmen passt besser zum letzten Stand',
-    'read turned by 180°, the opposite frame fits the last reading better'],
+  half_turn: ['um 180° verdreht gelesen, derselbe Rahmen andersherum passt besser zum Zähler',
+    'read turned by 180°, the same frame the other way round fits the meter better'],
+  behind: ['liest weniger als der zuletzt gelesene Stand, Richtung nicht eindeutig',
+    'reads less than the last reading seen, direction unclear'],
 }};
 // Collapsible "Verworfen (n)" list next to a candidate list; created once, closed by default.
 function renderRejectedCandidates(list, rejected) {{

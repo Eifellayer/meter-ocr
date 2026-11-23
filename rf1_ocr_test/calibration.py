@@ -766,20 +766,26 @@ def closer_half_turn(layout, reading, tried, baseline, precision, digits):
     read the last reading plus a few litres, the frame turned by 180° a value several m³
     higher, and the higher one was confirmed. Of two such frames the one closer to the last
     known reading is the meter. ``tried`` holds (score, layout, readings) of this picture.
+    0.5.32: when the turned frame's decimals stay unclear ("10517.?7?"), its whole cubic metres
+    are compared; before, it counted as no evidence and the wrong frame was confirmed.
     """
     known = baseline_litres(baseline)
-    prefix = meter_prefix(reading, precision, digits)
-    if known is None or prefix is None:
+    if known is None:
         return None
     last, lowest = known
-    step = 10 ** (3 - precision)
-    distance = abs(prefix * step - last)
-    for _, other, values in tried:
-        if other == layout or not values or not half_turned(layout, other):
+    for compared in dict.fromkeys((precision, 0)):
+        prefix = meter_prefix(reading, compared, digits)
+        if prefix is None:
             continue
-        value = meter_prefix(values[0], precision, digits)
-        if value is not None and value * step + step > lowest and abs(value * step - last) < distance:
-            return other
+        step = 10 ** (3 - compared)
+        distance = abs(prefix * step - last)
+        for _, other, values in tried:
+            if other == layout or not values or not half_turned(layout, other):
+                continue
+            value = meter_prefix(values[0], compared, digits)
+            if (value is not None and value * step + step > lowest // step * step
+                    and abs(value * step - last) + (step if compared < precision else 0) < distance):
+                return other
     return None
 
 
@@ -1102,7 +1108,10 @@ class Calibration:
         self.best, self.best_confirmations = None, 0
         self.confirmations = self.full_hits = self.partial_hits = self.unclear_frames = 0
         self.partial_prefix = None
-        self.anchored = self.advanced = self.focused = False
+        self.anchored = self.advanced = False
+        # 0.5.32: the next picture tests the turned frame first instead of searching all frames
+        # again; if it does not read, the search widens as before.
+        self.focused = self.candidate is not None
         self.verification_pending, self.verification_deadline = False, None
         self.reference_reading = None
         self.fine_evidence = None
@@ -1126,9 +1135,11 @@ class Calibration:
             return False
         if closer_half_turn(layout, reading, tried, baseline, precision, digits) is not None:
             return True
-        if any(half_turned(layout, other) for _, other, _ in tried) or stop():
-            return False
         twin = half_turn_layout(layout, slots)
+        # 0.5.32: other frames on the same digits turned by 180° may have read garbage (a box of
+        # another size); only the exact twin of this frame decides.
+        if stop() or any(other == twin for _, other, _ in tried):
+            return False
         left, top, right, bottom = twin.box
         if twin in tested or not (0 <= left < right <= frame.width and 0 <= top < bottom <= frame.height):
             return False
@@ -1136,7 +1147,7 @@ class Calibration:
         self.attempts += 1
         try:
             values = [read(twin, OCR_PROFILES[0])]
-            if meter_prefix(values[0], precision, digits) is None or stop():
+            if meter_prefix(values[0], 0, digits) is None or stop():
                 return False
             values.append(read(twin, OCR_PROFILES[1]))
         except (OSError, ValueError, subprocess.SubprocessError):

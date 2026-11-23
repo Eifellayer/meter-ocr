@@ -2147,18 +2147,23 @@ def main():
                 shared_result = (picture, drawn, dict(sample))
             job.state = "testing"
             job.stage = "capture"
-            attempt = deepcopy(job)
             if orientation_flip["requested"]:
                 orientation_flip["requested"] = False
-                if attempt.flip_orientation(active_rules["integer_digits"] + active_rules.get("fraction_digits", 3)):
+                # 0.5.32: turned on the shown job as well, so the page shows the new direction at
+                # once and not only after this picture has been evaluated.
+                if job.flip_orientation(active_rules["integer_digits"] + active_rules.get("fraction_digits", 3)):
                     print("Einrichtung: Ausrichtung auf Wunsch um 180° gedreht")
-                    debug_log.record(kind="setup_flip", wrong_turns=list(attempt.wrong_turns))
+                    debug_log.record(kind="setup_flip", wrong_turns=list(job.wrong_turns))
+            attempt = deepcopy(job)
         if attempt.intensive:
             active_rules = {**active_rules, "decimals": 3}
         deadline = time.monotonic() + 30
 
         def stopped():
-            return time.monotonic() >= deadline or calibration is not job or job.state != "testing" or get_auto_paused()
+            # 0.5.32: "turn by 180°" ends the evaluation of this picture at once; the next picture
+            # is taken right away in the turned direction.
+            return (time.monotonic() >= deadline or calibration is not job or job.state != "testing"
+                    or get_auto_paused() or orientation_flip["requested"])
 
         def fetch(url, token=None, timeout=8):
             if stopped():
@@ -2643,7 +2648,7 @@ def main():
             calibration = attempt
             capture_interval = LAST_DIGIT_CAPTURE_INTERVAL if attempt.intensive else (
                 PERFECT_CONFIRMATION_INTERVAL if attempt.full_hits else CAPTURE_INTERVAL)
-            calibration_next = now + capture_interval
+            calibration_next = now if orientation_flip["requested"] else now + capture_interval
             wake_worker.set()
         write_setup_log(setup_entries)
         return True

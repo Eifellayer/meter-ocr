@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.32
+
+- **„Um 180° drehen“ wirkt sofort.** Der Klick bricht die Prüfung des aktuellen Bildes ab und holt direkt ein neues Bild. Bisher wartete die App, bis das laufende Bild fertig ausgewertet war, und das konnte einige Minuten dauern. Die neue Richtung steht sofort in der Anzeige. Das nächste Bild prüft zuerst nur den gedrehten Rahmen, statt wieder alle Rahmen zu durchsuchen. Liest der gedrehte Rahmen nicht, sucht die App wie gewohnt weiter.
+- **180°-Vergleich auch mit unklaren Nachkommastellen.** Liest der gedrehte Rahmen die vollen Kubikmeter, aber nicht die Nachkommastellen, zählt sein Stand trotzdem für den Vergleich mit dem letzten bekannten Stand. Liegt er deutlich näher daran, wird der andere Rahmen verworfen. Außerdem liest die App immer genau den gedrehten Zwilling des Rahmens. Andere Rahmen in der Gegenrichtung mit anderem Zuschnitt, die nur Unsinn gelesen hatten, verhindern die Gegenprobe nicht mehr.
+- *English:* “Turn by 180°” takes effect at once: the click ends the evaluation of the current picture and takes a new one right away (before, the app finished the running picture, which could take minutes); the new direction shows at once, and the next picture first tests only the turned frame instead of searching all frames again. The 180° comparison also works with unclear decimals: when the turned frame reads the whole cubic metres but not the decimals, its reading still counts against the last known reading, and the exact turned twin is always read, so other frames in the opposite direction that read garbage no longer prevent the cross-check.
+
 ## 0.5.31
 
 - **Ausrichtung direkt in der Einrichtung korrigieren.** Unter dem geprüften Ausschnitt stehen zwei Knöpfe:

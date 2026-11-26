@@ -1,6 +1,8 @@
 FROM debian:bookworm-slim
 ARG BUILD_VERSION
 ENV BUILD_VERSION=${BUILD_VERSION}
+# One thread per OCR process: the app runs several of them side by side when the machine has room.
+ENV OMP_THREAD_LIMIT=1
 RUN apt-get update \
     && apt-get install -y --no-install-recommends python3 python3-pil python3-websocket tesseract-ocr tesseract-ocr-eng tzdata fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*

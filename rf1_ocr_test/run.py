@@ -13,11 +13,12 @@ import json
 import os
 from pathlib import Path
 import re
+import signal
 from statistics import median
 import subprocess
 from queue import Empty, Queue
 from tempfile import NamedTemporaryFile
-from threading import Event, Lock, RLock, Thread
+from threading import BoundedSemaphore, Event, Lock, RLock, Thread
 import time
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -1154,8 +1155,10 @@ _digit_pool = None
 _digit_pool_lock = Lock()
 
 
-def digit_workers():
-    """Parallel single-digit reads: one per usable CPU core, at most four."""
+MAX_DIGIT_WORKERS = 3
+
+
+def usable_cores():
     cores = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count() or 1
     try:
         quota, period = Path("/sys/fs/cgroup/cpu.max").read_text().split()
@@ -1163,7 +1166,34 @@ def digit_workers():
             cores = min(cores, max(1, int(quota) // int(period)))
     except (OSError, ValueError):
         pass
-    return max(1, min(4, cores))
+    return max(1, cores)
+
+
+def digit_workers():
+    """Parallel single-digit reads, sized by the free CPU and memory right now.
+
+    0.5.47: at most three and always one core less than the machine has, so Home Assistant
+    keeps a core of its own; fewer when the load is high or memory runs short (each Tesseract
+    process needs up to about 100 MB).
+    """
+    cores = usable_cores()
+    workers = min(MAX_DIGIT_WORKERS, cores - 1)
+    try:
+        workers = min(workers, int(cores - os.getloadavg()[0]))
+    except (AttributeError, OSError):
+        pass
+    try:
+        available = 0
+        with open("/proc/meminfo", encoding="ascii") as meminfo:
+            for line in meminfo:
+                if line.startswith("MemAvailable:"):
+                    available = int(line.split()[1]) * 1024
+                    break
+        if available:
+            workers = min(workers, (available - 512 * 1024 ** 2) // (128 * 1024 ** 2))
+    except (OSError, ValueError, IndexError):
+        pass
+    return max(1, workers)
 
 
 def read_digits_parallel(tasks):
@@ -1180,9 +1210,16 @@ def read_digits_parallel(tasks):
         return [task() if callable(task) else task for task in tasks]
     with _digit_pool_lock:
         if _digit_pool is None:
-            _digit_pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="digit")
+            _digit_pool = ThreadPoolExecutor(max_workers=MAX_DIGIT_WORKERS, thread_name_prefix="digit")
         pool = _digit_pool
-    futures = [pool.submit(task) if callable(task) else task for task in tasks]
+    # The pool is shared; this row uses only as many of its threads as the load allows now.
+    gate = BoundedSemaphore(workers)
+
+    def gated(task):
+        with gate:
+            return task()
+
+    futures = [pool.submit(gated, task) if callable(task) else task for task in tasks]
     return [item.result() if isinstance(item, Future) else item for item in futures]
 
 
@@ -1804,14 +1841,55 @@ def publish_consumption(history, token):
         publish_state(f"http://supervisor/core/api/states/{CONSUMPTION_ENTITY}", payload, token)
 
 
+# 0.5.47: every state write creates an event and a recorder row in Home Assistant. An unchanged
+# state is sent again only after this time (it also restores the sensors after a restart of
+# Home Assistant that happened between two rounds).
+STATE_REFRESH_SECONDS = 30 * 60
+# After a failed write the waiting-time refresh pauses for growing steps, so a starting or
+# overloaded Home Assistant is not hit again every round.
+CORE_BACKOFF_STEPS = (30, 60, 120, 300)
+_published_states = {}
+_core_backoff = {"failures": 0, "until": 0.0}
+_published_lock = Lock()
+
+
+def core_backoff_active(now=None):
+    """True while Home Assistant recently refused or missed a state write."""
+    with _published_lock:
+        return (time.monotonic() if now is None else now) < _core_backoff["until"]
+
+
 def publish_state(url, payload, token):
+    """Write one state to Home Assistant; returns False if it was unchanged and therefore skipped."""
+    body = json.dumps(payload).encode("utf-8")
+    now = time.monotonic()
+    with _published_lock:
+        last = _published_states.get(url)
+        if last is not None and last[0] == body and now - last[1] < STATE_REFRESH_SECONDS:
+            system_monitor.count_state_write("skipped")
+            return False
     request = Request(
-        url, data=json.dumps(payload).encode("utf-8"), method="POST",
+        url, data=body, method="POST",
         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
     )
-    with open_core(request, timeout=10) as response:
-        if response.status not in (200, 201):
-            raise OSError(f"Home Assistant meldet HTTP {response.status}")
+    try:
+        with open_core(request, timeout=10) as response:
+            if response.status not in (200, 201):
+                raise OSError(f"Home Assistant meldet HTTP {response.status}")
+    except OSError:
+        with _published_lock:
+            # Home Assistant may have restarted and lost the states: send everything again later.
+            _published_states.clear()
+            _core_backoff["failures"] += 1
+            step = CORE_BACKOFF_STEPS[min(_core_backoff["failures"], len(CORE_BACKOFF_STEPS)) - 1]
+            _core_backoff["until"] = time.monotonic() + step
+        system_monitor.count_state_write("failed")
+        raise
+    with _published_lock:
+        _published_states[url] = (body, now)
+        _core_backoff.update(failures=0, until=0.0)
+    system_monitor.count_state_write("sent")
+    return True
 
 
 def check_reminder(reminder, history, now, review_after=REVIEW_AFTER):
@@ -1857,7 +1935,34 @@ def automatic_inputs_ready(rules, source, history, *, legacy_crop=False):
     )
 
 
+def install_shutdown_handler():
+    """End cleanly when the Supervisor stops the app (0.5.47).
+
+    The app runs as process 1 of its container, and process 1 ignores SIGTERM without a handler:
+    the Supervisor then waited for its timeout and killed it hard. Now the main loop ends with
+    SystemExit, so a file write in progress finishes or leaves the old file (atomic_write), and
+    queued digit reads are dropped. The app also runs with a lower priority than Home Assistant.
+    """
+    def stop(signum, frame):
+        print("App wird beendet.")
+        with _digit_pool_lock:
+            pool = _digit_pool
+        if pool is not None:
+            pool.shutdown(wait=False, cancel_futures=True)
+        raise SystemExit(0)
+
+    try:
+        signal.signal(signal.SIGTERM, stop)
+    except ValueError:
+        pass  # not the main thread (tests)
+    try:
+        os.nice(5)
+    except OSError:
+        pass
+
+
 def main():
+    install_shutdown_handler()
     raw_options = json.loads(OPTIONS.read_text(encoding="utf-8"))
     # The Supervisor remains the source of truth for values edited in its UI.
     # It regenerates options.json. Record a versioned, normalized copy separately.
@@ -3153,8 +3258,9 @@ def main():
                          STANDALONE_PENDING_NOTICE if history.get("check_status") == STANDALONE_PENDING
                          else IDLE_PENDING_NOTICE if any(idle_state["jobs"]) and calibration is None
                          else "App läuft. Wartet auf die nächste automatische Prüfung.")
-            # Refresh status after a Home Assistant restart, even between checks.
-            if "check_status" in history:
+            # Refresh status after a Home Assistant restart, even between checks. Unchanged states
+            # are skipped (publish_state); after a failed write this waits for the backoff (0.5.47).
+            if "check_status" in history and not core_backoff_active():
                 try:
                     publish_check(history, now, token, review_after)
                     if pending_image is not None:

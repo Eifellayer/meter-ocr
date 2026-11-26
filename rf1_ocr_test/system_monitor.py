@@ -6,6 +6,7 @@ works on a Raspberry Pi. Every value that cannot be read is ``None``; nothing he
 
 import os
 from pathlib import Path
+import threading
 from threading import Lock
 import time
 
@@ -13,6 +14,7 @@ PROC = Path("/proc")
 THERMAL = Path("/sys/class/thermal")
 _lock = Lock()
 _last = {}
+_writes = {"sent": 0, "skipped": 0, "failed": 0, "started": time.monotonic()}
 
 
 def _cpu_times(text):
@@ -98,7 +100,23 @@ def snapshot(now=None, *, proc=PROC, thermal=THERMAL, times=os.times, cores=os.c
                 result["cpu_percent"] = max(0, min(100, round(100 * busy)))
     except (ValueError, IndexError, TypeError, AttributeError):
         pass
+    # 0.5.47: figures to spot leaks and needless writes to Home Assistant.
+    result["app_threads"] = threading.active_count()
+    try:
+        result["app_open_files"] = len(os.listdir(proc / "self" / "fd"))
+    except OSError:
+        result["app_open_files"] = None
+    with _lock:
+        result.update(state_writes_sent=_writes["sent"], state_writes_skipped=_writes["skipped"],
+                      state_writes_failed=_writes["failed"],
+                      uptime_minutes=round((now - _writes["started"]) / 60))
     return result
+
+
+def count_state_write(outcome):
+    """Count one state write to Home Assistant: "sent", "skipped" (unchanged) or "failed"."""
+    with _lock:
+        _writes[outcome] = _writes.get(outcome, 0) + 1
 
 
 def busy(sample, limit=85):

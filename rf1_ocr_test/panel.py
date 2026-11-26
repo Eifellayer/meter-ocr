@@ -51,7 +51,7 @@ from consumption import (DEFAULT_FLOW_LPH, EXCESSIVE_INCREASE, LOWER_PENDING, LO
                          CALORIFIC_RANGE, CONVERSION_RANGE, STATE_FACTOR_RANGE, consumption_statistics, format_cubic_metres,
                          BASE_PRICE_RANGE, WORK_PRICE_RANGE, parse_energy_factor, parse_flow_limit, parse_price,
                          kwh_factor, period_values, valid_energy_factor, valid_price)
-from demo import run_demo
+from demo import demo_preview, run_demo
 from i18n import EN_UI, english_progress, english_result, translate_page
 from language import MODES, SUPPORTED, USER_ID, browser_locale, profile_script
 from layout import MANUAL_ROW_UNCLEAR, PARTLY_UNCLEAR, RAW_ROW_UNCLEAR, crop_coordinates, fine_rotation, split_rotation, digit_box_settings, scale_digit_boxes, turn_crop
@@ -1255,7 +1255,8 @@ name: Zählerstand (OCR)</code></pre>
 </details>
 <label>Eigenes Testbild (optional, JPG oder PNG)
 <input type="file" name="image" accept="image/jpeg,image/png"></label>
-<p class="settings-note">Ein ausgewähltes Bild wird nur für diesen manuellen Test verwendet (max. 3 MB).</p>
+<p class="settings-note">Ein ausgewähltes Bild wird nur für diesen manuellen Test verwendet. Große Fotos werden vorher automatisch verkleinert.</p>
+<p class="settings-note" id="manual-image-note" role="status" hidden></p>
 <div class="crop-actions">
 <button id="start-check-with-options" type="submit">Jetzt prüfen</button>
 </div>
@@ -1912,8 +1913,25 @@ async function checkDemo(reflection, picture = '') {{
   buttons.forEach(button => button.disabled = true);
   demoResults.hidden = true;
   demoStatus.textContent = 'Demo-Bild wird geprüft …';
+  const original = document.querySelector('#demo-original');
+  const aligned = document.querySelector('#demo-aligned');
+  const timeline = document.querySelector('#demo-timeline-box');
   try {{
     const fields = new URLSearchParams({{csrf: '{csrf}', lang, reflection: reflection ? '1' : '0', picture}});
+    // Picture and steps are visible at once; the reading follows when the check is done.
+    const early = new URLSearchParams(fields);
+    early.set('preview', '1');
+    const shown = await fetch('zaehler-demo', {{method: 'POST', body: early}})
+      .then(reply => reply.ok ? reply.json() : null).catch(() => null);
+    if (shown && shown.image) {{
+      original.src = 'data:image/jpeg;base64,' + shown.image;
+      aligned.removeAttribute('src');
+      aligned.closest('figure').hidden = true;
+      renderSetupTimeline(timeline, demoTimelineModel(shown, picture));
+      document.querySelector('#demo-reading').textContent = '';
+      document.querySelector('#demo-estimate').textContent = '';
+      demoResults.hidden = false;
+    }}
     let reply = await fetch('zaehler-demo', {{method: 'POST', body: fields}}).catch(() => null);
     if (!reply || !reply.ok) {{
       // The machine may be busy with a check or a setup: one quiet second try.
@@ -1923,9 +1941,10 @@ async function checkDemo(reflection, picture = '') {{
     }}
     if (!reply.ok) throw Error();
     const result = await reply.json();
-    document.querySelector('#demo-original').src = 'data:image/jpeg;base64,' + result.image;
-    document.querySelector('#demo-aligned').src = 'data:image/jpeg;base64,' + result.aligned;
-    renderSetupTimeline(document.querySelector('#demo-timeline-box'), demoTimelineModel(result, picture));
+    original.src = 'data:image/jpeg;base64,' + result.image;
+    aligned.src = 'data:image/jpeg;base64,' + result.aligned;
+    aligned.closest('figure').hidden = false;
+    renderSetupTimeline(timeline, demoTimelineModel(result, picture));
     document.querySelector('#demo-reading').textContent =
       'Abgelesen ' + result.reading + ' m³ · Drehung ' + result.angle + '° · ' +
       (result.real ? (result.complete ? 'Alle geprüften Ziffern erkannt. ' : 'Mindestens eine Ziffer blieb offen. ') +
@@ -1937,6 +1956,7 @@ async function checkDemo(reflection, picture = '') {{
     demoStatus.textContent = '';
     demoResults.hidden = false;
   }} catch (_) {{
+    demoResults.hidden = true;
     demoStatus.textContent = 'Die Demo konnte nicht geladen werden, weil die App gerade ausgelastet ist. Versuche es in einer Minute noch einmal.';
   }} finally {{
     buttons.forEach(button => button.disabled = false);
@@ -3459,14 +3479,21 @@ function automaticTimelineModel(sample) {{
 }}
 function demoTimelineModel(result, picture) {{
   const en = lang === 'en';
+  const loaded = {{key: 'image', label: en ? 'Load the picture' : 'Bild laden', state: 'done',
+    result: picture ? (en ? 'real picture ' : 'echtes Bild ') + picture : (en ? 'generated picture' : 'künstliches Bild')}};
+  const turned = {{key: 'align', label: en ? 'Straighten the counter' : 'Zählwerk ausrichten', state: 'done',
+    result: (en ? 'rotation ' : 'Drehung ') + String(result.angle).replace('-', '−') + '°'}};
+  if (result.preview) {{
+    // While the check runs: the picture is there, the digits are being read.
+    return {{steps: [loaded, turned,
+      {{key: 'read', label: en ? 'Read digits' : 'Ziffern lesen', state: 'current',
+       result: en ? 'in progress …' : 'läuft …'}},
+      {{key: 'result', label: en ? 'Result' : 'Ergebnis', state: 'todo'}}], stats: '', rounds: []}};
+  }}
   const reading = String(result.reading || '');
   const complete = result.real ? result.complete : reading === result.expected;
   const attempts = (result.attempts || []).map(value => en ? value : String(value).replace('.', ',')).join(' | ');
-  const steps = [
-    {{key: 'image', label: en ? 'Load the picture' : 'Bild laden', state: 'done',
-     result: picture ? (en ? 'real picture ' : 'echtes Bild ') + picture : (en ? 'generated picture' : 'künstliches Bild')}},
-    {{key: 'align', label: en ? 'Straighten the counter' : 'Zählwerk ausrichten', state: 'done',
-     result: (en ? 'rotation ' : 'Drehung ') + String(result.angle).replace('-', '−') + '°'}},
+  const steps = [loaded, turned,
     {{key: 'read', label: en ? 'Read digits' : 'Ziffern lesen', state: complete ? 'done' : 'failed',
      result: (result.attempts || []).length + (en ? ' attempts' : ' Leseversuche'), detail: attempts}},
     {{key: 'result', label: en ? 'Result' : 'Ergebnis', state: complete ? 'done' : 'failed',
@@ -4501,8 +4528,77 @@ if (['queued', 'open', 'busy'].includes(testRequest)) {{
   history.replaceState(null, '', location.pathname + (searchPrefs.size ? '?' + searchPrefs : ''));
   activateTab('tools');
 }}
+// A phone photo is far larger than the app accepts (3 MB, 4 megapixels): it used to be
+// rejected and the test showed no picture. It is made smaller in the browser first.
+const MANUAL_IMAGE_PIXELS = 3800000;
+const MANUAL_IMAGE_BYTES = 2700000;
+const manualImageInput = manualForm.elements.image;
+const manualImageNote = document.querySelector('#manual-image-note');
+const shrunkManualImages = new WeakSet();
+let manualImageBusy = null;
+function manualImageText(german) {{
+  const english = {{
+    'Foto wird verkleinert …': 'Making the photo smaller …',
+    'Das Foto wurde für den Test verkleinert.': 'The photo was made smaller for the test.',
+    'Das Foto ist zu groß und ließ sich nicht verkleinern. Bitte ein kleineres Bild wählen (höchstens 3 MB).':
+      'The photo is too large and could not be made smaller. Please choose a smaller image (3 MB at most).',
+  }};
+  manualImageNote.hidden = !german;
+  manualImageNote.textContent = lang === 'en' ? (english[german] || german) : german;
+}}
+async function shrinkManualImage() {{
+  const file = manualImageInput.files[0];
+  if (!file || shrunkManualImages.has(file)) return;
+  manualImageText('');
+  let bitmap = null;
+  try {{
+    bitmap = await createImageBitmap(file);
+    const pixels = bitmap.width * bitmap.height;
+    if (pixels <= MANUAL_IMAGE_PIXELS && file.size <= MANUAL_IMAGE_BYTES) return;
+    manualImageText('Foto wird verkleinert …');
+    let scale = Math.min(1, Math.sqrt(MANUAL_IMAGE_PIXELS / pixels));
+    let blob = null;
+    for (let round = 0; round < 5; round++) {{
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.floor(bitmap.width * scale));
+      canvas.height = Math.max(1, Math.floor(bitmap.height * scale));
+      canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+      if (blob && blob.size <= MANUAL_IMAGE_BYTES) break;
+      blob = null;
+      scale *= 0.75;
+    }}
+    if (!blob) throw Error();
+    const smaller = new File([blob], 'testbild.jpg', {{type: 'image/jpeg'}});
+    shrunkManualImages.add(smaller);
+    const transfer = new DataTransfer();
+    transfer.items.add(smaller);
+    manualImageInput.files = transfer.files;
+    manualImageText('Das Foto wurde für den Test verkleinert.');
+    manualImageInput.dispatchEvent(new Event('change'));
+  }} catch (_) {{
+    if (file.size > 3000000)
+      manualImageText('Das Foto ist zu groß und ließ sich nicht verkleinern. Bitte ein kleineres Bild wählen (höchstens 3 MB).');
+  }} finally {{
+    bitmap?.close();
+  }}
+}}
+manualImageInput.addEventListener('change', () => {{
+  const file = manualImageInput.files[0];
+  if (!file) {{ manualImageText(''); return; }}
+  if (shrunkManualImages.has(file)) return;
+  const run = shrinkManualImage().finally(() => {{ if (manualImageBusy === run) manualImageBusy = null; }});
+  manualImageBusy = run;
+}});
 manualForm.addEventListener('submit', event => {{
   if (event.submitter?.name === 'save_settings') return;
+  if (manualImageBusy) {{
+    // Wait until the photo is small enough, then send the test.
+    event.preventDefault();
+    const submitter = event.submitter;
+    manualImageBusy.then(() => manualForm.requestSubmit(submitter?.form === manualForm || submitter?.getAttribute('form') === 'manual-form' ? submitter : undefined));
+    return;
+  }}
   if (sendingCheck) {{
     event.preventDefault();
     return;
@@ -6420,6 +6516,14 @@ def start_panel(
                 self.redirect("?ui=overview" + keep_mode)
                 return
             if path == "/zaehler-demo":
+                if field("preview") == "1":
+                    # Only the picture, without reading: the page shows it while the check runs.
+                    try:
+                        self.reply(json.dumps(demo_preview(field("picture"), field("reflection") == "1")).encode("utf-8"),
+                                   "application/json")
+                    except (OSError, ValueError):
+                        problem(503)
+                    return
                 # A second request waits for the first instead of failing at once.
                 if not demo_lock.acquire(timeout=45):
                     problem(503)

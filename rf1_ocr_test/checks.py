@@ -993,6 +993,51 @@ def learned_flow_limit(history, max_flow_lph):
     return min(max_flow_lph, max(SLOW_ROLLER_FLOOR_LPH, SLOW_ROLLER_MARGIN * max(values)))
 
 
+# A digit read wrong the same way on two pictures (a 1 as a 7 in the first decimal) used to be
+# confirmed and published: about +0.6 m³ within minutes. Such a jump is only accepted within
+# the flow this meter really reaches. The median of the daily peaks is used, so that a peak
+# learned from an earlier misread does not open the limit again.
+JUMP_FLOW_MARGIN = 2
+JUMP_FLOW_NOTICE = ("Zählerstand springt stärker, als der bisher gemessene Durchfluss erlaubt. "
+                    "Die App wartet auf die nächste Ablesung.")
+
+
+def jump_flow_limit(history, max_flow_lph):
+    """Twice the usual daily peak flow (at least 1.5 m³/h), never above the configured limit.
+
+    The configured limit until enough confirmed readings were seen.
+    """
+    if type(max_flow_lph) not in (int, float) or max_flow_lph <= 0:
+        return max_flow_lph
+    peaks = history.get("flow_peaks")
+    samples = history.get("flow_peak_samples", 0)
+    if not isinstance(peaks, dict) or type(samples) is not int or samples < FLOW_PEAK_MIN_SAMPLES:
+        return max_flow_lph
+    values = sorted(value for value in peaks.values() if type(value) is int and value >= 0)
+    if not values:
+        return max_flow_lph
+    usual = values[(len(values) - 1) // 2]
+    return min(max_flow_lph, max(SLOW_ROLLER_FLOOR_LPH, JUMP_FLOW_MARGIN * usual))
+
+
+def jump_within_flow(ocr, anchor, stamp, decimals, integer_digits, flow_limit_lph):
+    """Whether the reading is reachable from the last confirmed one within the learned flow.
+
+    True when there is nothing to compare with. Two display steps tolerate rollers read at
+    different moments of their turn.
+    """
+    value = meter_prefix(ocr, decimals, integer_digits)
+    if (value is None or not isinstance(anchor, dict) or type(anchor.get("value")) is not int
+            or type(anchor.get("time")) not in (int, float) or type(stamp) not in (int, float)
+            or type(flow_limit_lph) not in (int, float) or flow_limit_lph <= 0):
+        return True
+    elapsed = stamp - anchor["time"]
+    if elapsed <= 0:
+        return True
+    step = 10 ** (3 - decimals)
+    return value * step - anchor["value"] <= 2 * step + flow_limit_lph * elapsed / 3600
+
+
 SLOW_ROLLER_NOTICE = "Langsame Nachkommastelle aus dem zuletzt bestätigten Stand und dem bisherigen Durchfluss ergänzt."
 
 

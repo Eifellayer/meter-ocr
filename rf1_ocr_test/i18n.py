@@ -803,7 +803,10 @@ EN_UI = {
     "Manueller Bildtest": "Manual image test",
     "Jetzt prüfen": "Run check now",
     "Eigenes Testbild (optional, JPG oder PNG)": "Choose a test image (optional, JPG or PNG)",
-    "Ein ausgewähltes Bild wird nur für diesen manuellen Test verwendet (max. 3 MB).": "The selected image is used only for this manual test (max. 3 MB).",
+    "Ein ausgewähltes Bild wird nur für diesen manuellen Test verwendet. Große Fotos werden vorher automatisch verkleinert.": "The selected image is used only for this manual test. Large photos are made smaller automatically first.",
+    "Foto wird verkleinert …": "Making the photo smaller …",
+    "Das Foto wurde für den Test verkleinert.": "The photo was made smaller for the test.",
+    "Das Foto ist zu groß und ließ sich nicht verkleinern. Bitte ein kleineres Bild wählen (höchstens 3 MB).": "The photo is too large and could not be made smaller. Please choose a smaller image (3 MB at most).",
     "Speichern und prüfen": "Save and check",
     "ⓘ Was passiert bei „Jetzt prüfen“?": "ⓘ What happens when I run a check?",
     "Die App verwendet das letzte vorhandene Zählerbild oder ein ausgewähltes eigenes JPG-/PNG-Testbild (bis 3 MB). Sie liest die Zahlen aus dem Bild und vergleicht sie mit dem Referenzwert. Sobald die Werte übereinstimmen, stoppt die Prüfung. Andernfalls werden höchstens so viele OCR-Versuche durchgeführt wie eingestellt (1–10). Der Test verändert die automatische Trefferzahl nicht.": "The app uses the latest available meter image or a selected JPG/PNG test image (up to 3 MB). It reads the digits and compares them with the reference. The check stops as soon as they match. Otherwise it runs up to the configured number of OCR attempts (1–10). A manual test does not change the automatic confirmation count.",
@@ -1083,6 +1086,8 @@ EN_DETAILS = {
      "der Zählerstand wurde korrigiert."):
         ("Several consistent readings were below the stored value. The higher value was a misread and the reading "
          "has been corrected."),
+    "Zählerstand springt stärker, als der bisher gemessene Durchfluss erlaubt. Die App wartet auf die nächste Ablesung.":
+        "The reading jumps more than the flow measured so far allows. The app waits for the next reading.",
     "Zählerstand steigt schneller als der eingestellte Durchfluss erlaubt.":
         "Reading increased faster than the configured maximum flow.",
     "Messzeitpunkt liegt vor der letzten gültigen Messung.": "The reading is older than the last accepted measurement.",

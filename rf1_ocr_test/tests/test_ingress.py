@@ -322,6 +322,17 @@ class IngressTests(IngressFixture):
         status = json.loads(self.request("/automatic")[0])
         self.assertIn("seit mindestens 40 Minuten nicht sicher erkannt", status["geometry_warning"])
 
+    def test_demo_preview_returns_the_picture_at_once_without_a_check(self):
+        with patch.object(panel, "run_demo") as check:
+            shown = json.loads(self.request("/zaehler-demo", data={
+                "csrf": self.csrf, "lang": "de", "reflection": "0", "picture": "1", "preview": "1"})[0])
+        check.assert_not_called()
+        self.assertTrue(shown["preview"] and shown["image"])
+        page = self.request("/")[0]
+        self.assertIn("early.set('preview', '1')", page)
+        self.assertIn('id="manual-image-note"', page)
+        self.assertIn("shrinkManualImage", page)
+
     def test_demo_offers_real_pictures_and_needs_the_worker_for_them(self):
         page = self.request("/")[0]
         self.assertEqual(4, page.count('class="run-demo-real"'))

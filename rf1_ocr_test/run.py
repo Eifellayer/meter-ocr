@@ -35,7 +35,7 @@ from checks import (
     STANDALONE_CACHED_CAPTURE_DELAY, MAX_OCR_ATTEMPTS, DEFAULT_FAILURE_PAUSE_MINUTES, MAX_FAILURE_PAUSE_MINUTES, MIN_FAILURE_PAUSE_MINUTES, SHIFTED_DIGIT_POSITIONS, ROW_SHIFT_READS, ROW_SHIFT_TRIALS, plausible_integer_digits, note_skew, skew_offset, SHIFTED_DIGIT_READS, missing_digit_pattern, single_missing_digit, disputed_digit_pattern, resolve_ocr_readings,
     compare_sample, crop_register, lighting_ocr_profiles, read_register, read_with_retries, record_sample,
     anchored_leading_digits, anchored_hidden_digits, within_anchor_bounds, anchor_bounds,
-    learned_flow_limit, slow_roller_digit, activity_phase, hidden_roller_flow, hidden_roller_interval, hidden_fill_reachable, hidden_fill_with_turning_roller,
+    learned_flow_limit, jump_flow_limit, jump_within_flow, JUMP_FLOW_NOTICE, slow_roller_digit, activity_phase, hidden_roller_flow, hidden_roller_interval, hidden_fill_reachable, hidden_fill_with_turning_roller,
                     estimated_hidden_digits, shadow_decimal_estimate, HIDDEN_ESTIMATE_AFTER, HIDDEN_ESTIMATE_NOTICE,
                     only_known_hidden_unclear, HIDDEN_FILLED_NOTICE, HIDDEN_FILLED_TURNING_NOTICE,
     automatic_interval_minutes, defer_duplicate_cycle,
@@ -3603,7 +3603,8 @@ def main():
                                       "whole_boxes": whole_boxes, "fraction_boxes": fraction_boxes,
                                       "source": source, "picture": picture, "captured": captured,
                                       "image_id": image_id, "attempts": 0, "frame_reads": []}
-                        live_source = live_deadline is not None
+                        # An uploaded test picture is read as it is: no fresh camera picture between the attempts.
+                        live_source = live_deadline is not None and not manual_upload
 
                         # Leading digits confirmed by a complete read are taken over (read_plan).
                         previous_counter = history.get("consumption")
@@ -4319,6 +4320,18 @@ def main():
                                         new_standalone = standalone_reading(
                                             standalone_source, sample, ocr, decimals, None, integer_digits,
                                         )
+                                    # 0.5.49: a reading without a reference must be reachable from the last
+                                    # confirmed one within the flow this meter really reaches.
+                                    jump_limit = active_rules["max_flow_lph"]
+                                    if (reading_status == "ocr_only" and not accept_reference and not allow_lower
+                                            and not manual):
+                                        jump_limit = jump_flow_limit(history, active_rules["max_flow_lph"])
+                                        if jump_limit < active_rules["max_flow_lph"] and not jump_within_flow(
+                                                ocr, history.get("reflection_anchor"), captured,
+                                                decimals, integer_digits, jump_limit):
+                                            debug_log.record(kind="jump_rejected", ocr=ocr, limit_lph=jump_limit,
+                                                             anchor=history.get("reflection_anchor"))
+                                            raise ImplausibleReading(JUMP_FLOW_NOTICE)
                                     previous_consumption = history.get("consumption", {})
                                     if not previous_consumption and active_rules["fallback_value"]:
                                         fallback_prefix = meter_prefix(active_rules["fallback_value"], decimals,
@@ -4354,7 +4367,7 @@ def main():
                                     new_consumption = accumulate_consumption(
                                         previous_consumption, source_key, captured,
                                         sample["actual_value"] if accept_reference else ocr, decimals,
-                                        active_rules["max_flow_lph"], integer_digits, allow_lower=allow_lower,
+                                        jump_limit, integer_digits, allow_lower=allow_lower,
                                         confirmed=reading_status == "match" or accept_reference,
                                     )
                                     if setup_reference:

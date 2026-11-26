@@ -35,7 +35,7 @@ def tilted_meter(angle, serial=True):
 
 class SkewTests(unittest.TestCase):
     def test_measured_skew_levels_a_fourteen_degree_meter(self):
-        for angle in (-14, 14, -7, 0, 19):
+        for angle in (-14, 14, -7, 0, 19, 30, -32, 41):
             with self.subTest(angle=angle):
                 self.assertEqual(angle, estimate_skew(tilted_meter(angle)))
 

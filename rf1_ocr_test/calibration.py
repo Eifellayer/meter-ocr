@@ -35,8 +35,11 @@ LAST_DIGIT_CAPTURE_INTERVAL = 2
 # Fine grid up to ±20° (no jump from 12° to 18°). Right angles are no longer part of the
 # regular rotation: quarter turns are only tried when nothing with the right digit count
 # was found (quarter_turn_layouts).
-ANGLES = (-3, 3, -1, 1, -2, 2, -4, 4, -6, 6, -9, 9, -12, 12, -14, 14, -16, 16, -18, 18, -20, 20)
-SEARCH_ANGLE_LIMIT = 20
+# 0.5.52: up to 45°. Before, the search ended at 20° and the right-angle turns only covered
+# 70°–110°, so a camera looking at the meter 21°–69° askew (e.g. 30°) never found the counter.
+ANGLES = (-3, 3, -1, 1, -2, 2, -4, 4, -6, 6, -9, 9, -12, 12, -14, 14, -16, 16, -18, 18, -20, 20,
+          -24, 24, -28, 28, -32, 32, -36, 36, -40, 40, -45, 45)
+SEARCH_ANGLE_LIMIT = 45
 SMALL_ANGLES = (0, -1, 1, -2, 2, -3, 3)
 MAX_LAYOUTS_PER_IMAGE = 5
 COARSE_LIMIT = 50
@@ -230,6 +233,9 @@ def estimate_skew(frame, limit=SEARCH_ANGLE_LIMIT):
         down = small.filter(ImageFilter.Kernel((3, 3), (-1, -2, -1, 0, 0, 0, 1, 2, 1), 1))
         up = small.filter(ImageFilter.Kernel((3, 3), (1, 2, 1, 0, 0, 0, -1, -2, -1), 1))
         edges = ImageChops.add(down, up)
+        # 0.5.52: the kernel leaves the outermost pixels unfiltered. Turned by up to 45°, that
+        # border reached the measured middle and showed a tilt in a plain grey picture.
+        edges = edges.crop((2, 2, edges.width - 2, edges.height - 2))
     except (OSError, ValueError, ZeroDivisionError):
         return None
     width, height = edges.size
@@ -536,7 +542,10 @@ def guided_layouts(frame, overlay, rules, offset, current, region):
         if left <= a < c <= right and top <= b < d <= bottom:
             seed = replace(current, box=(a - left, b - top, c - left, d - top))
     cropped_overlay = overlay.crop(area) if overlay is not None and overlay.size == frame.size else None
-    for layout in layouts(frame.crop(area), cropped_overlay, local_rules, offset, seed):
+    marked = frame.crop(area)
+    # 0.5.52: the tilt is measured inside the marked area as well. Before, a marked counter hanging
+    # askew was only searched near 0°, and the search settled on straight lines of the serial number.
+    for layout in layouts(marked, cropped_overlay, local_rules, offset, seed, skew=estimate_skew(marked)):
         a, b, c, d = layout.box
         yield replace(layout, box=(a + left, b + top, c + left, d + top))
 

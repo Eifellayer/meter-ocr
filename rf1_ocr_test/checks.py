@@ -525,6 +525,45 @@ FRAME_OFF_WAIT_NOTICE = ("Die letzte verglichene Stelle war mehrmals hintereinan
                          "Rahmen neben der Rolle. Bis das korrigiert ist, prüft die App mit einer Nachkommastelle weniger.")
 
 
+# 0.5.50: while gas flows, the last compared roller is between two digits most of the time.
+# Re-reading it for 25 seconds per check, moving its frame or calling the frame misplaced
+# only cost time; such a check is confirmed one decimal coarser right away.
+TURNING_FLOW_SECONDS = 60 * 60
+
+
+def turning_tail_unclear(ocr, decimals, integer_digits=5):
+    """Number of unreadable trailing compared decimals (1 or 2) while every digit before is certain."""
+    text = str(ocr or "")
+    compared = integer_digits + (decimals + 1 if decimals else 0)
+    shown = text[:compared]
+    if not decimals or len(shown) != compared or not shown[:integer_digits].isdigit():
+        return 0
+    for drop in (2, 1):
+        if drop <= decimals and shown[-drop:] == "?" * drop and "?" not in shown[:-drop]:
+            return drop
+    return 0
+
+
+def meter_running(ocr, decimals, integer_digits, anchor, counter, stamp):
+    """Whether the meter moved lately: then an unclear last roller is a turning one.
+
+    True when the readable part of this reading is already above the last confirmed
+    reading, or when the last two accepted readings differ and are less than an hour old.
+    """
+    drop = turning_tail_unclear(ocr, decimals, integer_digits)
+    if isinstance(anchor, dict) and type(anchor.get("value")) is int and drop:
+        text = str(ocr)[:integer_digits + decimals + 1 - drop].rstrip(".")
+        if text.replace(".", "").isdigit():
+            low = int(text.replace(".", "")) * 10 ** (3 - (decimals - drop))
+            if low > anchor["value"]:
+                return True
+    if not isinstance(counter, dict) or type(stamp) not in (int, float):
+        return False
+    reading, booked, since = counter.get("reading_litres"), counter.get("anchor_litres"), counter.get("anchor_time")
+    return (type(reading) is int and type(booked) is int and type(since) in (int, float)
+            and reading > booked and 0 <= stamp - since <= TURNING_FLOW_SECONDS)
+
+
 def only_known_hidden_unclear(ocr, decimals, integer_digits, hidden_slots):
     """True when every unreadable compared digit is a known hidden slot or a turning last roller.
 

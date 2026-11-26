@@ -264,15 +264,18 @@ def find_glyph_register(frame, count, with_tilt=False):
     if count < 3:
         return None
     gray = frame.convert("L")
-    gray.thumbnail((400, 300), Image.Resampling.BILINEAR)
+    # 0.5.53: a portrait picture (a meter mounted sideways, searched turned by a right angle) keeps
+    # the scale of a landscape one; before, it was shrunk until its digits fell below the limit.
+    gray.thumbnail((400, 300) if gray.width >= gray.height else (300, 400), Image.Resampling.BILINEAR)
     width, height = gray.size
+    short = min(width, height)
     found = []
     for stroke in (7, 11):
         glyphs = bright_glyphs(gray, stroke)
         for threshold in (80, 120):
             for box in digit_components(glyphs, threshold, True):
                 tall = box[3] - box[1]
-                if not height / 20 <= tall <= height / 3 or box[2] - box[0] > tall:
+                if not short / 20 <= tall <= short / 3 or box[2] - box[0] > tall:
                     continue
                 center = ((box[0] + box[2]) / 2, (box[1] + box[3]) / 2)
                 twin = next((i for i, old in enumerate(found)

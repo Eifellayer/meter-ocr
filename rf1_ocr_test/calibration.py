@@ -299,24 +299,176 @@ def neighbour_layout(frame, angle, detected, whole_digits, fraction_digits):
     return Layout(outer, angle, whole_width, tuple(map(tuple, normalized)), method="neighbours")
 
 
-def glyph_register_layout(frame, whole_digits, fraction_digits):
-    """Propose the meter window from a row of bright digits, levelled by the measured tilt."""
+# Start angles for the glyph row: it is found up to about 20° off level and reports its own
+# tilt, so three starts cover every tilt up to 45° without relying on the measured skew (0.5.53).
+GLYPH_START_ANGLES = (0, 30, -30)
+# Colour difference between whole and decimal rollers that counts as a cue, in percent of the
+# brightness of a cell.
+COLOUR_SPLIT = 35.0
+
+
+def _cell_colours(image, window, count, first, last):
+    """Median colour of the roller cells ``first``..``last`` (0 = first cell of the window); None outside."""
+    l, t, r, b = window
+    pitch, tall = (r - l) / count, b - t
+    colours = {}
+    for index in range(first, last + 1):
+        box = (round(l + (index + .2) * pitch), round(t + .15 * tall),
+               round(l + (index + .8) * pitch), round(b - .15 * tall))
+        if box[0] < 0 or box[1] < 0 or box[2] > image.width or box[3] > image.height or box[2] - box[0] < 2:
+            colours[index] = None
+            continue
+        colours[index] = tuple(ImageStat.Stat(image.crop(box).convert("RGB")).median)
+    return colours
+
+
+def register_shift(image, window, whole_digits, fraction_digits, reach=2, colour_only=False, evidence=None):
+    """By how many rollers the window must move to sit on the counter, and whether it is upside down.
+
+    A row of digits found by its glyphs can sit one or two rollers beside the counter: dim rollers
+    at one end are missed, print next to the other end ("m³", a reflection) is taken for digits.
+    Two cues that do not depend on reading the digits, on the picture being in colour or on it
+    being a negative (0.5.53):
+
+    - every roller lies in the counter window, whose background differs from the meter face
+      above and below it;
+    - the decimal rollers have their own background colour (usually red). The change of colour
+      then sits exactly between the whole and the decimal rollers. If it sits where an upside
+      down counter would have it, the second value is True.
+
+    Returns (shift in rollers, upside down). (0, False) when the cues say nothing.
+    ``colour_only`` moves a window only on the colour cue (for rows that may be a label).
+    ``evidence`` (a list) receives whether the colour cue was seen.
+    """
     count = whole_digits + fraction_digits
-    found = find_glyph_register(frame, count, with_tilt=True)
+    l, t, r, b = window
+    tall = b - t
+    if count < 3 or r - l < count * 4 or tall < 6:
+        return 0, False
+    colours = _cell_colours(image, window, count, -reach, count - 1 + reach)
+    grey = lambda colour: sum(colour) / 3
+
+    def face(top, bottom):
+        box = (max(0, l), max(0, round(top)), min(image.width, r), min(image.height, round(bottom)))
+        if box[3] - box[1] < 2 or box[2] - box[0] < 2:
+            return None
+        return grey(ImageStat.Stat(image.crop(box).convert("RGB")).median)
+
+    inside = [grey(colours[i]) for i in range(count) if colours[i] is not None]
+    if len(inside) < count:
+        return 0, False
+    middle = median(inside)
+    faces = [level for level in (face(t - .9 * tall, t - .35 * tall), face(b + .35 * tall, b + .9 * tall))
+             if level is not None]
+    reference = max(faces, key=lambda level: abs(level - middle)) if faces else None
+    contrast = abs(reference - middle) if reference is not None else 0
+
+    def in_window(index):
+        colour = colours.get(index)
+        if colour is None:
+            return False
+        if contrast < 25:
+            return True
+        return abs(grey(colour) - reference) > .4 * contrast
+
+    def chroma(colour):
+        # Relative to the brightness: a colour cast of the light (a bluish flash) is stronger on
+        # bright cells than on dark ones and must not pass for a second colour.
+        level = grey(colour)
+        return tuple(100 * (value - level) / max(level, 40) for value in colour)
+
+    def split(shift, flipped, skip_last=False):
+        # skip_last: the last decimal roller turns all the time while gas flows; caught between
+        # two digits its cell shows neither colour clearly and is left out of the comparison.
+        cells = [colours.get(shift + i) for i in range(count)]
+        if any(cell is None for cell in cells):
+            return 0.0
+        cut = fraction_digits if flipped else whole_digits
+        groups = [list(map(chroma, cells[:cut])), list(map(chroma, cells[cut:]))]
+        if not all(groups):
+            return 0.0
+        if not skip_last:
+            pass
+        elif flipped and len(groups[0]) >= 3:
+            groups[0] = groups[0][1:]
+        elif not flipped and len(groups[1]) >= 3:
+            groups[1] = groups[1][:-1]
+        centres = [tuple(median(values) for values in zip(*group)) for group in groups]
+        apart = sum((a - b) ** 2 for a, b in zip(*centres)) ** .5
+        spread = max(max(sum((a - b) ** 2 for a, b in zip(colour, centre)) ** .5 for colour in group)
+                     for group, centre in zip(groups, centres))
+        return apart - spread
+
+    shifts = sorted(range(-reach, reach + 1), key=abs)
+    best = None
+    for flipped in (False, True):
+        for shift in shifts:
+            covered = sum(in_window(shift + i) for i in range(count))
+            colour = max(split(shift, flipped), split(shift, flipped, True)) if fraction_digits else 0.0
+            key = (colour if colour >= COLOUR_SPLIT else 0.0) / COLOUR_SPLIT + covered
+            if best is None or key > best[0] + 1e-6:
+                best = key, shift, flipped, colour, covered
+    _, shift, flipped, colour, covered = best
+    if covered < count - 1:
+        # Rollers beside the counter window: the colours compared are not those of one counter.
+        colour = 0.0
+    if evidence is not None:
+        evidence.append(colour >= COLOUR_SPLIT)
+    if colour < COLOUR_SPLIT:
+        if colour_only:
+            return 0, False
+        flipped = False
+    return shift, flipped
+
+
+def glyph_register_layout(frame, whole_digits, fraction_digits, start=0, evidence=None, upside_down=False):
+    """Propose the meter window from a row of bright digits, levelled by the measured tilt.
+
+    ``start`` levels the picture first (0.5.53): a counter hanging e.g. 33° askew is not found as
+    a row in the plain picture. The window is then moved onto the counter (``register_shift``).
+    """
+    count = whole_digits + fraction_digits
+    turned = turn_crop(frame, start, expand=False) if start else frame
+    found = find_glyph_register(turned, count, with_tilt=True)
     if found is None:
         return None
-    angle = max(-SEARCH_ANGLE_LIMIT, min(SEARCH_ANGLE_LIMIT, round(-found[1])))
-    if angle:
-        found = find_glyph_register(turn_crop(frame, angle, expand=False), count, with_tilt=True)
+    angle = max(-SEARCH_ANGLE_LIMIT, min(SEARCH_ANGLE_LIMIT, start + round(-found[1])))
+    if angle != start:
+        turned = turn_crop(frame, angle, expand=False) if angle else frame
+        found = find_glyph_register(turned, count, with_tilt=True)
         if found is None:
             return None
     window = found[0]
+    shift, flipped = register_shift(turned, window, whole_digits, fraction_digits, evidence=evidence)
+    if flipped:
+        # The decimal rollers sit where an upside down counter has them. The counter is searched
+        # again in the picture turned by 180°, where its digits stand upright and its cells are
+        # fitted the usual way, and the frame found there is carried back.
+        if upside_down:
+            return None
+        twin = glyph_register_layout(frame.transpose(Image.Transpose.ROTATE_180), whole_digits, fraction_digits,
+                                     start, upside_down=True)
+        if twin is None:
+            return None
+        l, t, r, b = twin.box
+        return replace(twin, box=(frame.width - r, frame.height - b, frame.width - l, frame.height - t),
+                       rotation=quarter_rotation(180, twin.rotation))
+    if shift:
+        move = round(shift * (window[2] - window[0]) / count)
+        moved = (window[0] + move, window[1], window[2] + move, window[3])
+        if moved[0] >= 0 and moved[2] <= turned.width:
+            window = moved
     l, t, r, b = window
-    turned = turn_crop(frame, angle, expand=False) if angle else frame
     strip = turned.crop(window)
     fitted = dark_register_cells(strip, count)
     if fitted:
         cells = scale_digit_boxes(fitted, strip.size)
+        # The window already sits on the counter: cells fitted more than half a roller beside its
+        # even division sit on the neighbouring digits and are not used.
+        pitch = (r - l) / count
+        if any(abs((cell[0] + cell[2]) / 2 - (index + .5) * pitch) > .5 * pitch for index, cell in enumerate(cells)):
+            fitted = None
+    if fitted:
         split = (cells[whole_digits - 1][2] + cells[whole_digits][0]) // 2 if fraction_digits else r - l
     else:
         edges = [round((r - l) * i / count) for i in range(count + 1)]
@@ -328,8 +480,84 @@ def glyph_register_layout(frame, whole_digits, fraction_digits):
     return replace(proposal, method="register_window")
 
 
+def settled_layout(frame, layout, whole_digits, fraction_digits):
+    """A proposed frame put right by the colour of the decimal rollers (0.5.53).
+
+    The change of colour between whole and decimal rollers needs no reading, so it is checked
+    before any frame is read: a frame one or two rollers beside the counter is moved onto it, a
+    frame on a counter standing upside down is turned by 180°. Frames without one box per roller
+    and pictures without such a colour (grey pictures, labels) stay as they are.
+    """
+    count = whole_digits + fraction_digits
+    angle = layout.rotation
+    if not fraction_digits or len(layout.digit_boxes) != count or abs(angle) > SEARCH_ANGLE_LIMIT:
+        return layout
+    left, top, right, bottom = layout.box
+    if not (0 <= left < right <= frame.width and 0 <= top < bottom <= frame.height):
+        return layout
+    turned = turn_crop(frame, angle, expand=False) if angle else frame
+    w, h = turn_crop(crop_register(frame, layout.box), angle).size
+    x, y = (left + right - frame.width) / 2, (top + bottom - frame.height) / 2
+    c, s = cos(radians(angle)), sin(radians(angle))
+    origin = frame.width / 2 + c * x - s * y - w / 2, frame.height / 2 + s * x + c * y - h / 2
+    cells = scale_digit_boxes(layout.digit_boxes, (w, h))
+    inner = (min(cell[0] for cell in cells), min(cell[1] for cell in cells),
+             max(cell[2] for cell in cells), max(cell[3] for cell in cells))
+    window = (round(origin[0] + inner[0]), round(origin[1] + inner[1]),
+              round(origin[0] + inner[2]), round(origin[1] + inner[3]))
+    shift, flipped = register_shift(turned, window, whole_digits, fraction_digits, colour_only=True)
+    if flipped:
+        return half_turn_layout(layout, count)
+    move = round(shift * (window[2] - window[0]) / count)
+    if not move or window[0] + move < 0 or window[2] + move > turned.width:
+        return layout
+    moved = (window[0] + move, window[1], window[2] + move, window[3])
+    relative = [(cell[0] - inner[0], cell[1] - inner[1], cell[2] - inner[0], cell[3] - inner[1]) for cell in cells]
+    split = (relative[whole_digits - 1][2] + relative[whole_digits][0]) // 2
+    proposal = neighbour_layout(frame, angle, (moved, split, relative), whole_digits, fraction_digits)
+    return layout if proposal is None else replace(proposal, method=layout.method)
+
+
 def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False, on_regions=None, *, upright=False,
             skew=None):
+    """The candidates of ``raw_layouts``, each put right by the colour of the decimal rollers."""
+    whole, fraction = rules["integer_digits"], rules["fraction_digits"]
+    seen = set()
+    anchors = []
+    for layout in raw_layouts(frame, overlay, rules, offset, current, prefer_configured, on_regions,
+                              upright=upright, skew=skew, anchors=anchors):
+        kept = current is not None and layout.box == current.box and layout.rotation == current.rotation
+        if kept or layout.method == "register_window":
+            yield layout
+            continue
+        if any(beside_counter(layout, anchor) for anchor in anchors):
+            # The colour of the decimal rollers shows where this counter lies: a second frame on
+            # it that sits beside that place reads shifted digits ("56759" for 10567.59).
+            continue
+        settled = settled_layout(frame, layout, whole, fraction)
+        if settled != layout and settled in seen:
+            continue
+        seen.add(settled)
+        yield settled
+
+
+def beside_counter(layout, anchor):
+    """A frame on the counter of ``anchor`` that is not the same frame (0.5.53)."""
+    if layout.method not in DETECTED_METHODS or same_register(layout, anchor):
+        return False
+    turn = abs((layout.rotation - anchor.rotation + 180) % 360 - 180)
+    if min(turn, 180 - turn) > 15:
+        return False
+    a, b = layout.box, anchor.box
+    wide, tall = min(a[2], b[2]) - max(a[0], b[0]), min(a[3], b[3]) - max(a[1], b[1])
+    if wide <= 0 or tall <= 0:
+        return False
+    smaller = min((a[2] - a[0]) * (a[3] - a[1]), (b[2] - b[0]) * (b[3] - b[1]))
+    return wide * tall >= .5 * smaller
+
+
+def raw_layouts(frame, overlay, rules, offset, current=None, prefer_configured=False, on_regions=None, *,
+                upright=False, skew=None, anchors=None):
     """Try a few geometry candidates per image, rotating the search across images."""
     emitted = set()
 
@@ -388,9 +616,16 @@ def layouts(frame, overlay, rules, offset, current=None, prefer_configured=False
         level = skew or 0
         ranked.sort(key=lambda item: (-item[0], abs(item[1] - level), item[3][1], item[3][0]))
         whole, fraction = rules["integer_digits"], rules["fraction_digits"]
-        glyph_window = glyph_register_layout(frame, whole, fraction)
-        if glyph_window is not None and unique(glyph_window):
-            yield glyph_window
+        starts = (0,) if upright else GLYPH_START_ANGLES
+        if skew is not None and all(abs(skew - start) > 8 for start in starts):
+            starts = (*starts, skew)
+        for start in starts:
+            seen_colour = []
+            glyph_window = glyph_register_layout(frame, whole, fraction, start, seen_colour)
+            if glyph_window is not None and unique(glyph_window):
+                if anchors is not None and any(seen_colour):
+                    anchors.append(glyph_window)
+                yield glyph_window
         windows = []
         for angle in angles:
             if abs(angle) > SEARCH_ANGLE_LIMIT:
@@ -1096,6 +1331,40 @@ class Calibration:
     # 0.5.41, shadow mode only: frames tested on the current picture with their filled digit fields.
     presort_shadow: bool = False
     presort_seen: list = field(default_factory=list)
+
+    def frozen_digits(self, layout, readings, stamp, digits, flow):
+        """Leading whole digits one profile could not read, from the reading confirmed before (0.5.53).
+
+        Dim rollers at one end of the counter read as "1?567" with one profile and "10567" with the
+        other, picture after picture, and the frame that sits right was never confirmed a second
+        time. A whole digit that cannot have changed since the last confirmed reading of the same
+        frame (maximum flow × time) is taken from that reading where a profile shows "?". A profile
+        that reads another digit there is left as it is and still counts as a contradiction.
+        """
+        known = self.counter.get("reading_litres") if isinstance(self.counter, dict) else None
+        if (not self.simplified or not self.confirmations or self.candidate is None or type(known) is not int
+                or not same_register(layout, self.candidate)):
+            return readings
+        since = self.counter.get("timestamp", stamp)
+        elapsed = stamp - since if type(since) in (int, float) and type(stamp) in (int, float) else None
+        if elapsed is None or not 0 <= elapsed <= 6 * 3600 or type(flow) not in (int, float) or flow <= 0:
+            return readings
+        low, high = known // 1000, (known + int(flow * elapsed / 3600) + 1000) // 1000
+        if high >= 10 ** digits:
+            return readings
+        lowest, highest = str(low).zfill(digits), str(high).zfill(digits)
+        frozen = 0
+        while frozen < digits and lowest[frozen] == highest[frozen]:
+            frozen += 1
+        rows = [str(value) for value in readings]
+        if not frozen or any(len(row) < digits for row in rows):
+            return readings
+        for position in range(frozen):
+            shown = {row[position] for row in rows}
+            if shown - {"?", lowest[position]} or shown == {"?"}:
+                # Another digit, or no profile read it at all: nothing is filled in.
+                return readings
+        return [lowest[:frozen] + row[frozen:] for row in rows]
 
     def measured_skew(self, frame):
         """Median of the tilt measured on the last images (None until one was measured)."""
@@ -2325,6 +2594,7 @@ class Calibration:
                 on_decision("unreadable")
                 continue
             readings = self.mask_empty_fields(frame, layout, readings)
+            readings = self.frozen_digits(layout, readings, stamp, digits, flow)
             score = score_layout(layout, readings)
             coarse.append((score, layout, readings))
             # A plain setup reads two decimals: there the row is complete without the third one.

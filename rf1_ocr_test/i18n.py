@@ -760,6 +760,11 @@ EN_UI = {
     "<p>Die vier unteren Verfahren schreiben ihr Ergebnis neben das der bewährten Prüfung ins Schattenmodus-Protokoll (Werkzeuge › Debug-Protokoll › Schattenmodus-Protokoll). Sie sind an, sobald experimentelle Funktionen eingeschaltet sind, und lassen sich hier einzeln abschalten.</p>":
         "<p>The four lower methods write their result next to that of the established check into the shadow mode log (Tools › Debug log › Shadow mode log). They are on as soon as experimental functions are switched on and can be switched off here one by one.</p>",
     '<summary>Kamera-Diagnose</summary>': '<summary>Camera diagnosis</summary>',
+    # 0.5.51: firmware installer under tools
+    '<summary>Zählerkamera-Firmware</summary>': '<summary>Meter camera firmware</summary>',
+    "Installiert die fertige Firmware auf ein ESP32-Board mit Kamera oder trägt bei einer schon geflashten Zählerkamera das WLAN neu ein. Öffnet den Installer in einem neuen Tab; am Computer Chrome oder Edge benutzen und das Board per USB anstecken.":
+        "Installs the ready-made firmware on an ESP32 board with a camera, or enters the Wi-Fi again on a meter camera that is already flashed. Opens the installer in a new tab; use Chrome or Edge on a computer and connect the board by USB.",
+    '>Firmware installieren oder WLAN einrichten<': '>Install firmware or set up Wi-Fi<',
     "Wie gut das Bild der letzten Prüfung zum Lesen taugt, und wie oft die Bildquelle in den letzten 24 Stunden ausfiel. Die App holt dafür kein neues Bild und schaltet kein Licht.":
         "How well the picture of the last check can be read, and how often the image source failed in the last 24 hours. The app fetches no new picture for this and switches no light.",
     '<dt>Letztes Prüfbild</dt>': '<dt>Last check picture</dt>', '<dt>Zählwerk: Helligkeit</dt>': '<dt>Counter: brightness</dt>',

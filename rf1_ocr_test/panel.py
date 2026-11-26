@@ -804,6 +804,14 @@ details > summary:focus-visible{{outline:3px solid light-dark(#0b8f7c66,#38c9b08
 .calibration-rejected{{margin:.3rem 0 .5rem;font-size:.88rem;color:var(--muted)}}
 .calibration-rejected > summary{{font-weight:600}}
 .calibration-rejected ul{{margin:.3rem 0 0;padding-left:1.4rem;font-variant-numeric:tabular-nums}}
+/* 0.5.51: wide screens (Full HD) use the width: two columns instead of one long page. */
+@media(min-width:1400px){{
+body{{max-width:100rem}}
+.two-columns{{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:0 1.6rem;align-items:start}}
+.two-columns > .column-main,.two-columns > .column-side{{min-width:0}}
+.two-columns > .column-side > :first-child{{margin-top:0}}
+#view-settings:not([hidden]){{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:0 1.25rem;align-items:start}}
+}}
 </style>
 <header>
 <div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5a8 8 0 1 1 15 0"/><path d="M12 13l3.5-4"/><circle cx="12" cy="13.5" r="1.4" fill="currentColor"/><path d="M7 20h10"/></svg></span>
@@ -1155,6 +1163,11 @@ name: Zählerstand (OCR)</code></pre>
 <div><dt>Prüfungen in 24 Stunden</dt><dd id="camera-checks">–</dd></div>
 <div><dt>Ohne neues Bild</dt><dd id="camera-failures">–</dd></div>
 </dl>
+</details>
+<details id="camera-firmware">
+<summary>Zählerkamera-Firmware</summary>
+<p class="settings-note">Installiert die fertige Firmware auf ein ESP32-Board mit Kamera oder trägt bei einer schon geflashten Zählerkamera das WLAN neu ein. Öffnet den Installer in einem neuen Tab; am Computer Chrome oder Edge benutzen und das Board per USB anstecken.</p>
+<p><a class="button-link kit-install" id="tools-kit-install" href="{kit_installer_url}?board=auto&amp;lang={language}" target="_blank" rel="noopener">Firmware installieren oder WLAN einrichten</a></p>
 </details>
 <details id="background-work">
 <summary>Schattenmodus und Arbeit im Hintergrund</summary>
@@ -1848,6 +1861,48 @@ const settingsOpen = selectedTab ? selectedTab === 'settings' :
   searchPrefs.get('saved') === 'crop' || settingsSections.some(selector => document.querySelector(selector).open);
 const toolsOpen = !settingsOpen && (selectedTab === 'tools' || !document.querySelector('#view-tools').hidden);
 activateTab(settingsOpen ? 'settings' : toolsOpen ? 'tools' : 'overview', false);
+// 0.5.51: on wide screens the big pictures move into a second column, so less scrolling is
+// needed. Markers keep their places; on a narrow window everything goes back in its old order.
+function twoColumns(panel, sideSelectors) {{
+  if (!panel || !window.matchMedia) return;
+  const wide = window.matchMedia('(min-width: 1400px)');
+  let main = null, side = null;
+  const apply = () => {{
+    if (wide.matches && !main) {{
+      main = document.createElement('div');
+      main.className = 'column-main';
+      side = document.createElement('div');
+      side.className = 'column-side';
+      for (const child of [...panel.children]) {{
+        if (!sideSelectors.some(selector => child.matches(selector))) continue;
+        const mark = document.createComment('column');
+        child.before(mark);
+        child.columnMark = mark;
+        side.append(child);
+      }}
+      main.append(...panel.childNodes);
+      panel.append(main, side);
+      panel.classList.add('two-columns');
+    }} else if (!wide.matches && main) {{
+      let previous = null;
+      for (const child of [...side.children]) {{
+        if (child.columnMark && child.columnMark.isConnected) child.columnMark.replaceWith(child);
+        else if (previous) previous.after(child);
+        else main.append(child);
+        child.columnMark = null;
+        previous = child;
+      }}
+      main.replaceWith(...main.childNodes);
+      side.remove();
+      main = side = null;
+      panel.classList.remove('two-columns');
+    }}
+  }};
+  if (wide.addEventListener) wide.addEventListener('change', apply);
+  apply();
+}}
+twoColumns(document.querySelector('#check-overview'), ['#calibration-overview', '#preview-home', '#automatic-images']);
+twoColumns(document.querySelector('#tools-panel'), ['#manual-test-area', '#preview-tools-slot', '#automatic-images']);
 const setupDialog = document.querySelector('#setup-dialog');
 // Keep the first-run modal outside the tab panel so its hidden ancestor cannot hide it.
 document.body.appendChild(setupDialog);
@@ -6199,7 +6254,11 @@ def start_panel(
                         else "Automatische Selbsteinrichtung (empfohlen)"} if control_calibration else {}),
                     "auto": CROP_MODES_EN["auto"] if language == "en" else CROP_MODES["auto"],
                     "manual": "Set up manually" if language == "en" else "Manuell einrichten",
-                }, "learn" if control_calibration and (setup_pending or summary["activity_state"] == "setup_wait")
+                }, "learn" if control_calibration and (
+                    setup_pending or summary["activity_state"] == "setup_wait"
+                    # 0.5.51: frames found by the self-setup are saved as manual frames; the
+                    # wizard still shows the self-setup the user chose, not "set up manually".
+                    or auto_rules["crop_mode"] == "manual" and auto_rules.get("frames_origin") == "setup")
                    else auto_rules["crop_mode"]),
                 wizard_digit_boxes=html.escape(json.dumps(auto_rules["digit_boxes"]), quote=True),
                 fallback_value=html.escape(auto_rules["fallback_value"], quote=True),
@@ -6715,13 +6774,27 @@ def start_panel(
                                 "rotation": marked["rotation"], "digit_boxes": boxes,
                             }
                     with source_lock, rules_lock:
+                        previous_source, initial_setup = get_source()
+                        # 0.5.51: walking through the wizard again with the self-setup still selected
+                        # keeps the frames it found, as long as source and digit layout stay the same.
+                        # A new self-setup starts with the button in the settings.
+                        keep_setup = (learn_crop and not initial_setup and old_rules["crop_mode"] == "manual"
+                                      and old_rules.get("frames_origin") == "setup"
+                                      and integer_digits == old_rules["integer_digits"]
+                                      and fraction_digits == old_rules["fraction_digits"]
+                                      and setup_source_id(previous_source)
+                                      == setup_source_id({**previous_source, **source_values}))
+                        if keep_setup:
+                            learn_crop = False
+                            rules_values["setup_reflection"] = old_rules.get("setup_reflection")
                         if learn_crop and get_auto_paused and get_auto_paused():
                             problem(409, "Setze die Automatik fort und starte dann die Selbsteinrichtung.",
                                     "Resume automatic checks before starting automatic setup.")
                             return
-                        previous_source, initial_setup = get_source()
                         save_source(source_values)
-                        if not learn_crop or fallback_value and (
+                        if keep_setup:
+                            pass
+                        elif not learn_crop or fallback_value and (
                                 fallback_value != old_rules.get("fallback_value") or previous_source != get_source()[0]):
                             rules_values["setup_input_source"] = setup_source_id(get_source()[0])
                         else:

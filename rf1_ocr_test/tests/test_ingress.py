@@ -999,6 +999,30 @@ class IngressTests(IngressFixture):
                          tuple(self.rules[key] for key in ("crop_mode", "crop", "width", "rotation")))
         self.assertIn("Einrichtung gespeichert.", self.request("/?saved=setup-calibration&ui=overview")[0])
 
+    def test_wizard_keeps_the_self_setup_selected_and_its_frames(self):
+        # 0.5.51: frames from the self-setup are saved as manual frames. Walking through the
+        # wizard again must still show the self-setup and keep its frames instead of starting over.
+        values = {
+            "source_mode": "esphome", "camera": "camera.meter", "meter_display": "rollers",
+            "integer_digits": 5, "fraction_digits": 3, "decimals": 1, "attempts": 5,
+            "polarity": "auto", "crop_mode": "learn", "crop": "ignored", "interval_minutes": 60,
+            "max_flow": "6", "review_minutes": 240, "delivery_hours": 24,
+        }
+        self.assertEqual(303, self.submit("/einrichtung", image_limit=24, **values)[0])
+        self.calibration = None
+        self.rules.update(crop_mode="manual", crop="10,20,410,100", width=270, rotation=-3,
+                          frames_origin="setup", digit_boxes=[[0, 0, 10, 10]] * 8)
+        page = self.request("/")[0]
+        self.assertRegex(page, r'name="crop_mode" value="learn"[^>]*checked')
+        status, location = self.submit("/einrichtung", image_limit=24, **values)
+        self.assertEqual((303, "./?saved=setup&ui=overview"), (status, location))
+        self.assertIsNone(self.calibration)
+        self.assertEqual(("manual", "10,20,410,100", "setup"),
+                         tuple(self.rules[key] for key in ("crop_mode", "crop", "frames_origin")))
+        # Frames the user placed by hand stay on "set up manually".
+        self.rules.update(frames_origin="user")
+        self.assertNotRegex(self.request("/")[0], r'name="crop_mode" value="learn"[^>]*checked')
+
     def test_setup_wizard_rejects_fallback_without_timestamp_and_keeps_old_settings(self):
         before = dict(self.source)
         values = {

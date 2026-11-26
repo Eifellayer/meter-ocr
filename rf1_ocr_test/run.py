@@ -58,7 +58,7 @@ from consumption import (DEFAULT_FLOW_LPH, LOWER_READING, LOWER_PENDING, LOWER_R
                          valid_energy_factor, BASE_PRICE_RANGE, WORK_PRICE_RANGE, kwh_factor, period_values,
                          update_periods, valid_price,
                          accumulate_consumption, fallback_detail, format_cubic_metres, record_consumption_sample)
-from checks import (without_light, unclear_trailing_decimals, last_two_compared_unclear, setup_tilt, initial_skew_state, FRAME_OFF_NOTICE, FRAME_OFF_STREAK, FRAME_OFF_WAIT_NOTICE, MOVING_DIGIT_NOTICE,
+from checks import (without_light, turning_tail_unclear, meter_running, unclear_trailing_decimals, last_two_compared_unclear, setup_tilt, initial_skew_state, FRAME_OFF_NOTICE, FRAME_OFF_STREAK, FRAME_OFF_WAIT_NOTICE, MOVING_DIGIT_NOTICE,
                     REDUCED_PRECISION_NOTICE, REDUCED_PRECISION2_NOTICE, MOVING_DIGITS_NOTICE, only_last_compared_unclear)
 import debug_log
 import experiments
@@ -3332,6 +3332,7 @@ def main():
         local_trial = None
         shifted_trial = None
         recovery_log = None
+        turning_roller = False
         restoring_local = False
         recover_geometry = False
         geometry_warning = False
@@ -3751,7 +3752,15 @@ def main():
                         hidden_known = (not manual and only_known_hidden_unclear(
                             observed or ocr, comparison_decimals, integer_digits,
                             hidden_reflection_slots(active_rules, active_source)))
+                        # 0.5.50: only the last compared roller(s) unclear while gas flows: a turning
+                        # roller. No intensive re-read (it timed out almost every time).
+                        turning_roller = bool(
+                            not manual and turning_tail_unclear(observed or ocr, comparison_decimals, integer_digits)
+                            and meter_running(observed or ocr, comparison_decimals, integer_digits,
+                                              history.get("reflection_anchor"), history.get("consumption"),
+                                              read_state["captured"]))
                         near_hit = (digit_probe_enabled and regular_status != "match" and not hidden_known
+                                    and not turning_roller
                                     and read_state["captured"] is not None and not sample.get("reference_is_fallback")
                                     and (pattern or not ocr_confirmed
                                          and missing_digit_pattern(observed, comparison_decimals, integer_digits,
@@ -3762,6 +3771,7 @@ def main():
                             recovery_log["reason"] = (
                                 "matched" if regular_status == "match" else
                                 "hidden_known" if hidden_known else
+                                "turning_roller" if turning_roller else
                                 "confirmed" if ocr_confirmed else
                                 "disabled" if not digit_probe_enabled else
                                 "paused" if paused_now else
@@ -4608,7 +4618,8 @@ def main():
                             and outcome in SUCCESSFUL_CHECKS)
                             or updated.get("check_detail") == MOVING_DIGIT_NOTICE):
                         streak = updated.get("last_position_unclear_streak", 0)
-                        streak = (streak if type(streak) is int else 0) + 1
+                        # A turning roller says nothing about its frame (0.5.50).
+                        streak = 0 if turning_roller else (streak if type(streak) is int else 0) + 1
                         updated["last_position_unclear_streak"] = streak
                         if streak >= FRAME_OFF_STREAK and not validation_detail and not lower_recovered:
                             relocatable = active_rules["decimals"] == 3 and active_rules["fraction_digits"] == 3
@@ -4974,7 +4985,7 @@ def main():
                 idle_state["turn"] += 1
                 idle_state["jobs"][:] = idle_work.keep_recent(idle_state["jobs"], idle_job(
                     idle_work.next_reason([
-                        *(["unclear_check"] if "?" in (ocr or "") else []),
+                        *(["unclear_check"] if "?" in (ocr or "") and not local.get("turning_roller") else []),
                         *(["experiment"] if experiment and experiment.get("skipped") else []),
                     ], idle_state["turn"]),
                     local.get("register"),

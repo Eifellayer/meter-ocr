@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.50
+
+- **Keine Nachprüfung mehr für eine drehende Rolle.** Solange Gas fließt, steht die letzte verglichene Rolle fast immer zwischen zwei Ziffern. Bisher las die App sie bei jeder Prüfung bis zu 25 Sekunden lang nach, verschob dafür probeweise ihren Rahmen und meldete nach drei solchen Prüfungen „Rahmen der letzten Stelle sitzt daneben“. Jetzt erkennt sie am laufenden Verbrauch, dass sich die Rolle dreht: Die Prüfung wird sofort mit einer Nachkommastelle weniger bestätigt, ohne Nachprüfung, ohne Nacharbeit im Hintergrund und ohne den Hinweis auf den Rahmen. Steht der Zähler still und bleibt die Stelle trotzdem unklar, prüft die App wie bisher nach.
+- *English:* No more re-check for a turning roller: while gas flows, the last compared roller is between two digits most of the time. The app used to re-read it for up to 25 seconds on every check, moved its frame for trials and reported “Frame of the last digit is off” after three such checks. It now sees from the running consumption that the roller is turning: the check is confirmed one decimal coarser at once, without a re-check, without background work and without the frame notice. When the meter stands still and the digit stays unclear, the app re-checks as before.
+
 ## 0.5.49
 
 - **Keine Sprünge durch falsch gelesene Ziffern mehr.** Wurde eine Ziffer auf zwei Bildern hintereinander gleich falsch gelesen (etwa eine 1 als 7), galt der Stand bisher als bestätigt und der Zähler sprang um mehrere Zehntel nach oben; die richtigen Werte danach wurden verworfen, bis der echte Stand aufgeholt hatte. Die App prüft jetzt jeden Stand ohne Vergleichswert gegen den Durchfluss, den dein Zähler in den letzten Tagen wirklich erreicht hat (doppelter üblicher Tageshöchstwert, mindestens 1,5 m³/h). Ein größerer Sprung wird nicht übernommen; die App wartet auf die nächste Ablesung. Solange noch zu wenige Ablesungen vorliegen, gilt wie bisher der eingestellte Höchstdurchfluss.

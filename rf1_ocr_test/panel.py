@@ -2497,6 +2497,23 @@ document.querySelector('#language-select').addEventListener('change', () => {{
 
 let sendingCheck = false;
 let statusPending = false;
+// 0.5.47: poll the status every second only while something runs (setup, check, a click just now);
+// otherwise every 5 seconds, and not at all while the page is hidden (background tab, closed sidebar).
+let statusBusy = false;
+let statusBusyUntil = 0;
+let statusPolledAt = 0;
+function whenVisible(action) {{
+  if (!document.hidden) {{ action(); return; }}
+  const resume = () => {{
+    if (document.hidden) return;
+    document.removeEventListener('visibilitychange', resume);
+    action();
+  }};
+  document.addEventListener('visibilitychange', resume);
+}}
+for (const kind of ['click', 'submit', 'change']) {{
+  document.addEventListener(kind, () => {{ statusBusyUntil = Date.now() + 20000; }}, true);
+}}
 const manualPanel = document.querySelector('#manual-panel');
 const manualForm = document.querySelector('#manual-form');
 const testBox = document.querySelector('#test-box');
@@ -4175,6 +4192,8 @@ async function refreshTestStatus() {{
     const apply = document.querySelector('#apply-crop-form');
     const extra = document.querySelector('#ocr-details');
     const active = ['queued', 'running', 'ocr'].includes(job.phase);
+    statusBusy = active || calibrating
+      || ['working', 'queued'].includes(document.querySelector('.activity-status')?.dataset.state);
     const outcome = job.phase === 'done' ? job.outcome : null;
     testBox.hidden = job.phase === 'idle';
     testBox.dataset.phase = job.phase;
@@ -4300,8 +4319,19 @@ async function refreshTestStatus() {{
     statusPending = false;
   }}
 }}
+function pollTestStatus() {{
+  if (document.hidden) return;
+  const interval = statusBusy || Date.now() < statusBusyUntil ? 1000 : 5000;
+  if (Date.now() - statusPolledAt < interval - 100) return;
+  statusPolledAt = Date.now();
+  refreshTestStatus();
+}}
+statusPolledAt = Date.now();
 refreshTestStatus();
-setInterval(refreshTestStatus, 1000);
+setInterval(pollTestStatus, 1000);
+document.addEventListener('visibilitychange', () => {{
+  if (!document.hidden) {{ statusPolledAt = Date.now(); refreshTestStatus(); }}
+}});
 // 0.5.38: time left until the app fills a hidden digit itself when no reading is entered.
 // var: the status refresh may set it before this line runs.
 var hiddenEstimateAt;
@@ -4337,6 +4367,7 @@ function formatStamp(epoch) {{
 // estimate when the next one can start.
 let backgroundLoadTimer = null;
 async function refreshBackgroundLoad() {{
+  if (document.hidden) return;
   const out = document.querySelector('#background-load');
   const toggle = document.querySelector('#show-background-work');
   if (!out || !toggle || !toggle.checked) return;
@@ -4828,6 +4859,7 @@ document.querySelector('#shadow-log').addEventListener('toggle', async (event) =
 }});
 let systemMonitorTimer = null;
 async function refreshSystemMonitor() {{
+  if (document.hidden) return;
   const set = (id, text) => {{ document.querySelector(id).textContent = text; }};
   const percent = value => value == null ? '–' : value + ' %';
   try {{
@@ -4897,6 +4929,7 @@ document.querySelector('#system-monitor').addEventListener('toggle', event => {{
   systemMonitorTimer = setInterval(refreshSystemMonitor, 5000);
 }});
 async function refreshAutomatic() {{
+  if (document.hidden) {{ whenVisible(refreshAutomatic); return; }}
   let refreshDelay = 15000;
   let sample;
   try {{

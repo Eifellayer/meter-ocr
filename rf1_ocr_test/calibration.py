@@ -924,7 +924,7 @@ def refinement_workers():
                 spare_memory = min(spare_memory, int(limit) - used)
         except (OSError, ValueError):
             pass
-        return max(1, min(4, spare_cpu, spare_memory // (256 * 1024 ** 2)))
+        return max(1, min(3, spare_cpu, spare_memory // (256 * 1024 ** 2)))
     except (OSError, ValueError, AttributeError):
         return 1
 

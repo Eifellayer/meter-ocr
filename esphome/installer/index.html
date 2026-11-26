@@ -48,6 +48,10 @@ padding:.9rem;border-radius:var(--radius-sm);border:1.5px solid var(--edge);back
 .install-button{font:inherit;font-size:1.05rem;font-weight:750;padding:.8rem 1.6rem;border-radius:99px;border:0;cursor:pointer;
 background:var(--accent);color:var(--accent-ink);box-shadow:var(--shadow);display:inline-flex;align-items:center;gap:.55rem}
 .install-button svg{width:1.25rem;height:1.25rem}
+.install-button.secondary{background:var(--surface-2);color:var(--ink);border:1.5px solid var(--edge);font-size:.98rem;padding:.7rem 1.3rem}
+.wifi-row{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem 1.2rem;padding-top:.9rem;border-top:1px solid var(--edge)}
+.wifi-row p{margin:0;flex:1 1 18rem;color:var(--muted);font-size:.93rem}
+.wifi-row[hidden]{display:none}
 .note{margin:0;padding:.75rem .9rem;border-radius:var(--radius-sm);background:var(--warn-soft);color:var(--ink);border:1px solid light-dark(#f0dca8,#4a3d17)}
 ol.flow{margin:0;padding:0;list-style:none;display:grid;gap:.7rem;counter-reset:flow}
 ol.flow li{counter-increment:flow;display:grid;grid-template-columns:2rem 1fr;gap:.2rem .7rem;align-items:start}
@@ -60,7 +64,7 @@ summary{cursor:pointer;font-weight:650}
 details p,details ul{margin:.5rem 0 0;color:var(--muted);font-size:.93rem}
 details ul{padding-left:1.2rem}
 footer{color:var(--muted);font-size:.85rem;text-align:center}
-@media(max-width:520px){main{padding:1rem .7rem 2.5rem}.card{padding:1rem}.install-button{width:100%;justify-content:center}}
+@media(max-width:520px){main{padding:1rem .7rem 2.5rem}.card{padding:1rem}.install-button{width:100%;justify-content:center}.wifi-row esp-web-install-button{width:100%}}
 </style>
 </head>
 <body>
@@ -85,7 +89,15 @@ footer{color:var(--muted);font-size:.85rem;text-align:center}
 <p slot="unsupported" class="note" data-t="unsupported">Dein Browser kann keine USB-Geräte ansprechen. Öffne diese Seite am Computer in Chrome oder Edge.</p>
 <p slot="not-allowed" class="note" data-t="notAllowed">Die Installation geht nur über eine sichere Verbindung (https).</p>
 </esp-web-install-button>
-<p id="install-hint" data-t="installHint">Board per USB an den Computer stecken, „Installieren“ drücken und den Anschluss auswählen. Danach fragt der Installer nach deinem WLAN.</p>
+<p id="install-hint" data-t="installHint">Board per USB an den Computer stecken, „Installieren“ drücken und den Anschluss auswählen. Danach fragt der Installer nach deinem WLAN. Der erste Start nach der Installation dauert etwas – das Fenster bitte offen lassen, bis die Abfrage kommt.</p>
+</div>
+<div class="wifi-row" id="wifi-row">
+<esp-web-install-button id="wifi-setup" manifest="firmware/automatisch.manifest.json">
+<button slot="activate" class="install-button secondary" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 8.8a15 15 0 0 1 20 0"/><path d="M5 12.6a10 10 0 0 1 14 0"/><path d="M8.5 16.4a5 5 0 0 1 7 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/></svg><span data-t="wifiButton">WLAN einrichten</span></button>
+<p slot="unsupported" class="note" data-t="unsupported">Dein Browser kann keine USB-Geräte ansprechen. Öffne diese Seite am Computer in Chrome oder Edge.</p>
+<p slot="not-allowed" class="note" data-t="notAllowed">Die Installation geht nur über eine sichere Verbindung (https).</p>
+</esp-web-install-button>
+<p data-t="wifiHint">Firmware schon drauf? Hier trägst du das WLAN neu ein oder änderst es, ohne neu zu installieren. Im Fenster „WLAN einrichten“ bzw. „Connect to Wi-Fi“ wählen.</p>
 </div>
 <p class="note" id="board-note" hidden></p>
 </section>
@@ -107,6 +119,11 @@ footer{color:var(--muted);font-size:.85rem;text-align:center}
 <li data-t="h1c">Das ESP32-CAM hat keinen USB-Anschluss: Es braucht die Programmier-Platine (ESP32-CAM-MB) oder einen USB-Seriell-Adapter.</li></ul></details>
 <details><summary data-t="h2">Die Verbindung klappt nicht</summary>
 <p data-t="h2a">BOOT-Taste gedrückt halten, kurz RESET drücken, BOOT loslassen und noch einmal „Installieren“ wählen. Bei Boards mit zwei USB-Buchsen die andere Buchse probieren.</p></details>
+<details><summary data-t="h5">Nach der Installation kommt keine WLAN-Abfrage</summary>
+<ul><li data-t="h5w">Der erste Start nach der Installation dauert bis zu einer halben Minute. Kam die Abfrage nicht, mit „WLAN einrichten“ oben noch einmal verbinden – das installiert nichts neu.</li>
+<li data-t="h5a">Manche Boards starten nach der Installation nicht von selbst neu: einmal die Taste RESET (auch „EN“ oder „RST“) drücken, noch einmal „Installieren“ wählen und denselben Anschluss nehmen. Dann bietet der Installer die WLAN-Einrichtung („Connect to Wi-Fi“) an.</li>
+<li data-t="h5b">Oder mit dem Handy das WLAN „zaehlerkamera-…“ der Kamera verbinden und dort dein WLAN eintragen.</li>
+<li data-t="h5c">Die Firmware ist für die oben gezeigten Boards mit Kamera gebaut. Andere ESP32 ohne Kamera werden nicht unterstützt.</li></ul></details>
 <details><summary data-t="h3">Das Bild ist gespiegelt oder steht auf dem Kopf</summary>
 <p data-t="h3a">In Home Assistant beim Gerät die Schalter „Bild spiegeln“ oder „Bild umdrehen“ umlegen. Schräg oder quer hängende Kameras richtet die App selbst aus.</p></details>
 <details><summary data-t="h4">Selbst in ESPHome weiterbauen</summary>
@@ -137,7 +154,7 @@ const BOARDS = [
   {id: 'xiao-esp32s3-sense', tag: 'new',
    de: ['Seeed XIAO ESP32S3 Sense', 'Sehr klein, mit aufgesteckter Kamera. Kein eigener Blitz.'],
    en: ['Seeed XIAO ESP32S3 Sense', 'Very small, with plug-on camera. No flash of its own.']},
-  {id: 'waveshare-esp32s3-eth', tag: 'new',
+  {id: 'waveshare-esp32s3-eth', tag: 'new', wifi: false,
    de: ['Waveshare ESP32-S3-ETH', 'Mit Netzwerkkabel (auch PoE) statt WLAN – für Keller ohne Empfang. Kein eigener Blitz.'],
    en: ['Waveshare ESP32-S3-ETH', 'Network cable (also PoE) instead of Wi-Fi – for basements without reception. No flash of its own.']}
 ];
@@ -146,7 +163,9 @@ const TEXT = {
        step1: 'Which board do you have?', step2: 'Plug in and install', install: 'Install',
        unsupported: 'Your browser cannot talk to USB devices. Open this page on a computer in Chrome or Edge.',
        notAllowed: 'Installing only works over a secure connection (https).',
-       installHint: 'Connect the board to your computer by USB, press “Install” and choose the port. The installer then asks for your Wi-Fi.',
+       installHint: 'Connect the board to your computer by USB, press “Install” and choose the port. The installer then asks for your Wi-Fi. The first start after the installation takes a moment – please keep the window open until the prompt appears.',
+       wifiButton: 'Set up Wi-Fi',
+       wifiHint: 'Firmware already installed? Enter or change the Wi-Fi here without installing again. Choose “Connect to Wi-Fi” in the window.',
        step3: 'Done – what comes next', after1: 'Enter your Wi-Fi',
        after1d: 'Right after the installation in the same window. If no prompt appears, connect your phone to the camera’s own Wi-Fi “zaehlerkamera-…” and enter your Wi-Fi there.',
        after2: 'Add it in Home Assistant', after2d: 'Home Assistant reports the new meter camera under Settings → Devices & services. Press “Add” there.',
@@ -157,6 +176,11 @@ const TEXT = {
        h1b: 'Older boards need a driver for their USB chip (CH340 or CP210x).',
        h1c: 'The ESP32-CAM has no USB port: it needs the programmer board (ESP32-CAM-MB) or a USB serial adapter.',
        h2: 'The connection fails', h2a: 'Hold BOOT, press RESET briefly, release BOOT and choose “Install” again. On boards with two USB ports try the other one.',
+       h5: 'No Wi-Fi prompt after the installation',
+       h5w: 'The first start after the installation takes up to half a minute. If the prompt did not come, connect again with “Set up Wi-Fi” above – it does not install anything again.',
+       h5a: 'Some boards do not restart by themselves after the installation: press RESET (also labelled “EN” or “RST”) once, choose “Install” again and pick the same port. The installer then offers the Wi-Fi setup (“Connect to Wi-Fi”).',
+       h5b: 'Or connect your phone to the camera’s own Wi-Fi “zaehlerkamera-…” and enter your Wi-Fi there.',
+       h5c: 'The firmware is built for the camera boards shown above. Other ESP32 boards without a camera are not supported.',
        h3: 'The picture is mirrored or upside down', h3a: 'In Home Assistant, switch “Bild spiegeln” (mirror) or “Bild umdrehen” (flip) on the device. The app straightens tilted or sideways cameras itself.',
        h4: 'Keep building it in ESPHome', h4a: 'The camera appears in the ESPHome Device Builder with “Adopt”. ESPHome then builds the firmware itself and you can extend it; updates from this page stop after that.',
        footer: 'Firmware', built: 'built with',
@@ -171,6 +195,7 @@ let lang = params.get('lang') || ((navigator.language || 'de').toLowerCase().sta
 if (!TEXT[lang]) lang = 'de';
 let selected = BOARDS.some(board => board.id === params.get('board')) ? params.get('board') : 'auto';
 const installer = document.querySelector('#installer');
+const wifiSetup = document.querySelector('#wifi-setup');
 const boardList = document.querySelector('#boards');
 const note = document.querySelector('#board-note');
 
@@ -197,7 +222,11 @@ function render() {
     return card;
   }));
   const board = BOARDS.find(item => item.id === selected);
-  installer.setAttribute('manifest', 'firmware/' + (board.manifest || board.id) + '.manifest.json');
+  const manifest = 'firmware/' + (board.manifest || board.id) + '.manifest.json';
+  installer.setAttribute('manifest', manifest);
+  wifiSetup.setAttribute('manifest', manifest);
+  // Das Board mit Netzwerkkabel hat kein WLAN.
+  document.querySelector('#wifi-row').hidden = board.wifi === false;
   note.hidden = board.tag !== 'new';
   note.textContent = TEXT[lang].untested;
 }

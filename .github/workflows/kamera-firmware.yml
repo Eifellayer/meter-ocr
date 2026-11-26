@@ -70,6 +70,8 @@ jobs:
           jq --arg board "$BOARD" --arg label "$LABEL" '
             .name = $label
             | .new_install_prompt_erase = true
+            # Der erste Start nach dem Flashen dauert länger als die üblichen 10 Sekunden; sonst fehlt die WLAN-Abfrage.
+            | .new_install_improv_wait_time = 30
             | .builds |= map(
                 .ota.path = ($board + ".ota.bin")
                 | .parts |= map(.path = ($board + ".factory.bin")))' \

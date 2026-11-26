@@ -22,6 +22,17 @@ class RealDemoTests(unittest.TestCase):
         boxes = [(i * 10, 0, i * 10 + 8, 20) for i in range(8)]
         return Image.new("RGB", (80, 20)), width, boxes[:5], boxes[5:], "manual"
 
+    def test_preview_shows_the_picture_without_reading_it(self):
+        for picture, angle in (("2", demo.REAL_LAYOUT["rotation"]), ("", -demo.DEMO_ANGLE)):
+            shown = demo.demo_preview(picture)
+            self.assertEqual((True, angle), (shown["preview"], shown["angle"]))
+            self.assertNotIn("reading", shown)
+            import base64, io
+            with Image.open(io.BytesIO(base64.b64decode(shown["image"]))) as image:
+                self.assertEqual("JPEG", image.format)
+        with self.assertRaises(ValueError):
+            demo.demo_preview("9")
+
     def test_two_profiles_must_agree_and_only_complete_results_are_kept(self):
         answers = iter(["10501.05", "10501.0?", "10501.05", "10501.05"])
         calls = []

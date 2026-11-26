@@ -17,17 +17,8 @@ DEMO_SECONDS = 40
 _complete = {}
 
 
-def run_demo(reflection=False, draw=None):
-    """Read the generated meter; only a complete result is kept for the next call.
-
-    A result cut short by a busy machine used to be cached for good and the first
-    request could run into the time limit ("Die Demo konnte nicht geladen werden").
-    ``draw`` is the automatic check's own picture of the read digits (0.5.33); without it the
-    digit frames are only outlined.
-    """
-    reflection = bool(reflection)
-    if (reflection, draw is not None) in _complete:
-        return _complete[reflection, draw is not None]
+def _synthetic(reflection):
+    """The generated meter: straight picture, digit frames and the slanted camera view."""
     digits = DEMO_READING.replace(".", "")
     image = Image.new("RGB", (600, 128), "#263844")
     canvas = ImageDraw.Draw(image)
@@ -42,7 +33,33 @@ def run_demo(reflection=False, draw=None):
         canvas.text((left + 30, 64), digit, font=font, fill="#f6f6ed", anchor="mm")
     if reflection:
         canvas.rectangle(boxes[-1], fill="#fffaf0")
-    slanted = turn_crop(image, DEMO_ANGLE)
+    return image, boxes, turn_crop(image, DEMO_ANGLE)
+
+
+def demo_preview(picture="", reflection=False):
+    """Only the demo picture, without reading it: shown at once while the check runs."""
+    if picture:
+        number = int(picture) if str(picture).isdigit() else 0
+        if not 1 <= number <= REAL_COUNT:
+            raise ValueError("unbekanntes Demobild")
+        with Image.open(REAL_IMAGES / f"gas-{number}.png") as stored:
+            return {"image": _jpeg(stored.convert("RGB")), "angle": REAL_LAYOUT["rotation"], "preview": True}
+    return {"image": _jpeg(_synthetic(bool(reflection))[2]), "angle": -DEMO_ANGLE, "preview": True}
+
+
+def run_demo(reflection=False, draw=None):
+    """Read the generated meter; only a complete result is kept for the next call.
+
+    A result cut short by a busy machine used to be cached for good and the first
+    request could run into the time limit ("Die Demo konnte nicht geladen werden").
+    ``draw`` is the automatic check's own picture of the read digits (0.5.33); without it the
+    digit frames are only outlined.
+    """
+    reflection = bool(reflection)
+    if (reflection, draw is not None) in _complete:
+        return _complete[reflection, draw is not None]
+    digits = DEMO_READING.replace(".", "")
+    image, boxes, slanted = _synthetic(reflection)
     straight = turn_crop(slanted, -DEMO_ANGLE)
     dx, dy = (straight.width - image.width) // 2, (straight.height - image.height) // 2
     straight = straight.crop((dx, dy, dx + image.width, dy + image.height))

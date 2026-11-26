@@ -1434,6 +1434,21 @@ class StateTests(TestCase):
         self.assertIn("zweite Aufnahme", rejected["check_detail"])
         self.assertEqual(second["consumption"], rejected["consumption"])
 
+        # 0.5.49: a jump the configured maximum would allow, but not the flow this meter
+        # really reaches (a digit read wrong the same way on two pictures).
+        learned = json.loads(files["HISTORY"].read_text())
+        learned["flow_peaks"] = {str(day): 800 for day in range(20780, 20787)}
+        learned["flow_peak_samples"] = 50
+        learned["reflection_anchor"]["time"] -= 3600
+        age(learned, 3600)
+        jumped = check("12351.???")
+        self.assertEqual("12347", published[run.OCR_ENTITY]["state"])
+        self.assertEqual("2", published[run.CONSUMPTION_ENTITY]["state"])
+        self.assertIn(run.JUMP_FLOW_NOTICE, jumped["check_detail"])
+        self.assertEqual("ocr_unclear", jumped["check_status"])
+        # The same hour later a reading within the learned flow is taken as before.
+        self.assertEqual("standalone_pending", check("12349.???")["check_status"])
+
         files["HISTORY"].unlink()
         source = {**run.source_rules(json.loads(files["SOURCE_SETTINGS"].read_text())), "selected": True}
         files["AUTO_RULES"].write_text(json.dumps({
@@ -1599,6 +1614,47 @@ class StateTests(TestCase):
         self.assertEqual(0, history["comparison_decimals"])
         self.assertEqual(0, history["consumption"]["total_litres"])
         self.assertTrue(paths["GOOD_IMAGE"].exists())
+
+    def test_uploaded_test_picture_is_not_replaced_by_a_camera_picture(self):
+        # A camera source used to fetch a fresh camera picture from the second attempt on:
+        # the upload was read once at most and the picture shown afterwards was the camera's.
+        class StopLoop(Exception):
+            pass
+
+        folder = Path(self.enterContext(TemporaryDirectory()))
+        paths = {name: folder / f"{name.lower()}.json" for name in (
+            "OPTIONS", "HISTORY", "EFFECTIVE_OPTIONS", "AUTO_RULES", "LANGUAGE_MODES",
+            "SOURCE_SETTINGS", "NOTIFICATIONS",
+            "DESTINATION", "GOOD_IMAGE", "TEST_IMAGE", "TEST_SOURCE_IMAGE",
+        )}
+        paths["OPTIONS"].write_text(json.dumps({"ausschnitt": "0,0,500,100", "vorkomma_breite": 350}))
+        paths["SOURCE_SETTINGS"].write_text(json.dumps({
+            "mode": "camera", "url": "", "camera": "camera.meter", "reference": "sensor.meter", "selected": True}))
+        self.enterContext(patch.multiple(run, **paths))
+        self.enterContext(patch.dict(os.environ, {"SUPERVISOR_TOKEN": "stub"}))
+        with BytesIO() as stream:
+            synthetic_meter().save(stream, "JPEG")
+            jpeg = stream.getvalue()
+        progress_updates = []
+
+        def fake_panel(history_path, current, good, requested, *_, **__):
+            requested.put_nowait({
+                "request_id": 1, "decimals": 2, "attempts": 3, "polarity": "dark",
+                "crop_mode": "manual", "crop": "0,0,480,100", "width": 350,
+                "manual_reference": "12345.129", "image": jpeg,
+            })
+            return None, lambda *args, **kwargs: progress_updates.append((args, kwargs)), None
+
+        self.enterContext(patch.object(run, "start_panel", fake_panel))
+        self.enterContext(patch.object(run, "capture_camera", side_effect=StopLoop))
+        reads = self.enterContext(patch.object(run, "read_visible_digits", return_value="12345.1?0"))
+        self.enterContext(patch.object(run, "publish_state"))
+        with self.assertRaises(StopLoop):
+            run.main()
+        self.assertGreaterEqual(reads.call_count, 2)
+        self.assertTrue(any("outcome" in kwargs for _, kwargs in progress_updates))
+        with Image.open(paths["TEST_SOURCE_IMAGE"]) as source_image:
+            self.assertEqual((500, 100), source_image.size)
 
 
 class TwoMissingDigitsTests(TestCase):

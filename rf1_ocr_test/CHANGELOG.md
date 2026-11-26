@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.52
+
+- **Selbsteinrichtung findet auch stark schräge Zählwerke.** Hängt die Kamera so, dass das Zählwerk 21° bis 69° schräg im Bild steht (etwa 30°), fand die Selbsteinrichtung es bisher nie: Sie suchte nur bis 20° Neigung und daneben in rechten Winkeln. Sie misst und sucht jetzt bis 45° Neigung, zusammen mit den rechten Winkeln ist damit jede Lage abgedeckt.
+- **Markiertes Ziffernfeld mit Neigung.** Wer das Ziffernfeld von Hand markiert, bekommt jetzt auch innerhalb der Markierung die gemessene Neigung. Bisher suchte die App dort nur fast gerade und landete bei einem schrägen Zählwerk auf den geraden Zeilen der Seriennummer.
+- *English:* The self-setup also finds counters hanging far askew: with the counter 21° to 69° askew in the picture (e.g. 30°), the self-setup never found it, because it searched only up to 20° tilt plus right angles. It now measures and searches up to 45° tilt, which together with the right angles covers every position. A digit field marked by hand now gets the measured tilt inside the marking as well; before, the app searched it almost level only and settled on the straight lines of the serial number when the counter hung askew.
+
 ## 0.5.51
 
 - **Breite Bildschirme nutzen.** Ab etwa 1400 Pixel Breite (Full HD) stehen Übersicht, Werkzeuge und Einstellungen in zwei Spalten: Zählerstand, Status und Verbrauch links, die Bilder der Prüfung und der Selbsteinrichtung rechts; unter Werkzeuge links die Werkzeuge, rechts der manuelle Test. Die Seiten sind dadurch nur noch etwa halb so lang. Auf Handy und Tablet bleibt alles wie bisher.
